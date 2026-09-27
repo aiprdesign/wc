@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { SEGMENTS, DURATION, FILM_ASPECT, warmthAt } from '../timeline.js';
+import { SEGMENTS, DURATION, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { DofShader, TransitionShader, FinalShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { PALETTE } from '../lib/palette.js';
@@ -46,7 +46,8 @@ export class Engine {
       // Ortho overlay whose visible area is x ∈ [-aspect, aspect], y ∈ [-1, 1].
       makeHUD: () => {
         const scene = new THREE.Scene();
-        const camera = new THREE.OrthographicCamera(-FILM_ASPECT, FILM_ASPECT, 1, -1, -10, 10);
+        const m = FILM_ASPECT / OUTPUT_ASPECT;   // open matte: the authored band stays centred
+        const camera = new THREE.OrthographicCamera(-FILM_ASPECT, FILM_ASPECT, m, -m, -10, 10);
         return { scene, camera };
       },
     };
@@ -73,12 +74,12 @@ export class Engine {
   // Fit the canvas to the window at the film aspect (letterbox / pillarbox via CSS).
   resize() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    let cw = vw, ch = vw / FILM_ASPECT;
-    if (ch > vh) { ch = vh; cw = vh * FILM_ASPECT; }
+    let cw = vw, ch = vw / OUTPUT_ASPECT;
+    if (ch > vh) { ch = vh; cw = vh * OUTPUT_ASPECT; }
     this.canvas.style.width = `${Math.round(cw)}px`;
     this.canvas.style.height = `${Math.round(ch)}px`;
     const w = Math.min(Math.round(cw * this.pixelRatio), this.maxWidth);
-    const h = Math.round(w / FILM_ASPECT);
+    const h = Math.round(w / OUTPUT_ASPECT);
     this.setSize(w, h);
   }
 
@@ -116,14 +117,14 @@ export class Engine {
     this.bloom.setSize(w, h);
     this.dofQuad.material.uniforms.uResolution.value = new THREE.Vector2(w, h);
     this.finalQuad.material.uniforms.uResolution.value = new THREE.Vector2(w, h);
-    this.finalQuad.material.uniforms.uAspect.value = FILM_ASPECT;
-    this.transQuad.material.uniforms.uAspect.value = FILM_ASPECT;
+    this.finalQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
+    this.transQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
   }
 
   info(T, seg, dt) {
     const dur = seg.end - seg.start;
     const t = T - seg.start;
-    return { T, t, dur, p: t / dur, dt, width: this.width, height: this.height, aspect: FILM_ASPECT, pixelRatio: this.height / 800 };
+    return { T, t, dur, p: t / dur, dt, width: this.width, height: this.height, aspect: FILM_ASPECT, pixelRatio: this.width / FILM_ASPECT / 800 };
   }
 
   activeSegments(T) {
@@ -144,7 +145,19 @@ export class Engine {
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);
     r.clear(true, true, true);
-    r.render(inst.scene, inst.camera);
+    const cam = inst.camera;
+    const matte = cam.isPerspectiveCamera && OUTPUT_ASPECT !== FILM_ASPECT;
+    let fov0;
+    if (matte) {
+      // Open matte: (nearly) the same horizontal view as the 2.39 composition, taller frame; a slight
+      // push-in (exponent 0.85) keeps subjects readable while every composed element stays in frame.
+      fov0 = cam.fov;
+      cam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0) / 2) * Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.85)));
+      cam.aspect = OUTPUT_ASPECT;
+      cam.updateProjectionMatrix();
+    }
+    r.render(inst.scene, cam);
+    if (matte) { cam.fov = fov0; cam.aspect = FILM_ASPECT; cam.updateProjectionMatrix(); }
     const dof = inst.dof;
     // The HUD is composited after depth of field so screen-space typography stays razor sharp.
     const drawHUD = (target) => { if (inst.hud) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
@@ -152,7 +165,7 @@ export class Engine {
       const u = this.dofQuad.material.uniforms;
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
       u.uNear.value = inst.camera.near; u.uFar.value = inst.camera.far;
-      u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.height / 800) * 14;
+      u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.width / FILM_ASPECT / 800) * 14;
       r.setRenderTarget(dofRT);
       this.dofQuad.render(r);
       drawHUD(dofRT);

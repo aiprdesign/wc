@@ -35,11 +35,11 @@ const server = http.createServer((req, res) => {
 }).listen(port);
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width, height: Math.round(width / 2.39) } });
+const page = await browser.newPage({ viewport: { width, height: Math.round(width / (args.aspect ? eval(String(args.aspect).replace(':', '/')) : 2.39)) } });
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
-const q = `still&t=${times[0]}&q=${args.q ?? 'low'}${args.audio ? '' : '&noaudio'}`;
+const q = `still&t=${times[0]}&q=${args.q ?? 'low'}${args.aspect ? `&aspect=${args.aspect}` : ''}${args.audio ? '' : '&noaudio'}`;
 await page.goto(`http://localhost:${port}/?${q}`);
 await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 240000 });
 for (const t of times) {

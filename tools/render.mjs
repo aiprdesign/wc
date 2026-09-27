@@ -40,9 +40,9 @@ const browser = await chromium.launch({ args: [...gl, '--ignore-gpu-blocklist'] 
 const quality = width > 1920 ? 'high' : width > 1280 ? 'medium' : 'low';
 
 async function openPage(extra = '') {
-  const page = await browser.newPage({ viewport: { width, height: Math.round(width / 2.39) } });
+  const page = await browser.newPage({ viewport: { width, height: Math.round(width / (args.aspect ? eval(String(args.aspect).replace(':', '/')) : 2.39)) } });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
-  await page.goto(`http://localhost:${port}/?still&noaudio&q=${quality}${extra}`);
+  await page.goto(`http://localhost:${port}/?still&noaudio&q=${quality}${args.aspect ? `&aspect=${args.aspect}` : ''}${extra}`);
   await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 600000 });
   return page;
 }

@@ -3,7 +3,18 @@
 // the compositor blends the outgoing and incoming sequences with `transition`.
 
 export const DURATION = 60;
-export const FILM_ASPECT = 2.39;         // anamorphic frame; every camera renders at this aspect
+export const FILM_ASPECT = 2.39;         // anamorphic frame; every scene is composed for this aspect
+// Delivery aspect (?aspect=1, ?aspect=16:9 …). Other aspects render "open matte": each camera keeps its
+// exact 2.39 horizontal view and the frame extends above/below, so nothing composed is ever cropped.
+export const OUTPUT_ASPECT = (() => {
+  try {
+    const a = new URLSearchParams(globalThis.location?.search ?? '').get('aspect');
+    if (!a) return FILM_ASPECT;
+    const [x, y] = a.split(/[:x/]/).map(Number);
+    const v = y ? x / y : x;
+    return v > 0.3 && v < 4 ? Math.min(v, FILM_ASPECT) : FILM_ASPECT;
+  } catch { return FILM_ASPECT; }
+})();
 export const BPM = 120;
 export const BEAT = 60 / BPM;            // 0.5 s
 export const BAR = BEAT * 4;             // 2.0 s
