@@ -2,7 +2,7 @@
 // All times are GLOBAL seconds. Segments overlap by ~0.5 s; the overlap is where
 // the compositor blends the outgoing and incoming sequences with `transition`.
 
-export const DURATION = 60;
+export const DURATION = 64;
 export const FILM_ASPECT = 2.39;         // anamorphic frame; every scene is composed for this aspect
 // Delivery aspect (?aspect=1, ?aspect=16:9 …). Other aspects render "open matte": each camera keeps its
 // exact 2.39 horizontal view and the frame extends above/below, so nothing composed is ever cropped.
@@ -31,10 +31,11 @@ export const SEGMENTS = [
   { id: 'electricity', title: 'Electricity & Communication',  start: 28.5, end: 32.0, transition: 'zoom' },
   { id: 'medicine',    title: 'Medicine',                     start: 31.5, end: 35.0, transition: 'luma' },
   { id: 'flight',      title: 'Flight & Space',               start: 34.5, end: 39.0, transition: 'dissolve' },
-  { id: 'computing',   title: 'Computing & Digital',          start: 38.5, end: 43.0, transition: 'zoom' },
-  { id: 'knowledge',   title: 'Knowledge',                    start: 42.5, end: 46.0, transition: 'flash' },
-  { id: 'montage',     title: 'Montage',                      start: 45.5, end: 50.5, transition: 'dissolve' },
-  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 50.0, end: 60.0, transition: null },
+  { id: 'moonshot',    title: 'The Moonshot · American Century', start: 38.5, end: 43.0, transition: 'dissolve' },
+  { id: 'computing',   title: 'Computing & Digital',          start: 42.5, end: 47.0, transition: 'zoom' },
+  { id: 'knowledge',   title: 'Knowledge',                    start: 46.5, end: 50.0, transition: 'flash' },
+  { id: 'montage',     title: 'Montage',                      start: 49.5, end: 54.5, transition: 'dissolve' },
+  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 54.0, end: 64.0, transition: null },
 ];
 
 // Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`;
@@ -101,41 +102,48 @@ export const CUES = {
   clouds: 36.8,
   rocketLaunch: 37.4,
   earthWide: 38.2,
+  // moonshot (the American century)
+  translunar: 38.8,
+  lunarDescent: 39.6,
+  moonLanding: 40.6,
+  footprint: 41.2,
+  earthrise: 41.8,
+  guidanceComputer: 42.4,
   // computing
-  calculator: 38.8,
-  relays: 39.4,
-  tubes: 39.9,
-  transistors: 40.4,
-  processor: 40.9,
-  processorDive: 41.3,
-  binary: 41.8,
+  calculator: 42.8,
+  relays: 43.4,
+  tubes: 43.9,
+  transistors: 44.4,
+  processor: 44.9,
+  processorDive: 45.3,
+  binary: 45.8,
   // knowledge
-  pagesFly: 42.8,
-  pageSphere: 43.6,
-  books: 44.4,
-  pixels: 44.9,
-  network: 45.3,
+  pagesFly: 46.8,
+  pageSphere: 47.6,
+  books: 48.4,
+  pixels: 48.9,
+  network: 49.3,
   // montage (one morph every 0.8 s)
-  mColumns: 45.6,
-  mGears: 46.4,
-  mOrbits: 47.2,
-  mAtoms: 48.0,
-  mCircuit: 48.8,
-  mStars: 49.6,
+  mColumns: 49.6,
+  mGears: 50.4,
+  mOrbits: 51.2,
+  mAtoms: 52.0,
+  mCircuit: 52.8,
+  mStars: 53.6,
   // finale
-  pullBack: 50.5,
-  musicDrop: 51.5,
-  ideasLine: 52.5,
-  ideasOut: 55.0,
-  finalImpact: 56.0,
-  closingLine: 57.4,
-  fadeOut: 59.0,
+  pullBack: 54.5,
+  musicDrop: 55.5,
+  ideasLine: 56.5,
+  ideasOut: 59.0,
+  finalImpact: 60.0,
+  closingLine: 61.4,
+  fadeOut: 63.0,
 };
 
 // Colour temperature of the grade over time: +1 = marble/bronze/gold, -1 = steel/electric/cool.
 export const WARMTH_KEYS = [
   [0, 0.9], [8, 1.0], [20, 0.8], [25, 0.35], [29, 0.0], [32, -0.35],
-  [39, -0.6], [46, -0.75], [50.5, -0.5], [56, -0.3], [60, -0.3],
+  [39, -0.6], [43, -0.55], [50, -0.75], [54.5, -0.5], [60, -0.3], [64, -0.3],
 ];
 
 export function segmentById(id) {
