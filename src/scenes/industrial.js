@@ -181,7 +181,7 @@ export function create(ctx, segment) {
   const SCALES = [0.6, 0.8, 1.0, 1.0, 1.25, 1.6];
   for (let layer = 0; layer < 3; layer++) {
     let placed = 0, tries = 0;
-    const target = [150, 120, 90][layer];
+    const target = [125, 100, 75][layer];
     while (placed < target && tries < 4000) {
       tries++;
       const s = SCALES[Math.floor(R() * SCALES.length)] * (layer === 2 ? 1.3 : 1);
@@ -323,7 +323,7 @@ export function create(ctx, segment) {
     const shell = new THREE.Mesh(new THREE.CylinderGeometry(BO.r, BO.r, boilerLen, 96, 1, true), paint); shell.rotation.z = Math.PI / 2; boiler.add(shell);
     [-1, 1].forEach((s) => { const cap = new THREE.Mesh(new THREE.SphereGeometry(BO.r, 64, 24, 0, TAU, 0, Math.PI / 2), paint); cap.scale.y = 0.35; cap.rotation.z = -s * Math.PI / 2; cap.position.x = (s * boilerLen) / 2; boiler.add(cap); });
     for (let i = 0; i <= 6; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(BO.r + 0.03, BO.r + 0.03, 0.14, 96, 1, true), iron); b.rotation.z = Math.PI / 2; b.position.x = -boilerLen / 2 + (boilerLen * i) / 6; boiler.add(b); }
-    const rivG = new THREE.SphereGeometry(0.034, 8, 6, 0, TAU, 0, Math.PI / 2);
+    const rivG = new THREE.SphereGeometry(0.034, 6, 3, 0, TAU, 0, Math.PI / 2);
     const NRING = 7, NPER = 56;
     const rivets = new THREE.InstancedMesh(rivG, steel, NRING * NPER * 2);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(1, 1, 1), pos = V(0, 0, 0);
@@ -506,7 +506,7 @@ export function create(ctx, segment) {
       im.instanceMatrix.needsUpdate = true;
     }
     const set1 = shotA;
-    wallMat.color.setScalar(shotA ? 1 : 0.22);
+    wallMat.color.setScalar(shotA ? 1 : lerp(0.12, 0.3, smoothstep(3.2, 3.6, t)));
     heroSpin.visible = pinSpin.visible = wheelSpin.visible = true;
     calloutA.position.copy(H).add(V(Math.cos(0.35) * hero.r, Math.sin(0.35) * hero.r, 0.26));
     calloutB.position.copy(pinSpin.position).add(V(0.35, -0.3, 0.3));

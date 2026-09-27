@@ -64,7 +64,6 @@ function planetTexture(kind, seed = 1) {
     x.fillStyle = 'rgba(255,255,255,0.85)'; x.fillRect(0, 0, 256, 8); x.fillRect(0, 120, 256, 8);
   } else {
     const base = { mercury: [150, 145, 140], venus: [226, 205, 160], mars: [182, 92, 58], moon: [170, 170, 165] }[kind];
-    for (let i = 0; i < 256 * 128; i += 1) { /* noise dots */ }
     x.fillStyle = `rgb(${base})`; x.fillRect(0, 0, 256, 128);
     for (let i = 0; i < 180; i++) { const l = 0.75 + r() * 0.4; x.fillStyle = `rgba(${base.map((v) => Math.min(255, v * l)).join(',')},0.6)`; x.beginPath(); x.arc(r() * 256, r() * 128, 1 + r() * 7, 0, TAU); x.fill(); }
   }

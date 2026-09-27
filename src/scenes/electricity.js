@@ -96,7 +96,7 @@ export function create(ctx, segment) {
   const strandTex = canvasTex(256, 64, (x, w, h) => { x.fillStyle = '#808080'; x.fillRect(0, 0, w, h); for (let i = -20; i < 40; i++) { x.strokeStyle = i % 2 ? 'rgba(40,40,40,0.9)' : 'rgba(210,210,210,0.8)'; x.lineWidth = 3; x.beginPath(); x.moveTo(i * 8, 0); x.lineTo(i * 8 + 32, h); x.stroke(); } }, { srgb: false });
   strandTex.wrapS = strandTex.wrapT = THREE.RepeatWrapping; strandTex.repeat.set(WIRE_LEN * 30, 1);
   const wireMat = copper.clone(); wireMat.bumpMap = strandTex; wireMat.bumpScale = 0.6; wireMat.roughnessMap = strandTex;
-  const wire = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 3000, 0.013, 10, false), wireMat);
+  const wire = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 1800, 0.013, 10, false), wireMat);
   scene.add(wire);
   // coil core (soft iron) + bobbin cheeks
   {
@@ -119,7 +119,7 @@ export function create(ctx, segment) {
         gl_FragColor = vec4(col, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
-  const pulseTube = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 3000, 0.019, 8, false), pulseMat);
+  const pulseTube = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 1800, 0.019, 8, false), pulseMat);
   pulseTube.frustumCulled = false; scene.add(pulseTube);
   const headGlow = glowSprite({ color: '#dfeeff', intensity: 3.2, scale: 0.35 }); scene.add(headGlow);
   const headGlow2 = glowSprite({ color: '#9cc8ff', intensity: 0.8, scale: 1.4 }); scene.add(headGlow2);
@@ -382,14 +382,14 @@ export function create(ctx, segment) {
   traceGeo.setAttribute('position', new THREE.Float32BufferAttribute(tPos, 3));
   traceGeo.setAttribute('aD', new THREE.Float32BufferAttribute(tD, 1));
   traceGeo.setAttribute('aC', new THREE.Float32BufferAttribute(tC, 3));
-  const cityUniforms = { uGrow: { value: 0 }, uTime: { value: 0 }, uI: { value: 1 } };
+  const cityUniforms = { uGrow: { value: 0 }, uTime: { value: 0 }, uI: { value: 0.65 } };
   const traceMat = new THREE.ShaderMaterial({
     uniforms: cityUniforms,
     vertexShader: `attribute float aD; attribute vec3 aC; varying float vD; varying vec3 vC; varying float vFog;
       void main(){ vD = aD; vC = aC; vec4 mv = modelViewMatrix*vec4(position,1.0); vFog = exp(-length(mv.xyz)*0.09); gl_Position = projectionMatrix*mv; }`,
     fragmentShader: `uniform float uGrow, uTime, uI; varying float vD; varying vec3 vC; varying float vFog;
       void main(){ if (vD > uGrow) discard;
-        float front = exp(-(uGrow - vD) * 3.0);
+        float front = exp(-(uGrow - vD) * 3.0) * smoothstep(0.3, 1.2, vD);
         float pulses = pow(fract(vD * 0.9 - uTime * 2.2), 18.0);
         vec3 col = vC * (0.3 + front * 2.0 + pulses * 1.8) * uI * vFog;
         gl_FragColor = vec4(col, 1.0); }`,
@@ -583,8 +583,8 @@ export function create(ctx, segment) {
     camera.updateProjectionMatrix();
 
     dof.focus = cp.distanceTo(ct);
-    dof.range = shot === 1 ? 0.12 : shot === 5 ? 0.6 + g * 0.05 : dof.focus * 0.25;
-    dof.amount = shot === 1 ? 0.6 : shot === 5 ? 0.45 : 0.55;
+    dof.range = shot === 1 ? 0.12 : shot === 5 ? 0.6 + g * 0.05 : shot === 4 ? dof.focus * 0.6 : dof.focus * 0.25;
+    dof.amount = shot === 1 ? 0.6 : shot === 5 ? 0.45 : shot === 4 ? 0.3 : 0.55;
     bloom.strength = 0.7 + ignite * 0.5;
     rim.intensity = shot === 2 ? 1.3 : 3.0;
 
