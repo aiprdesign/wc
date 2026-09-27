@@ -604,7 +604,7 @@ export function create(ctx, segment) {
       tmp.set(PAD.x, Math.max(rY, 9) + 1.5, PAD.z);
       look.lerp(tmp, ramp(t, tCloud + 0.35, tRocket + 0.15, ease.inOutSine));
       camera.position.copy(camPos);
-      camera.up.set(0, 1, 0);
+      camera.up.set(Math.sin(ramp(t, tRocket - 0.2, tSwitch, ease.inOutSine) * 0.5) * 0.18, 1, 0).normalize();
       camera.lookAt(look);
       camera.fov = 35 - ramp(t, tRocket - 0.2, tSwitch, ease.inOutSine) * 9 + envelope(t, tFly + 0.2, tCloud, 0.15, 0.2) * 6;
       camera.near = 0.05; camera.far = 2000;
@@ -729,8 +729,8 @@ export function create(ctx, segment) {
           smoke.S[i] = d.s * (0.7 + age * 3.2);
           smoke.Rot[i] = d.rot + age;
           const hot = Math.exp(-age * 14);
-          smoke.A[i] = Math.min(1, age * 20) * (0.55 - Math.min(0.45, age * 0.35)) * (y0 > 7.5 ? 1 : 0.2);
-          smoke.C[i * 3] = 0.85 + hot * 5.0; smoke.C[i * 3 + 1] = 0.85 + hot * 2.6; smoke.C[i * 3 + 2] = 0.9 + hot * 1.0;
+          smoke.A[i] = Math.min(1, age * 20) * (0.5 - Math.min(0.42, age * 0.3)) * (y0 > 7.5 ? 1 : 0.2);
+          const lit = 0.42 + 0.25 * d.sh; smoke.C[i * 3] = lit + hot * 4.0; smoke.C[i * 3 + 1] = lit * 1.02 + hot * 2.0; smoke.C[i * 3 + 2] = lit * 1.1 + hot * 0.7;
         }
         smoke.commit(info);
       }

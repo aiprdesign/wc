@@ -37,20 +37,20 @@ export function create(ctx, segment) {
   const DUR = segment.end - segment.start;
 
   scene.environment = ctx.env;
-  scene.environmentIntensity = 0.45;
+  scene.environmentIntensity = 0.3;
   scene.fog = new THREE.FogExp2(0x030406, 0.06);
   const BG = 0x020304;
 
-  const key = new THREE.DirectionalLight('#fff0e0', 2.2); key.position.set(-3, 5, 4); scene.add(key);
+  const key = new THREE.DirectionalLight('#fff0e0', 1.6); key.position.set(-4, 5, -1.5); scene.add(key);
   const rim = new THREE.DirectionalLight('#bcd8ff', 3.0); rim.position.set(3, 2, -5); scene.add(rim);
   const warm = new THREE.PointLight('#ffb070', 0, 3, 2); scene.add(warm);
 
   // materials
   const copper = new THREE.MeshPhysicalMaterial({ color: '#d7824a', metalness: 1, roughness: 0.22, clearcoat: 0.3 });
   const brass = brassMat({ roughness: 0.2, color: '#d2a862' });
-  const chrome = new THREE.MeshStandardMaterial({ color: '#e4e8ee', metalness: 1, roughness: 0.07 });
+  const chrome = new THREE.MeshStandardMaterial({ color: '#b9bec5', metalness: 1, roughness: 0.14 });
   const walnutTex = surfaceTexture('walnut', 512, 21);
-  const walnut = new THREE.MeshPhysicalMaterial({ map: walnutTex, color: '#ffffff', roughness: 0.42, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.2 });
+  const walnut = new THREE.MeshPhysicalMaterial({ map: walnutTex, color: '#ffffff', roughness: 0.62, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.45, envMapIntensity: 0.45 });
   const bakelite = new THREE.MeshPhysicalMaterial({ color: '#0d0c0c', roughness: 0.28, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 });
   const ironM = new THREE.MeshStandardMaterial({ color: '#4a4f55', metalness: 0.9, roughness: 0.45 });
 
@@ -124,7 +124,7 @@ export function create(ctx, segment) {
   const headGlow = glowSprite({ color: '#dfeeff', intensity: 3.2, scale: 0.35 }); scene.add(headGlow);
   const headGlow2 = glowSprite({ color: '#9cc8ff', intensity: 0.8, scale: 1.4 }); scene.add(headGlow2);
   // crackling micro-arcs around the head (preallocated buffer, rewritten per frame from a seeded hash)
-  const ARCS = 6, ARC_SEG = 7;
+  const ARCS = 4, ARC_SEG = 6;
   const arcPos = new Float32Array(ARCS * ARC_SEG * 2 * 3);
   const arcGeo = new THREE.BufferGeometry(); arcGeo.setAttribute('position', new THREE.BufferAttribute(arcPos, 3));
   const arcLines = new THREE.LineSegments(arcGeo, new THREE.LineBasicMaterial({ color: new THREE.Color('#cfe6ff').multiplyScalar(4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
@@ -135,7 +135,7 @@ export function create(ctx, segment) {
     const r = rng(55);
     for (let i = 0; i < 700; i++) {
       const u = r(), p = wireCurve.getPointAt(u), tn = wireCurve.getTangentAt(u);
-      const off = V(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(0.12 + r() * 0.9);
+      const off = V(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(0.3 + r() * 0.9);
       const a = p.clone().add(off), L = 0.15 + r() * 0.7;
       streakSegs.push([a, a.clone().addScaledVector(tn, L)]);
     }
@@ -152,7 +152,7 @@ export function create(ctx, segment) {
   const lever = new THREE.Group(); lever.position.copy(PIV); tele.add(lever);
   {
     const base = new THREE.Mesh(new RoundedBoxGeometry(1.0, 0.075, 0.44, 4, 0.022), walnut); base.position.y = 0.0375; tele.add(base);
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.01, 0.13), brass); plate.position.y = 0.08; tele.add(plate);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.01, 0.13), brassMat({ roughness: 0.5, color: '#9a7a48' })); plate.position.y = 0.08; tele.add(plate);
     [-1, 1].forEach((s) => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.1, 0.02), brass); p.position.set(PIV.x, 0.125, s * 0.05); tele.add(p); });
     const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.13, 12).rotateX(Math.PI / 2), chrome); axle.position.copy(PIV); tele.add(axle);
     const bar = new THREE.Mesh(new RoundedBoxGeometry(0.7, 0.028, 0.04, 2, 0.008), brass); bar.position.x = 0.06; lever.add(bar);
@@ -175,7 +175,7 @@ export function create(ctx, segment) {
     tele.add(new THREE.Mesh(new THREE.TubeGeometry(back, 120, 0.013, 8), wireMat));
     // Morse tape strip on the base
     const tapeTex = canvasTex(512, 32, (x, w, h) => { x.fillStyle = '#e9dfc6'; x.fillRect(0, 0, w, h); x.fillStyle = '#2a1d12'; const code = '.-- .... .- - / .... .- - .... / --. --- -.. / .-- .-. --- ..- --. .... -'; let px = 10; for (const ch of code) { if (ch === '.') { x.fillRect(px, 13, 6, 6); px += 14; } else if (ch === '-') { x.fillRect(px, 13, 20, 6); px += 28; } else px += 18; } });
-    const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.04), new THREE.MeshStandardMaterial({ map: tapeTex, roughness: 0.8 })); tape.rotation.x = -Math.PI / 2; tape.position.set(0.05, 0.0765, 0.17); tele.add(tape);
+    const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.04), new THREE.MeshStandardMaterial({ map: tapeTex, color: '#6f6a60', roughness: 0.85 })); tape.rotation.x = -Math.PI / 2; tape.position.set(0.05, 0.0765, 0.17); tele.add(tape);
   }
   const contactGlow = glowSprite({ color: '#cfe6ff', intensity: 3, scale: 0.12 }); contactGlow.position.set(0.24, 0.14, 0).add(TG); scene.add(contactGlow);
   const LEVER_C = TG.clone().add(V(0.06, 0.2, 0)); // silhouette centre used for the match cut
@@ -207,14 +207,14 @@ export function create(ctx, segment) {
       x.fillStyle = '#1a1a1a'; x.font = '600 44px "Inter"'; x.textAlign = 'center'; x.textBaseline = 'middle';
       for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const d = String((i + 1) % 10); x.fillText(d, 256 + Math.cos(a) * 190, 256 - Math.sin(a) * 190); x.font = '400 18px "Inter"'; x.fillText(['', 'ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PRS', 'TUV', 'WXY', 'OPER'][i + 1 > 9 ? 9 : i + 1] ?? '', 256 + Math.cos(a) * 150, 256 - Math.sin(a) * 150); x.font = '600 44px "Inter"'; }
     });
-    const plateN = new THREE.Mesh(new THREE.CircleGeometry(0.088, 64), new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.5 })); dial.add(plateN);
+    const plateN = new THREE.Mesh(new THREE.CircleGeometry(0.088, 64), new THREE.MeshStandardMaterial({ map: numTex, color: '#7a766e', roughness: 0.8 })); dial.add(plateN);
     const ws = new THREE.Shape(); ws.absarc(0, 0, 0.088, 0, TAU, false);
     const wheelHoles = [];
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const h = new THREE.Path(); h.absarc(Math.cos(a) * 0.066, Math.sin(a) * 0.066, 0.0125, 0, TAU, true); ws.holes.push(h); wheelHoles.push(a); }
     const inner = new THREE.Path(); inner.absarc(0, 0, 0.034, 0, TAU, true); ws.holes.push(inner);
     const wheelG = new THREE.ExtrudeGeometry(ws, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2, curveSegments: 32 });
-    const wheel = new THREE.Mesh(wheelG, chrome); wheel.position.z = 0.004; dial.add(wheel); dial.userData.wheel = wheel;
-    const card = new THREE.Mesh(new THREE.CircleGeometry(0.032, 48), new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (x) => { x.fillStyle = '#efe7d4'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#6a1b12'; x.font = '600 34px "IBM Plex Mono"'; x.textAlign = 'center'; x.fillText('MAIN', 128, 110); x.fillText('1876', 128, 160); }), roughness: 0.6 })); card.position.z = 0.003; dial.add(card);
+    const wheel = new THREE.Mesh(wheelG, new THREE.MeshStandardMaterial({ color: '#aab0b8', metalness: 1, roughness: 0.2, envMapIntensity: 0.6 })); wheel.position.z = 0.004; dial.add(wheel); dial.userData.wheel = wheel;
+    const card = new THREE.Mesh(new THREE.CircleGeometry(0.032, 48), new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (x) => { x.fillStyle = '#efe7d4'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#6a1b12'; x.font = '600 34px "IBM Plex Mono"'; x.textAlign = 'center'; x.fillText('MAIN', 128, 110); x.fillText('1876', 128, 160); }), color: '#8f8a80', roughness: 0.6 })); card.position.z = 0.003; dial.add(card);
     const stop = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.01), chrome); stop.position.set(Math.cos(-0.95) * 0.086, Math.sin(-0.95) * 0.086, 0.012); stop.rotation.z = -0.95; dial.add(stop);
     // cradle
     [-0.11, 0.11].forEach((x) => { const pr = new THREE.Mesh(new RoundedBoxGeometry(0.05, 0.08, 0.05, 2, 0.015), bakelite); pr.position.set(x, 0.2, -0.02); phone.add(pr); });
@@ -277,8 +277,8 @@ export function create(ctx, segment) {
     const needle = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.05, 0.002).translate(0, 0.025, 0), new THREE.MeshBasicMaterial({ color: '#8a1a10' })); needle.position.set(0, 0.2, RDP / 2 - 0.012); radio.add(needle); radio.userData.needle = needle;
     [-1, 1].forEach((s) => { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.03, 32).rotateX(Math.PI / 2), bakelite); k.position.set(s * 0.2, 0.2, RDP / 2 + 0.015); radio.add(k); });
     // chassis + tubes inside
-    const chassis = new THREE.Mesh(new THREE.BoxGeometry(RW - 0.08, 0.02, RDP - 0.08), new THREE.MeshStandardMaterial({ color: '#8a8f96', metalness: 1, roughness: 0.4 })); chassis.position.set(0, 0.24, -0.01); radio.add(chassis);
-    const glassM = new THREE.MeshPhysicalMaterial({ color: '#dfe8ee', roughness: 0.03, metalness: 0, transmission: 0.9, transparent: true, opacity: 0.5, thickness: 0.02, envMapIntensity: 1.6, clearcoat: 1 });
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(RW - 0.08, 0.02, RDP - 0.08), new THREE.MeshStandardMaterial({ color: '#3a3d42', metalness: 1, roughness: 0.45 })); chassis.position.set(0, 0.24, -0.01); radio.add(chassis);
+    const glassM = new THREE.MeshPhysicalMaterial({ color: '#dfe8ee', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.4, clearcoat: 1, depthWrite: false });
     const plateM = new THREE.MeshStandardMaterial({ color: '#3b3d40', metalness: 0.9, roughness: 0.5 });
     const tubeSpots = [[-0.2, -0.08, 0.16], [-0.08, -0.1, 0.19], [0.05, -0.07, 0.22], [0.18, -0.09, 0.15], [0.0, 0.07, 0.13]];
     tubeSpots.forEach(([x, z, h], i) => {
@@ -297,6 +297,7 @@ export function create(ctx, segment) {
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 24), new THREE.MeshStandardMaterial({ color: '#b8bdc4', metalness: 1, roughness: 0.3 })); cap.position.set(-0.24, 0.3, 0.07); radio.add(cap);
   }
   const TUBE0 = tubes[2];
+  TUBE0.gl2.scale.setScalar(0.1); TUBE0.gl2.material.color.multiplyScalar(1.8);
   const TUBE_TOP = RD.clone().add(V(0.05, 0.25 + 0.02 + TUBE0.h, -0.07));
   const tubeLight = new THREE.PointLight('#ff8a3a', 0, 1.2, 2); tubeLight.position.copy(RD).add(V(0, 0.4, -0.05)); scene.add(tubeLight);
 
@@ -306,7 +307,7 @@ export function create(ctx, segment) {
   const board = new THREE.Group(); board.position.copy(PC); scene.add(board);
   const boardTex = canvasTex(1024, 1024, (x, w, h) => { x.fillStyle = '#07130f'; x.fillRect(0, 0, w, h); x.strokeStyle = 'rgba(80,140,110,0.08)'; x.lineWidth = 1; for (let i = 0; i < w; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); } });
   boardTex.wrapS = boardTex.wrapT = THREE.RepeatWrapping; boardTex.repeat.set(10, 10);
-  const pcb = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ map: boardTex, color: '#ffffff', roughness: 0.45, metalness: 0.3 }));
+  const pcb = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ map: boardTex, color: '#ffffff', roughness: 0.45, metalness: 0.3, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
   pcb.rotation.x = -Math.PI / 2; board.add(pcb);
   const CHIP = 0.3;
   const chip = new THREE.Group(); board.add(chip);
@@ -317,7 +318,7 @@ export function create(ctx, segment) {
     dieMat.map = dieTex;
     const die = new THREE.Mesh(new THREE.PlaneGeometry(CHIP * 0.5, CHIP * 0.5), dieMat); die.rotation.x = -Math.PI / 2; die.position.y = 0.0405; chip.add(die);
     const pinG = new THREE.BoxGeometry(0.012, 0.008, 0.04);
-    const pins = new THREE.InstancedMesh(pinG, new THREE.MeshStandardMaterial({ color: '#d9dde2', metalness: 1, roughness: 0.25 }), 64);
+    const pins = new THREE.InstancedMesh(pinG, new THREE.MeshStandardMaterial({ color: '#9aa0a8', metalness: 1, roughness: 0.4 }), 64);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(); let k = 0;
     for (let s = 0; s < 4; s++) for (let i = 0; i < 16; i++) { const o = -CHIP / 2 + 0.02 + (i / 15) * (CHIP - 0.04); const a = (s * Math.PI) / 2; q.setFromAxisAngle(V(0, 1, 0), a); const p = V(o, 0.006, CHIP / 2 + 0.018).applyAxisAngle(V(0, 1, 0), a); m4.compose(p, q, V(1, 1, 1)); pins.setMatrixAt(k++, m4); }
     chip.add(pins);
@@ -330,7 +331,7 @@ export function create(ctx, segment) {
   const COOL = new THREE.Color('#bfe0ff'), WARM = new THREE.Color('#e8955a');
   function ribbon(a, b, dA, dB, w, col) {
     const dir = new THREE.Vector2(b.x - a.x, b.y - a.y); const L = dir.length(); if (L < 1e-5) return; dir.divideScalar(L);
-    const nx = -dir.y * w / 2, nz = dir.x * w / 2, y = 0.002;
+    const nx = -dir.y * w / 2, nz = dir.x * w / 2, y = 0.003; w *= 0.6;
     const verts = [[a.x + nx, a.y + nz, dA], [a.x - nx, a.y - nz, dA], [b.x + nx, b.y + nz, dB], [a.x - nx, a.y - nz, dA], [b.x - nx, b.y - nz, dB], [b.x + nx, b.y + nz, dB]];
     for (const [x, z, d] of verts) { tPos.push(x, y, z); tD.push(d); tC.push(col.r, col.g, col.b); }
   }
@@ -362,7 +363,7 @@ export function create(ctx, segment) {
     if (R2() < 0.5) route(res.p, new THREE.Vector2(out.y, -out.x), res.d, 1 + R2() * 3, 0.01, COOL, 0.3);
   }
   // city buses: bundles of parallel traces across the board
-  for (let b = 0; b < 70; b++) {
+  for (let b = 0; b < 260; b++) {
     const ang = Math.floor(R2() * 4) * (Math.PI / 2);
     const c = new THREE.Vector2((R2() - 0.5) * 20, (R2() - 0.5) * 20);
     if (c.length() < 0.8) continue;
@@ -390,9 +391,9 @@ export function create(ctx, segment) {
       void main(){ if (vD > uGrow) discard;
         float front = exp(-(uGrow - vD) * 3.0);
         float pulses = pow(fract(vD * 0.9 - uTime * 2.2), 18.0);
-        vec3 col = vC * (0.35 + front * 3.5 + pulses * 2.2) * uI * vFog;
+        vec3 col = vC * (0.3 + front * 2.0 + pulses * 1.8) * uI * vFog;
         gl_FragColor = vec4(col, 1.0); }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
   const traces = new THREE.Mesh(traceGeo, traceMat); traces.frustumCulled = false; board.add(traces);
   // pads / vias (instanced, same growth rule)
@@ -404,7 +405,7 @@ export function create(ctx, segment) {
     fragmentShader: `uniform float uGrow, uTime, uI; varying float vD; varying float vFog; varying vec2 vL;
       void main(){ if (vD > uGrow) discard; float r = length(vL); float ring = smoothstep(1.0, 0.8, r) * (0.6 + 0.4 * smoothstep(0.3, 0.5, r));
         float front = exp(-(uGrow - vD) * 2.0);
-        gl_FragColor = vec4(vec3(0.85, 0.93, 1.0) * ring * (0.6 + front * 4.0) * uI * vFog, 1.0); }`,
+        gl_FragColor = vec4(vec3(0.85, 0.93, 1.0) * ring * (0.35 + front * 2.5) * uI * vFog, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }), pads.length);
   {
@@ -415,17 +416,17 @@ export function create(ctx, segment) {
   }
   // components = the city's buildings
   const comps = [];
-  for (let i = 0; i < 420; i++) {
+  for (let i = 0; i < 900; i++) {
     const x = (R2() - 0.5) * 18, z = (R2() - 0.5) * 18; const d = Math.hypot(x, z); if (d < 0.6) continue;
     const big = R2() < 0.12;
-    comps.push({ x, z, d, w: big ? 0.18 + R2() * 0.3 : 0.03 + R2() * 0.06, l: big ? 0.18 + R2() * 0.3 : 0.015 + R2() * 0.03, h: big ? 0.03 + R2() * 0.05 : 0.01 + R2() * 0.02, rot: R2() < 0.5 ? 0 : Math.PI / 2 });
+    comps.push({ x, z, d, w: big ? 0.18 + R2() * 0.3 : 0.03 + R2() * 0.06, l: big ? 0.18 + R2() * 0.3 : 0.015 + R2() * 0.03, h: big ? 0.03 + R2() * 0.05 : 0.01 + R2() * 0.02, rot: R2() < 0.5 ? 0 : Math.PI / 2, lit: big || R2() < 0.35 });
   }
   const compInst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: '#1a1c20', metalness: 0.4, roughness: 0.4 }), comps.length);
   const ledInst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), comps.length);
   compInst.frustumCulled = ledInst.frustumCulled = false;
   board.add(compInst, ledInst);
   const cm4 = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = V(1, 1, 1), cp3 = V(0, 0, 0), ledCol = new THREE.Color();
-  comps.forEach((c, i) => { ledCol.set(R2() < 0.7 ? '#9cc8ff' : R2() < 0.5 ? '#ffb070' : '#ffffff').multiplyScalar(2 + R2() * 2); ledInst.setColorAt(i, ledCol); });
+  comps.forEach((c, i) => { ledCol.set(R2() < 0.7 ? '#9cc8ff' : R2() < 0.5 ? '#ffb070' : '#ffffff').multiplyScalar(1.5 + R2() * 2); ledInst.setColorAt(i, ledCol); });
 
   // =====================================================================================
   // HUD labels
@@ -452,12 +453,12 @@ export function create(ctx, segment) {
   }
   // shot 2 ends in a pure side view of the lever; shot 3 starts from the SAME relative pose on the handset
   const MATCH_OFF = V(0.02, 0.03, 1.15);
-  const camTel = makePath([[tTel, TG.clone().add(V(-0.75, 0.32, 0.55))], [tTel + 0.35, TG.clone().add(V(-0.25, 0.24, 0.95))], [tPhone, LEVER_C.clone().add(MATCH_OFF)]]);
-  const tgtTel = makePath([[tTel, TG.clone().add(V(-0.3, 0.1, 0.05))], [tTel + 0.35, TG.clone().add(V(0.0, 0.16, 0))], [tPhone, LEVER_C.clone()]]);
+  const camTel = makePath([[tTel, TG.clone().add(V(-0.75, 0.32, 0.55))], [tTel + 0.3, TG.clone().add(V(-0.2, 0.24, 1.0))], [tPhone - 0.08, LEVER_C.clone().add(MATCH_OFF).add(V(-0.01, 0, 0.01))], [tPhone, LEVER_C.clone().add(MATCH_OFF)]]);
+  const tgtTel = makePath([[tTel, TG.clone().add(V(-0.3, 0.1, 0.05))], [tTel + 0.3, TG.clone().add(V(0.02, 0.17, 0))], [tPhone - 0.08, LEVER_C.clone().add(V(-0.01, 0, 0))], [tPhone, LEVER_C.clone()]]);
   // shot 3: from the handset side view down onto the dial (dial fills a known angular size at the cut)
   const DIAL_D = 0.42;
   const dialCam = DIAL_W.clone().addScaledVector(DIAL_N, DIAL_D);
-  const camPh = makePath([[tPhone, HANDSET_C.clone().add(MATCH_OFF)], [tPhone + 0.3, HANDSET_C.clone().add(V(0.12, -0.02, 0.8))], [tRadio, dialCam]]);
+  const camPh = makePath([[tPhone, HANDSET_C.clone().addScaledVector(MATCH_OFF, 0.82)], [tPhone + 0.3, HANDSET_C.clone().add(V(0.12, -0.02, 0.8))], [tRadio, dialCam]]);
   const tgtPh = makePath([[tPhone, HANDSET_C.clone()], [tPhone + 0.3, HANDSET_C.clone().lerp(DIAL_W, 0.6)], [tRadio, DIAL_W.clone()]]);
   // shot 4: start with the grille at the same screen size as the dial, fly through it onto the tube top
   const GRILLE_D = DIAL_D * (GR / 0.088);
@@ -465,8 +466,8 @@ export function create(ctx, segment) {
   const tgtRd = makePath([[tRadio, grilleC.clone()], [tRadio + 0.25, grilleC.clone().add(V(0, -0.1, -0.3))], [tRadio + 0.4, TUBE_TOP.clone().add(V(0, 0, 0.05))], [tElec, TUBE_TOP.clone()]]);
   // shot 5: chip from above (same framing as the tube top), rise over the city, then push into the centre
   const CH_H = 0.13 * (CHIP / 2) / 0.03;
-  const camPc = makePath([[tElec, PC.clone().add(V(0, CH_H, 0.0))], [tElec + 0.3, PC.clone().add(V(0, 1.1, 0.25))], [tCity + 0.15, PC.clone().add(V(0.25, 2.0, 2.3))], [DUR - 0.25, PC.clone().add(V(0.05, 0.9, 1.0))], [DUR, PC.clone().add(V(0.0, 0.42, 0.4))]]);
-  const tgtPc = makePath([[tElec, PC.clone()], [tElec + 0.3, PC.clone()], [tCity + 0.15, PC.clone().add(V(0, 0, -0.4))], [DUR, PC.clone()]]);
+  const camPc = makePath([[tElec, PC.clone().add(V(0, CH_H, 0.0))], [tElec + 0.25, PC.clone().add(V(0, 1.7, 0.3))], [tCity + 0.1, PC.clone().add(V(0.3, 3.4, 3.0))], [DUR - 0.2, PC.clone().add(V(0.1, 1.7, 1.5))], [DUR, PC.clone().add(V(0.0, 0.75, 0.6))]]);
+  const tgtPc = makePath([[tElec, PC.clone()], [tElec + 0.25, PC.clone()], [tCity + 0.1, PC.clone().add(V(0, 0, -0.9))], [DUR - 0.2, PC.clone().add(V(0, 0, -0.2))], [DUR, PC.clone()]]);
 
   // scratch
   const cp = V(0, 0, 0), ct = V(0, 0, 0), up = V(0, 1, 0), tmp = V(0, 0, 0), tmp2 = V(0, 0, 0), tan = V(0, 0, 0), side = V(0, 0, 0);
@@ -478,15 +479,15 @@ export function create(ctx, segment) {
     const shot = t < tTel ? 1 : t < tPhone ? 2 : t < tRadio ? 3 : t < tElec ? 4 : 5;
 
     // ---- shot 1: the spark
-    const head = sat(timeWarp(t, [[0.0, 0.0], [tSpark, 0.02], [tSpark + 0.25, 0.3], [tTel - 0.04, 1.0]]));
+    const head = sat(timeWarp(t, [[0.0, 0.0], [tSpark, 0.02], [tSpark + 0.2, 0.35], [tTel - 0.12, 1.0]]));
     const hu = Math.max(0.0005, head);
     pulseMat.uniforms.uHead.value = hu;
-    pulseMat.uniforms.uI.value = ramp(t, 0.15, tSpark) * (1 - 0.6 * smoothstep(tTel, tTel + 0.5, t));
+    pulseMat.uniforms.uI.value = ramp(t, 0.15, tSpark) * (1 - 0.6 * smoothstep(tTel - 0.3, tTel - 0.13, t)) * (1 - smoothstep(tTel - 0.13, tTel - 0.03, t));
     wireCurve.getPointAt(Math.min(1, hu), tmp);
     headGlow.position.copy(tmp); headGlow2.position.copy(tmp);
     const ignite = Math.exp(-Math.max(0, t - 0.25) * 10) * (t > 0.2 ? 1 : 0);
-    headGlow.scale.setScalar((0.25 + ignite * 1.5) * (head < 0.999 ? 1 : 0.4));
-    headGlow2.scale.setScalar(0.9 + ignite * 3);
+    headGlow.scale.setScalar(0.22 + ignite * 0.6);
+    headGlow2.scale.setScalar(0.7 + ignite * 1.2);
     headGlow.visible = headGlow2.visible = t > 0.18 && head < 0.999;
     // micro arcs
     arcLines.visible = headGlow.visible;
@@ -496,7 +497,7 @@ export function create(ctx, segment) {
       for (let a = 0; a < ARCS; a++) {
         const hsd = fr * 13.7 + a * 7.1;
         const dx = hash1(hsd) - 0.5, dy = hash1(hsd + 1) - 0.5, dz = hash1(hsd + 2) - 0.5;
-        const L = 0.05 + hash1(hsd + 3) * 0.12;
+        const L = 0.025 + hash1(hsd + 3) * 0.05;
         let px = tmp.x, py = tmp.y, pz = tmp.z;
         for (let s = 0; s < ARC_SEG; s++) {
           const f = L / ARC_SEG;
@@ -509,7 +510,7 @@ export function create(ctx, segment) {
       }
       arcGeo.attributes.position.needsUpdate = true;
     }
-    streaks.opacity = 0.45 * (shot === 1 ? 1 : 0);
+    streaks.opacity = 0.4 * (shot === 1 ? ramp(t, 0.35, 0.5) : 0);
     bokeh.tick(t, info); bokeh.u.opacity = shot === 1 ? 0.6 : 0;
 
     // ---- shot 2: telegraph (key taps: down on the beat at 29.5, double tap 29.75/29.875)
@@ -525,14 +526,14 @@ export function create(ctx, segment) {
     // ---- shot 4: tubes warm up, needle sweeps
     const warmUp = ramp(t, tRadio - 0.05, tRadio + 0.4);
     tubes.forEach((tb, i) => { const flick = 0.9 + 0.1 * Math.sin(T * 50 + i * 3.1); tb.fil.material.color.setRGB(1, 0.45, 0.15).multiplyScalar((1.5 + 3 * warmUp) * flick); tb.gl.material.opacity = warmUp * flick; tb.gl2.material.opacity = warmUp; });
-    tubeLight.intensity = 0.8 * warmUp;
+    tubeLight.intensity = 0.3 * warmUp;
     radio.userData.needle.rotation.z = 0.9 - 1.8 * ramp(t, tRadio, tElec, ease.inOutSine);
     cloth.material.opacity = 1 - smoothstep(tRadio + 0.2, tRadio + 0.36, t);
 
     // ---- shot 5: chip die cools from tube-orange to electric white-blue; the city grows
     const cool = ramp(t, tElec + 0.05, tElec + 0.45);
-    dieMat.color.setRGB(lerp(1.0, 0.75, cool), lerp(0.6, 0.9, cool), lerp(0.3, 1.0, cool)).multiplyScalar(2.2 + 1.5 * pulse(T, { decay: 5 }));
-    chipGlow.material.color.setRGB(lerp(1.0, 0.7, cool), lerp(0.7, 0.88, cool), lerp(0.45, 1.0, cool)).multiplyScalar(2.2);
+    dieMat.color.setRGB(lerp(1.0, 0.75, cool), lerp(0.6, 0.9, cool), lerp(0.3, 1.0, cool)).multiplyScalar(1.3 + 0.8 * pulse(T, { decay: 5 }));
+    chipGlow.material.color.setRGB(lerp(1.0, 0.7, cool), lerp(0.7, 0.88, cool), lerp(0.45, 1.0, cool)).multiplyScalar(1.1);
     cityUniforms.uGrow.value = 0.18 + Math.pow(sat((t - tElec - 0.05) / (DUR - tElec)), 1.6) * 14 + ramp(t, tCity - 0.1, tCity + 0.2) * 1.2;
     cityUniforms.uTime.value = t;
     const g = cityUniforms.uGrow.value;
@@ -541,8 +542,8 @@ export function create(ctx, segment) {
       cq.setFromAxisAngle(up, c.rot);
       cp3.set(c.x, 0, c.z); cs.set(c.w, c.h * k + 1e-4, c.l);
       cm4.compose(cp3, cq, cs); compInst.setMatrixAt(i, cm4);
-      const on = c.w > 0.15 ? k : 0;
-      cp3.set(c.x, c.h * k + 0.004, c.z); cs.set(0.012 * on + 1e-5, 0.006, 0.012 * on + 1e-5);
+      const on = c.lit ? k : 0;
+      cp3.set(c.x, c.h * k + 0.004, c.z); cs.set((c.w > 0.15 ? 0.014 : 0.008) * on + 1e-5, 0.004, (c.w > 0.15 ? 0.014 : 0.008) * on + 1e-5);
       cm4.compose(cp3, cq, cs); ledInst.setMatrixAt(i, cm4);
     });
     compInst.instanceMatrix.needsUpdate = true; ledInst.instanceMatrix.needsUpdate = true;
@@ -565,7 +566,7 @@ export function create(ctx, segment) {
       cp.addScaledVector(side, 0.32 + wob).addScaledVector(up, 0.1);
       wireCurve.getPointAt(Math.min(1, hu + 0.02), ct);
       // settle towards the telegraph as the pulse arrives
-      const s = smoothstep(tTel - 0.25, tTel, t);
+      const s = smoothstep(tTel - 0.16, tTel, t);
       camTel(tTel, tmp2); cp.lerp(tmp2, s);
       tgtTel(tTel, tmp2); ct.lerp(tmp2, s);
     } else if (shot === 2) { camTel(t, cp); tgtTel(t, ct); }
@@ -578,6 +579,7 @@ export function create(ctx, segment) {
     else camera.up.copy(up);
     camera.lookAt(ct);
     camera.fov = shot === 1 ? 44 + 10 * smoothstep(tSpark, tSpark + 0.2, t) * (1 - smoothstep(tTel - 0.25, tTel, t)) : 30;
+    camera.near = shot === 5 ? 0.02 : 0.004;
     camera.updateProjectionMatrix();
 
     dof.focus = cp.distanceTo(ct);

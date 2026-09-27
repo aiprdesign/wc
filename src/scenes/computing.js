@@ -182,10 +182,11 @@ export function create(ctx, segment) {
 
   // ================================================================ WORLD A — the bench
   const worldA = new THREE.Group(); scene.add(worldA);
+  scene.fog = new THREE.Fog(0x000000, 5.5, 12);
   const key = new THREE.SpotLight('#ffe7c4', 60, 20, 0.36, 0.55, 1.4); key.position.set(-1.6, 4.6, 2.0); key.target.position.set(0, 0.5, 0); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
   worldA.add(key, key.target);
   const rim = new THREE.DirectionalLight('#9cc8ff', 1.6); rim.position.set(3, 2, -4); worldA.add(rim);
-  const floorMat = new THREE.MeshStandardMaterial({ color: '#030304', metalness: 0.3, roughness: 0.62, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#020203', metalness: 0.0, roughness: 0.8, envMapIntensity: 0.1, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), floorMat); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; worldA.add(floor);
 
   // ---- materials
@@ -193,11 +194,12 @@ export function create(ctx, segment) {
   const brassWheel = new THREE.MeshStandardMaterial({ map: wheelTexture(), metalness: 0.95, roughness: 0.32 });
   const darkSteel = new THREE.MeshStandardMaterial({ color: '#2a2d33', metalness: 0.9, roughness: 0.4 });
   const steelM = new THREE.MeshStandardMaterial({ color: '#c9d0d8', metalness: 1, roughness: 0.28, map: brushedMetalTexture() });
-  const copperM = new THREE.MeshStandardMaterial({ color: '#c47a42', metalness: 1, roughness: 0.32 });
+  const steelR = new THREE.MeshStandardMaterial({ color: '#b9c0c8', metalness: 1, roughness: 0.5, map: brushedMetalTexture() });
+  const copperM = new THREE.MeshStandardMaterial({ color: '#c47a42', metalness: 1, roughness: 0.48 });
   const bakelite = new THREE.MeshStandardMaterial({ color: '#17140f', metalness: 0.1, roughness: 0.5 });
   const epoxy = new THREE.MeshStandardMaterial({ color: '#0e0f11', metalness: 0.2, roughness: 0.38 });
   const goldM = new THREE.MeshStandardMaterial({ color: '#f0c46a', metalness: 1, roughness: 0.22 });
-  const glassM = new THREE.MeshStandardMaterial({ color: '#dfe9f5', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.13, envMapIntensity: 2.2, depthWrite: false });
+  const glassM = new THREE.MeshStandardMaterial({ color: '#dfe9f5', metalness: 0, roughness: 0.2, transparent: true, opacity: 0.13, envMapIntensity: 1.3, depthWrite: false });
   const filM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff8a3a').multiplyScalar(4), toneMapped: false });
   const haloM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff9a50').multiplyScalar(0.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const sparkM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe8ff').multiplyScalar(1.6), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
@@ -240,11 +242,11 @@ export function create(ctx, segment) {
   const relayParts = [
     { mesh: inst(new THREE.BoxGeometry(0.34, 0.035, 0.24), bakelite, 18), L: local(0, 0.0175, 0) },
     { mesh: inst(new THREE.CylinderGeometry(0.058, 0.058, 0.16, 24), copperM, 18), L: local(-0.06, 0.115, 0) },
-    { mesh: inst(new THREE.BoxGeometry(0.03, 0.2, 0.12), steelM, 18), L: local(0.035, 0.135, 0) },
-    { mesh: inst(new THREE.BoxGeometry(0.02, 0.07, 0.05), steelM, 18), L: local(0.12, 0.07, 0) },
+    { mesh: inst(new THREE.BoxGeometry(0.03, 0.2, 0.12), steelR, 18), L: local(0.035, 0.135, 0) },
+    { mesh: inst(new THREE.BoxGeometry(0.02, 0.07, 0.05), steelR, 18), L: local(0.12, 0.07, 0) },
   ];
   const armGeo = new THREE.BoxGeometry(0.17, 0.012, 0.1); armGeo.translate(-0.085, 0, 0);
-  const armature = inst(armGeo, steelM, 18);
+  const armature = inst(armGeo, steelR, 18);
   const relaySpark = inst(new THREE.SphereGeometry(0.011, 8, 6), sparkM, 18); relaySpark.castShadow = false;
 
   // ---- stage 2: vacuum tubes (8 × 3)
@@ -469,6 +471,7 @@ export function create(ctx, segment) {
     update(t, info) {
       const inA = t < tSwitch;
       worldA.visible = inA; worldB.visible = !inA; lightB.visible = !inA;
+      scene.fog.near = inA ? 5.5 : 900; scene.fog.far = inA ? 12 : 1000;
       if (inA) this._bench(t, info); else this._die(t, info);
       this._hud(t);
     },
@@ -488,7 +491,7 @@ export function create(ctx, segment) {
 
       // key light sweeps across the brass in darkness
       key.position.set(-1.6 + Math.sin(t * 0.6) * 0.5, 4.6, 2.0);
-      key.intensity = 60 * ramp(t, 0, 0.35) + 20 * beatAt(T) * 0.3;
+      key.intensity = (t < tRel - 0.2 ? 55 : 38) * ramp(t, 0, 0.35) + 5 * beatAt(T);
       floorMat.emissiveIntensity = 0;
 
       // ---------------- stage 0: calculator
@@ -546,7 +549,7 @@ export function create(ctx, segment) {
         const ang = closed ? -0.02 : 0.14 * (1 - bt * 0.5);
         Mp.compose(tmp.set(0.075, 0.245, 0), qv.setFromAxisAngle(tmp2.set(0, 0, 1), ang), sv.set(1, 1, 1));
         M.multiplyMatrices(Mb, Mp); armature.setMatrixAt(i, M);
-        const sp = closed * (0.3 + bt * 0.5);
+        const sp = 0;
         Mp.compose(tmp.set(0.12, 0.11, 0), qv.identity(), sv.setScalar(sp));
         M.multiplyMatrices(Mb, Mp); relaySpark.setMatrixAt(i, M);
       }
