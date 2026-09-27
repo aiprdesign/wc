@@ -69,7 +69,7 @@ vec3 dieColor(vec2 p, float time, float litR, float gain){
   vec3 lane = vec3(0.32, 0.58, 1.0);
   col += lane * (glow + blk * 0.3) * lit * gain * 0.55;
   col += vec3(0.85, 0.93, 1.0) * pul * 3.0 * lit * gain;
-  col += lane * front * (glow + 0.08) * 1.3 * gain;
+  col += lane * front * (glow + 0.04) * 0.6 * gain;
   return col;
 }`;
 function dieMaterial({ chip = false } = {}) {
@@ -175,7 +175,7 @@ export function create(ctx, segment) {
   const tSwitch = tDive + 0.22;                    // chip world → die world (matched framing)
   const scene = new THREE.Scene();
   scene.environment = ctx.env;
-  scene.environmentIntensity = 0.45;
+  scene.environmentIntensity = 0.7;
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.01, 200);
   const R = rng(3885);
   const beatAt = (T) => pulse(T, { decay: 9 });
@@ -185,7 +185,7 @@ export function create(ctx, segment) {
   const key = new THREE.SpotLight('#ffe7c4', 60, 20, 0.36, 0.55, 1.4); key.position.set(-1.6, 4.6, 2.0); key.target.position.set(0, 0.5, 0); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
   worldA.add(key, key.target);
   const rim = new THREE.DirectionalLight('#9cc8ff', 1.6); rim.position.set(3, 2, -4); worldA.add(rim);
-  const floorMat = new THREE.MeshStandardMaterial({ color: '#040506', metalness: 0.7, roughness: 0.34, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#030304', metalness: 0.3, roughness: 0.62, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), floorMat); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; worldA.add(floor);
 
   // ---- materials
@@ -295,7 +295,7 @@ export function create(ctx, segment) {
 
   // ---- carried-over particles for each transformation
   const bursts = [[WHEELS, RELAYS], [RELAYS, TUBES], [TUBES, TRS], [TRS, [V3(0, 0.08, 0)]]].map(([A, B], k) => {
-    const n = 1400, pa = new Float32Array(n * 3), pb = new Float32Array(n * 3), r = rng(70 + k);
+    const n = 800, pa = new Float32Array(n * 3), pb = new Float32Array(n * 3), r = rng(70 + k);
     for (let i = 0; i < n; i++) {
       const a = A[i % A.length], b = B[Math.floor(r() * B.length)];
       const ya = k === 0 ? a.y : 0.12;
@@ -396,7 +396,7 @@ export function create(ctx, segment) {
   addPanel(nn, V3(0, 1.8, -14.4), 0, 'ARTIFICIAL INTELLIGENCE', 'Learning from data', tBin + 0.42, 2.8, 2.2);
 
   // binary glyph streams: die → interfaces
-  const GLYPHS = 1600;
+  const GLYPHS = 1100;
   const atlas = (() => { const c = mkCanvas(256, 128), g = c.getContext('2d'); g.fillStyle = '#fff'; g.font = `500 104px "${FONTS.mono}"`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('0', 64, 68); g.fillText('1', 192, 68); return toTexture(c, { srgb: false }); })();
   const gGeo = new THREE.InstancedBufferGeometry();
   gGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
@@ -428,12 +428,12 @@ export function create(ctx, segment) {
         vec3 p = mix(mix(aS, aC, ku), mix(aC, aE, ku), ku);
         vBit = step(0.5, fract(aP.z * 7.0 + floor(uTime * 9.0 + aP.z * 20.0) * 0.618));
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        mv.xy += position.xy * aP.w * 2.2;
+        mv.xy += position.xy * aP.w * 2.0 * clamp(-mv.z / 4.0, 0.35, 1.0);
         vUv = vec2((uv.x + vBit) * 0.5, uv.y);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `uniform sampler2D uMap; uniform float uOpacity; varying vec2 vUv; varying float vA; varying float vBit;
-      void main(){ float a = texture2D(uMap, vUv).a * vA * uOpacity; if (a < 0.01) discard; gl_FragColor = vec4(vec3(0.6, 0.8, 1.0) * 1.8, a); }`,
+      void main(){ float a = texture2D(uMap, vUv).a * vA * uOpacity; if (a < 0.01) discard; gl_FragColor = vec4(vec3(0.6, 0.8, 1.0) * 1.25, a); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const glyphs = new THREE.Mesh(gGeo, glyphMat); glyphs.frustumCulled = false; worldB.add(glyphs);
@@ -546,7 +546,7 @@ export function create(ctx, segment) {
         const ang = closed ? -0.02 : 0.14 * (1 - bt * 0.5);
         Mp.compose(tmp.set(0.075, 0.245, 0), qv.setFromAxisAngle(tmp2.set(0, 0, 1), ang), sv.set(1, 1, 1));
         M.multiplyMatrices(Mb, Mp); armature.setMatrixAt(i, M);
-        const sp = closed * (0.4 + bt);
+        const sp = closed * (0.3 + bt * 0.5);
         Mp.compose(tmp.set(0.12, 0.11, 0), qv.identity(), sv.setScalar(sp));
         M.multiplyMatrices(Mb, Mp); relaySpark.setMatrixAt(i, M);
       }
@@ -601,7 +601,7 @@ export function create(ctx, segment) {
         const p = bursts[k];
         const m = ramp(t, t0, t0 + 0.5);
         p.visible = m > 0 && m < 1;
-        p.u.mix = m; p.u.opacity = envelope(t, t0, t0 + 0.55, 0.08, 0.2); p.tick(t, info);
+        p.u.mix = m; p.u.opacity = envelope(t, t0, t0 + 0.55, 0.08, 0.2) * 0.7; p.tick(t, info);
       });
 
       // ---------------- lens
