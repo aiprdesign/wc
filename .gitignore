@@ -3,3 +3,4 @@ node_modules/
 *.webm
 frames/
 *.bundle
+renders/
