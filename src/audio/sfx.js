@@ -606,6 +606,154 @@ function impactBuffer(S, v) {
   return buf;
 }
 
+// ------------------------------------------------------------------ the moonshot
+// Everything here is heard the way the Apollo audio was: through the hull or over the
+// air-to-ground loop — muffled, band-limited, never a "space whoosh".
+
+/**
+ * Structural creak (the capsule flexing): stick-slip friction — a buzz whose rate
+ * wanders and catches — through two panel resonances, muffled by the hull.
+ */
+export function creak(S, t0, dur, { level = 0.05, pan = 0, bus = 'sfx', rate = 70, panel = 820 } = {}) {
+  const t1 = t0 + dur;
+  const walk = wander(S, dur, 200, 0.6, 0.85);
+  const o = S.osc('sawtooth', rate, t0, t1 + 0.05);
+  o.frequency.setValueCurveAtTime(S.curve(dur, 200, (_, i) => rate * (0.6 + 0.9 * walk[i])), t0, dur);
+  const b1 = S.filter('bandpass', panel, 7), b2 = S.filter('bandpass', panel * 2.37, 9);
+  const lp = S.filter('lowpass', 2600, 0.7);
+  const g = S.gain(0);
+  let hold = 1;
+  g.gain.setValueCurveAtTime(S.curve(dur, 200, (t, i) => {
+    if (S.random() < 0.04) hold = S.rand(0.1, 1);               // the joint catches, then slips
+    const e = Math.sin(Math.PI * Math.min(1, t / dur)) ** 0.6;
+    return level * e * hold * (0.4 + 0.6 * walk[i]);
+  }), t0, dur);
+  const mix = S.gain(1);
+  o.connect(b1).connect(mix);
+  o.connect(b2).connect(mix);
+  mix.connect(lp).connect(g);
+  const p = S.out(g, bus, pan);
+  S.free(o, o, b1, b2, lp, g, mix, p);
+}
+
+/** RCS thruster puff heard inside the capsule: a valve click, a dull thump and a short hiss. */
+export function thrusterPuff(S, t, { level = 0.06, pan = 0, bus = 'sfx', dur = 0.09 } = {}) {
+  click(S, t, { level: level * 0.5, freq: 2400, body: 700, q: 3, decay: 0.012, pan, bus });
+  const n = S.noise('white', t, t + dur + 0.08);
+  const bp = S.filter('bandpass', S.rand(1500, 2300), 0.8);
+  const lp = S.filter('lowpass', 3400, 0.7);
+  const g = S.gain(0);
+  perc(g.gain, t + 0.004, level, dur, 0.004);
+  const o = S.osc('sine', 110, t, t + 0.12);
+  o.frequency.exponentialRampToValueAtTime(52, t + 0.06);
+  const go = S.gain(0);
+  perc(go.gain, t, level * 1.4, 0.08, 0.002);
+  const mix = S.gain(1);
+  n.connect(bp).connect(lp).connect(g).connect(mix);
+  o.connect(go).connect(mix);
+  const p = S.out(mix, bus, pan);
+  S.free(n, n, bp, lp, g, o, go, mix, p);
+}
+
+/** Descent engine felt through the structure: a low, breathing rumble with no top end. */
+export function descentRumble(S, t0, t1, { level = 0.08, bus = 'sfx', attack = 0.4, release = 0.3 } = {}) {
+  const dur = t1 - t0;
+  const n = S.noise('brown', t0, t1 + release * 2, { stereo: true });
+  const lp = S.filter('lowpass', 150, 0.8);
+  lp.frequency.setValueAtTime(110, t0);
+  lp.frequency.exponentialRampToValueAtTime(210, t0 + attack);
+  lp.frequency.setValueAtTime(210, t1);
+  lp.frequency.exponentialRampToValueAtTime(70, t1 + release);      // throttle down / shutdown
+  const g = S.gain(0);
+  ahr(g.gain, t0, t1, level, attack, release);
+  const fl = S.gain(1);                                              // combustion "breathing"
+  fl.gain.setValueCurveAtTime(S.curve(dur, 40, () => S.rand(0.8, 1.1)), t0, dur);
+  n.connect(lp).connect(g).connect(fl);
+  S.out(fl, bus);
+  // a faint mid band of the chamber, far away
+  const m = S.noise('pink', t0, t1 + release * 2);
+  const bp = S.filter('bandpass', 380, 1.6);
+  const mg = S.gain(0);
+  ahr(mg.gain, t0, t1, level * 0.18, attack, release);
+  m.connect(bp).connect(mg);
+  const p = S.out(mg, bus, 0.1);
+  S.free(n, n, lp, g, fl, m, bp, mg, p);
+}
+
+/**
+ * Quindar tone: the Apollo air-to-ground keying beep — a pure tone (2525 Hz intro,
+ * 2475 Hz outro) of 250 ms, heard through the radio's band-limit.
+ */
+export function quindar(S, t, { level = 0.012, freq = 2525, dur = 0.25, pan = 0.3, bus = 'sfx' } = {}) {
+  const o = S.osc('sine', freq, t, t + dur + 0.02);
+  const g = S.gain(0);
+  ahr(g.gain, t, t + dur, level, 0.004, 0.008);
+  const bp = S.filter('bandpass', 2000, 0.5);
+  o.connect(g).connect(bp);
+  const p = S.out(bp, bus, pan);
+  S.free(o, o, g, bp, p);
+}
+
+/**
+ * Air-to-ground radio burst: band-limited static with a squelch edge and a clipped,
+ * syllabic "voice" underneath (never intelligible — texture, not dialogue).
+ */
+export function radioBurst(S, t0, dur, { level = 0.03, pan = 0.3, bus = 'sfx', voice = 1 } = {}) {
+  const t1 = t0 + dur;
+  const n = S.noise('white', t0, t1 + 0.03);
+  const hp = S.filter('highpass', 350, 0.7), bp = S.filter('bandpass', 1700, 0.6);
+  const g = S.gain(0);
+  g.gain.setValueCurveAtTime(S.curve(dur, 300, (t) => {
+    const edge = Math.min(1, t / 0.008, (dur - t) / 0.02);
+    return level * Math.max(0, edge) * (0.35 + 0.65 * S.random() ** 2);
+  }), t0, dur);
+  n.connect(hp).connect(bp).connect(g);
+  const p1 = S.out(g, bus, pan);
+  const v = S.osc('sawtooth', S.rand(110, 140), t0, t1);
+  v.frequency.setValueCurveAtTime(S.curve(dur, 30, () => S.rand(105, 150)), t0, dur);
+  const f = S.filter('bandpass', 1000, 2.5);
+  f.frequency.setValueCurveAtTime(S.curve(dur, 40, () => S.rand(500, 2200)), t0, dur);
+  const vg = S.gain(0);
+  vg.gain.setValueCurveAtTime(S.curve(dur, 60, (t) => {
+    const edge = Math.min(1, t / 0.03, (dur - t) / 0.03);
+    return level * 0.5 * voice * Math.max(0, edge) * (S.random() < 0.6 ? 1 : 0.1);
+  }), t0, dur);
+  v.connect(f).connect(vg);
+  const p2 = S.out(vg, bus, pan);
+  S.free(n, n, hp, bp, g, p1, v, f, vg, p2);
+}
+
+/** A boot pressing into fine regolith: a soft compacting crunch over a muted thud. */
+export function crunch(S, t, { level = 0.05, pan = 0, bus = 'sfx' } = {}) {
+  const sr = S.sr, dur = 0.26, n = Math.ceil(dur * sr);
+  const buf = S.ctx.createBuffer(2, n, sr);
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  for (let k = 0; k < 260; k++) {
+    const u = S.random() ** 1.8;                                  // most grains in the first press
+    const i0 = Math.floor(u * 0.8 * n);
+    const amp = (1 - u) ** 1.2 * S.random() ** 1.5;
+    const f = S.rand(500, 3200), q = S.rand(2, 6);
+    const w = (2 * Math.PI * f) / sr, kk = Math.exp(-w / (2 * q));
+    const c1 = 2 * kk * Math.cos(w), c2 = -kk * kk;
+    const len = Math.floor(sr * S.rand(0.001, 0.005));
+    const pp = S.rand(-0.4, 0.4), gl = Math.cos(((pp + 1) * Math.PI) / 4) * amp, gr = Math.sin(((pp + 1) * Math.PI) / 4) * amp;
+    let y1 = 0, y2 = 0;
+    for (let j = 0; j < len * 4 && i0 + j < n; j++) {
+      const x = j < len ? S.random() * 2 - 1 : 0;
+      const y = x + c1 * y1 + c2 * y2;
+      y2 = y1; y1 = y;
+      L[i0 + j] += y * gl * 0.2; R[i0 + j] += y * gr * 0.2;
+    }
+  }
+  const src = S.buffer(buf, t);
+  const lp = S.filter('lowpass', 3000, 0.7);
+  const g = S.gain(level);
+  src.connect(lp).connect(g);
+  const pn = S.out(g, bus, pan);
+  S.free(src, src, lp, g, pn);
+  thud(S, t, { level: level * 1.2, f: 55, tone: 450, decay: 0.25, pan, bus });
+}
+
 /** Queue the impact and debris one-shots for idle-time synthesis (see Studio.warm). */
 export function warmSfx(S) {
   for (let v = 0; v < 3; v++) S.warm(() => impactBuffer(S, v));

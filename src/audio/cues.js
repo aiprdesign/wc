@@ -159,14 +159,14 @@ function industrial(S) {
 function electricity(S) {
   // spark: big crackle + arc zap, then a live crackle bed through the section
   S.at(C.spark, () => {
-    X.sparks(S, C.spark, 0.5, { level: 0.2, bursts: 1.5 });
+    X.sparks(S, C.spark, 0.5, { level: 0.16, bursts: 1.5 });
     X.zap(S, C.spark, { level: 0.08 });
     X.zap(S, C.spark + 0.12, { level: 0.05, from: 3800, to: 400, pan: 0.4 });
     X.sparks(S, C.spark + 0.4, C.circuitCity + 0.3 - C.spark - 0.4, { level: 0.05, bursts: 0.8, pan: 0.2 });
     X.hum(S, C.spark, C.circuitCity, { level: 0.03, freq: 100, cutoff: 1600, pan: -0.2 });
   });
   // telegraph: morse "W C"
-  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.055 }));
+  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.075 }));
   // telephone: a short bell ring
   S.at(C.telephone, () => X.phoneRing(S, C.telephone, 0.45, { level: 0.025 }));
   // radio: tuning sweep through static
@@ -205,6 +205,36 @@ function flight(S) {
   S.at(C.rocketLaunch, () => X.rocket(S, C.rocketLaunch, 2.3, { level: 0.16 }));
 }
 
+// The moonshot: capsule, descent, landing — all tucked under the music.
+function moonshot(S) {
+  // translunar: the capsule creaks as the stack turns; attitude thrusters puff
+  S.at(C.translunar, () => {
+    X.creak(S, C.translunar - 0.05, 0.75, { level: 0.03, pan: -0.35 });
+    X.creak(S, C.translunar + 0.35, 0.5, { level: 0.02, pan: 0.4, rate: 95, panel: 1150 });
+  });
+  [[0.0, -0.5], [0.14, 0.45], [0.5, -0.3], [0.62, 0.5]].forEach(([d, p]) => S.at(C.translunar + d, () => X.thrusterPuff(S, C.translunar + d, { level: 0.035, pan: p })));
+  // lunarDescent: the descent engine through the structure, shutting down on contact
+  S.at(C.lunarDescent - 0.2, () => X.descentRumble(S, C.lunarDescent - 0.2, C.moonLanding - 0.05, { level: 0.07, attack: 0.5, release: 0.35 }));
+  S.at(C.lunarDescent + 0.45, () => X.thrusterPuff(S, C.lunarDescent + 0.45, { level: 0.025, pan: 0.4 }));
+  // air-to-ground: Quindar intro, a burst of the loop, Quindar outro …
+  const q = C.lunarDescent + 0.1;
+  S.at(q, () => {
+    X.quindar(S, q, { level: 0.01 });
+    X.radioBurst(S, q + 0.27, 0.33, { level: 0.022 });
+    X.quindar(S, q + 0.62, { level: 0.009, freq: 2475 });
+  });
+  // … and again just after the landing (static first, then the outro tone)
+  S.at(C.moonLanding + 0.15, () => {
+    X.radioBurst(S, C.moonLanding + 0.15, 0.2, { level: 0.018, pan: 0.35, voice: 0.7 });
+    X.quindar(S, C.moonLanding + 0.37, { level: 0.008, freq: 2475, pan: 0.35 });
+  });
+  // footprint: the boot presses into the regolith
+  S.at(C.footprint, () => X.crunch(S, C.footprint, { level: 0.05, pan: -0.1 }));
+  // guidanceComputer: DSKY relays and the "1202" alarm beeps
+  [0, 0.06, 0.125, 0.19, 0.25].forEach((d, k) => S.at(C.guidanceComputer + d, () => X.relay(S, C.guidanceComputer + d, { level: 0.028, pan: k % 2 ? 0.35 : -0.25 })));
+  [0.05, 0.2].forEach((d) => S.at(C.guidanceComputer + d, () => I.blip(S, C.guidanceComputer + d, 1202, { level: 0.014, type: 'square', decay: 0.09, pan: 0.3 })));
+}
+
 function computing(S) {
   // mechanical calculator: crank ratchet + key clacks
   S.at(C.calculator, () => {
@@ -214,7 +244,7 @@ function computing(S) {
   // relays: a clicking bank on the 16th grid
   const bits = [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0];
   bits.forEach((b, k) => {
-    const t = C.relays + 0.1 + k * 0.125; // 39.5 … on the grid
+    const t = C.relays + 0.1 + k * 0.125; // 43.5 … on the grid
     if (b) S.at(t, () => X.relay(S, t, { level: 0.035, pan: k % 3 === 0 ? -0.4 : 0.35 }));
   });
   // vacuum tubes: warm hum
@@ -229,8 +259,8 @@ function computing(S) {
   S.at(C.processorDive, () => I.whoosh(S, C.processorDive, 0.8, { level: 0.1, f0: 5000, f1: 1200, pan0: 0, pan1: 0, peak: 0.15, kind: 'white' }));
   // binary: arpeggiated digital blips on 16ths, 1 = high square, 0 = low sine
   const tones = [74, 77, 81, 86, 89];
-  for (let k = 0; C.binary + 0.075 + k * 0.125 < 46.0; k++) {
-    const t = Math.round((C.binary + 0.075 + k * 0.125) / 0.125) * 0.125; // snap to the 16th grid (41.875 …)
+  for (let k = 0; C.binary + 0.075 + k * 0.125 < C.mColumns + 0.4; k++) {
+    const t = Math.round((C.binary + 0.075 + k * 0.125) / 0.125) * 0.125; // snap to the 16th grid (45.875 …)
     const bit = S.random() < 0.55;
     if (S.random() < 0.18) continue;
     const m = tones[(k * 3) % tones.length] + (bit ? 12 : 0);
@@ -279,10 +309,11 @@ function montage(S) {
 
 function finale(S) {
   // After the drop: only a faint resonance and air remain.
-  S.at(51.0, () => {
-    I.drone(S, 51.0, 55.6, 38, { level: 0.009, attack: 1.2, release: 0.8, beat: 0.2, bus: 'end' });
-    I.drone(S, 51.2, 55.4, 57, { level: 0.0025, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
-    X.air(S, 51.0, 55.5, { level: 0.004, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
+  const t0 = C.musicDrop - 0.5, t1 = C.finalImpact;
+  S.at(t0, () => {
+    I.drone(S, t0, t1 - 0.4, 38, { level: 0.009, attack: 1.2, release: 0.8, beat: 0.2, bus: 'end' });
+    I.drone(S, t0 + 0.2, t1 - 0.6, 57, { level: 0.0025, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
+    X.air(S, t0, t1 - 0.5, { level: 0.004, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
   });
   // (the final impact itself — the score's button — lives in music.js)
   // closingLine: faint high shimmer (D major add9)
@@ -291,14 +322,14 @@ function finale(S) {
 
 // Designed air movement on the sequence changes that have no hit of their own.
 function transitionAir(S) {
-  for (const [t, p0] of [[12.0, -0.6], [20.0, 0.6], [28.5, -0.5], [34.5, 0.5], [38.6, -0.4], [42.5, 0.4]]) {
+  for (const [t, p0] of [[12.0, -0.6], [20.0, 0.6], [28.5, -0.5], [34.5, 0.5], [38.6, -0.4], [42.5, 0.4], [46.5, -0.4]]) {
     S.at(t - 0.35, () => I.whoosh(S, t - 0.35, 0.9, { level: 0.05, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
   }
 }
 
 export function arrangeCues(S) {
   transitionAir(S);
-  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, computing, knowledge, montage, finale]) {
+  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, montage, finale]) {
     section(S);
   }
 }

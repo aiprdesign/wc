@@ -1,8 +1,9 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v4: the v3 three-act
-// trailer score, re-voiced for realism — humanised, round-robin, modelled timbres,
-// a stage with early reflections, designed sound effects and an analogue-style master).
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v5: the v4 realistic
+// three-act trailer score — humanised, round-robin, modelled timbres, a stage with early
+// reflections, designed sound effects and an analogue-style master — with the Moonshot
+// chapter composed into act II: two bars at 38.5–42.5, everything after it +4 s).
 //
-// renderScore() synthesises the whole 60 s score offline (Web Audio only: no
+// renderScore() synthesises the whole 64 s score (+ tail) offline (Web Audio only: no
 // samples) and returns an AudioBuffer that the player starts at any offset.
 //
 //   music.js       harmony, the heroic theme, orchestra, rhythm section, trailer hits
@@ -33,7 +34,7 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 4;
+export const SCORE_VERSION = 5;
 
 const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
