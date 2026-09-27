@@ -1,4 +1,6 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v3, three-act trailer score).
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v4: the v3 three-act
+// trailer score, re-voiced for realism — humanised, round-robin, modelled timbres,
+// a stage with early reflections, designed sound effects and an analogue-style master).
 //
 // renderScore() synthesises the whole 60 s score offline (Web Audio only: no
 // samples) and returns an AudioBuffer that the player starts at any offset.
@@ -12,30 +14,32 @@
 //   reverb.js      procedural convolution halls;  mastering.js  gain, compressor, limiter
 //   wav.js         WAV export
 //
-// Mix topology:
+// Mix topology (rendered as two parallel studios — see renderScore — then summed):
+//   instrument buses ── seating (pan, air absorption) ─┬─ stage early reflections ─┐
 //   instrument buses ─┬─ film bus ── (drops out at CUES.musicDrop) ─┐
 //   hall (3 s) ───────┘                                             ├─ master HP → buffer
 //   end buses ── finale bus (+ 5 s "space") ────────────────────────┘
-//   then, on the rendered buffer: loudness trim → glue compressor → limiter at -1 dBFS
+//   then, on the rendered buffer: loudness trim → tape/console saturation →
+//   two-band glue compressor → room tone → limiter at -1 dBFS
 
 import { DURATION, CUES as C } from '../timeline.js';
-import { Studio } from './core.js';
+import { Studio, mulberry32 } from './core.js';
 import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
-import { applyGain, compress, limit, rmsBetween } from './mastering.js';
+import { applyGain, limit, rmsBetween, saturate, glue2, roomTone } from './mastering.js';
 import { arrangeMusic } from './music.js';
 import { warmPercussion } from './percussion.js';
+import { warmSfx } from './sfx.js';
 import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 3;
+export const SCORE_VERSION = 4;
 
 const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
-export function __buildMixer(S) { return buildMixer(S); }
-function buildMixer(S, { space: withSpace = true } = {}) {
+function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
   const { ctx } = S;
 
   // Master: subsonic high-pass only; compression, loudness and limiting happen
@@ -92,30 +96,34 @@ function buildMixer(S, { space: withSpace = true } = {}) {
   sfxTone.connect(film);
 
   // Stage: early reflections (true stereo, short) feed the film bus and the hall.
-  const early = makeEarlyReflections(ctx, S.random, S.cache);
-  const earlyIn = S.filter('lowpass', 7000, 0.6);
-  earlyIn.connect(early);
-  const earlyOut = S.gain(0.55);
-  //early.connect(earlyOut);
-  earlyOut.connect(film);
-  earlyOut.connect(hallIn);
-  S.at(C.musicDrop + 1.0, () => { earlyIn.disconnect(); earlyOut.disconnect(); });
+  // (Only the orchestra studio has one: percussion bakes its own reflections.)
+  let earlyIn = null;
+  if (stage) {
+    const early = makeEarlyReflections(ctx, S.random);
+    earlyIn = early.input;
+    const earlyOut = S.gain(0.8);
+    early.output.connect(earlyOut);
+    earlyOut.connect(film);
+    earlyOut.connect(hallIn);
+    S.at(C.musicDrop + 1.0, () => { earlyOut.disconnect(); });
+  }
 
-  // Seating: strings left-centre, horns centre, brass centre-right and further
-  // back, percussion at the back, choir behind everything and wide. `er` is the
-  // early-reflection send (more = further away), `shelf` the air absorption (dB).
-  const bus = (name, gain, sends, { to = film, pan = 0, shelf = 0, er = 0 } = {}) =>
-    S.addBus(name, { to, gain, pan, shelf, sends });
-  bus('strings', 1.0, [[hallIn, 0.34]], { pan: -0.14, er: 0.3 });
+  // Seating (strings left-centre, horns centre, brass centre-right, choir wide) is
+  // baked into the section loops (orchestra.js), which costs nothing at render
+  // time; here each bus sets how far back it sits: its early-reflection send `er`
+  // (more = further away) and its hall send.
+  const bus = (name, gain, sends, { to = film, er = 0 } = {}) =>
+    S.addBus(name, { to, gain, sends: er && stage ? [...sends, [earlyIn, er]] : sends });
+  bus('strings', 1.0, [[hallIn, 0.34]], { er: 0.3 });
   bus('choir', 1.0, [[hallIn, 0.6]], { er: 0.45 });
-  bus('brass', 1.0, [[hallIn, 0.34]], { pan: 0.16, er: 0.45 });
-  bus('horn', 1.0, [[hallIn, 0.42]], { pan: 0.06, er: 0.4 });
-  bus('piano', 1.0, [[hallIn, 0.7]], { pan: -0.05, er: 0.25 });
+  bus('brass', 1.0, [[hallIn, 0.36]], { er: 0.45 });
+  bus('horn', 1.0, [[hallIn, 0.42]], { er: 0.4 });
+  bus('piano', 1.0, [[hallIn, 0.7]], { er: 0.25 });
   bus('lead', 0.9, [[hallIn, 0.55]], { er: 0.2 });
   bus('pad', 0.9, [[hallIn, 0.35]]);
-  bus('far', 1.0, [[hallIn, 1.2]], { shelf: -5, er: 0.5 });   // distant, mostly-wet details
+  bus('far', 1.0, [[hallIn, 1.3]], { er: 0.5 });   // distant, mostly-wet details
   bus('spic', 1.0, [[hallIn, 0.2]], { to: spicTone, er: 0.25 });
-  bus('perc', 0.9, [[hallIn, 0.14]], { er: 0.35 });
+  bus('perc', 0.9, [[hallIn, 0.16]], { er: 0.35 });
   bus('drums', 0.9, [[hallIn, 0.04]], { er: 0.1 });
   bus('bass', 0.9, []);
   bus('synth', 0.8, [[hallIn, 0.2]], { er: 0.1 });
@@ -147,14 +155,16 @@ export async function renderScore(sampleRate = 48000) {
   // Two studios render in parallel (one OfflineAudioContext = one render thread
   // each), sharing noise and pre-rendered buffers. Both have the same mixer (so
   // every part gets the same halls, stage and film/finale automation):
-  //   A — the sustained orchestra;  B — rhythm section, hits, transitions, sound design.
+  //   A — the orchestra, piano, harp, celesta (with the stage early reflections);
+  //   B — rhythm section, hits, transitions, finale and the sound design.
   const A = new Studio(sampleRate, DURATION + TAIL, 1492);
   const B = new Studio(sampleRate, DURATION + TAIL, 1815, A);
   buildMixer(A, { space: false });
-  buildMixer(B);
+  buildMixer(B, { stage: false });
   const { kicks } = arrangeMusic(A, 'orchestra');
   arrangeMusic(B, 'rhythm');
   arrangeCues(B);
+  warmSfx(B);
   warmPercussion(B);
   duckStrings(A, kicks);
 
@@ -166,7 +176,11 @@ export async function renderScore(sampleRate = 48000) {
   const loud = rmsBetween(buffer, C.gear, C.pullBack);
   const gain = loud > 0 ? Math.min(8, TARGET_LOUD_RMS / loud) : 1;
   applyGain(buffer, gain);
-  compress(buffer, { threshold: -17, ratio: 2, knee: 8, attack: 0.02, release: 0.3 });
+  // console / tape colour, then a gentle two-band glue compressor
+  saturate(buffer, { drive: 0.9 });
+  glue2(buffer);
+  // the hall never goes digitally silent (fades in with the opening, out at the end)
+  roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (DURATION + 0.8 - t) / 1.5)) });
   const glued = rmsBetween(buffer, C.gear, C.pullBack);
   limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
   return buffer;

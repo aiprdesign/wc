@@ -13,7 +13,7 @@
 // every hit is played with its own small level / pitch deviation, so no two hits
 // in a pattern are ever identical. Timing stays locked to the grid.
 
-const VARIANTS = 4;
+const VARIANTS = 3; // (plus per-hit level / pitch deviation on every play)
 
 // --------------------------------------------------------------- tiny DSP
 
@@ -125,19 +125,24 @@ function membrane(S, L, R, start, { f, decay, skin, pan = 0, gain = 1, drop = 0.
   }
 }
 
-/** Stage early reflections: a few sparse, filtered, decorrelated taps (floor, walls, back wall). */
+/** Stage early reflections: a few sparse, dulled, decorrelated taps (floor, walls, back wall). */
 function earlyReflections(S, L, R, amount = 0.35) {
   const sr = S.sr, n = L.length;
-  const dryL = L.slice(), dryR = R.slice();
+  // reflections arrive dulled, from both sides: one lowpassed blend per side
+  const c = onePole(4200, sr);
+  const srcL = new Float32Array(n), srcR = new Float32Array(n);
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) {
+    a += c * (L[i] + 0.6 * R[i] - a); srcL[i] = a;
+    b += c * (R[i] + 0.6 * L[i] - b); srcR[i] = b;
+  }
   const taps = [[0.0071, 0.8], [0.0113, 0.65], [0.0167, 0.55], [0.0239, 0.45], [0.0311, 0.35], [0.0433, 0.28]];
   for (const [dt, g] of taps) {
-    for (const [src, out, side] of [[dryL, L, 0], [dryR, R, 1]]) {
-      const d = Math.floor((dt * (side ? S.rand(0.85, 1.2) : S.rand(0.85, 1.2))) * sr);
+    for (let side = 0; side < 2; side++) {
+      const src = side ? srcR : srcL, out = side ? R : L;
+      const d = Math.floor(dt * S.rand(0.85, 1.2) * sr);
       const k = amount * g * (S.random() < 0.5 ? 1 : -1) * 0.5;
-      const cross = side ? dryL : dryR; // reflections arrive from both sides
-      const c = onePole(5000 - dt * 60000, sr);
-      let lp = 0;
-      for (let i = d; i < n; i++) { lp += c * ((src[i - d] + cross[i - d] * 0.6) - lp); out[i] += lp * k; }
+      for (let i = d; i < n; i++) out[i] += src[i - d] * k;
     }
   }
 }

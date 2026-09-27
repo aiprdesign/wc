@@ -107,3 +107,98 @@ export function compress(buffer, { threshold = -20, ratio = 2.5, knee = 6, attac
     }
   }
 }
+
+/**
+ * Tape / console colour (in place): a touch of even-harmonic asymmetry, DC-blocked,
+ * into a soft saturation curve that rounds peaks the way a desk and tape do.
+ * `drive` ≈ 1 is subtle; unity gain for small signals.
+ */
+export function saturate(buffer, { drive = 1, even = 0.04 } = {}) {
+  const sr = buffer.sampleRate;
+  const hp = Math.exp((-2 * Math.PI * 8) / sr); // DC blocker
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    let x1 = 0, y1 = 0;
+    for (let i = 0; i < d.length; i++) {
+      const x = d[i] + even * d[i] * d[i];
+      const y = x - x1 + hp * y1; // remove the DC the asymmetry creates
+      x1 = x; y1 = y;
+      const u = y * drive;
+      d[i] = u / (1 + Math.abs(u) * 0.25 + u * u * 0.05) / drive;
+    }
+  }
+}
+
+/**
+ * Two-band glue (in place): below ~150 Hz and above are compressed by separate,
+ * gentle, stereo-linked detectors (the low band a little slower and firmer), so
+ * the sub hits stop pumping the orchestra and the whole mix sits together.
+ */
+export function glue2(buffer, { split = 150, low = { threshold: -20, ratio: 2.2 }, high = { threshold: -19, ratio: 1.6 } } = {}) {
+  const sr = buffer.sampleRate;
+  const n = buffer.length;
+  const L = buffer.getChannelData(0);
+  const R = buffer.getChannelData(buffer.numberOfChannels > 1 ? 1 : 0);
+  const a = 1 - Math.exp((-2 * Math.PI * split) / sr);
+  // 2-pole lowpass split (the high band is the remainder, so the sum is exact)
+  const loL = new Float32Array(n), loR = new Float32Array(n);
+  let l1 = 0, l2 = 0, r1 = 0, r2 = 0;
+  for (let i = 0; i < n; i++) {
+    l1 += a * (L[i] - l1); l2 += a * (l1 - l2); loL[i] = l2;
+    r1 += a * (R[i] - r1); r2 += a * (r1 - r2); loR[i] = r2;
+  }
+  const km = Math.exp(-1 / (0.012 * sr));
+  const coef = (t) => Math.exp(-16 / (t * sr));
+  const kaL = coef(0.03), krL = coef(0.35), kaH = coef(0.015), krH = coef(0.25);
+  const reduce = (ms, { threshold, ratio }) => {
+    const over = 10 * Math.log10(ms + 1e-12) - threshold;
+    return over > 3 ? over * (1 - 1 / ratio) : over > -3 ? ((1 - 1 / ratio) * (over + 3) ** 2) / 12 : 0;
+  };
+  let msL = 0, msH = 0, eL = 0, eH = 0;
+  for (let i0 = 0; i0 < n; i0 += 16) {
+    const i1 = Math.min(n, i0 + 16);
+    for (let i = i0; i < i1; i++) {
+      const a0 = loL[i], a1 = loR[i], h0 = L[i] - a0, h1 = R[i] - a1;
+      msL = km * msL + (1 - km) * Math.max(a0 * a0, a1 * a1);
+      msH = km * msH + (1 - km) * Math.max(h0 * h0, h1 * h1);
+    }
+    const rl = reduce(msL, low), rh = reduce(msH, high);
+    eL = rl > eL ? kaL * eL + (1 - kaL) * rl : krL * eL + (1 - krL) * rl;
+    eH = rh > eH ? kaH * eH + (1 - kaH) * rh : krH * eH + (1 - krH) * rh;
+    const gl = 10 ** (-eL / 20), gh = 10 ** (-eH / 20);
+    for (let i = i0; i < i1; i++) {
+      const a0 = loL[i], a1 = loR[i];
+      L[i] = a0 * gl + (L[i] - a0) * gh;
+      if (R !== L) R[i] = a1 * gl + (R[i] - a1) * gh;
+    }
+  }
+}
+
+/**
+ * Room tone (in place): the faint, never-silent air of a hall — decorrelated
+ * pink-ish noise with a little low rumble, at `level` RMS, following `env(t)`.
+ */
+export function roomTone(buffer, random, { level = 0.0005, env = () => 1 } = {}) {
+  const sr = buffer.sampleRate;
+  // a 5.3 s decorrelated loop per channel (long enough never to be heard repeating)
+  const m = Math.floor(5.3 * sr);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const loop = new Float32Array(m);
+    let b0 = 0, b1 = 0, b2 = 0, r = 0;
+    for (let i = 0; i < m; i++) {
+      const w = random() * 2 - 1;
+      b0 = 0.99765 * b0 + w * 0.099046;
+      b1 = 0.963 * b1 + w * 0.2965164;
+      b2 = 0.57 * b2 + w * 1.0526913;
+      r = 0.9995 * r + w * 0.02;                  // HVAC-like rumble
+      loop[i] = (b0 + b1 + b2 + w * 0.1848) * 0.11 * 0.75 + r * 0.9;
+    }
+    const d = buffer.getChannelData(c);
+    const off = c * Math.floor(m / 2);
+    let e = 1;
+    for (let i = 0; i < d.length; i++) {
+      if ((i & 255) === 0) e = level * env(i / sr);
+      d[i] += loop[(i + off) % m] * e;
+    }
+  }
+}

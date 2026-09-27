@@ -36,20 +36,21 @@ const body = (f) => 1 + BODY.reduce((s, [F, bw, g]) => s + g / (1 + ((f - F) / b
 
 // Section timbres. amps(k, f) = amplitude of harmonic k (frequency f).
 const KINDS = {
+  // centre: stage position of the section (strings left-centre, brass right-centre)
   // pitchDrift: cents of slow random wander per player · noise: bow / breath layer
   // level · noiseBands: [centre Hz, Q, gain] of that layer.
   strings: {
-    voices: 6, detune: 12, spread: 0.95, vib: [4.6, 5.8], vibCents: 9, drift: 0.2, cap: 7500, pitchDrift: 5,
+    voices: 6, detune: 12, spread: 0.85, centre: -0.14, vib: [4.6, 5.8], vibCents: 9, drift: 0.2, cap: 7500, pitchDrift: 5,
     amps: (k, f) => (1 / k) * body(f) * (1 + 0.6 / (1 + ((f - 2800) / 900) ** 2)) / (1 + (f / 6500) ** 2),
     noise: 0.07, noiseBands: [[3200, 0.9, 1], [1100, 1.2, 0.45], [6500, 1.5, 0.3]],
   },
   brass: {
-    voices: 4, detune: 8, spread: 0.55, vib: [4.4, 5.0], vibCents: 3, drift: 0.1, cap: 7000, pitchDrift: 3,
+    voices: 4, detune: 8, spread: 0.5, centre: 0.2, vib: [4.4, 5.0], vibCents: 3, drift: 0.1, cap: 7000, pitchDrift: 3,
     amps: (k, f) => (k % 2 ? 1 : 0.8) / k ** 0.8 * (1 + 0.5 / (1 + ((f - 1200) / 500) ** 2)),
     noise: 0.025, noiseBands: [[1400, 1.2, 1], [3000, 1.5, 0.4]],
   },
   horn: {
-    voices: 4, detune: 6, spread: 0.5, vib: [4.8, 5.4], vibCents: 5, drift: 0.12, cap: 4000, pitchDrift: 3.5,
+    voices: 4, detune: 6, spread: 0.45, centre: 0.07, vib: [4.8, 5.4], vibCents: 5, drift: 0.12, cap: 4000, pitchDrift: 3.5,
     amps: (k, f) => 1 / k ** 1.25 / (1 + (f / 1800) ** 2) * (1 + 0.4 / (1 + ((f - 450) / 150) ** 2)),
     noise: 0.02, noiseBands: [[900, 1.2, 1]],
   },
@@ -144,9 +145,10 @@ function noiseLoop(S, spec, n) {
 }
 
 /** Render (or fetch) the seamless stereo section loop for `kind` at `base` (MIDI). */
-function sectionLoop(S, kind, base) {
+function sectionLoop(S0, kind, base) {
   const key = `ens:${kind}:${base}`;
-  if (S.cache.has(key)) return S.cache.get(key);
+  if (S0.cache.has(key)) return S0.cache.get(key);
+  const S = S0.seeded(key); // identical whichever studio renders it first
   const spec = KINDS[kind];
   const sr = S.sr;
   const n = LOOP * sr;
@@ -171,7 +173,8 @@ function sectionLoop(S, kind, base) {
     const vibHz = Math.round(S.rand(...spec.vib) * LOOP) / LOOP;
     const vibDepth = 2 ** (spec.vibCents / 1200) - 1;
     const driftHz = Math.max(1, Math.round(S.rand(0.3, 0.9) * LOOP)) / LOOP;
-    const pan = spec.spread * (2 * ((v * 0.618 + 0.3) % 1) - 1); // interleaved so pitch ≠ position
+    // interleaved so pitch ≠ position; `centre` seats the section on the stage
+    const pan = Math.max(-1, Math.min(1, (spec.centre ?? 0) + spec.spread * (2 * ((v * 0.618 + 0.3) % 1) - 1)));
     const lvl = S.rand(0.75, 1.1);                               // no two players equally loud
     const gl = Math.cos(((pan + 1) * Math.PI) / 4) * lvl, gr = Math.sin(((pan + 1) * Math.PI) / 4) * lvl;
     // slow random pitch wander: two wobbles of 1 and 2 (or 3) cycles per loop, random
@@ -245,6 +248,7 @@ function transient(S, name) {
   const v = S.robin(`tr:${name}`, 4);
   const key = `tr:${name}:${v}`;
   if (S.cache.has(key)) return S.cache.get(key);
+  S = S.seeded(key);
   const [secs, bands, att, dec] = TRANSIENTS[name];
   const sr = S.sr, n = Math.ceil(secs * sr);
   const buf = S.ctx.createBuffer(2, n, sr);
@@ -304,6 +308,14 @@ export function chord(S, kind, t0, t1, notes, o = {}) {
     amp.gain.linearRampToValueAtTime(lv * swell, t0 + att);
     amp.gain.exponentialRampToValueAtTime(lv, t1);
     amp.gain.setTargetAtTime(0, t1, release / 5);
+  } else if (t1 - t0 > 1.2 && kind !== 'brass') {
+    // a held chord is never flat: the section leans into the middle of the bow / breath
+    const g = amp.gain, mid = t0 + att + (t1 - t0 - att) * S.rand(0.45, 0.65);
+    g.setValueAtTime(0, t0);
+    g.linearRampToValueAtTime(lv * 0.92, t0 + att);
+    g.linearRampToValueAtTime(lv * S.rand(1.05, 1.12), mid);
+    g.linearRampToValueAtTime(lv * 0.96, t1);
+    g.setTargetAtTime(0, t1, release / 5);
   } else {
     ahr(amp.gain, t0, t1, lv, att, release);
   }

@@ -3,6 +3,13 @@
 //
 // Irregular textures (grinding, scratching, rustling) use ONE noise source each,
 // shaped by JS-generated automation curves, rather than hundreds of tiny nodes.
+//
+// v4: layered, designed sounds instead of single synthetic voices — impacts are
+// crack + inharmonic metal/rock modes + debris grains; gears are modal teeth
+// (inharmonic, round-robin, never evenly spaced) over a body rumble; steam is a
+// valve chuff, sputtering hiss and pressure rumble; electricity is crackle plus a
+// modulated arc buzz; paper is rendered grain by grain; jet and rocket get
+// doppler, turbine wobble and distorted crackle. All sit under the music.
 
 import { perc, ahr } from './core.js';
 import { modalBuffer, playBuffer } from './instruments.js';
@@ -90,23 +97,40 @@ export function pencil(S, t0, t1, { level = 0.12, pan = 0, bus = 'sfx', vigor = 
   S.free(src, src, bp, hp, g, p);
 }
 
-/** Paper rustle / crinkle: dense random crackles in the upper mids. */
+/**
+ * Paper rustle / crinkle, rendered grain by grain: hundreds of tiny resonant
+ * crackles (each its own pitch, width and level) under a bell-shaped density.
+ */
 export function crinkle(S, t0, dur, { level = 0.12, pan = 0, bus = 'sfx', density = 0.08 } = {}) {
-  const rate = 2000;
-  let s = 0;
-  const amp = S.curve(dur, rate, (t) => {
-    const env = Math.sin(Math.PI * Math.min(1, t / dur)) ** 0.7;
-    const spike = S.random() < density ? S.random() ** 2 : 0;
-    s = Math.max(spike, s * 0.72);
-    return level * env * s;
-  });
-  const n = S.noise('white', t0, t0 + dur);
-  const bp = S.filter('bandpass', 3200, 0.9);
-  const g = S.gain(0);
-  g.gain.setValueCurveAtTime(amp, t0, dur);
-  n.connect(bp).connect(g);
-  const p = S.out(g, bus, pan);
-  S.free(n, n, bp, g, p);
+  const sr = S.sr, n = Math.ceil(dur * sr);
+  const buf = S.ctx.createBuffer(2, n, sr);
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+  const count = Math.floor(dur * 2000 * density);
+  for (let g = 0; g < count; g++) {
+    // denser in the middle of the gesture
+    let u = S.random();
+    u = 0.5 + (u - 0.5) * (0.6 + 0.4 * S.random());
+    const i0 = Math.floor(u * (n - 1));
+    const env = Math.sin(Math.PI * u) ** 0.7;
+    const amp = env * S.random() ** 2.2 * (S.random() < 0.08 ? 2.2 : 1);
+    const f = S.rand(1400, 7000), q = S.rand(3, 9);
+    const len = Math.floor(sr * S.rand(0.002, 0.012));
+    const w = (2 * Math.PI * f) / sr, k = Math.exp(-w / (2 * q));
+    const p = S.rand(-0.6, 0.6), gl = Math.cos(((p + 1) * Math.PI) / 4) * amp, gr = Math.sin(((p + 1) * Math.PI) / 4) * amp;
+    let y1 = 0, y2 = 0;
+    const c1 = 2 * k * Math.cos(w), c2 = -k * k;
+    for (let j = 0; j < len * 3 && i0 + j < n; j++) {
+      const x = j < len ? (S.random() * 2 - 1) * (1 - j / len) : 0;
+      const y = x + c1 * y1 + c2 * y2;
+      y2 = y1; y1 = y;
+      L[i0 + j] += y * gl * 0.25; R[i0 + j] += y * gr * 0.25;
+    }
+  }
+  const src = S.buffer(buf, t0);
+  const g = S.gain(level * 1.6);
+  src.connect(g);
+  const pn = S.out(g, bus, pan);
+  S.free(src, src, g, pn);
 }
 
 /** Sheet of paper moving through air: soft lowpassed swish + a little crinkle. */
@@ -127,15 +151,15 @@ export function paperSwish(S, t0, dur, { level = 0.12, pan0 = -0.5, pan1 = 0.5, 
   crinkle(S, t0 + dur * 0.1, dur * 0.8, { level: level * 0.6, pan: (pan0 + pan1) / 2, bus, density: 0.05 });
 }
 
-/** Short mechanical click: bandpassed noise tick + resonant body ping (cached one-shot). */
+/** Short mechanical click: noise tick + inharmonic resonant body (cached, round-robin). */
 export function click(S, t, { level = 0.1, freq = 3200, body = 900, q = 3, decay = 0.018, pan = 0, bus = 'sfx' } = {}) {
   const f = Math.round(freq / 100) * 100, b = Math.round(body / 20) * 20, d = Math.round(decay * 1000) / 1000;
-  const v = (S.clickRR = ((S.clickRR ?? 0) + 1) % 2);
-  // body ping + noise tick as a modal voice: the tick is the buffer's noise transient
-  const buf = modalBuffer(S, `click:${f}:${b}:${q}:${d}:${v}`, b, [[1, 0.5, d * 1.6], [f / b, 1, d * 0.7 + 0.002]], {
-    seconds: d * 2 + 0.01, noise: 1.2, attack: 0.0003,
-  });
-  playBuffer(S, t, buf, { level, pan, bus });
+  const v = S.robin(`click:${f}:${b}`, 3);
+  // body ping + tick partials (inharmonic) as a modal voice; the noise transient is the contact
+  const buf = modalBuffer(S, `click:${f}:${b}:${q}:${d}:${v}`, b, [
+    [1, 0.5, d * 1.6], [1.73, 0.2, d * 1.1], [f / b, 1, d * 0.7 + 0.002], [(f / b) * 1.41, 0.4, d * 0.5 + 0.001],
+  ], { seconds: d * 2 + 0.01, noise: 1.2, attack: 0.0003, vary: 0.5 });
+  playBuffer(S, t, buf, { level: level * S.rand(0.85, 1.1), pan, bus, rate: S.rand(0.97, 1.03) });
 }
 
 /** Clock escapement on a grid: alternating tick / tock. */
@@ -150,30 +174,65 @@ export function clockwork(S, t0, t1, step, { level = 0.08, bus = 'sfx' } = {}) {
   }
 }
 
-/** Gear ratchet: a burst of fast pawl clicks. */
+/**
+ * Gear ratchet: a run of pawl-on-tooth strikes — inharmonic metal teeth (round-robin),
+ * slightly uneven spacing, an accent once per revolution, and the gear's own body
+ * ringing underneath.
+ */
 export function ratchet(S, t0, dur, { level = 0.06, rate = 28, pan = 0, bus = 'sfx', freq = 4200 } = {}) {
   const count = Math.floor(dur * rate);
+  const teeth = 8 + Math.floor(S.random() * 5);
+  let t = t0;
   for (let i = 0; i < count; i++) {
-    const t = t0 + i / rate;
-    click(S, t, { level: level * (0.7 + 0.3 * S.random()), freq: freq * S.rand(0.9, 1.1), body: 1600, q: 5, decay: 0.008, pan, bus });
+    const acc = i % teeth === 0 ? 1.35 : 1;
+    const v = S.robin(`tooth:${freq}`, 5);
+    const f = Math.round(freq / 200) * 200;
+    const buf = modalBuffer(S, `tooth:${f}:${v}`, f * 0.37, [
+      [1, 0.35, 0.05], [2.32, 0.5, 0.03], [2.7, 1, 0.02], [4.18, 0.6, 0.012], [6.1, 0.3, 0.008], [7.9, 0.2, 0.005],
+    ], { seconds: 0.07, noise: 1.4, attack: 0.0002, vary: 0.6 });
+    playBuffer(S, t, buf, { level: level * acc * S.rand(0.65, 1.05), pan: pan + S.rand(-0.05, 0.05), bus, rate: S.rand(0.94, 1.06) });
+    t += (1 / rate) * S.rand(0.85, 1.15);
   }
+  // the gear body: a low metallic ring excited by the run
+  const body = modalBuffer(S, `gearbody:${Math.round(freq / 1000)}`, 180 + (freq % 700) / 7, [
+    [1, 1, 0.5], [1.51, 0.6, 0.35], [2.47, 0.4, 0.25], [3.3, 0.25, 0.15],
+  ], { seconds: 0.6, noise: 0.3, attack: 0.002 });
+  playBuffer(S, t0, body, { level: level * 0.5, pan, bus });
 }
 
-/** Steam pressure release: hiss burst with falling filter. */
+/**
+ * Steam pressure release: a valve "chuff", a hiss that sputters (turbulent, never
+ * a steady filter), its falling pitch as pressure drops, and a pressure rumble.
+ */
 export function steam(S, t, dur, { level = 0.2, pan = 0, bus = 'sfx' } = {}) {
-  const n = S.noise('white', t, t + dur + 0.1, { stereo: true });
+  const end = t + dur + 0.1;
+  const n = S.noise('white', t, end, { stereo: true });
   const hp = S.filter('highpass', 1800, 0.7);
   const bp = S.filter('bandpass', 6500, 0.6);
   bp.frequency.setValueAtTime(7500, t);
   bp.frequency.exponentialRampToValueAtTime(2500, t + dur);
   const g = S.gain(0);
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(level, t + 0.015);
-  g.gain.setTargetAtTime(level * 0.5, t + 0.015, dur * 0.2);
-  g.gain.setTargetAtTime(0, t + dur * 0.6, dur * 0.15);
+  // sputter: turbulent flutter on top of the pressure envelope
+  let fl = 1;
+  g.gain.setValueCurveAtTime(S.curve(dur + 0.05, 400, (u) => {
+    fl = fl * 0.85 + (0.55 + 0.45 * S.random() + (S.random() < 0.03 ? -0.5 : 0)) * 0.15;
+    const env = Math.min(1, u / 0.012) * (0.5 + 0.5 * Math.exp(-u / (dur * 0.25))) * Math.min(1, Math.max(0, (dur + 0.05 - u) / (dur * 0.4)));
+    return level * env * fl;
+  }), t, dur + 0.05);
   n.connect(hp).connect(bp).connect(g);
   const p = S.out(g, bus, pan);
-  S.free(n, n, hp, bp, g, p);
+  // pressure rumble in the pipe
+  const r = S.noise('brown', t, end);
+  const lp = S.filter('lowpass', 160, 0.9);
+  const rg = S.gain(0);
+  rg.gain.setValueAtTime(0, t);
+  rg.gain.linearRampToValueAtTime(level * 0.9, t + 0.03);
+  rg.gain.setTargetAtTime(0, t + 0.05, dur * 0.3);
+  r.connect(lp).connect(rg);
+  const p2 = S.out(rg, bus, pan * 0.5);
+  S.free(n, n, hp, bp, g, p, r, lp, rg, p2);
+  // valve chuff: a short dull thump at the opening
+  if (dur > 0.3) thud(S, t, { level: level * 0.5, f: 95, tone: 700, decay: 0.12, pan, bus });
 }
 
 /** Electrical crackle through a highpass; `bursts` adds random surges. */
@@ -194,16 +253,28 @@ export function sparks(S, t0, dur, { level = 0.15, pan = 0, bus = 'sfx', hp = 22
   S.free(src, src, f, g, p);
 }
 
-/** Arc zap: bright saw sweeping down fast. */
+/**
+ * Electric arc: a burst of crackle, a modulated arc buzz (irregular AM on a
+ * bandpassed square) and a quieter falling sweep for the discharge.
+ */
 export function zap(S, t, { level = 0.08, pan = 0, bus = 'sfx', from = 5200, to = 180, dur = 0.16 } = {}) {
-  const o = S.osc('sawtooth', from, t, t + dur + 0.05);
+  const end = t + dur + 0.08;
+  const o = S.osc('sawtooth', from, t, end);
   o.frequency.exponentialRampToValueAtTime(to, t + dur);
   const bp = S.filter('bandpass', 2400, 0.8);
   const g = S.gain(0);
-  perc(g.gain, t, level, dur, 0.001);
+  perc(g.gain, t, level * 0.55, dur, 0.001);
   o.connect(bp).connect(g);
   const p = S.out(g, bus, pan);
-  S.free(o, o, bp, g, p);
+  // arc buzz: mains-rate square, bandpassed, with a jittery amplitude
+  const bz = S.osc('square', S.rand(95, 125), t, end);
+  const bb = S.filter('bandpass', S.rand(1500, 2600), 1.2);
+  const bg = S.gain(0);
+  bg.gain.setValueCurveAtTime(S.curve(dur + 0.06, 500, (u) => level * 0.5 * (S.random() < 0.7 ? S.rand(0.4, 1) : 0.05) * Math.exp(-u / (dur * 0.6))), t, dur + 0.06);
+  bz.connect(bb).connect(bg);
+  const p2 = S.out(bg, bus, pan);
+  S.free(o, o, bp, g, p, bz, bb, bg, p2);
+  sparks(S, t, Math.max(0.12, dur * 0.8), { level: level * 1.3, pan, bus, bursts: 2 });
 }
 
 /** Mains buzz / valve hum: 50–60 Hz saw with harmonics, gently filtered. */
@@ -311,6 +382,10 @@ export function jetPass(S, tPeak, { pre = 1.0, post = 1.3, level = 0.3, bus = 's
   pan.connect(S.bus(bus));
   // broadband roar
   const n = S.noise('pink', t0, t1, { stereo: true });
+  // doppler: the whole roar is pitched up on approach and drops as it passes
+  n.playbackRate.setValueAtTime(1.18, t0);
+  n.playbackRate.setValueAtTime(1.18, tPeak - 0.3);
+  n.playbackRate.linearRampToValueAtTime(0.84, tPeak + 0.25);
   const bp = S.filter('bandpass', 700, 0.7);
   bp.frequency.setValueAtTime(700, t0);
   bp.frequency.exponentialRampToValueAtTime(2800, tPeak);
@@ -335,9 +410,15 @@ export function jetPass(S, tPeak, { pre = 1.0, post = 1.3, level = 0.3, bus = 's
   wg.gain.exponentialRampToValueAtTime(0.0001, t1);
   const wf = S.filter('bandpass', 1500, 2);
   const nodes = [n, bp, g, r, lp, rg, wg, wf, pan];
-  for (const [f, c] of [[1480, -5], [1485, 7]]) {
-    const o = S.osc('sawtooth', f * 1.14, t0, t1);
+  // turbine: two blade-pass tones with a slow irregular speed wobble
+  const wob = S.osc('sine', 3.3, t0, t1);
+  const wd = S.gain(9);
+  wob.connect(wd);
+  nodes.push(wob, wd);
+  for (const [f, c] of [[1480, -5], [2210, 7]]) {
+    const o = S.osc(c < 0 ? 'sawtooth' : 'triangle', f * 1.14, t0, t1);
     o.detune.value = c;
+    wd.connect(o.detune);
     o.frequency.setValueAtTime(f * 1.14, tPeak - 0.25);
     o.frequency.setTargetAtTime(f * 0.86, tPeak - 0.12, 0.12);
     o.connect(wf);
@@ -370,13 +451,22 @@ export function rocket(S, t0, dur, { level = 0.35, bus = 'sfx' } = {}) {
   env(mg.gain, level * 0.45, 0.25);
   mid.connect(bp).connect(mg);
   S.out(mg, bus);
+  // crackle: the supersonic "popcorn" of the exhaust, overdriven
   const cr = S.noise('crackle', t0, t1, { rate: 0.55 });
-  const hp = S.filter('highpass', 900, 0.7);
+  const hp = S.filter('highpass', 700, 0.7);
+  const drive = S.ctx.createWaveShaper();
+  drive.curve = S.curve(1, 1024, (u) => Math.tanh(4 * (u * 2 - 1)) * 0.8);
   const cg = S.gain(0);
-  env(cg.gain, level * 1.4, 0.2);
-  cr.connect(hp).connect(cg);
+  env(cg.gain, level * 1.2, 0.2);
+  cr.connect(hp).connect(drive).connect(cg);
   S.out(cg, bus, 0.1);
-  S.free(low, low, lp, lg, mid, bp, mg, cr, hp, cg);
+  // roar flutter: the low roar breathes irregularly
+  const fl = S.gain(1);
+  fl.gain.setValueCurveAtTime(S.curve(dur, 60, () => S.rand(0.75, 1.1)), t0, dur);
+  lg.disconnect();
+  lg.connect(fl);
+  S.out(fl, bus);
+  S.free(low, low, lp, lg, mid, bp, mg, cr, hp, drive, cg, fl);
 }
 
 /** Underwater dive: lowpass sweeping down plus a few bubble chirps. */
@@ -426,6 +516,100 @@ export function thud(S, t, { level = 0.3, f = 80, pan = 0, bus = 'sfx', decay = 
   o.connect(go).connect(mix);
   const p = S.out(mix, bus, pan);
   S.free(o, n, lp, g, o, go, mix, p);
+  if (level >= 0.12) debris(S, t + 0.01, { level: level * 0.35, pan, bus, size: tone < 1000 ? 1 : 0.6 });
+}
+
+/**
+ * Debris: small fragments (grit, stone chips, splinters) settling after an impact —
+ * sparse resonant grains, each its own pitch and position, thinning out over ~0.6 s.
+ * Rendered in JS per round-robin; size 1 = coarse/low, smaller = finer/brighter.
+ */
+export function debris(S, t, { level = 0.1, pan = 0, bus = 'sfx', size = 1 } = {}) {
+  const buf = debrisBuffer(S, size, S.robin(`debris:${size}`, 4));
+  playBuffer(S, t, buf, { level, pan, bus, rate: S.rand(0.9, 1.1) });
+}
+
+function debrisBuffer(S, size, v) {
+  const key = `debris:${size}:${v}`;
+  let buf = S.cache.get(key);
+  if (!buf) {
+    const R0 = S.seeded(key), sr = S.sr, n = Math.ceil(0.9 * sr);
+    buf = S.ctx.createBuffer(2, n, sr);
+    const L = buf.getChannelData(0), Rr = buf.getChannelData(1);
+    const count = 70;
+    for (let k = 0; k < count; k++) {
+      const u = R0.random() ** 2.2;                      // most fragments land early
+      const i0 = Math.floor(u * 0.7 * sr);
+      const amp = (1 - u) ** 1.5 * (0.3 + 0.7 * R0.random());
+      const f = (600 + R0.random() * 3000) / size, q = 4 + R0.random() * 10;
+      const w = (2 * Math.PI * Math.min(f, 9000)) / sr, kk = Math.exp(-w / (2 * q));
+      const c1 = 2 * kk * Math.cos(w), c2 = -kk * kk;
+      const len = Math.floor(sr * (0.001 + R0.random() * 0.004));
+      const p = R0.random() * 1.6 - 0.8, gl = Math.cos(((p + 1) * Math.PI) / 4) * amp, gr = Math.sin(((p + 1) * Math.PI) / 4) * amp;
+      let y1 = 0, y2 = 0;
+      for (let j = 0; j < len * 6 && i0 + j < n; j++) {
+        const x = j < len ? R0.random() * 2 - 1 : 0;
+        const y = x + c1 * y1 + c2 * y2;
+        y2 = y1; y1 = y;
+        L[i0 + j] += y * gl; Rr[i0 + j] += y * gr;
+      }
+    }
+    let peak = 0;
+    for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(L[i]), Math.abs(Rr[i]));
+    for (let i = 0; i < n; i++) { L[i] /= peak; Rr[i] /= peak; }
+    S.cache.set(key, buf);
+  }
+  return buf;
+}
+
+/**
+ * Designed trailer impact (the layers that sit on top of the sub boom): a
+ * transient crack, inharmonic metal/rock body modes, debris, and a wide low-mid
+ * "body" thump. Round-robin; `power` scales everything.
+ */
+export function impact(S, t, { level = 0.2, pan = 0, bus = 'fx', metal = 0.5 } = {}) {
+  const buf = impactBuffer(S, S.robin('impact', 3));
+  playBuffer(S, t, buf, { level: level * (0.5 + 0.5 * metal), pan, bus, rate: S.rand(0.94, 1.04) });
+  debris(S, t + 0.015, { level: level * 0.45, pan: -pan, bus, size: 1 });
+}
+
+function impactBuffer(S, v) {
+  const key = `impact:${v}`;
+  let buf = S.cache.get(key);
+  if (!buf) {
+    const R0 = S.seeded(key), sr = S.sr, n = Math.ceil(1.6 * sr);
+    buf = S.ctx.createBuffer(2, n, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      // crack: a very short bright burst (differentiated noise)
+      let prev = 0;
+      for (let i = 0; i < 0.006 * sr; i++) { const x = R0.random() * 2 - 1; d[i] += (x - prev) * (1 - i / (0.006 * sr)) ** 2 * 0.9; prev = x; }
+      // body: low-mid thump (pitch-dropping) + inharmonic rock/metal modes
+      let ph = 0;
+      for (let i = 0; i < 0.35 * sr; i++) {
+        const tt = i / sr;
+        ph += (2 * Math.PI * (140 + 180 * Math.exp(-tt / 0.02))) / sr;
+        d[i] += Math.sin(ph) * Math.exp(-tt / 0.07) * 0.8;
+      }
+      for (const [f, a, t60] of [[317, 0.3, 0.5], [523, 0.25, 0.8], [781, 0.22, 1.1], [1187, 0.16, 0.9], [1733, 0.12, 0.7], [2441, 0.08, 0.5]]) {
+        const w = (2 * Math.PI * f * (1 + (R0.random() - 0.5) * 0.04)) / sr, k = Math.exp(-6.9 / (t60 * sr));
+        let re = 0, im = a * (0.6 + 0.4 * R0.random()) * (c ? 0.9 : 1);
+        const cr = k * Math.cos(w), ci = k * Math.sin(w);
+        for (let i = 0; i < Math.min(n, t60 * 1.2 * sr); i++) { d[i] += im * 0.5; const r = re * cr - im * ci; im = re * ci + im * cr; re = r; }
+      }
+    }
+    let peak = 0;
+    for (let c = 0; c < 2; c++) for (const x of buf.getChannelData(c)) peak = Math.max(peak, Math.abs(x));
+    for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) d[i] /= peak; }
+    S.cache.set(key, buf);
+  }
+  return buf;
+}
+
+/** Queue the impact and debris one-shots for idle-time synthesis (see Studio.warm). */
+export function warmSfx(S) {
+  for (let v = 0; v < 3; v++) S.warm(() => impactBuffer(S, v));
+  for (let v = 0; v < 4; v++) for (const size of [1, 0.6]) S.warm(() => debrisBuffer(S, size, v));
 }
 
 /** Air bed: stereo pink noise through a slowly drifting bandpass. */

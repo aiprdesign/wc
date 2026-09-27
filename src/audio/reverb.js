@@ -72,37 +72,27 @@ export function makeWideMonoReverb(ctx, random, options, spread = 0.019, cache =
 }
 
 /**
- * Stage early reflections: a short true-stereo convolution (≈ 90 ms) of sparse,
- * progressively duller taps — floor, side walls, stage shell — different on each
- * side, so a source panned left gets left-wall reflections first. Sections feed
- * it by how far back they sit; it bridges the dry signal and the late hall so the
- * orchestra sounds recorded in a room instead of "dry + reverb".
+ * Stage early reflections: sparse delay taps (floor, side walls, stage shell,
+ * back wall) alternating left / right, each quieter and later, fed from a mono,
+ * dulled blend of the sections. It bridges the dry signal and the late hall, so
+ * the orchestra sounds recorded in a room instead of "dry + reverb". (Delay taps,
+ * not a convolver: a short ConvolverNode costs far more to render.)
+ * Returns { input, output }; output is stereo.
  */
-export function makeEarlyReflections(ctx, random, cache = null) {
-  const key = 'ir:early';
-  let ir = cache?.get(key);
-  if (!ir) {
-    const sr = ctx.sampleRate, n = Math.ceil(0.095 * sr);
-    ir = ctx.createBuffer(2, n, sr);
-    for (let ch = 0; ch < 2; ch++) {
-      const d = ir.getChannelData(ch);
-      for (let k = 0; k < 22; k++) {
-        const t = 0.004 + (k / 22) ** 1.4 * 0.085 + random() * 0.003;
-        const amp = (1 - t / 0.1) ** 1.5 * (0.5 + random() * 0.5) * (random() < 0.5 ? -1 : 1);
-        // each tap is a tiny smeared (absorbed) click, duller the later it arrives
-        const w = Math.floor((0.0003 + t * 0.012) * sr);
-        const i0 = Math.floor(t * sr);
-        for (let j = 0; j < w && i0 + j < n; j++) d[i0 + j] += amp * Math.sin((Math.PI * j) / w) / Math.sqrt(w);
-      }
-      let e = 0;
-      for (let i = 0; i < n; i++) e += d[i] * d[i];
-      const k = 1 / Math.sqrt(e);
-      for (let i = 0; i < n; i++) d[i] *= k;
-    }
-    cache?.set(key, ir);
-  }
-  const conv = ctx.createConvolver();
-  conv.normalize = false;
-  conv.buffer = ir;
-  return conv;
+export function makeEarlyReflections(ctx, random) {
+  const input = ctx.createBiquadFilter();
+  input.type = 'lowpass';
+  input.frequency.value = 5500;
+  input.channelCount = 1;
+  input.channelCountMode = 'explicit';
+  const merge = ctx.createChannelMerger(2);
+  const taps = [[0.0073, 0.7], [0.0111, 0.62], [0.0169, 0.52], [0.0233, 0.46], [0.0317, 0.36], [0.0431, 0.3], [0.057, 0.22], [0.071, 0.17]];
+  taps.forEach(([t, g], k) => {
+    const d = ctx.createDelay(0.1);
+    d.delayTime.value = t * (0.93 + 0.14 * random());
+    const a = ctx.createGain();
+    a.gain.value = g * (k % 3 === 2 ? -1 : 1) * 0.6;
+    input.connect(d).connect(a).connect(merge, 0, k % 2);
+  });
+  return { input, output: merge };
 }

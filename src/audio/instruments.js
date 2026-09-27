@@ -157,11 +157,12 @@ export function piano(S, t, midi, { level = 0.25, pan = 0, bus = 'piano' } = {})
   const key = `piano:${midi}:${hard}:${v}`;
   let buf = S.cache.get(key);
   if (!buf) {
+    const R = S.seeded(key); // deterministic whichever studio renders it first
     const T = clamp(4.2 * Math.sqrt(262 / f0), 1.4, 5.5);
     const B = 0.00038 * (f0 < 130 ? 1.6 : 1);        // inharmonicity (stiffer bass strings)
     const tilt = hard ? 1.25 : 1.7;                    // spectral tilt from hammer velocity
-    const strike = S.rand(0.1, 0.14);                  // hammer position → comb in the spectrum
-    const det = [0, S.rand(0.6, 1.4), -S.rand(0.4, 1.1)]; // cents per string
+    const strike = R.rand(0.1, 0.14);                  // hammer position → comb in the spectrum
+    const det = [0, R.rand(0.6, 1.4), -R.rand(0.4, 1.1)]; // cents per string
     const modes = [];
     for (let k = 1; k <= 16; k++) {
       const ratio = k * Math.sqrt(1 + B * k * k);
@@ -173,7 +174,7 @@ export function piano(S, t, midi, { level = 0.25, pan = 0, bus = 'piano' } = {})
     modes.push([95 / f0, 0.04, 0.25], [210 / f0, 0.03, 0.18]);
     buf = modalBuffer(S, key, f0, modes, {
       seconds: T * 0.6, noise: hard ? 0.35 : 0.2, attack: hard ? 0.002 : 0.004, vary: 0.25,
-      hammer: { level: hard ? 0.08 : 0.05, knock: 70 + 30 * S.random(), damper: 0.02 },
+      hammer: { level: hard ? 0.08 : 0.05, knock: 70 + 30 * R.random(), damper: 0.02 },
     });
   }
   return playBuffer(S, t, buf, { level: level * S.rand(0.88, 1.08), pan: Math.abs(pan) < 0.2 ? 0 : pan, bus });
@@ -381,25 +382,62 @@ export function downer(S, t, { level = 0.2, dur = 1.6, from = 320, to = 38, bus 
   S.free(o, s, lp, g, sg, n, nl, ng);
 }
 
-/** Air whoosh: bandpassed noise sweep with a bell-shaped envelope and moving pan. */
+/**
+ * Designed air whoosh: three noise layers moving together past the listener —
+ * a bandpassed body, a brighter "tear" that peaks just after it, and (for big
+ * ones) low displacement air — with doppler (the noise itself is pitched up on
+ * approach and drops as it passes), an asymmetric sweep and a moving pan.
+ */
 export function whoosh(S, t0, dur, o = {}) {
   const { level = 0.15, f0 = 300, f1 = 3000, pan0 = -0.7, pan1 = 0.7, q = 1.2, peak = 0.55, bus = 'fx', kind = 'pink' } = o;
   const t1 = t0 + dur;
   const tp = t0 + dur * peak;
+  const lv = level * S.rand(0.9, 1.1);
+  const p = S.panner(pan0);
+  p.pan.setValueAtTime(pan0, t0);
+  p.pan.linearRampToValueAtTime((pan0 + pan1) / 2, tp);
+  p.pan.linearRampToValueAtTime(pan1, t1);
+  p.connect(S.bus(bus));
+  const doppler = (src) => {
+    src.playbackRate.setValueAtTime(1.12, t0);
+    src.playbackRate.linearRampToValueAtTime(1.05, tp - dur * 0.05);
+    src.playbackRate.linearRampToValueAtTime(0.86, Math.min(t1, tp + dur * 0.2));
+  };
+  // body
   const n = S.noise(kind, t0, t1 + 0.05);
+  doppler(n);
   const bp = S.filter('bandpass', f0, q);
   bp.frequency.setValueAtTime(f0, t0);
   bp.frequency.exponentialRampToValueAtTime(f1, tp);
   bp.frequency.exponentialRampToValueAtTime(Math.max(80, (f0 + f1) * 0.25), t1);
   const g = S.gain(0);
   g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(level, tp);
+  g.gain.exponentialRampToValueAtTime(lv, tp);
   g.gain.exponentialRampToValueAtTime(0.0001, t1);
-  const p = S.panner(pan0);
-  p.pan.setValueAtTime(pan0, t0);
-  p.pan.linearRampToValueAtTime(pan1, t1);
-  n.connect(bp).connect(g).connect(p).connect(S.bus(bus));
-  S.free(n, n, bp, g, p);
+  n.connect(bp).connect(g).connect(p);
+  // tear: bright, narrower in time, peaks a moment after the body
+  const tt = Math.min(t1 - 0.01, tp + dur * 0.06);
+  const n2 = S.noise('white', t0 + dur * 0.2, t1 + 0.05);
+  doppler(n2);
+  const hp = S.filter('highpass', Math.min(9000, f1 * 1.3), 0.8);
+  const g2 = S.gain(0);
+  g2.gain.setValueAtTime(0.0001, t0 + dur * 0.2);
+  g2.gain.exponentialRampToValueAtTime(lv * 0.35, tt);
+  g2.gain.exponentialRampToValueAtTime(0.0001, Math.min(t1, tt + dur * 0.3));
+  n2.connect(hp).connect(g2).connect(p);
+  const nodes = [n, bp, g, n2, hp, g2, p];
+  // displacement: low air for the bigger moves
+  if (level >= 0.08) {
+    const n3 = S.noise('brown', t0, t1 + 0.05);
+    const lp = S.filter('lowpass', 260, 0.7);
+    const g3 = S.gain(0);
+    g3.gain.setValueAtTime(0.0001, t0);
+    g3.gain.exponentialRampToValueAtTime(lv * 1.1, tp);
+    g3.gain.exponentialRampToValueAtTime(0.0001, t1);
+    n3.connect(lp).connect(g3).connect(p);
+    nodes.push(n3, lp, g3);
+  }
+  S.free(n, ...nodes);
 }
 
 /** Sub boom: pitch-dropping sine for cinematic impacts. */

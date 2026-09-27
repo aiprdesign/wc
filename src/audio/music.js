@@ -225,7 +225,9 @@ function ostinato(S) {
     while (r < 45) r += 12;
     let iv = fig[k % 16];
     if (iv === 15) iv = ch.choir.some((m) => (m - r - 4) % 12 === 0) ? 16 : 15; // major or minor third
-    const lv = 0.2 * acc[k % 16] * drive(t);
+    // phrase shaping: each 2-bar phrase leans forward into the next downbeat
+    const phrase = 0.92 + 0.1 * ((t % 4) / 4);
+    const lv = 0.2 * acc[k % 16] * drive(t) * phrase;
     S.at(t, () => {
       O.spiccato(S, t, r + iv, { level: lv });
       if (t >= 32 && k % 4 === 0) O.spiccato(S, t, r + iv + 12, { level: lv * 0.5 }); // violins join an octave up
@@ -316,6 +318,7 @@ function whooshHit(S, t, power = 1, pan = 0.6) {
     I.boom(S, t, { level: 0.5 * power, f0: 85, f1: 34, decay: 1.8 });
     I.taiko(S, t, 0.55 * power, { size: 1 });
     I.crash(S, t, 0.07 * power);
+    X.impact(S, t, { level: 0.09 * power, pan: pan * 0.3 });
   });
 }
 
@@ -325,6 +328,7 @@ function hit(S, t, { power = 1, braam = null, chord = null, down = false, subHz 
     I.boom(S, t, { level: 0.5 * power, f0: subHz, f1: 34, decay: 1.4 + power });
     I.taiko(S, t, 0.6 * power, { size: 1 });
     I.crash(S, t, 0.08 * power);
+    X.impact(S, t, { level: 0.1 * power, metal: braam != null ? 1 : 0.4 });
     if (braam != null) O.braam(S, t, braam, { level: 0.42 * power, power, dur: 1.6 + power });
     if (chord) I.harpRoll(S, t, CHORDS[chord].choir.concat(CHORDS[chord].choir.at(-1) + 12), { level: 0.08 * power });
     if (down) I.downer(S, t + 0.1, { level: 0.05 * power, dur: 1.0 });
@@ -387,6 +391,7 @@ function finalButton(S) {
     I.taiko(S, t + 0.02, 0.6, { size: 0.6, bus: 'end' });
     I.kick(S, t, 0.9, { bus: 'endDry' });
     I.crash(S, t, 0.1, { bus: 'end' });
+    X.impact(S, t, { level: 0.14, bus: 'end', metal: 1 });
     O.braam(S, t, 50, { level: 0.6, power: 1.3, dur: 3.2, bus: 'end' });
     O.brass(S, t, 1.4, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 2.6, bus: 'end' });
     O.chord(S, 'choirA', t, t + 1.6, [57, 62, 66, 69, 74, 78], { level: 0.45, attack: 0.05, release: 3.0, cutoff: 5200, bus: 'end' });
@@ -433,8 +438,8 @@ export function kickTimes() {
 /**
  * Schedule the music into Studio S. The score renders in parallel studios, so
  * `part` selects which layers this studio plays:
- *   'orchestra' — sustained orchestra: strings, choir, theme, low brass, ostinato
- *   'rhythm'    — act I colour, percussion, arps, transitions, hits, final button
+ *   'orchestra' — strings, choir, theme, low brass, ostinato, act I colour
+ *   'rhythm'    — percussion, arps, transitions, hits, final button
  */
 export function arrangeMusic(S, part = 'all') {
   const orch = part === 'all' || part === 'orchestra';
@@ -446,9 +451,9 @@ export function arrangeMusic(S, part = 'all') {
     themeLayer(S);
     ostinato(S);
     lowBrass(S);
+    actOne(S);
   }
   if (rest) {
-    actOne(S);
     rhythm(S, []);
     arps(S);
     transitions(S);
@@ -458,4 +463,3 @@ export function arrangeMusic(S, part = 'all') {
   duckPads(S);
   return { kicks: kickTimes(), suckBacks: [OST_END, C.finalImpact - 0.08] };
 }
-export const __layers = { preload, stringsLayer, choirLayer, themeLayer, ostinato, lowBrass, actOne, rhythm: (S) => rhythm(S, []), arps, transitions, accents, finalButton };
