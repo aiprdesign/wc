@@ -106,7 +106,7 @@ export function create(ctx, segment) {
   const tFlash = 28.75 - segment.start;
 
   scene.environment = ctx.env;
-  scene.environmentIntensity = 0.28;
+  scene.environmentIntensity = 0.18;
   scene.fog = new THREE.FogExp2(0x070605, 0.016);
   const BG = 0x050403;
 

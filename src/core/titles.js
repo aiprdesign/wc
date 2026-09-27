@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { SEGMENTS, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
-import { progressLine } from '../lib/lines.js';
+import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
 
 // Headings per segment. Dates are the milestones each chapter shows.
@@ -22,6 +22,23 @@ const CHAPTERS = {
   knowledge:   { n: 'XI',   era: '1450 — TODAY',                heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
 };
 
+// Showreel breakdown: the craft each chapter demonstrates.
+const TECHNIQUE = {
+  opening: 'PROCEDURAL LINEWORK · 2.5D LAYERING · PARTICLE TYPOGRAPHY',
+  classical: 'PROCEDURAL MODELLING · LOOK-DEV · ARCHVIZ · TECHNICAL HUD',
+  civic: 'KINETIC TYPOGRAPHY · PROCEDURAL FOLDING · MORPHING',
+  renaissance: 'PROCEDURAL DRAWING · 2D → 3D · PARTICLE SIMULATION',
+  science: 'SPEED RAMPING · SCIENTIFIC VISUALISATION · REFRACTION',
+  industrial: 'HARD-SURFACE · MECHANICAL RIGGING · SMOKE · SOUND SYNC',
+  electricity: 'MATCH CUTS · ENERGY FX · PROCEDURAL CIRCUIT GROWTH',
+  medicine: 'MICRO CINEMATOGRAPHY · HOLOGRAPHIC UI · DATA VIZ',
+  flight: 'BLUEPRINT FOLD · ATMOSPHERICS · PLANETARY SHADING',
+  moonshot: 'LUNAR SHADING · HARD LIGHT · DUST FX · INTERFACE ANIMATION',
+  computing: 'HARD-SURFACE MORPHS · DATA FLOW · UI ANIMATION',
+  knowledge: 'INSTANCED CHOREOGRAPHY · MULTI-STAGE MORPHS · NETWORKS',
+  montage: 'SHAPE-DRIVEN MATCH CUTS · RHYTHM EDITING',
+};
+
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.25, end: 3.0, text: 'Every achievement begins as an idea.' },
@@ -29,6 +46,36 @@ const INTERLUDES = [
 ];
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
+
+// Small text that can change every frame (timecode, counters); redraws only when the string changes.
+class LiveText extends THREE.Mesh {
+  constructor({ height = 0.03, chars = 16, align = 'left', font = FONTS.mono, spacing = 0.18 } = {}) {
+    const size = 64, c = document.createElement('canvas');
+    c.width = Math.ceil(chars * size * (0.62 + spacing)); c.height = Math.ceil(size * 1.5);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter;
+    const w = height * c.width / size, h = height * c.height / size;
+    const geo = new THREE.PlaneGeometry(w, h);
+    geo.translate(align === 'left' ? w / 2 : align === 'right' ? -w / 2 : 0, 0, 0);
+    super(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+    Object.assign(this, { c, ctx: c.getContext('2d'), tex, size, align, font, spacing, str: null });
+  }
+  set(str, color, opacity, gain = 1.2) {
+    this.material.color.copy(color).multiplyScalar(gain);
+    this.material.opacity = opacity; this.visible = opacity > 0.003;
+    if (str === this.str) return;
+    this.str = str;
+    const { ctx, c, size } = this;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.font = `400 ${size}px "${this.font}"`; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    const adv = (ch) => ctx.measureText(ch).width + this.spacing * size;
+    const total = [...str].reduce((a, ch) => a + adv(ch), 0);
+    let x = this.align === 'left' ? 4 : this.align === 'right' ? c.width - total - 4 : (c.width - total) / 2;
+    for (const ch of str) { ctx.fillText(ch, x, c.height / 2); x += adv(ch); }
+    this.tex.needsUpdate = true;
+  }
+}
+
+const tc = (T) => { const s = Math.floor(T), f = Math.floor((T - s) * 30); return `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}:${String(f).padStart(2, '0')}`; };
 
 export class TitleLayer {
   constructor() {
@@ -46,6 +93,87 @@ export class TitleLayer {
       this.cards.push(this.makeCard(seg, c));
     }
     this.interludes = INTERLUDES.map((d) => this.makeInterlude(d));
+    this.makeReel(a);
+  }
+
+  // Persistent showreel frame: corner marks, timecode, chapter counter, technique tag, progress rail,
+  // plus graphic line sweeps at every chapter change.
+  makeReel(a) {
+    const reel = new THREE.Group();
+    this.reel = reel; this.scene.add(reel);
+    const mx = a - 0.07, my = 0.93, L = 0.07, V = (x, y) => new THREE.Vector3(x, y, 0);
+    this.corners = segmentsLine([
+      [V(-mx, my - L), V(-mx, my)], [V(-mx, my), V(-mx + L, my)], [V(mx - L, my), V(mx, my)], [V(mx, my), V(mx, my - L)],
+      [V(mx, -my + L), V(mx, -my)], [V(mx, -my), V(mx - L, -my)], [V(-mx + L, -my), V(-mx, -my)], [V(-mx, -my), V(-mx, -my + L)],
+    ], { color: '#ffffff', intensity: 0.9, orderFn: () => 0, stagger: 0 });
+    reel.add(this.corners);
+    const top = my - 0.005, bot = -my + 0.035;
+    this.tcText = new LiveText({ height: 0.03, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035, 0);
+    this.idxText = new LiveText({ height: 0.03, chars: 26, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035, 0);
+    this.techText = new LiveText({ height: 0.026, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035, 0);
+    this.rtText = new LiveText({ height: 0.026, chars: 20, align: 'right', spacing: 0.2 }); this.rtText.position.set(mx - 0.005, bot + 0.035, 0);
+    reel.add(this.tcText, this.idxText, this.techText, this.rtText);
+    // progress rail with chapter ticks
+    const railW = mx * 2 - 0.01;
+    this.rail = progressLine([V(-railW / 2, bot, 0), V(railW / 2, bot, 0)], { color: '#ffffff', intensity: 0.35, head: 0.001 });
+    this.railFill = progressLine([V(-railW / 2, bot, 0), V(railW / 2, bot, 0)], { color: '#ffffff', intensity: 1.6, head: 0.004 });
+    const ticks = SEGMENTS.slice(1).map((sg) => { const x = -railW / 2 + railW * (sg.start + 0.25) / SEGMENTS.at(-1).end; return [V(x, bot - 0.012), V(x, bot + 0.012)]; });
+    this.ticks = segmentsLine(ticks, { color: '#ffffff', intensity: 0.6, orderFn: () => 0, stagger: 0 });
+    reel.add(this.rail, this.railFill, this.ticks);
+    // chapter-change sweeps: two hairlines racing across the frame + a soft light band
+    this.sweeps = SEGMENTS.slice(1, -1).map((sg) => {
+      const g = new THREE.Group();
+      const l1 = progressLine([V(-a, 0.36), V(a, 0.36)], { color: '#ffffff', intensity: 1.8, head: 0.06, fade: 0.35 });
+      const l2 = progressLine([V(a, -0.36), V(-a, -0.36)], { color: '#ffffff', intensity: 1.8, head: 0.06, fade: 0.35 });
+      const band = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 2.4), new THREE.ShaderMaterial({
+        uniforms: { uO: { value: 0 }, uC: { value: new THREE.Color() } }, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: 'uniform float uO; uniform vec3 uC; varying vec2 vUv; void main(){ float x = 1.0 - abs(vUv.x - 0.5) * 2.0; gl_FragColor = vec4(uC * pow(x, 3.0) * uO, 1.0); }',
+      }));
+      band.rotation.z = -0.35;
+      g.add(l1, l2, band);
+      this.scene.add(g);
+      return { g, l1, l2, band, t: sg.start + 0.25 };
+    });
+  }
+
+  updateReel(T) {
+    const end = SEGMENTS.at(-1).end;
+    const finale = SEGMENTS.at(-1).start + 0.5;
+    const o = ramp(T, 5.6, 6.4) * (1 - ramp(T, finale - 0.4, finale + 0.3));
+    this.reel.visible = o > 0.003;
+    const col = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(T)) / 2));
+    if (this.reel.visible) {
+      this.corners.progress = 1; this.corners.opacity = 0.55 * o;
+      this.corners.material.uniforms.uColor.value.copy(col);
+      const segs = SEGMENTS.filter((sg) => T >= sg.start);
+      const cur = segs.at(-1), idx = SEGMENTS.indexOf(cur);
+      this.tcText.set(tc(T), col, 0.75 * o);
+      this.idxText.set(`${String(idx + 1).padStart(2, '0')} / ${String(SEGMENTS.length).padStart(2, '0')}  ${cur.id.toUpperCase()}`, col, 0.75 * o);
+      // technique tag types on at each chapter start
+      const tech = TECHNIQUE[cur.id] ?? '';
+      const typed = Math.floor(tech.length * ramp(T, cur.start + 0.5, cur.start + 1.3, ease.linear));
+      this.techText.set(tech.slice(0, typed), col, 0.7 * o);
+      this.rtText.set('WEBGL · REAL-TIME', col, 0.5 * o);
+      this.rail.progress = 1; this.rail.opacity = 0.5 * o;
+      this.railFill.progress = Math.max(0.0001, T / end); this.railFill.opacity = 0.9 * o;
+      this.ticks.progress = 1; this.ticks.opacity = 0.6 * o;
+      [this.rail, this.railFill, this.ticks].forEach((l) => l.material.uniforms.uColor.value.copy(col));
+    }
+    for (const s of this.sweeps) {
+      const u = (T - s.t) / 0.6;
+      const on = u > -0.05 && u < 1.1 && o > 0.01;
+      s.g.visible = on;
+      if (!on) continue;
+      const p = ease.inOutCubic(sat(u));
+      s.l1.progress = s.l2.progress = Math.max(0.0001, p * 1.4);
+      s.l1.opacity = s.l2.opacity = (1 - sat((u - 0.6) / 0.4)) * 0.8;
+      [s.l1, s.l2].forEach((l) => l.material.uniforms.uColor.value.copy(col));
+      s.band.position.x = lerp(-OUTPUT_ASPECT - 0.5, OUTPUT_ASPECT + 0.5, p);
+      s.band.material.uniforms.uO.value = Math.sin(Math.PI * sat(u)) * 0.12;
+      s.band.material.uniforms.uC.value.copy(col);
+    }
+    return this.reel.visible;
   }
 
   makeCard(seg, c) {
@@ -97,7 +225,7 @@ export class TitleLayer {
   }
 
   update(T) {
-    let any = false;
+    let any = this.updateReel(T);
     for (const c of this.cards) {
       const on = T > c.t0 - 0.05 && T < c.t1 + 0.7;
       c.g.visible = on;
