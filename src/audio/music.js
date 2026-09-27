@@ -71,7 +71,7 @@ export const chordAt = (t) => CHORDS[(HARMONY.find(([a, b]) => t >= a && t < b) 
 // Overall orchestral intensity 0..1 (pad level and brightness follow it).
 const INTENSITY = [
   [0, 0.1], [2, 0.2], [5, 0.45], [8, 0.45], [10.6, 0.65], [12, 0.5], [16, 0.5], [18.4, 0.65],
-  [20, 0.55], [25, 0.75], [32, 0.6], [35, 0.7], [38.2, 0.85], [39, 0.7], [41.3, 0.85], [45.5, 0.9], [50.5, 1],
+  [20, 0.55], [25, 0.75], [31.5, 0.7], [32, 0.45], [34.5, 0.55], [35, 0.7], [38.2, 0.85], [39, 0.7], [41.3, 0.85], [45.5, 0.9], [50.5, 1],
 ];
 export function intensity(t) {
   const k = INTENSITY;
@@ -102,7 +102,7 @@ function stringsLayer(S) {
     // Before the sub pulse takes over, a cello/bass note doubles the root an octave down.
     const notes = hybrid || name === 'D5' ? pad : [root >= 36 ? root - 12 : root, ...pad];
     S.at(start, () => I.strings(S, start, b, notes, {
-      level: 0.34 * (0.35 + 0.65 * lv),
+      level: 0.34 * (0.35 + 0.65 * lv) * (a >= 45.5 ? 1.25 : 1),
       attack: name === 'D5' ? 2.6 : name === 'D' ? 0.03 : hybrid ? 0.25 : 0.9,
       release: hybrid ? 0.45 : 1.1,
       cutoff: 600 + 2600 * lv,
@@ -112,8 +112,8 @@ function stringsLayer(S) {
 
 const BRASS = [
   // [start, duration, chord, level, options]
-  [4.0, 1.0, 'Bb9', 0.5, { attack: 0.9 }],               // swell into the title
-  [5.0, 2.6, 'Dm', 0.85, { sfz: true }],                 // titleLocked
+  [4.0, 1.0, 'Bb9', 0.35, { attack: 0.9 }],               // swell into the title
+  [5.0, 2.6, 'Dm', 0.7, { sfz: true }],                  // titleLocked
   [10.6, 1.8, 'F', 1.0, { sfz: true, bright: 2200 }],    // templeReveal
   [14.0, 2.0, 'Dm', 0.45, { attack: 1.2 }],
   [18.4, 1.6, 'F', 0.8, { sfz: true }],                  // model3D
@@ -124,8 +124,8 @@ const BRASS = [
   [38.2, 0.8, 'Gm', 1.0, { sfz: true, bright: 2200 }],   // earthWide
   [41.3, 1.7, 'Dm', 0.9, { sfz: true }],                 // processorDive
   [45.5, 2.0, 'Bb', 0.8, { attack: 0.6 }],               // montage
-  [47.5, 2.0, 'C', 0.9, { attack: 0.6 }],
-  [49.5, 1.0, 'Asus4', 1.0, { attack: 0.5, bright: 2200 }],
+  [47.5, 2.0, 'C', 1.0, { attack: 0.6, bright: 2000 }],
+  [49.5, 1.0, 'Asus4', 1.2, { attack: 0.5, bright: 2500 }],
   [50.5, 1.0, 'D', 1.2, { sfz: true, bright: 2600 }],    // pullBack climax
 ];
 
@@ -196,24 +196,31 @@ const HATS = [
   [39.5, 50.5, 'xoXoxoxoxoXoxoxo'],
 ];
 
+// Rhythm-section dynamics: calmer through medicine, swelling through the montage.
+function drive(t) {
+  if (t >= 31.5 && t < 34.5) return 0.55;
+  if (t >= 45.5 && t < C.pullBack) return 1.05 + (0.45 * (t - 45.5)) / (C.pullBack - 45.5);
+  return 0.9;
+}
+
 function rhythmLayer(S, kicks) {
   for (const [a, b, p] of KICK) {
     pattern(a, b, p, (t, v) => {
       kicks.push(t);
-      S.at(t, () => I.kick(S, t, 0.85 * v));
+      S.at(t, () => I.kick(S, t, 0.85 * v * drive(t)));
     });
   }
   for (const [a, b, p] of TAIKO) {
-    pattern(a, b, p, (t, v, k) => S.at(t, () => I.drum(S, t, 0.55 * v, { f: 68, decay: 1.0, pan: (k % 4 ? 0.25 : -0.25) })));
+    pattern(a, b, p, (t, v, k) => S.at(t, () => I.drum(S, t, 0.55 * v * drive(t), { f: 68, decay: 1.0, pan: (k % 4 ? 0.25 : -0.25) })));
   }
   for (const [a, b, p] of TOMS) {
     pattern(a, b, p, (t, v, k) => S.at(t, () => I.drum(S, t, 0.35 * v, { f: k % 2 ? 98 : 118, decay: 0.55, pan: k % 2 ? -0.4 : 0.4, skin: 0.7 })));
   }
   for (const [a, b, p] of SNARE) {
-    pattern(a, b, p, (t, v) => S.at(t, () => I.snare(S, t, 0.22 * v, { pan: 0.05 })));
+    pattern(a, b, p, (t, v) => S.at(t, () => I.snare(S, t, 0.22 * v * drive(t), { pan: 0.05 })));
   }
   for (const [a, b, p] of HATS) {
-    pattern(a, b, p, (t, v, k) => S.at(t, () => I.hat(S, t, 0.075 * v, { pan: 0.28 + (k % 2) * 0.1 })));
+    pattern(a, b, p, (t, v, k) => S.at(t, () => I.hat(S, t, 0.1 * v * drive(t), { pan: 0.28 + (k % 2) * 0.1 })));
   }
   // montage finale bar: snare + tom roll crescendo into pullBack
   pattern(49.5, C.pullBack, 'xxxxxxxxxxxxxxxx', (t) => {
@@ -272,7 +279,7 @@ function risersAndSwells(S) {
   S.at(19.4, () => I.swellIn(S, C.paintBurst, 0.5, { level: 0.12 }));
   S.at(C.prismBeam, () => I.riser(S, C.prismBeam, C.gear, { level: 0.05, from: 600, to: 6000 }));
   S.at(40.3, () => I.riser(S, 40.3, C.processorDive, { level: 0.1, pitch: [50, 74] }));
-  S.at(C.mColumns - 0.1, () => I.riser(S, C.mColumns - 0.1, C.pullBack, { level: 0.14, from: 200, to: 9000, pitch: [38, 74] }));
+  S.at(C.mColumns - 0.1, () => I.riser(S, C.mColumns - 0.1, C.pullBack, { level: 0.26, from: 200, to: 9000, pitch: [38, 74] }));
 }
 
 // Orchestral "hit" used on the story's big beats.
@@ -286,7 +293,7 @@ function accent(S, t, { chord, power = 1, harp = true, cymbal = true, subHz = 80
 }
 
 function accents(S) {
-  accent(S, C.titleLocked, { chord: 'Dm9', power: 0.7 });
+  accent(S, C.titleLocked, { chord: 'Dm9', power: 0.5 });
   accent(S, C.templeReveal, { chord: 'F', power: 0.9 });
   accent(S, C.model3D, { chord: 'F', power: 0.6, cymbal: false });
   accent(S, C.paintBurst, { chord: 'F', power: 0.8 });
@@ -310,14 +317,13 @@ function accents(S) {
 
 export function arrangeMusic(S) {
   const kicks = [];
-  const sk = globalThis.__skip || '';
-  if (!sk.includes('strings')) stringsLayer(S);
-  if (!sk.includes('brass')) brassLayer(S);
-  if (!sk.includes('harp')) harpLayer(S);
-  if (!sk.includes('rhythm')) rhythmLayer(S, kicks);
-  if (!sk.includes('bass')) bassLayer(S);
-  if (!sk.includes('synth')) synthLayer(S);
-  if (!sk.includes('risers')) risersAndSwells(S);
-  if (!sk.includes('accents')) accents(S);
+  stringsLayer(S);
+  brassLayer(S);
+  harpLayer(S);
+  rhythmLayer(S, kicks);
+  bassLayer(S);
+  synthLayer(S);
+  risersAndSwells(S);
+  accents(S);
   return { kicks };
 }

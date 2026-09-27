@@ -19,6 +19,7 @@ export const DofShader = {
     void main(){
       float c0 = coc(linDepth(vUv));
       vec4 base = texture2D(tColor, vUv);
+      if (any(isnan(base.rgb)) || any(isinf(base.rgb))) base = vec4(0.0, 0.0, 0.0, 1.0);
       if (c0 * uMaxBlur < 0.5) { gl_FragColor = base; return; }
       vec2 px = 1.0 / uResolution;
       vec3 acc = base.rgb; float wsum = 1.0;
@@ -31,6 +32,7 @@ export const DofShader = {
         float cs = coc(linDepth(suv));
         float w = smoothstep(r - 0.15, r, max(cs, c0 * 0.5)); // limit sharp foreground bleeding
         vec3 s = texture2D(tColor, suv).rgb;
+        if (any(isnan(s)) || any(isinf(s))) { s = vec3(0.0); w = 0.0; }
         w *= 1.0 + dot(s, vec3(0.3)) * 0.6;                    // bokeh highlight bias
         acc += s * w; wsum += w;
       }
@@ -54,17 +56,20 @@ export const TransitionShader = {
     float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
       return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
     float lum(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+    // Some GPUs produce NaN/Inf from edge-case maths in scene shaders; left alone, bloom
+    // smears a single bad pixel into black blocks across the frame. Scrub it here.
+    vec3 safe(vec3 c){ return (any(isnan(c)) || any(isinf(c))) ? vec3(0.0) : clamp(c, 0.0, 64.0); }
     vec3 zoomBlur(sampler2D t, vec2 uv, float scale, float blur){
       vec2 c = vec2(0.5); vec3 acc = vec3(0.0);
-      for (int i = 0; i < 10; i++) { float k = scale * (1.0 + blur * float(i) / 10.0); acc += texture2D(t, c + (uv - c) / k).rgb; }
+      for (int i = 0; i < 10; i++) { float k = scale * (1.0 + blur * float(i) / 10.0); acc += safe(texture2D(t, c + (uv - c) / k).rgb); }
       return acc / 10.0;
     }
     vec3 spectrum(float x){ return clamp(abs(mod(x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
     void main(){
       vec2 uv = vUv;
-      vec3 A = texture2D(tA, uv).rgb;
+      vec3 A = safe(texture2D(tA, uv).rgb);
       if (uSingle > 0.5) { gl_FragColor = vec4(A, 1.0); return; }
-      vec3 B = texture2D(tB, uv).rgb;
+      vec3 B = safe(texture2D(tB, uv).rgb);
       float p = clamp(uProgress, 0.0, 1.0), ps = p * p * (3.0 - 2.0 * p);
       vec3 col;
       if (uMode == 1) {
@@ -89,7 +94,7 @@ export const TransitionShader = {
         float d = (x - edge) / w;             // <0 : revealed B, 0..1 : prism band, >1 : A
         vec3 bandB;
         float off = 0.012 * clamp(1.0 - abs(d), 0.0, 1.0);
-        bandB.r = texture2D(tB, uv + vec2(off, 0.0)).r; bandB.g = B.g; bandB.b = texture2D(tB, uv - vec2(off, 0.0)).b;
+        bandB.r = safe(texture2D(tB, uv + vec2(off, 0.0)).rgb).r; bandB.g = B.g; bandB.b = safe(texture2D(tB, uv - vec2(off, 0.0)).rgb).b;
         vec3 band = spectrum(clamp(d, 0.0, 1.0) * 0.85) * 2.2 * smoothstep(1.0, 0.0, abs(d - 0.5) * 2.0);
         col = d < 0.0 ? bandB : mix(bandB, A, smoothstep(0.0, 1.0, d));
         col += band * smoothstep(-0.05, 0.1, d) * smoothstep(1.05, 0.9, d);
@@ -101,7 +106,7 @@ export const TransitionShader = {
       } else {
         col = mix(A, B, ps);
       }
-      gl_FragColor = vec4(col, 1.0);
+      gl_FragColor = vec4(safe(col), 1.0);
     }`,
 };
 
@@ -132,6 +137,7 @@ export const FinalShader = {
       // radial chromatic aberration (stronger towards edges)
       vec2 ca = d * uCA * (0.4 + r2 * 1.5);
       vec3 col = vec3(texture2D(tInput, uv + ca).r, texture2D(tInput, uv).g, texture2D(tInput, uv - ca).b);
+      if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
       col *= uExposure;
       // era colour temperature before tonemapping (white balance)
       float w = clamp(uWarmth, -1.0, 1.0);

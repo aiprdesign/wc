@@ -411,7 +411,7 @@ export function create(ctx, segment) {
   const NPAINT = 36000;
   const paintSrc = sampleGeometry(figGeo, NPAINT, { seed: 5 });
   const paintTgt = new Float32Array(NPAINT * 3);
-  const pigments = ['#c8872e', '#e34234', '#2a5caa', '#3fa796', '#f0c060', '#f3ead8', '#9b2d20'].map((c) => new THREE.Color(c));
+  const pigments = ['#c8872e', '#e34234', '#2a5caa', '#3fa796', '#e0b050', '#1f4f9a', '#9b2d20'].map((c) => new THREE.Color(c));
   const paintCol = new Float32Array(NPAINT * 3);
   for (let i = 0; i < NPAINT; i++) {
     // swirl-ring target (a vortex that frames the camera) with depth
@@ -528,7 +528,7 @@ export function create(ctx, segment) {
       figGroup.position.set(sketch.position.x, sketch.position.y, lerp(canvasRig.position.z + SURF + 0.004, C3.z, lineLift));
       figGroup.rotation.copy(sketch.rotation);
       const inflate = ramp(t, m3, m3 + 0.7, ease.outCubic);
-      const burst = ramp(t, pB - 0.03, pB + 0.07, ease.inQuad);
+      const burst = ramp(t, pB - 0.07, pB + 0.02, ease.inQuad);
       figGroup.scale.set(1, 1, lerp(0.03, 1, inflate));
       figMat.opacity = sat(inflate * 1.4) * (1 - burst);
       figMesh.visible = figMat.opacity > 0.002;

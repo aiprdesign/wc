@@ -201,10 +201,10 @@ export function create(ctx, segment) {
   function camAt(t, pos, look) {
     const u = ease.inOutSine(sat(t / DUR));
     const ang = lerp(0.72, -0.34, u);
-    const rad = lerp(11.8, 7.6, ease.outCubic(sat(t / DUR))) - 0.4 * ramp(t, 3.3, 4.0);
+    const rad = lerp(11.8, 8.3, ease.outCubic(sat(t / DUR))) - 0.4 * ramp(t, 3.3, 4.0);
     const y = lerp(3.9, 1.9, u);
     pos.set(Math.sin(ang) * rad, y, Math.cos(ang) * rad);
-    look.set(lerp(0.4, 0, u), lerp(0.7, 2.0, ramp(t, 1.0, 3.2)), 0);
+    look.set(lerp(0.4, 0, u), lerp(0.7, 1.8, ramp(t, 1.0, 3.2)), 0);
     return pos;
   }
 
@@ -285,7 +285,7 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------- Parliament (dome, drum, portico, hemicycle)
   const parlMat = withDissolve(new THREE.MeshPhysicalMaterial({ color: '#efe7da', roughness: 0.34, clearcoat: 0.3, emissive: '#000000', side: THREE.DoubleSide }), '#ffd08a', 'parl');
-  const domeGoldMat = withDissolve(new THREE.MeshStandardMaterial({ color: '#d9a85a', metalness: 1, roughness: 0.3, emissive: '#000000' }), '#ffe0a0', 'dome');
+  const domeGoldMat = withDissolve(new THREE.MeshStandardMaterial({ color: '#d9a85a', metalness: 1, roughness: 0.42, emissive: '#000000', envMapIntensity: 0.6 }), '#ffe0a0', 'dome');
   const parlParts = [
     [new THREE.BoxGeometry(3.4, 0.95, 2.6), 0, 0.475, -1.9],
     [new THREE.BoxGeometry(3.6, 0.08, 2.8), 0, 0.99, -1.9],
@@ -401,7 +401,7 @@ export function create(ctx, segment) {
   lawWord.add(lawSub);
 
   const repWord = new KineticText('REPRESENTATION', { font: FONTS.display, weight: 600, height: 0.24, letterSpacing: 0.26, color: '#fff0d6', intensity: 1.7 });
-  placeWord(repWord, wR + 0.35, 3.6, 0, 0.72);
+  placeWord(repWord, wR + 0.35, 3.6, 0, 0.84);
   // local-space flight targets for each REPRESENTATION glyph → a drum column (computed once; path is deterministic)
   const inv = new THREE.Matrix4().copy(repWord.matrixWorld).invert();
   const repTargets = repWord.letters.map((L, i) => {
@@ -508,7 +508,7 @@ export function create(ctx, segment) {
           L.mesh.scale.setScalar(lerp(2.4, 1, k));
           L.mesh.position.set(L.base.x, L.base.y, L.base.z + (1 - k) * 0.9 - out * 1.2);
           L.mesh.opacity = sat(k * 1.6) * (1 - out);
-          L.mesh.intensity = 1.35 + Math.exp(-Math.max(0, t - wL - d - 0.18) * 7) * 1.4 * k;
+          L.mesh.intensity = 1.2 + Math.exp(-Math.max(0, t - wL - d - 0.18) * 7) * 1.4 * k;
         }
         const sp = ramp(t, wL + 0.1, wL + 0.7, ease.outCubic);
         seal.reveal(sp, 1 - out);
@@ -526,26 +526,26 @@ export function create(ctx, segment) {
         const L = repWord.letters[i];
         const d = Math.abs(L.u - 0.5) * 0.3;
         const k = ramp(t, wR + d, wR + d + 0.35, ease.outCubic);
-        const fd = lg + L.index * 0.025;
-        const f = ramp(t, fd, fd + 0.42, ease.inOutCubic);
+        const fd = lg - 0.08 + L.index * 0.011;
+        const f = ramp(t, fd, fd + 0.3, ease.inOutCubic);
         const tg = repTargets[i].local;
         const arc = Math.sin(Math.PI * f) * 0.35;
         L.mesh.position.set(lerp(L.base.x, tg.x, f), lerp(L.base.y - (1 - k) * 0.2, tg.y, f) + arc, lerp(L.base.z, tg.z, f));
         L.mesh.scale.set(lerp(1, 0.28, f), lerp(1, 3.2, f), 1);
         L.mesh.rotation.z = (1 - k) * (L.u - 0.5) * 0.4;
-        const fade = 1 - ramp(t, fd + 0.38, fd + 0.62);
+        const fade = 1 - ramp(t, fd + 0.27, fd + 0.45);
         L.mesh.opacity = k * fade;
         L.mesh.intensity = 1.7 + (1 - k) * 2 + f * 2.5;
       }
       // drum columns grow from the landing glyphs (others grow on their own)
       for (let i = 0; i < drumCols.length; i++) {
         const c = drumCols[i];
-        const ti = lg + 0.3 + (c.fed ? 0.1 : 0.2) + Math.abs(Math.sin(c.a - viewAng)) * 0.15;
-        const g = ramp(t, ti, ti + 0.35, ease.outCubic);
+        const ti = lg + 0.1 + (c.fed ? 0 : 0.08) + Math.abs(Math.sin(c.a - viewAng)) * 0.12;
+        const g = ramp(t, ti, ti + 0.25, ease.outCubic);
         c.m.scale.set(1, Math.max(0.001, g), 1);
         c.m.visible = g > 0.001;
       }
-      drumColMat.emissiveIntensity = 1.6 * (1 - ramp(t, lg + 0.5, 4.0)) * (t > lg ? 1 : 0);
+      drumColMat.emissiveIntensity = 1.4 * (1 - ramp(t, lg + 0.35, lg + 0.7)) * (t > lg ? 1 : 0) + 0.15;
 
       // callouts
       callGreek.reveal(ramp(t, 0.45, 0.95, ease.outCubic), 1 - ramp(t, 1.05, 1.3));

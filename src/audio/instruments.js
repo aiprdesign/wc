@@ -194,10 +194,11 @@ export function drone(S, t0, t1, midi, { level = 0.1, attack = 2, release = 2, b
   const end = t1 + release * 1.1;
   const a = S.osc('sine', hz(midi), t0, end);
   const b = S.osc('sine', hz(midi) + beat, t0, end);
+  const bg = S.gain(0.55); // partial beating: a slow swell, never a full null
   a.connect(amp);
-  b.connect(amp);
+  b.connect(bg).connect(amp);
   const p = S.out(amp, bus, pan);
-  S.free(a, a, b, amp, p);
+  S.free(a, b, bg, amp, p);
 }
 
 // ============================================================== percussion

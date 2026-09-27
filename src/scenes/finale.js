@@ -112,9 +112,9 @@ void main(){
   vec4 mv = modelViewMatrix * vec4(q, 1.0);
   gl_Position = projectionMatrix * mv;
   float s = uSize * (0.4 + aSeed.w * 1.2);
-  gl_PointSize = max(1.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z));
+  gl_PointSize = clamp(s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z), 1.0, 18.0);
   vColor = aColor * (1.0 + wave * 3.0);
-  vAlpha = 1.0 - uTwinkle + uTwinkle * (0.5 + 0.5 * sin(uTime * (1.5 + aSeed.x * 5.0) + aSeed.y * 40.0));
+  vAlpha = smoothstep(0.6, 2.2, -mv.z) * (1.0 - uTwinkle + uTwinkle * (0.5 + 0.5 * sin(uTime * (1.5 + aSeed.x * 5.0) + aSeed.y * 40.0)));
 }`;
 const orbFrag = /* glsl */ `
 uniform float uOpacity, uIntensity;
@@ -323,8 +323,8 @@ export function create(ctx, segment) {
     ideas.letters.forEach((l, i) => {
       const s0 = C_IDEAS + l.u * 1.4;
       const k = ease.outCubic(sat((t - s0) / 0.9));
-      const o0 = C_OUT + l.u * 0.45;
-      const out = ease.inCubic(sat((t - o0) / 0.6));
+      const o0 = C_OUT + l.u * 0.25;
+      const out = ease.inCubic(sat((t - o0) / 0.4));
       l.mesh.opacity = k * (1 - out);
       l.mesh.position.set(l.base.x, l.base.y - (1 - k) * 0.05 + out * 0.08, 0);
       l.mesh.scale.setScalar(1 + (1 - k) * 0.25);

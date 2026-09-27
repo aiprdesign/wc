@@ -3,11 +3,11 @@
 // Owns the OfflineAudioContext, a seeded RNG (the score renders identically every
 // time), a handful of shared noise buffers, the mix buses, and a just-in-time
 // event scheduler: events are registered with `at(time, build)` and their nodes
-// are only created ~1–2 s before they sound (OfflineAudioContext suspend/resume),
+// are only created a fraction of a second before they sound (OfflineAudioContext
+// suspend/resume) and disconnected once finished,
 // so the live audio graph stays small however many events the score contains.
 
 export const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
-export const db = (x) => 10 ** (x / 20);
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 
 export function mulberry32(seed) {
@@ -139,10 +139,6 @@ export class Studio {
   /** Disconnect these nodes once the last of their sources has stopped. */
   free(...nodes) {
     const end = Math.max(...nodes.map((n) => n._end ?? 0));
-    if (globalThis.__acct) {
-      const fr = new Error().stack.split('\n')[2].trim().split(' ')[1];
-      globalThis.__acct[fr] = (globalThis.__acct[fr] || 0) + nodes.length * (end + 0.02 - this.ctx.currentTime);
-    }
     this.voices.push({ end: end + 0.02, nodes });
   }
 
@@ -168,15 +164,7 @@ export class Studio {
     return n;
   }
 
-  acct(t0, t1, kind) {
-    return;
-    const fr = new Error().stack.split('\n')[3].trim().split(' ')[1];
-    const k = fr + ':' + kind;
-    globalThis.__acct[k] = (globalThis.__acct[k] || 0) + (t1 - t0);
-  }
-
   osc(type, freq, t0, t1) {
-    this.acct(t0, t1, 'osc');
     const o = this.ctx.createOscillator();
     o.type = type;
     o.frequency.setValueAtTime(freq, t0);
@@ -188,7 +176,6 @@ export class Studio {
 
   /** Looping noise source starting at a random point of a shared buffer. */
   noise(kind, t0, t1, { stereo = false, rate = 1 } = {}) {
-    this.acct(t0, t1, 'noise');
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers[stereo ? `${kind}2` : kind];
     src.loop = true;

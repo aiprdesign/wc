@@ -16,7 +16,7 @@
 import { DURATION, CUES as C } from '../timeline.js';
 import { Studio } from './core.js';
 import { makeReverb, makeWideMonoReverb } from './reverb.js';
-import { limit, rmsBetween } from './mastering.js';
+import { limit, rmsBetween, shiftEarlier } from './mastering.js';
 import { arrangeMusic } from './music.js';
 import { arrangeCues } from './cues.js';
 
@@ -28,18 +28,42 @@ const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
-function buildMixer(S) {
-  const { ctx } = S;
-
-  const master = S.gain(1);
-  const hp = S.filter('highpass', 24, 0.6);
+// Master-bus compressor settings (shared with the latency probe below).
+function makeCompressor(ctx) {
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -18;
   comp.knee.value = 10;
   comp.ratio.value = 2.5;
   comp.attack.value = 0.015;
   comp.release.value = 0.25;
-  master.connect(hp).connect(comp).connect(ctx.destination);
+  return comp;
+}
+
+// DynamicsCompressorNode looks ahead (6 ms in Chromium), delaying its output.
+// Measure it with a tiny render so the score can be shifted back onto the grid.
+async function compressorLatency(sampleRate) {
+  const n = 2048, at = 256;
+  const ctx = new OfflineAudioContext(1, n, sampleRate);
+  const buf = ctx.createBuffer(1, n, sampleRate);
+  buf.getChannelData(0)[at] = 0.05;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(makeCompressor(ctx)).connect(ctx.destination);
+  src.start();
+  const out = (await ctx.startRendering()).getChannelData(0);
+  let peak = 0, idx = at;
+  for (let i = 0; i < n; i++) if (Math.abs(out[i]) > peak) { peak = Math.abs(out[i]); idx = i; }
+  return Math.max(0, idx - at);
+}
+
+function buildMixer(S) {
+  const { ctx } = S;
+
+  // The mix is trimmed into the compressor so it only glues the loud passages;
+  // absolute loudness is set after rendering.
+  const master = S.gain(0.5);
+  const hp = S.filter('highpass', 24, 0.6);
+  master.connect(hp).connect(makeCompressor(ctx)).connect(ctx.destination);
 
   // Everything up to the drop lives on the film bus (dry + its own hall reverb),
   // so a single fade silences the music AND its reverb tail at musicDrop.
@@ -106,24 +130,19 @@ function duckPads(S, kicks) {
 }
 
 export async function renderScore(sampleRate = 48000) {
-  const T0 = performance.now();
   const S = new Studio(sampleRate, DURATION + TAIL);
-  console.log('studio', performance.now()-T0);
   buildMixer(S);
-  const { kicks } = globalThis.__noMusic ? { kicks: [] } : arrangeMusic(S);
-  if (!globalThis.__noCues) arrangeCues(S);
+  const { kicks } = arrangeMusic(S);
+  arrangeCues(S);
   duckPads(S, kicks);
 
-  console.log('arranged', performance.now()-T0, S.events.length);
   const buffer = await S.render();
-  console.log('rendered', performance.now()-T0);
+  shiftEarlier(buffer, await compressorLatency(sampleRate));
 
   // Master: level the loud body of the film to a consistent loudness, then
   // brickwall-limit to -1 dBFS. (Gain is capped so quiet mixes are not overdriven.)
   const loud = rmsBetween(buffer, C.gear, C.pullBack);
   const gain = loud > 0 ? Math.min(8, TARGET_LOUD_RMS / loud) : 1;
-  console.log('gain', gain);
   limit(buffer, { gain, ceiling: CEILING, lookahead: 0.004, release: 0.15 });
-  console.log('limited', performance.now()-T0);
   return buffer;
 }

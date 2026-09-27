@@ -82,6 +82,17 @@ export class Engine {
     this.setSize(w, h);
   }
 
+  // Drop render resolution one step (used when the GPU can't hold frame rate).
+  degrade() {
+    const steps = [1920, 1600, 1280, 1024, 800];
+    const next = steps.find((s) => s < this.width);
+    if (!next) return false;
+    this.maxWidth = next;
+    this.resize();
+    console.info(`[engine] render width lowered to ${this.width}px to keep playback smooth`);
+    return true;
+  }
+
   setSize(w, h) {
     if (w === this.width && h === this.height && this.rtA) return;
     this.width = w; this.height = h;
@@ -123,7 +134,12 @@ export class Engine {
   renderInstance(inst, T, dt, rt, dofRT) {
     const r = this.renderer;
     const info = this.info(T, inst.segment, dt);
-    inst.update(info.t, info);
+    try {
+      inst.update(info.t, info);
+    } catch (e) {
+      // A faulty sequence must never stop the film: log once, keep rendering its last pose.
+      if (!inst._warned) { console.error(`[${inst.segment.id}] update failed at T=${T.toFixed(2)}`, e); inst._warned = true; }
+    }
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);

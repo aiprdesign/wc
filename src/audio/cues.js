@@ -8,10 +8,10 @@ import * as X from './sfx.js';
 function opening(S) {
   // Distant atmospheric resonance: sub drone + airy filtered noise, very wet.
   S.at(0, () => {
-    I.drone(S, 0, 8.5, 26, { level: 0.2, attack: 2.2, release: 2.5, beat: 0.18 });       // D1
-    I.drone(S, 0.3, 8.0, 38, { level: 0.08, attack: 2.5, release: 2.5, beat: 0.31 });    // D2
+    I.drone(S, 0, 8.5, 26, { level: 0.13, attack: 2.2, release: 2.5, beat: 0.18 });       // D1
+    I.drone(S, 0.3, 8.0, 38, { level: 0.05, attack: 2.5, release: 2.5, beat: 0.31 });    // D2
     I.drone(S, 0.8, 7.0, 81, { level: 0.01, attack: 2.5, release: 2, beat: 0.9, bus: 'far', pan: 0.3 }); // A5 glint
-    X.air(S, 0, 7.5, { level: 0.05, freq: 2400, attack: 1.8, release: 2.5 });
+    X.air(S, 0, 7.5, { level: 0.035, freq: 2400, attack: 1.8, release: 2.5 });
   });
   // pointAppears: a tiny crystalline shimmer
   S.at(C.pointAppears, () => {
@@ -23,8 +23,8 @@ function opening(S) {
     S.at(t, () => X.click(S, t, { level: 0.012 + 0.001 * k, freq: 5200 + k * 150, body: 2600, q: 6, decay: 0.01, pan: (k % 2 ? 0.6 : -0.6) * (1 - k / 20), bus: 'far' }));
   }
   // layers: pencil scratches drafting the layers
-  S.at(C.layersStart, () => X.pencil(S, C.layersStart, 3.9, { level: 0.05, pan: -0.15 }));
-  S.at(2.6, () => X.pencil(S, 2.6, 3.8, { level: 0.03, pan: 0.35, vigor: 1.4 }));
+  S.at(C.layersStart, () => X.pencil(S, C.layersStart, 3.9, { level: 0.035, pan: -0.15 }));
+  S.at(2.6, () => X.pencil(S, 2.6, 3.8, { level: 0.02, pan: 0.35, vigor: 1.4 }));
   // flyThrough
   S.at(C.flyThrough, () => I.whoosh(S, C.flyThrough, 1.0, { level: 0.08, f0: 200, f1: 2200, pan0: -0.4, pan1: 0.4 }));
   // subtitle: soft glint
@@ -101,7 +101,7 @@ function science(S) {
     g.gain.linearRampToValueAtTime(0.012, C.fallStart + 0.05);
     g.gain.linearRampToValueAtTime(0, C.fallStart + 0.65);
     o.connect(g);
-    S.out(g, 'far', 0.2);
+    S.free(o, g, S.out(g, 'far', 0.2));
   });
   // instruments: clock escapement on 8ths (tick / tock), wind-up at the cue
   S.at(C.instruments, () => X.ratchet(S, C.instruments, 0.3, { level: 0.035, rate: 30, pan: -0.2 }));
@@ -122,7 +122,8 @@ function science(S) {
     g.gain.exponentialRampToValueAtTime(0.02, t1);
     g.gain.linearRampToValueAtTime(0, t1 + 0.25);
     o.connect(g);
-    S.out(g, 'lead', 0);
+    S.out(g, 'lead');
+    S.free(o, g);
   });
   S.at(C.spectrum, () => {
     [81, 85, 88, 93, 97, 100, 105].forEach((m, i) => I.bell(S, C.spectrum + i * 0.03, m, {
@@ -279,12 +280,12 @@ function montage(S) {
 function finale(S) {
   // After the drop: only a faint resonance and air remain.
   S.at(51.0, () => {
-    I.drone(S, 51.0, 55.6, 38, { level: 0.028, attack: 1.2, release: 0.8, beat: 0.2, bus: 'end' });
-    I.drone(S, 51.2, 55.4, 57, { level: 0.008, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
-    X.air(S, 51.0, 55.5, { level: 0.012, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
+    I.drone(S, 51.0, 55.6, 38, { level: 0.009, attack: 1.2, release: 0.8, beat: 0.2, bus: 'end' });
+    I.drone(S, 51.2, 55.4, 57, { level: 0.0025, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
+    X.air(S, 51.0, 55.5, { level: 0.004, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
   });
   // a faint inhale into the impact
-  S.at(55.3, () => I.swellIn(S, C.finalImpact, 0.7, { level: 0.03, bus: 'end', top: 5000 }));
+  S.at(55.3, () => I.swellIn(S, C.finalImpact, 0.7, { level: 0.02, bus: 'end', top: 5000 }));
   // FINAL IMPACT: sub boom + low hit + D major bloom into a long tail
   S.at(C.finalImpact, () => {
     const t = C.finalImpact;
@@ -301,8 +302,7 @@ function finale(S) {
 }
 
 export function arrangeCues(S) {
-  const sk = globalThis.__skip || '';
-  for (const fn of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, computing, knowledge, montage, finale]) {
-    if (!sk.includes(fn.name)) fn(S);
+  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, computing, knowledge, montage, finale]) {
+    section(S);
   }
 }

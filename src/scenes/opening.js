@@ -99,7 +99,7 @@ export function create(ctx, segment) {
     segs.push([V(-W + 0.45, top + 0.52), V(0, top + 1.38)], [V(0, top + 1.38), V(W - 0.45, top + 0.52)]);
     const ys = segs.map(([a, b]) => (a.y + b.y) / 2);
     const lo = Math.min(...ys), hi = Math.max(...ys);
-    add(segmentsLine(segs, lineOpts(1.25, { orderFn: (a, b) => ((a.y + b.y) / 2 - lo) / (hi - lo) * 0.75, stagger: 0.75 })), g0 + 0.55, g1 - 0.1, ease.inOutSine);
+    add(segmentsLine(segs, lineOpts(0.9, { headColor: '#e8bd6e', head: 0.012, orderFn: (a, b) => ((a.y + b.y) / 2 - lo) / (hi - lo) * 0.75, stagger: 0.75 })), g0 + 0.55, g1 - 0.1, ease.inOutSine);
   }
   // Fine floor-plan grid growing radially from the point
   {
@@ -190,13 +190,13 @@ export function create(ctx, segment) {
   const s2 = 10.4 / L2.width, s1 = 6.1 / L1.width;
   const Y1 = 0.95, Y2 = -0.3;
   const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#e6dccb', roughness: 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.4 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: '#e9b964', metalness: 1, roughness: 0.32, emissive: new THREE.Color('#ffb85a'), emissiveIntensity: 0, envMapIntensity: 1.1 });
-  const bronzeMat = new THREE.MeshStandardMaterial({ color: '#b87a45', metalness: 1, roughness: 0.34, emissive: new THREE.Color('#ffa24a'), emissiveIntensity: 0, envMapIntensity: 1.0 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: '#e9b964', metalness: 1, roughness: 0.38, emissive: new THREE.Color('#ffb85a'), emissiveIntensity: 0, envMapIntensity: 0.55 });
+  const bronzeMat = new THREE.MeshStandardMaterial({ color: '#b87a45', metalness: 1, roughness: 0.34, emissive: new THREE.Color('#ffa24a'), emissiveIntensity: 0, envMapIntensity: 0.55 });
   const glyphs = [];
   const flatParts1 = [], flatParts2 = [];
   const mkLine = (L, s, y, line) => {
     L.forEach((g, i) => {
-      const mat = line === 0 ? marbleMat : (g.char === 'I' || g.char === 'V' ? bronzeMat : goldMat);
+      const mat = line === 0 ? (i >= L.length - 2 ? bronzeMat : marbleMat) : goldMat;   // 'OF' in bronze
       const mesh = new THREE.Mesh(g.geometry, mat);
       const base = V(g.x * s, y, 0);
       mesh.position.copy(base);
@@ -395,14 +395,14 @@ export function create(ctx, segment) {
       key.intensity = lerp(1.2, 1.7, is3D);
       key.position.set(lerp(-6, -3, is3D), 7, Z_TITLE + 12);
       key.target.position.set(0, 0, Z_TITLE);
-      rim.intensity = lerp(0.3, 4.5, is3D);
+      rim.intensity = lerp(0.2, 0.7, is3D);
       rim.target.position.set(0, 0, Z_TITLE);
-      rim.position.set(4 - 6 * ramp(t, l3, 8), 5, Z_TITLE - 12);
+      rim.position.set(3 - 6 * ramp(t, l3, 8), 9, Z_TITLE - 8);
       // light sweep across the letters as they lock, and again as they turn 3D
       const sw = ramp(t, tL - 0.25, tL + 0.9, ease.inOutSine);
       const sw2 = ramp(t, l3, l3 + 1.2, ease.inOutSine);
       sweep.position.set(lerp(-8, 8, t < l3 ? sw : sw2), 0.6, Z_TITLE + 2.2);
-      sweep.intensity = 9 * envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4) + 2.5 * envelope(t, l3, l3 + 1.2, 0.3, 0.4);
+      sweep.intensity = 9 * envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4);
 
       const bOn = ramp(t, 6.4, 8.0, ease.inQuad);
       beyond.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(0.1 + bOn * 0.6);
@@ -416,7 +416,7 @@ export function create(ctx, segment) {
       // ---------------------------------------------------------------- post
       dof.focus = Math.max(1, camPos.z - Z_TITLE);
       dof.range = 4.5;
-      dof.amount = 0.55 * envelope(t, l3 - 0.2, 7.55, 0.4, 0.3);
+      dof.amount = 0.35 * envelope(t, l3 - 0.2, 7.55, 0.4, 0.3);
       bloom.strength = 0.75 + 0.25 * envelope(t, pA, pA + 0.6, 0.05, 0.5) + 0.15 * ramp(t, 7.0, 8.0);
     },
   };

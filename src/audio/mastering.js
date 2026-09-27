@@ -70,16 +70,12 @@ export function limit(buffer, { gain = 1, ceiling = 0.891, lookahead = 0.004, re
   return buffer;
 }
 
-/** Fade the very end of the buffer to digital silence. */
-export function fadeTail(buffer, from, to) {
-  const sr = buffer.sampleRate;
-  const a = Math.floor(from * sr);
-  const b = Math.min(buffer.length, Math.floor(to * sr));
+/** Shift the whole buffer earlier by `samples` (compensates processing latency). */
+export function shiftEarlier(buffer, samples) {
+  if (samples <= 0) return;
   for (let c = 0; c < buffer.numberOfChannels; c++) {
     const d = buffer.getChannelData(c);
-    for (let i = a; i < buffer.length; i++) {
-      const u = i >= b ? 0 : 1 - (i - a) / (b - a);
-      d[i] *= u * u;
-    }
+    d.copyWithin(0, samples);
+    d.fill(0, d.length - samples);
   }
 }

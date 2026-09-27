@@ -68,11 +68,23 @@ export class Player {
   loop() {
     if (this._raf) cancelAnimationFrame(this._raf);
     let last = this.currentTime;
+    let slow = 0, frames = 0, prevWall = performance.now();
     const frame = () => {
       if (!this.playing) return;
       const t = this.currentTime;
-      this.engine.render(t, Math.max(0, t - last));
+      try {
+        this.engine.render(t, Math.min(0.1, Math.max(0, t - last)));
+      } catch (e) {
+        if (!this._renderWarned) { console.error('[player] render failed', e); this._renderWarned = true; }
+      }
       last = t;
+      // Adaptive resolution: if frames keep taking longer than ~45 ms, render smaller.
+      const now = performance.now();
+      if (this.adaptive !== false && ++frames > 20) {
+        slow = (now - prevWall > 45) ? slow + 1 : Math.max(0, slow - 1);
+        if (slow > 24) { slow = 0; frames = 0; this.engine.degrade(); }
+      }
+      prevWall = now;
       this.onTick(t);
       if (t >= DURATION) { this.playing = false; this.time = DURATION; this.stopSource(); this.onEnd(); return; }
       this._raf = requestAnimationFrame(frame);

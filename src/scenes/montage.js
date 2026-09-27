@@ -280,10 +280,9 @@ export function create(ctx, segment) {
     if (down && r() < 0.45) addRoute(n, down);
   }
   // bus lines running off-frame
-  for (let b = 0; b < 10; b++) {
-    const z = (b - 4.5) * 0.09 + 3.9 * (b < 5 ? -1 : 1) * 0.0;
-    const zz = (b < 5 ? -3.9 : 3.9) + (b % 5) * 0.08 * (b < 5 ? 1 : -1);
-    traceSegs.push([V3(-12, 0.005, zz), V3(12, 0.005, zz + z * 0)]);
+  for (let b = 0; b < 6; b++) {
+    const zz = (b < 3 ? -3.9 : 3.9) + (b % 3) * 0.16 * (b < 3 ? 1 : -1);
+    traceSegs.push([V3(-12, 0.005, zz), V3(12, 0.005, zz)]);
   }
   const traces = segmentsLine(traceSegs, {
     color: '#d7824a', headColor: '#ffffff', intensity: 1.25, head: 0.05,
@@ -520,6 +519,14 @@ export function create(ctx, segment) {
     addAccent(4.5, 4.8, g, (u) => { net.progress = sat(u * 2.2); dotM.opacity = sat(u * 5); });
   }
 
+  for (const a of accents) {
+    a.texts = []; a.uops = [];
+    a.group.traverse((o) => {
+      if (o instanceof TextPlane) a.texts.push(o);
+      else if (o.material?.uniforms?.uOpacity) a.uops.push(o.material.uniforms.uOpacity);
+    });
+  }
+
   const labelText = ['I · ORDO DORICVS', 'II · MACHINA', 'III · SYSTEMA MVNDI', 'IV · ATOMVS', 'V · CIRCVITVS', 'VI · STELLAE'];
   const labelCue = [C0, C1, C2, C3, C4, C5];
   const labels = labelText.map((s) => {
@@ -694,10 +701,8 @@ export function create(ctx, segment) {
       if (!on) continue;
       const u = (t - a.t0) / (a.t1 - a.t0);
       const env = Math.min(1, u / 0.12, (1 - u) / 0.2);
-      a.group.traverse((o) => {
-        if (o instanceof TextPlane) o.opacity = env;
-        else if (o.material?.uniforms?.uOpacity) o.material.uniforms.uOpacity.value = env;
-      });
+      for (const tp of a.texts) tp.opacity = env;
+      for (const u of a.uops) u.value = env;
       a.anim(u, T);
       dimA = Math.max(dimA, env);
     }

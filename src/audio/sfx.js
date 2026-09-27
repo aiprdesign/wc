@@ -295,7 +295,11 @@ export function radioTune(S, t0, dur, { level = 0.12, bus = 'sfx' } = {}) {
   const f = S.filter('bandpass', 900, 3);
   f.frequency.setValueCurveAtTime(S.curve(dur * 0.45, 60, () => 600 + S.random() * 1400), t0 + dur * 0.55, dur * 0.45);
   const vg = S.gain(0);
-  vg.gain.setValueCurveAtTime(S.curve(dur * 0.45, 60, (t) => level * 0.35 * (t / (dur * 0.45)) * (S.random() < 0.65 ? 1 : 0.1)), t0 + dur * 0.55, dur * 0.45);
+  const vdur = dur * 0.45;
+  vg.gain.setValueCurveAtTime(S.curve(vdur, 60, (t) => {
+    const fade = Math.min(t / vdur, (vdur - t) / 0.05, 1); // rises in, never cut off abruptly
+    return level * 0.35 * Math.max(0, fade) * (S.random() < 0.65 ? 1 : 0.1);
+  }), t0 + dur * 0.55, vdur);
   v.connect(f).connect(vg);
   const p3 = S.out(vg, bus, 0.1);
   S.free(n, n, bp, g, p1, w, wg, p2, v, f, vg, p3);

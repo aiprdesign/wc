@@ -38,6 +38,18 @@ async function boot() {
   addEventListener('resize', () => { engine.resize(); if (!player.playing) engine.render(player.time, 0); });
 
   const player = new Player(engine, score?.buffer ?? null);
+  // If the GPU driver resets (context lost), reload at the same moment at a lighter quality.
+  $('film').addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    player.pause();
+    const q = { ultra: 'high', high: 'medium', medium: 'low' }[params.get('q') ?? 'medium'] ?? 'low';
+    const url = new URL(location.href);
+    url.searchParams.set('t', player.time.toFixed(2));
+    url.searchParams.set('q', q);
+    setStatus('The graphics driver reset. Reloading at a lighter quality…');
+    intro.classList.remove('hidden', 'ready');
+    setTimeout(() => location.replace(url), 600);
+  });
   window.__film.player = player;
   // Deterministic frame access for automated rendering / screenshots.
   window.__film.renderFrame = (T) => { engine.render(T, 1 / 30); return T; };
