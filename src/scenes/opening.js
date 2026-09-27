@@ -185,8 +185,8 @@ export function create(ctx, segment) {
   const titleGroup = new THREE.Group();
   titleGroup.position.set(0, 0, Z_TITLE);
   scene.add(titleGroup);
-  const L1 = letters3D('ACHIEVEMENTS OF', { size: 1, depth: 0.32, bevel: 0.025, tracking: 0.16 });
-  const L2 = letters3D('WESTERN CIVILIZATION', { size: 1, depth: 0.32, bevel: 0.025, tracking: 0.1 });
+  const L1 = letters3D('ACHIEVEMENTS OF', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.16 });
+  const L2 = letters3D('WESTERN CIVILIZATION', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.1 });
   const s2 = 10.4 / L2.width, s1 = 6.1 / L1.width;
   const Y1 = 0.95, Y2 = -0.3;
   const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#fff6ea', roughness: 0.28, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.8 });
@@ -264,7 +264,7 @@ export function create(ctx, segment) {
 
   // ======================================================================
   // camera path (speed ramp)
-  const zKeys = [[0, 1.55], [cue('gridStart'), 1.35], [1.8, 3.4], [cue('gridDone'), 8.4], [cue('flyThrough'), 8.0], [3.45, -4], [3.85, -24], [4.35, -37.5], [cue('titleLocked'), -40.6], [cue('letters3D'), -41.9], [cue('lettersFly'), -42.9], [7.25, -46.6], [7.6, -52.5], [8.0, -61]];
+  const zKeys = [[0, 1.55], [cue('gridStart'), 1.35], [1.8, 3.4], [cue('gridDone'), 8.4], [cue('flyThrough'), 8.0], [3.45, -4], [3.85, -24], [4.35, -37.5], [cue('titleLocked'), -40.6], [cue('letters3D'), -41.9], [cue('lettersFly'), -42.9], [7.3, -45.6], [7.7, -49.6], [8.0, -55]];
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
   const dof = { focus: 10, range: 3, amount: 0 };
   const bloom = { strength: 0.75 };
@@ -278,7 +278,7 @@ export function create(ctx, segment) {
       const orbit = ramp(t, cue('letters3D') - 0.2, cue('lettersFly') + 0.3, ease.inOutSine) * (1 - ramp(t, cue('lettersFly') + 0.2, 7.6, ease.inOutSine));
       const early = 1 - ramp(t, 2.8, 3.6);
       camPos.set(
-        Math.sin(t * 0.7) * 0.25 * early + orbit * 2.6 + Math.sin(t * 1.3) * 0.05,
+        Math.sin(t * 0.7) * 0.25 * early + orbit * 3.6 + Math.sin(t * 1.3) * 0.05,
         Math.sin(t * 0.5 + 1) * 0.12 * early + 0.35 * ramp(t, 3.6, 4.6) + orbit * 0.6 - 0.08 * ramp(t, cue('lettersFly'), 8),
         cz,
       );
@@ -339,19 +339,19 @@ export function create(ctx, segment) {
       const burst = ramp(t, cue('letters3D'), cue('letters3D') + 1.2, ease.outCubic);
       titleParticles.u.scatter = burst * 6;
       titleParticles.u.swirl = burst * 0.3;
-      const pOp = ramp(t, 3.1, 3.7) * lerp(1, 0.16, ramp(t, tL - 0.2, tL + 0.35)) * (1 - ramp(t, cue('letters3D') + 0.3, cue('letters3D') + 1.1));
+      const pOp = ramp(t, 3.1, 3.7) * lerp(1, 0.05, ramp(t, tL - 0.2, tL + 0.35)) * (1 - ramp(t, cue('letters3D') + 0.3, cue('letters3D') + 1.1));
       titleParticles.u.opacity = pOp;
       titleParticles.visible = pOp > 0.002;
-      titleParticles.u.intensity = 1.6 + 1.2 * ramp(t, tL - 0.3, tL) * (1 - ramp(t, tL, tL + 0.4));
-      titleParticles.u.size = lerp(0.05, 0.028, mix);
+      titleParticles.u.intensity = lerp(0.9, 1.5, mix) + 1.0 * ramp(t, tL - 0.3, tL) * (1 - ramp(t, tL, tL + 0.4));
+      titleParticles.u.size = lerp(0.032, 0.026, mix);
 
       // ---------------------------------------------------------------- title glyphs
       const l3 = cue('letters3D'), lf = cue('lettersFly');
       const flatOn = ramp(t, tL - 0.3, tL + 0.25, ease.inOutSine);
-      const glowK = flatOn * (1 - 0.9 * ramp(t, l3 - 0.1, l3 + 0.7));
-      marbleMat.emissiveIntensity = 0.95 * glowK;
-      goldMat.emissiveIntensity = 1.05 * glowK;
-      bronzeMat.emissiveIntensity = 1.0 * glowK;
+      const glowK = flatOn * (1 - 0.96 * ramp(t, l3 - 0.1, l3 + 0.7));
+      marbleMat.emissiveIntensity = 0.55 * glowK;
+      goldMat.emissiveIntensity = 0.7 * glowK;
+      bronzeMat.emissiveIntensity = 0.7 * glowK;
       const flyK = ramp(t, lf, 8.0, ease.inQuad);
       for (const g of glyphs) {
         const vis = flatOn > 0.001;
@@ -363,7 +363,7 @@ export function create(ctx, segment) {
         // subtle scale-in while locking so the swap from particles feels organic
         const lockS = lerp(0.985, 1, flatOn);
         g.mesh.scale.x *= lockS; g.mesh.scale.y *= lockS;
-        const rot = ex * (g.rnd[0] - 0.5) * 0.35 + flyK * (g.rnd[1] - 0.5) * 1.6;
+        const rot = ex * (g.rnd[0] - 0.5) * 0.8 + flyK * (g.rnd[1] - 0.5) * 1.6;
         g.mesh.rotation.set(flyK * (g.rnd[2] - 0.5) * 0.8, rot, flyK * (g.rnd[3] - 0.5) * 0.4);
         const side = g.line === 0 ? 1 : -1;
         g.mesh.position.set(
@@ -392,25 +392,25 @@ export function create(ctx, segment) {
 
       // ---------------------------------------------------------------- lights & glow
       const is3D = ramp(t, l3 - 0.2, l3 + 0.6);
-      key.intensity = lerp(1.2, 3.0, is3D);
+      key.intensity = lerp(1.2, 2.4, is3D);
       key.position.set(lerp(-6, -3, is3D), 7, Z_TITLE + 12);
       key.target.position.set(0, 0, Z_TITLE);
-      rim.intensity = lerp(0.3, 6.0, is3D);
+      rim.intensity = lerp(0.3, 4.5, is3D);
       rim.target.position.set(0, 0, Z_TITLE);
       rim.position.set(4 - 6 * ramp(t, l3, 8), 5, Z_TITLE - 12);
       // light sweep across the letters as they lock, and again as they turn 3D
       const sw = ramp(t, tL - 0.25, tL + 0.9, ease.inOutSine);
       const sw2 = ramp(t, l3, l3 + 1.2, ease.inOutSine);
       sweep.position.set(lerp(-8, 8, t < l3 ? sw : sw2), 0.6, Z_TITLE + 2.2);
-      sweep.intensity = 40 * (envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4) + envelope(t, l3, l3 + 1.2, 0.3, 0.4));
+      sweep.intensity = 18 * (envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4) + envelope(t, l3, l3 + 1.2, 0.3, 0.4));
 
       const bOn = ramp(t, 6.4, 8.0, ease.inQuad);
-      beyond.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(0.15 + bOn * 1.6);
-      beyondCore.material.color.setRGB(1.0, 0.92, 0.78).multiplyScalar(0.2 + bOn * 4.5);
+      beyond.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(0.1 + bOn * 0.6);
+      beyondCore.material.color.setRGB(1.0, 0.92, 0.78).multiplyScalar(0.2 + bOn * 2.2);
       beyond.visible = beyondCore.visible = t > 3.6;
-      halo.material.color.setRGB(1.0, 0.68, 0.36).multiplyScalar(0.18 * ramp(t, 4.0, 5.0) * (1 - ramp(t, 7.2, 7.8)) + 0.1 * pulse(T, { decay: 3 }) * ramp(t, 4.5, 5.0));
+      halo.material.color.setRGB(1.0, 0.68, 0.36).multiplyScalar(0.09 * ramp(t, 4.0, 5.0) * (1 - ramp(t, 7.2, 7.8)) + 0.05 * pulse(T, { decay: 3 }) * ramp(t, 4.5, 5.0));
       halo.visible = t > 3.8;
-      shaft.material.uniforms.uIntensity.value = 0.12 * ramp(t, 4.6, 5.6) * (1 - ramp(t, 7.0, 7.6));
+      shaft.material.uniforms.uIntensity.value = 0.08 * ramp(t, 4.6, 5.6) * (1 - ramp(t, 7.0, 7.6));
       shaft.material.uniforms.uTime.value = t;
 
       // ---------------------------------------------------------------- post
