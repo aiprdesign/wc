@@ -52,7 +52,7 @@ function makeSteam(count, emitters, { seed = 5, size = 0.9 } = {}) {
   const m = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 }, uViewport: { value: 800 }, uSize: { value: size }, uOpacity: { value: 1 },
-      uAmb: { value: new THREE.Color('#1c1f23') }, uKey: { value: new THREE.Color('#7d858e') }, uRim: { value: new THREE.Color('#ff9a52').multiplyScalar(3.0) },
+      uAmb: { value: new THREE.Color('#2a2d31') }, uKey: { value: new THREE.Color('#a0a8b0') }, uRim: { value: new THREE.Color('#ff9a52').multiplyScalar(1.8) },
       uLight: { value: new THREE.Vector2(0.6, 0.8) },
     },
     vertexShader: /* glsl */ `${GLSL_NOISE}
@@ -67,9 +67,9 @@ function makeSteam(count, emitters, { seed = 5, size = 0.9 } = {}) {
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float u = age / aLife;
-        float s = uSize * mix(0.18, 1.7 + aSeed.w * 0.8, sqrt(u));
+        float s = uSize * mix(0.5, 1.9 + aSeed.w * 0.8, sqrt(u));
         gl_PointSize = min(900.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.2, -mv.z));
-        vA = smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.35, 1.0, u)) * smoothstep(0.15, 0.9, -mv.z);
+        vA = smoothstep(0.0, 0.18, u) * (1.0 - smoothstep(0.35, 1.0, u)) * smoothstep(0.15, 0.9, -mv.z);
         vSeed = aSeed; vAge = u;
       }`,
     fragmentShader: /* glsl */ `${GLSL_NOISE}
@@ -88,7 +88,7 @@ function makeSteam(count, emitters, { seed = 5, size = 0.9 } = {}) {
         float rim = pow(1.0 - N.z, 1.4) * max(0.0, dot(normalize(c + 1e-4), normalize(uLight)));
         float front = max(0.0, dot(N, normalize(vec3(-0.4, 0.6, 0.7))));
         vec3 col = uAmb * (0.6 + n) + uKey * front * (0.4 + n2 * 0.6) + uRim * rim * (0.4 + n);
-        gl_FragColor = vec4(col, a * 0.42);
+        gl_FragColor = vec4(col, a * 0.5);
       }`,
     transparent: true, depthWrite: false,
   });
@@ -114,6 +114,7 @@ export function create(ctx, segment) {
   const key = new THREE.DirectionalLight('#ffe2c4', 2.0); key.position.set(-6, 10, 8); scene.add(key);
   const rim = new THREE.DirectionalLight('#ff9448', 3.2); rim.position.set(6, 5, -9); scene.add(rim);
   const fill = new THREE.DirectionalLight('#8fb0d0', 0.7); fill.position.set(9, 2, 7); scene.add(fill);
+  const side = new THREE.DirectionalLight('#ffd0a0', 0); side.position.set(12, 6, 5); scene.add(side);
   const ember = new THREE.PointLight('#ff7a30', 0, 9, 2); scene.add(ember);
 
   // ---- materials --------------------------------------------------------------
@@ -123,6 +124,8 @@ export function create(ctx, segment) {
   const iron = ironMat();
   const ironDark = ironMat({ color: '#34373b', roughness: 0.7 });
   const paint = new THREE.MeshStandardMaterial({ color: '#2a1d17', metalness: 0.5, roughness: 0.55, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.4 });
+  const pistonM = steelMat({ roughness: 0.26, color: '#b8c0c8', lathe: false });
+  const forged = new THREE.MeshStandardMaterial({ color: '#6d737a', metalness: 1, roughness: 0.38, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.3 });
   const copperM = new THREE.MeshStandardMaterial({ color: '#c77a4a', metalness: 1, roughness: 0.3 });
   const woodM = new THREE.MeshStandardMaterial({ color: '#3b2a1e', metalness: 0, roughness: 0.85, map: surfaceTexture('walnut', 512, 9) });
 
@@ -137,7 +140,7 @@ export function create(ctx, segment) {
   const heroSpin = new THREE.Group(); heroSpin.position.copy(H); heroSpin.add(heroMesh); scene.add(heroSpin);
   // hub, bolts and keyed shaft
   {
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.56, 64), steelPol); hub.rotation.x = Math.PI / 2; heroSpin.add(hub);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.56, 64), steel); hub.rotation.x = Math.PI / 2; heroSpin.add(hub);
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.3, 48), steelMat({ roughness: 0.2, color: '#aeb6bf' })); shaft.rotation.x = Math.PI / 2; heroSpin.add(shaft);
     const key0 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.32), ironDark); key0.position.y = 0.2; heroSpin.add(key0);
     for (let i = 0; i < 6; i++) {
@@ -261,10 +264,10 @@ export function create(ctx, segment) {
       const c2 = new THREE.Mesh(cwGeo, iron); c2.position.x = 0.2; crank.add(c2);
       const pin = new THREE.Mesh(pinGeo2, steelPol); pin.position.y = CR; crank.add(pin);
       const rod = new THREE.Group(); machine.add(rod);
-      rod.add(new THREE.Mesh(rodGeo, steelPol));
+      rod.add(new THREE.Mesh(rodGeo, forged));
       const be = new THREE.Mesh(bigEnd, steel); rod.add(be);
       const piston = new THREE.Group(); machine.add(piston);
-      piston.add(new THREE.Mesh(pistonGeo, steelPol));
+      piston.add(new THREE.Mesh(pistonGeo, pistonM));
       for (let k = 0; k < 3; k++) { const rg = new THREE.Mesh(ringGeo, iron); rg.position.y = 0.35 + k * 0.07; piston.add(rg); }
       const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.5, 16).rotateZ(Math.PI / 2), steel); piston.add(wrist);
       crankUnits.push({ crank, rod, piston, x, ph: PPH[i] });
@@ -374,7 +377,7 @@ export function create(ctx, segment) {
     s.position.set(-8 + i * 6.5, 21, -3 + i * 1.5); s.rotation.z = 0.42; s.rotation.x = 0.12; scene.add(s); shafts.push(s);
   }
   const lamps = [];
-  for (let i = 0; i < 8; i++) { const l = glowSprite({ color: '#ffb070', intensity: 0.7, scale: 1.2 }); l.position.set(-22 + i * 5.5, 7 + (i % 3), -3.5); scene.add(l); lamps.push(l); }
+  for (let i = 0; i < 8; i++) { const l = glowSprite({ color: '#ffb070', intensity: 0.7, scale: 1.2 }); l.position.set(-22 + i * 5.5, 14 + (i % 3) * 1.5, -3.5); scene.add(l); lamps.push(l); }
 
   // railway along z at x = RX
   const RX = 9.6, GAUGE = 0.72;
@@ -424,15 +427,14 @@ export function create(ctx, segment) {
   scene.add(sparks);
   // embers floating in the machine hall
   const embers = new Dust({ count: 450, size: [26, 12, 16], center: [-2, 6, 2], particleSize: 0.022, color: '#ffa860', opacity: 0.7, intensity: 1.6, seed: 33 });
-  scene.add(embers);
-  const hallDust = new Dust({ count: 1500, size: [30, 14, 20], center: [-2, 6, 0], particleSize: 0.02, color: '#ffe0c0', opacity: 0.4, intensity: 1.0, seed: 34 });
+  const hallDust = new Dust({ count: 900, size: [30, 14, 20], center: [-2, 6, 0], particleSize: 0.016, color: '#ffe0c0', opacity: 0.3, intensity: 0.8, seed: 34 });
   scene.add(hallDust);
 
   // steam
   const beatBirth = (b0, spread) => (u) => b0 + u * spread;
   const emitters = [
     // eruption at the exhaust valves (27.3) then chuffs on 27.5 / 28.0 / 28.5
-    ...PX.map((x, i) => ({ pos: V(x, yTop + 2.2, ZC), dir: V(0.25 * (i - 1.5), 1, 0.35), spread: 0.8, speed: 7, jitter: 0.15, life: 1.6, weight: 1, birth: (u) => tSteam + u * 0.35 })),
+    ...PX.map((x, i) => ({ pos: V(x, yTop + 2.2, ZC), dir: V(0.35 * (i - 1.5), 1, 0.5), spread: 0.9, speed: 4.2, jitter: 0.2, life: 1.8, weight: 1.4, birth: (u) => tSteam + u * u * 0.6 })),
     { pos: V(-2.7, 3.9, ZC + 0.3), dir: V(-1, 0.15, 0.25), spread: 0.4, speed: 8, jitter: 0.1, life: 1.2, weight: 0.8, birth: (u) => tSteam + u * 0.3 },
     { pos: V(2.7, 3.9, ZC + 0.3), dir: V(1, 0.15, 0.25), spread: 0.4, speed: 8, jitter: 0.1, life: 1.2, weight: 0.8, birth: (u) => tSteam + u * 0.3 },
     ...[0, 1, 2].map((k) => ({ pos: V(-2.4 + k * 2.4, yTop + 2.2, ZC), dir: V(0, 1, 0.3), spread: 0.9, speed: 6, jitter: 0.3, life: 1.4, weight: 0.8, birth: (u) => [3.0, 3.5, 4.0][k] + u * 0.12 })),
@@ -440,7 +442,7 @@ export function create(ctx, segment) {
     { pos: V(boiler.position.x - 2.6, BO.y + BO.r + 6.9, BO.z), dir: V(0.2, 1, 0), spread: 0.5, speed: 3, jitter: 0.3, life: 2.4, weight: 1.2, birth: (u) => 1.8 + u * 2.7 },
     { pos: V(RX - 1.0, 0.3, -3), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 2, jitter: 1.2, life: 1.6, weight: 0.6, birth: (u) => 3.6 + u * 0.9 },
   ];
-  const steam = makeSteam(2600, emitters, { size: 1.0, seed: 17 });
+  const steam = makeSteam(3200, emitters, { size: 1.15, seed: 17 });
   scene.add(steam);
 
   // ---- HUD ---------------------------------------------------------------------
@@ -458,10 +460,10 @@ export function create(ctx, segment) {
     return (t, out) => curve.getPoint(clamp(timeWarp(t, warp), 0, 1), out);
   }
   const Hp = (x, y, z) => H.clone().add(V(x, y, z));
-  const camA = makePath([[0, Hp(3.3, -1.45, 1.75)], [0.8, Hp(1.9, 2.1, 2.3)], [1.5, Hp(0.1, 0.7, 3.9)], [2.0, Hp(4.5, 0.2, 17)]]);
-  const tgtA = makePath([[0, Hp(1.35, -0.75, 0.1)], [0.8, Hp(0.8, 0.5, 0)], [1.5, Hp(0.15, 0.2, 0)], [2.0, Hp(4.2, -1.8, 0)]]);
-  const camC = makePath([[2.0, V(-2.9, 3.25, 7.4)], [2.8, V(1.0, 3.45, 7.1)], [3.3, V(2.4, 5.2, 10.5)], [3.85, V(7.0, 7.0, 21.5)], [4.12, V(RX, 0.8, 14)], [4.5, V(RX + 0.05, 0.5, 3.8)]]);
-  const tgtC = makePath([[2.0, V(-0.9, 3.75, 3.0)], [2.8, V(0.9, 3.9, 3.0)], [3.3, V(0.2, 5.2, 2.5)], [3.85, V(-2.2, 3.6, 0)], [4.12, V(RX - 0.1, 0.9, 0)], [4.5, V(RX - 0.15, 1.5, -8)]]);
+  const camA = makePath([[0, Hp(3.6, -2.4, 3.1)], [0.8, Hp(2.9, 1.9, 3.8)], [1.5, Hp(0.6, 0.8, 5.6)], [2.0, Hp(4.5, 0.2, 17)]]);
+  const tgtA = makePath([[0, Hp(1.45, -0.85, 0)], [0.8, Hp(0.95, 0.35, 0)], [1.5, Hp(0.25, 0.1, 0)], [2.0, Hp(4.2, -1.8, 0)]]);
+  const camC = makePath([[2.0, V(-2.3, 2.95, 6.3)], [2.8, V(0.9, 3.1, 6.2)], [3.05, V(1.7, 4.2, 8.2)], [3.35, V(3.4, 5.2, 11.0)], [3.85, V(11.5, 7.6, 15.5)], [4.12, V(RX + 0.2, 0.85, 13.5)], [4.5, V(RX + 0.05, 0.5, 3.8)]]);
+  const tgtC = makePath([[2.0, V(-0.8, 3.55, 3.0)], [2.8, V(0.8, 3.7, 3.0)], [3.05, V(0.5, 5.9, 3.0)], [3.35, V(0.3, 5.3, 2.5)], [3.85, V(-3.0, 3.2, 1.0)], [4.12, V(RX - 0.4, 1.0, 0)], [4.5, V(RX - 0.15, 1.5, -8)]]);
 
   // ---- scratch ------------------------------------------------------------------
   const cp = V(0, 0, 0), ct = V(0, 0, 0), m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), zAxis = V(0, 0, 1), s3 = V(1, 1, 1), p3 = V(0, 0, 0);
@@ -492,7 +494,7 @@ export function create(ctx, segment) {
       const list = byVar[vi];
       for (let i = 0; i < list.length; i++) {
         const g = list[i];
-        const near = g.dist < 4.2 ? 1 : 0;
+        const near = g.dist < 3.4 && g.layer > 0 ? 1 : 0;
         const wave = ease.outBack(sat((many - g.dist * 0.018 - g.layer * 0.05) / 0.28));
         const sc = Math.max(near, wave) * g.s;
         p3.set(g.x, g.y, layerZ(g.layer));
@@ -504,6 +506,7 @@ export function create(ctx, segment) {
       im.instanceMatrix.needsUpdate = true;
     }
     const set1 = shotA;
+    wallMat.color.setScalar(shotA ? 1 : 0.22);
     heroSpin.visible = pinSpin.visible = wheelSpin.visible = true;
     calloutA.position.copy(H).add(V(Math.cos(0.35) * hero.r, Math.sin(0.35) * hero.r, 0.26));
     calloutB.position.copy(pinSpin.position).add(V(0.35, -0.3, 0.3));
@@ -528,8 +531,8 @@ export function create(ctx, segment) {
     fly.rotation.x = theta * 0.25;
     const hit = pulse(T, { decay: 5 });
     emberSprites.forEach((s, i) => { const on = crankUnits[i].ph === 0 ? hit : 0; s.material.opacity = on * ramp(t, tPist - 0.05, tPist) ; s.visible = s.material.opacity > 0.01; s.scale.setScalar(0.6 + on * 0.9); });
-    ember.position.set(0, yTop + 0.6, ZC + 1.2);
-    ember.intensity = 40 * hit * ramp(t, tPist - 0.05, tPist) + 6 * ramp(t, tPist, tPist + 0.3);
+    ember.position.set(0, yTop + 0.9, ZC + 0.2);
+    ember.intensity = 10 * hit * ramp(t, tPist - 0.05, tPist) + 2 * ramp(t, tPist, tPist + 0.3);
     if (boiler.userData.fire) boiler.userData.fire.material.color.setRGB(1, 0.42, 0.12).multiplyScalar(2.2 + 1.8 * hit);
     boiler.userData.needle.rotation.z = 1.2 - 2.0 * ramp(t, 3.3, 3.6) - 0.15 * hit;
 
@@ -542,13 +545,13 @@ export function create(ctx, segment) {
       p.obj.visible = ta - p.delay > 0 || t > 4.0;
     }
     const lock = pulse(T, { decay: 4 }) * (Math.abs(T - 28.0) < 0.3 ? 1 : 0) * (T >= 28.0 ? 1 : 0);
-    rim.intensity = 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) + 4 * lock;
+    rim.intensity = 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * (shotA ? 0.7 : 1) + 4 * lock;
+    side.intensity = 1.6 * ramp(t, 3.2, 3.6);
 
     // ---------- steam, sparks, dust ------------------------------------------------
     steam.tick(t, info);
-    embers.tick(t, info); hallDust.tick(t, info);
-    embers.u.opacity = 0.6 * ramp(t, tPist - 0.1, tPist);
-    hallDust.u.opacity = 0.4 * ramp(t, tPist - 0.1, tPist);
+    hallDust.tick(t, info);
+    hallDust.u.opacity = 0.3 * ramp(t, tPist - 0.1, tPist);
     const fl = t - tFlash;
     sparks.tick(t, info);
     sparks.u.mix = sat((fl + 0.02) / 0.5);

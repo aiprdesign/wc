@@ -120,7 +120,7 @@ export function create(ctx, segment) {
 
   // ---- S0: ring of fluted Doric columns on a stepped stylobate ------------
   const RING = 2.2, NCOL = 12;
-  const marbleMat = marble({ seed: 3, repeat: 1, color: '#e2d9cb', roughness: 0.34 });
+  const marbleMat = marble({ seed: 3, repeat: 1, color: '#f0e9de', roughness: 0.32 });
   const shaftGeo = flutedShaft(0.22, 2.6);
   const echinusGeo = new THREE.CylinderGeometry(0.31, 0.2, 0.16, 48); echinusGeo.translate(0, 2.68, 0);
   const abacusGeo = new THREE.BoxGeometry(0.6, 0.12, 0.6); abacusGeo.translate(0, 2.82, 0);
@@ -135,9 +135,9 @@ export function create(ctx, segment) {
     m4.makeRotationY(a).setPosition(Math.cos(a) * RING, 0, -Math.sin(a) * RING);
     shafts.setMatrixAt(k, m4); echini.setMatrixAt(k, m4); abaci.setMatrixAt(k, m4);
   }
-  const stepMat = marble({ seed: 5, repeat: 2, color: '#7d766c', roughness: 0.45 });
+  const stepMat = marble({ seed: 5, repeat: 2, color: '#6a645b', roughness: 0.45 });
   const steps = new THREE.Group();
-  [[1.55, 2.75, 0.12, -0.12], [1.4, 2.95, 0.12, -0.24], [1.25, 3.15, 0.12, -0.36]].forEach(([ri, ro, h, y]) => {
+  [[1.85, 2.6, 0.12, -0.12], [1.75, 2.78, 0.12, -0.24], [1.65, 2.96, 0.12, -0.36]].forEach(([ri, ro, h, y]) => {
     const sh = new THREE.Shape(); sh.absarc(0, 0, ro, 0, TAU, false);
     const hole = new THREE.Path(); hole.absarc(0, 0, ri, 0, TAU, true); sh.holes.push(hole);
     const g = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 96 });
@@ -291,7 +291,7 @@ export function create(ctx, segment) {
   });
   scene.add(traces);
   // pulses racing along traces
-  const NPUL = 900;
+  const NPUL = 520;
   const puA = new Float32Array(NPUL * 3), puB = new Float32Array(NPUL * 3), puS = new Float32Array(NPUL * 2);
   for (let i = 0; i < NPUL; i++) {
     const [a, b] = traceSegs[Math.floor(r() * traceSegs.length)];
@@ -302,7 +302,7 @@ export function create(ctx, segment) {
   puGeo.setAttribute('aB', new THREE.BufferAttribute(puB, 3));
   puGeo.setAttribute('aSeed', new THREE.BufferAttribute(puS, 2));
   const puMat = new THREE.ShaderMaterial({
-    uniforms: { uT: { value: 0 }, uSize: { value: 0.09 }, uViewport: { value: 800 }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color('#dff0ff').multiplyScalar(3.5) } },
+    uniforms: { uT: { value: 0 }, uSize: { value: 0.075 }, uViewport: { value: 800 }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color('#dff0ff').multiplyScalar(2.6) } },
     vertexShader: /* glsl */ `attribute vec3 aB; attribute vec2 aSeed; uniform float uT, uSize, uViewport; varying float vA;
       void main(){ float f = fract(uT * (1.2 + aSeed.x * 2.5) + aSeed.y); vec3 p = mix(position, aB, f);
         vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
@@ -391,9 +391,9 @@ export function create(ctx, segment) {
     const g = new THREE.Group(); g.position.set(-1.55, -0.2, 0);
     const tex = puffTexture();
     const puffs = [];
-    for (let i = 0; i < 16; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color('#f4f1ea').multiplyScalar(1.2), transparent: true, depthWrite: false, opacity: 0 }));
-      m.userData = { d: i * 0.018, dx: (r() - 0.5) * 1.1, s: 0.14 + r() * 0.22, rot: r() * TAU };
+    for (let i = 0; i < 30; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color('#fff4e4').multiplyScalar(1.1), transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }));
+      m.userData = { d: (i % 10) * 0.03 + r() * 0.05, dx: (r() - 0.5) * 0.9, s: 0.12 + r() * 0.2, rot: r() * TAU, h: 0.5 + r() * 0.6 };
       g.add(m); puffs.push(m);
     }
     const stack = segmentsLine([[HV(-0.1, -0.75), HV(-0.1, -0.35)], [HV(0.1, -0.75), HV(0.1, -0.35)], [HV(-0.16, -0.35), HV(0.16, -0.35)]], { color: '#d9c49b', intensity: 1.1, orderFn: () => 0, stagger: 0 });
@@ -404,10 +404,10 @@ export function create(ctx, segment) {
       stack.progress = 1;
       puffs.forEach((m) => {
         const k = sat((u - m.userData.d) / 0.8);
-        m.position.set(m.userData.dx * k * k, -0.35 + k * (0.7 + Math.abs(m.userData.dx) * 0.4), 0);
+        m.position.set(m.userData.dx * k * k, -0.35 + k * m.userData.h, 0);
         m.scale.setScalar(m.userData.s * (0.4 + k * 1.6));
         m.rotation.z = m.userData.rot + k * 0.6;
-        m.material.opacity = Math.sin(Math.PI * Math.min(1, k * 1.1)) * 0.6;
+        m.material.opacity = Math.sin(Math.PI * Math.min(1, k * 1.1)) * 0.45;
       });
     });
   }
@@ -547,11 +547,11 @@ export function create(ctx, segment) {
     // palette: warm → cool across the sequence
     const cool = smoothstep(C1, C5, t);
     key.color.copy(WARM).lerp(COOL, cool);
-    key.intensity = lerp(2.3, 3.2, smoothstep(C1 - 0.2, C1 + 0.2, t)) * (1 - smoothstep(C4 - 0.3, C4, t) * 0.5);
-    scene.environmentIntensity = lerp(0.18, 0.5, smoothstep(C1 - 0.2, C1 + 0.2, t));
+    key.intensity = lerp(2.6, 3.2, smoothstep(C1 - 0.2, C1 + 0.2, t)) * (1 - smoothstep(C4 - 0.3, C4, t) * 0.5);
+    scene.environmentIntensity = lerp(0.3, 0.5, smoothstep(C1 - 0.2, C1 + 0.2, t));
 
     // ---- camera path (spherical around the plan centre)
-    const el = lerp(0.62, Math.PI / 2 - 0.001, ease.inOutCubic(sat((t - 0.05) / 0.85)))
+    const el = lerp(0.5, Math.PI / 2 - 0.001, ease.inOutCubic(sat((t - 0.3) / 0.62)))
       - 0.5 * envelope(t, C2 - 0.1, C3 + 0.05, 0.45, 0.35);
     const az = 0.35 + t * 0.22 + intSmooth(t, C2, C5) * 0.18 + intSmooth(t, C4, DUR) * 0.5;
     let D = timeWarp(t, [[0, 7.2], [0.9, 10.2], [C1 + 0.4, 9.4], [C2, 11.5], [C3 - 0.2, 12.5], [C3 + 0.2, 7.2], [C4 - 0.3, 6.8], [C4 + 0.1, 8.6], [C5 - 0.3, 9.2]]);
@@ -607,7 +607,7 @@ export function create(ctx, segment) {
       const tilt = i >= 1 && i <= 3 ? toAtom * (1 - toPad) : 0;
       qTmp.slerpQuaternions(qId, ring.qA, tilt);
       ring.quaternion.copy(qTmp);
-      ring.progress = sat(ringIn * 1.4 - i * 0.08);
+      ring.progress = Math.min(1.15, Math.max(0, ringIn * 1.6 - i * 0.08));
       const fadeOut = i === 0 || i === 4 ? toAtom : 0;
       ring.opacity = (1 - fadeOut) * (1 - circuitOut) * (i >= 1 && i <= 3 ? 1 : 0.7);
       tmpC.set(ring.col).lerp(COOL, toAtom);
@@ -650,9 +650,9 @@ export function create(ctx, segment) {
     miniAtoms.visible = latticeIn > 0 && circuitOut < 1;
     padMat.opacity = sat((t - (C4 - 0.05)) / 0.2) * (1 - circuitOut);
     pads.visible = padMat.opacity > 0.001;
-    traces.progress = sat((t - (C4 - 0.1)) / 0.55);
+    traces.progress = Math.min(1.15, Math.max(0, (t - (C4 - 0.1)) / 0.55));
     traces.opacity = 1 - circuitOut;
-    traces.intensity = 1.25 + beat * 0.6;
+    traces.intensity = 0.95 + beat * 0.5;
     puMat.uniforms.uT.value = t;
     puMat.uniforms.uOpacity.value = sat((t - (C4 + 0.1)) / 0.2) * (1 - circuitOut);
     puMat.uniforms.uViewport.value = info.height;
@@ -663,7 +663,7 @@ export function create(ctx, segment) {
     // ---- S5 stars
     stars.u.mix = sat((t - (C5 - 0.25)) / 0.6);
     stars.u.opacity = sat((t - (C5 - 0.32)) / 0.12);
-    stars.u.intensity = 1.5 + beat * 0.9;
+    stars.u.intensity = (0.3 + 1.2 * sat((t - (C5 - 0.1)) / 0.5)) * (1 + beat * 0.6);
     stars.u.noise = 0.02;
     stars.visible = t > C5 - 0.33;
     stars.tick(t, info);

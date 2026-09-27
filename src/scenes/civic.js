@@ -64,7 +64,7 @@ class FoldSheet extends THREE.Mesh {
 
 // World-space noise dissolve for PBR materials: uDissolve 0 = solid, 1 = gone; hot edge.
 function withDissolve(material, edgeColor = '#ffc070', key = 'a') {
-  const u = { uDissolve: { value: 0 }, uEdge: { value: new THREE.Color(edgeColor) }, uEdgeGain: { value: 5 } };
+  const u = { uDissolve: { value: 0 }, uEdge: { value: new THREE.Color(edgeColor) }, uEdgeGain: { value: 3 } };
   material.userData.dissolve = u;
   material.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -501,14 +501,14 @@ export function create(ctx, segment) {
       // LAW: stamped down with a seal ring shockwave
       lawWord.visible = t > wL - 0.05 && t < wR + 0.15;
       if (lawWord.visible) {
-        const out = ramp(t, wR - 0.3, wR + 0.1, ease.inCubic);
+        const out = ramp(t, wR - 0.45, wR - 0.05, ease.inCubic);
         for (const L of lawWord.letters) {
           const d = L.index * 0.05;
           const k = ramp(t, wL + d, wL + d + 0.18, ease.inQuad);
           L.mesh.scale.setScalar(lerp(2.4, 1, k));
           L.mesh.position.set(L.base.x, L.base.y, L.base.z + (1 - k) * 0.9 - out * 1.2);
           L.mesh.opacity = sat(k * 1.6) * (1 - out);
-          L.mesh.intensity = 1.6 + Math.exp(-Math.max(0, t - wL - d - 0.18) * 7) * 3 * k;
+          L.mesh.intensity = 1.35 + Math.exp(-Math.max(0, t - wL - d - 0.18) * 7) * 1.4 * k;
         }
         const sp = ramp(t, wL + 0.1, wL + 0.7, ease.outCubic);
         seal.reveal(sp, 1 - out);

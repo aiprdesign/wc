@@ -1,4 +1,4 @@
-// Procedural convolution reverb.
+// Procedural convolution reverbs.
 //
 // The impulse response is a decorrelated stereo noise tail with an exponential
 // decay (reaching -60 dB at `seconds`) that darkens as it decays (air and wall
@@ -11,14 +11,15 @@ export function makeImpulse(ctx, random, {
   brightHz = 9000,
   darkHz = 1500,
   reflections = 12,
+  channels = 2,
 } = {}) {
   const sr = ctx.sampleRate;
   const pd = Math.floor(preDelay * sr);
   const n = pd + Math.ceil(seconds * sr);
-  const ir = ctx.createBuffer(2, n, sr);
+  const ir = ctx.createBuffer(channels, n, sr);
   let energy = 0;
 
-  for (let ch = 0; ch < 2; ch++) {
+  for (let ch = 0; ch < channels; ch++) {
     const d = ir.getChannelData(ch);
     let y = 0;
     for (let i = pd; i < n; i++) {
@@ -41,17 +42,36 @@ export function makeImpulse(ctx, random, {
     for (let i = 0; i < n; i++) energy += d[i] * d[i];
   }
 
-  const k = 1 / Math.sqrt(energy / 2);
-  for (let ch = 0; ch < 2; ch++) {
+  const k = 1 / Math.sqrt(energy / channels);
+  for (let ch = 0; ch < channels; ch++) {
     const d = ir.getChannelData(ch);
     for (let i = 0; i < n; i++) d[i] *= k;
   }
   return ir;
 }
 
+/** Stereo convolution reverb (true stereo: two convolutions). */
 export function makeReverb(ctx, random, options) {
   const conv = ctx.createConvolver();
   conv.normalize = false;
   conv.buffer = makeImpulse(ctx, random, options);
-  return conv;
+  return { input: conv, output: conv };
+}
+
+/**
+ * Half-price stereo reverb: one mono convolution, widened by feeding the right
+ * channel a slightly delayed copy (the noise-like tail decorrelates completely).
+ */
+export function makeWideMonoReverb(ctx, random, options, spread = 0.019) {
+  const conv = ctx.createConvolver();
+  conv.normalize = false;
+  conv.channelCount = 1;
+  conv.channelCountMode = 'explicit';
+  conv.buffer = makeImpulse(ctx, random, { ...options, channels: 1 });
+  const delay = ctx.createDelay(0.1);
+  delay.delayTime.value = spread;
+  const merge = ctx.createChannelMerger(2);
+  conv.connect(merge, 0, 0);
+  conv.connect(delay).connect(merge, 0, 1);
+  return { input: conv, output: merge };
 }

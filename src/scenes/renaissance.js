@@ -32,19 +32,26 @@ const HUD = '#f3d08a';
 function figureParts(pose = 0) {
   const P = [];
   const rc = (ax, ay, bx, by, ra, rb, flat = 1, limb = true) => P.push({ a: [ax, ay], b: [bx, by], ra, rb, flat, limb });
-  // torso & neck (shared by both poses)
-  rc(0, 0.43, 0, 0.13, 0.155, 0.118, 0.62, false);
-  rc(0, 0.12, 0, -0.1, 0.118, 0.128, 0.7, false);
-  rc(-0.19, 0.445, 0.19, 0.445, 0.068, 0.068, 0.8, false);
-  rc(0, 0.5, 0, 0.6, 0.048, 0.042, 1, false);
-  rc(-0.085, -0.08, 0.085, -0.08, 0.1, 0.1, 0.75, false);
+  // torso & neck (shared by both poses): V-shaped chest, abdomen, pelvis
+  rc(0.105, 0.41, 0.07, 0.1, 0.098, 0.078, 0.6, false);
+  rc(-0.105, 0.41, -0.07, 0.1, 0.098, 0.078, 0.6, false);
+  rc(0, 0.36, 0, 0.12, 0.11, 0.1, 0.62, false);
+  rc(0, 0.14, 0, -0.04, 0.1, 0.106, 0.66, false);
+  rc(-0.2, 0.445, 0.2, 0.445, 0.062, 0.062, 0.8, false);
+  rc(0, 0.5, 0, 0.6, 0.046, 0.041, 1, false);
+  rc(-0.085, -0.075, 0.085, -0.075, 0.098, 0.098, 0.75, false);
+  rc(0.09, -0.02, 0.09, -0.13, 0.095, 0.09, 0.75, false);
+  rc(-0.09, -0.02, -0.09, -0.13, 0.095, 0.09, 0.75, false);
   if (pose === 0) {
     for (const s of [1, -1]) {
-      rc(0.2 * s, 0.445, 0.52 * s, 0.45, 0.056, 0.044);
-      rc(0.52 * s, 0.45, 0.8 * s, 0.452, 0.043, 0.032);
+      rc(0.2 * s, 0.445, 0.31 * s, 0.447, 0.07, 0.056);
+      rc(0.2 * s, 0.445, 0.52 * s, 0.45, 0.056, 0.042);
+      rc(0.52 * s, 0.45, 0.8 * s, 0.452, 0.042, 0.031);
+      rc(0.54 * s, 0.452, 0.66 * s, 0.452, 0.047, 0.04);
       rc(0.815 * s, 0.452, 0.975 * s, 0.456, 0.034, 0.018, 0.55);
       rc(0.085 * s, -0.12, 0.075 * s, -0.62, 0.076, 0.05);
-      rc(0.075 * s, -0.62, 0.062 * s, -1.1, 0.048, 0.031);
+      rc(0.075 * s, -0.62, 0.062 * s, -1.1, 0.047, 0.03);
+      rc(0.077 * s, -0.68, 0.07 * s, -0.86, 0.053, 0.04);
       rc(0.062 * s, -1.13, 0.13 * s, -1.175, 0.03, 0.024, 0.8);
     }
   } else {
@@ -145,7 +152,7 @@ function weaveTexture() {
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const i = (y * S + x) * 4;
     const wv = 0.5 + 0.5 * Math.sin(x * 1.6) * Math.sin(y * 1.6 + (Math.floor(x / 4) % 2) * 1.6);
-    const n = noise2(x * 0.02, y * 0.02) * 0.05 + noise2(x * 0.3, y * 0.05) * 0.02;
+    const n = noise2(x * 0.02, y * 0.02) * 0.018 + noise2(x * 0.3, y * 0.05) * 0.02;
     const l = 0.92 + wv * 0.05 + n;
     d[i] = 236 * l; d[i + 1] = 228 * l; d[i + 2] = 212 * l; d[i + 3] = 255;
   }
@@ -203,10 +210,10 @@ export function create(ctx, segment) {
   const goldGroup = new THREE.Group();
   goldGroup.position.z = SURF + 0.002;
   canvasRig.add(goldGroup);
-  const gOpts = { color: GOLD, headColor: '#fff3d6', intensity: 1.5, head: 0.04 };
+  const gOpts = { color: GOLD, headColor: '#fff3d6', intensity: 0.85, head: 0.04 };
   const gRect = progressLine([V(-gW / 2, -gH / 2), V(gW / 2, -gH / 2), V(gW / 2, gH / 2), V(-gW / 2, gH / 2)], { ...gOpts, closed: true });
   const gDiv = segmentsLine(gc.dividers, { ...gOpts, orderFn: (a, b, i) => (i / gc.dividers.length) * 0.7, stagger: 0.7 });
-  const gSpiral = progressLine(gc.spiral, { ...gOpts, intensity: 2.0 });
+  const gSpiral = progressLine(gc.spiral, { ...gOpts, intensity: 1.2 });
   const gDiag = segmentsLine([[V(-gW / 2, gH / 2), V(gW / 2, -gH / 2)], [V(gW / 2, gH / 2 - gW), V(-gW / 2, gH / 2)]], { ...gOpts, intensity: 0.7, orderFn: (a, b, i) => i * 0.2, stagger: 0.6 });
   goldGroup.add(gRect, gDiv, gSpiral, gDiag);
 
@@ -239,7 +246,7 @@ export function create(ctx, segment) {
   const strokesP = segmentsLine(segP, inkOpts(CHALK, 0.4, { orderFn: (a, b) => radialOrder(a, b) * 0.75 + R() * 0.05, stagger: 0.85 }));
 
   // hatching driven by a fake 3D normal: light from the upper left
-  const hatch = [];
+  const hatch = [], details = [];
   {
     const L = V(-0.55, 0.55, 0.63).normalize(), N = new THREE.Vector3();
     const shade = (x, y) => {
@@ -281,14 +288,29 @@ export function create(ctx, segment) {
     };
     layer(-Math.PI / 4, 0.0125, 0.5, 0.07, 3);
     layer(Math.PI / 4, 0.016, 0.72, 0.06, 7);
+    // curls of hair around the crown + minimal facial marks (drawn last, with the ticks)
+    const r = rng(19);
+    for (let i = 0; i < 44; i++) {
+      const a = -0.35 + (Math.PI + 0.7) * r(), k = 0.96 + r() * 0.2;
+      const cx = HEAD.c[0] + Math.cos(a) * HEAD.r[0] * k, cy = HEAD.c[1] + 0.012 + Math.sin(a) * HEAD.r[1] * k;
+      const cr = 0.01 + r() * 0.012, a0 = r() * Math.PI * 2;
+      let px = cx + Math.cos(a0) * cr, py = cy + Math.sin(a0) * cr;
+      for (let j = 1; j <= 5; j++) { const aa = a0 + j * 0.9; const qx = cx + Math.cos(aa) * cr, qy = cy + Math.sin(aa) * cr; details.push([V(px, py), V(qx, qy)]); px = qx; py = qy; }
+    }
+    const fy = HEAD.c[1];
+    details.push([V(-0.052, fy + 0.012), V(-0.02, fy + 0.014)], [V(0.02, fy + 0.014), V(0.052, fy + 0.012)]);
+    details.push([V(0.002, fy - 0.004), V(0.008, fy - 0.045)], [V(0.008, fy - 0.045), V(-0.008, fy - 0.05)]);
+    details.push([V(-0.022, fy - 0.075), V(0.022, fy - 0.075)]);
     layer(-Math.PI / 3, 0.022, 0.86, 0.05, 11);
   }
-  const strokesH = segmentsLine(hatch, inkOpts(SEPIA, 0.55, { orderFn: (a, b) => (1 - ((a.y + b.y) / 2 - BY0) / (BY1 - BY0)) * 0.55 + R() * 0.3, stagger: 0.9, head: 0.02 }));
+  const strokesH = segmentsLine(hatch, inkOpts(SEPIA, 0.7, { orderFn: (a, b) => (1 - ((a.y + b.y) / 2 - BY0) / (BY1 - BY0)) * 0.55 + R() * 0.3, stagger: 0.9, head: 0.02 }));
   // proportion ticks across the figure (head, chin, chest, navel, groin, knees)
   const ticks = [];
   for (const y of [0.8, 0.55, 0.3, 0.0, -0.2, -0.7, -1.2]) ticks.push([V(-0.22, y), V(0.22, y)]);
   for (const x of [-0.75, -0.5, -0.25, 0.25, 0.5, 0.75]) ticks.push([V(x, 0.4), V(x, 0.5)]);
-  const strokesT = segmentsLine(ticks, inkOpts(SEPIA, 0.55, { orderFn: (a, b, i) => i / ticks.length * 0.6, stagger: 0.7 }));
+  const nTicks = ticks.length;
+  ticks.push(...details);
+  const strokesT = segmentsLine(ticks, inkOpts(SEPIA, 0.55, { orderFn: (a, b, i) => (i < nTicks ? i / nTicks * 0.3 : 0.25 + R() * 0.4), stagger: 0.7 }));
   // compass circle + square (two passes each)
   const circleR = 1.2, sqHalf = 1.0, sqCy = -0.2;
   const sqPts = (o) => [V(-sqHalf - o, sqCy - sqHalf), V(sqHalf, sqCy - sqHalf - o), V(sqHalf + o, sqCy + sqHalf), V(-sqHalf, sqCy + sqHalf + o), V(-sqHalf - o, sqCy - sqHalf)];
@@ -343,8 +365,8 @@ export function create(ctx, segment) {
   const dimN2 = new Dimension(V(1.32, 0.0, 0), V(1.32, 0.8, 0), '0.382', { color: HUD, size: 0.07, tick: 0.06, intensity: 1.5 });
   const callRatio = new Callout('1 : 1.618', { dx: 0.75, dy: -0.35, size: 0.1, color: HUD, sub: 'UMBILICUS · SECTIO AUREA', intensity: 1.6 });
   callRatio.position.set(0.02, 0.0, 0.1);
-  const callProp = new Callout('PROPORTIO', { dx: -0.8, dy: 0.42, size: 0.11, color: HUD, sub: 'HOMO AD CIRCULUM ET QUADRATUM', intensity: 1.6 });
-  callProp.position.set(-0.05, 0.7, 0.1);
+  const callProp = new Callout('PROPORTIO', { dx: 0.85, dy: 0.22, size: 0.11, color: HUD, sub: 'HOMO AD CIRCULUM ET QUADRATUM', intensity: 1.6 });
+  callProp.position.set(0.09, 0.72, 0.1);
   hudGroup.add(dimH, dimW, dimN, dimN2, callRatio, callProp);
   sharpen(hudGroup);
 
@@ -400,19 +422,20 @@ export function create(ctx, segment) {
     const k = 0.8 + R() * 0.4;
     paintCol[i * 3] = c.r * k; paintCol[i * 3 + 1] = c.g * k; paintCol[i * 3 + 2] = c.b * k;
   }
-  const paint = new MorphParticles({ count: NPAINT, positions: paintSrc, targets: paintTgt, colors: paintCol, size: 0.03, intensity: 2.0, stagger: 0.35, seed: 44 });
+  const paint = new MorphParticles({ count: NPAINT, positions: paintSrc, targets: paintTgt, colors: paintCol, size: 0.03, intensity: 1.3, stagger: 0.35, seed: 44, additive: false });
   paint.u.noiseFreq = 0.9; paint.u.noiseSpeed = 0.3;
   paint.u.scatterCenter = V(0, -0.1, 0);
   figGroup.add(paint);
 
   // ---------------------------------------------------------------- lights & atmosphere
-  const spot = new THREE.SpotLight('#ffe3bf', 0, 0, 0.42, 0.75, 0);
+  const spot = new THREE.SpotLight('#ffe3bf', 0, 0, 0.27, 1.0, 0);
   spot.position.set(-3.2, 3.6, 5.5);
   scene.add(spot, spot.target);
   const rim = new THREE.DirectionalLight('#ffcf94', 0); rim.position.set(3, 3, -4);
   const kick = new THREE.DirectionalLight('#9fb8ff', 0); kick.position.set(-4, 1, -3);
   const fill = new THREE.AmbientLight('#2b1d12', 0.35);
-  scene.add(rim, kick, fill);
+  const key = new THREE.DirectionalLight('#ffe6c4', 0); key.position.set(-2.5, 3, 5); key.target.position.set(0, -0.2, 1);
+  scene.add(rim, kick, fill, key, key.target);
   const beam = lightShaft({ length: 9, radiusTop: 0.2, radiusBottom: 2.6, color: '#ffe0b0', intensity: 0.1 });
   beam.position.copy(spot.position);
   beam.lookAt(0, 0, 0); beam.rotateX(-Math.PI / 2);
@@ -450,17 +473,19 @@ export function create(ctx, segment) {
       // ------------------------------------------------ canvas: floats in, chiaroscuro light
       const arrive = ramp(t, -0.3, cC + 0.2, ease.outCubic);
       const recede = ramp(t, m3, m3 + 0.9, ease.inOutCubic);
-      canvasRig.position.set(0, lerp(-0.25, 0, arrive) + Math.sin(t * 0.9) * 0.02, lerp(-1.2, 0, arrive) - recede * 2.2);
+      canvasRig.position.set(-recede * 0.6, lerp(-0.25, 0, arrive) + Math.sin(t * 0.9) * 0.02, lerp(-1.2, 0, arrive) - recede * 3.4);
       canvasRig.rotation.set(lerp(0.08, 0, arrive) + Math.sin(t * 0.7) * 0.01, lerp(-0.42, 0.04, arrive) + recede * 0.25, lerp(0.03, 0, arrive));
-      spot.intensity = lerp(1.2, 4.2, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.45 * recede);
-      spot.target.position.set(0, 0, lerp(0, C3.z, lift));
+      spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede);
+      spot.target.position.set(lerp(-0.45, 0, lift), lerp(0.5, -0.2, lift), lerp(0, C3.z, lift));
+      key.intensity = 2.4 * lift;
+      canvasMat.color.setRGB(0.95, 0.92, 0.87).multiplyScalar(1 - 0.72 * recede);
       rim.intensity = 2.8 * lift;
       kick.intensity = 1.2 * lift;
       beam.material.uniforms.uIntensity.value = 0.08 + 0.05 * ramp(t, 0.1, cC);
       beam.material.uniforms.uTime.value = t;
 
       // ------------------------------------------------ golden ratio (16.3)
-      const gFade = 1 - 0.7 * ramp(t, s0 + 0.2, s0 + 0.8) - 0.3 * ramp(t, m3 - 0.2, m3 + 0.2);
+      const gFade = 1 - 0.82 * ramp(t, s0 + 0.2, s0 + 0.8) - 0.18 * ramp(t, m3 - 0.2, m3 + 0.2);
       gRect.progress = ramp(t, cG, cG + 0.4, ease.inOutCubic);
       gDiv.progress = ramp(t, cG + 0.2, cG + 0.75, ease.inOutSine);
       gSpiral.progress = ramp(t, cG + 0.3, cG + 1.1, ease.inOutSine);
@@ -484,7 +509,7 @@ export function create(ctx, segment) {
       sq1.opacity = 0.85 * inkOut * (1 - lift); sq2.opacity = 0.4 * inkOut * (1 - lift);
       ci1.opacity = 0.85 * inkOut * (1 - lift); ci2.opacity = 0.4 * inkOut * (1 - lift);
       strokesA.opacity = 0.42 * inkOut; strokesB.opacity = 0.9 * inkOut; strokesC.opacity = 0.32 * inkOut;
-      strokesP.opacity = 0.4 * inkOut; strokesH.opacity = 0.55 * inkOut; strokesT.opacity = 0.55 * inkOut;
+      strokesP.opacity = 0.4 * inkOut; strokesH.opacity = 0.7 * inkOut; strokesT.opacity = 0.55 * inkOut;
       // strokes lift off the canvas plane and glow as they go
       const lineLift = ramp(t, m3 - 0.05, m3 + 0.7, ease.inOutCubic);
       sketch.position.set(lerp(canvasRig.position.x, 0, lineLift), lerp(canvasRig.position.y, 0, lineLift), lerp(canvasRig.position.z + SURF + 0.004, C3.z + 0.02, lineLift));
@@ -503,7 +528,7 @@ export function create(ctx, segment) {
       figGroup.position.set(sketch.position.x, sketch.position.y, lerp(canvasRig.position.z + SURF + 0.004, C3.z, lineLift));
       figGroup.rotation.copy(sketch.rotation);
       const inflate = ramp(t, m3, m3 + 0.7, ease.outCubic);
-      const burst = ramp(t, pB, pB + 0.18, ease.inQuad);
+      const burst = ramp(t, pB - 0.03, pB + 0.07, ease.inQuad);
       figGroup.scale.set(1, 1, lerp(0.03, 1, inflate));
       figMat.opacity = sat(inflate * 1.4) * (1 - burst);
       figMesh.visible = figMat.opacity > 0.002;
@@ -535,16 +560,16 @@ export function create(ctx, segment) {
 
       // ------------------------------------------------ paint burst (19.9)
       paint.tick(t, info);
-      const pm = ramp(t, pB + 0.02, 5.0, ease.outCubic);
+      const pm = ramp(t, pB + 0.02, pB + 0.75, ease.outCubic);
       paint.u.mix = pm;
-      paint.u.scatter = ramp(t, pB, pB + 0.5, ease.outExpo) * 1.4;
+      paint.u.scatter = ramp(t, pB, pB + 0.4, ease.outExpo) * 2.2;
       paint.u.swirl = pm * 1.6;
       paint.u.noise = 0.02 + 0.18 * Math.sin(Math.PI * Math.min(1, pm * 1.3));
       paint.u.size = lerp(0.022, 0.07, ramp(t, pB, pB + 0.4, ease.outCubic));
       const pOp = ramp(t, pB - 0.12, pB + 0.02);
       paint.u.opacity = pOp;
       paint.visible = pOp > 0.002;
-      paint.u.intensity = 2.0 + 1.5 * Math.exp(-Math.max(0, t - pB) * 5);
+      paint.u.intensity = 0.95 + 0.45 * Math.exp(-Math.max(0, t - pB) * 5);
 
       dust.tick(t, info);
 

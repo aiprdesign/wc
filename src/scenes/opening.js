@@ -189,7 +189,7 @@ export function create(ctx, segment) {
   const L2 = letters3D('WESTERN CIVILIZATION', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.1 });
   const s2 = 10.4 / L2.width, s1 = 6.1 / L1.width;
   const Y1 = 0.95, Y2 = -0.3;
-  const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#e6dccb', roughness: 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.8 });
+  const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#e6dccb', roughness: 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.4 });
   const goldMat = new THREE.MeshStandardMaterial({ color: '#e9b964', metalness: 1, roughness: 0.32, emissive: new THREE.Color('#ffb85a'), emissiveIntensity: 0, envMapIntensity: 1.1 });
   const bronzeMat = new THREE.MeshStandardMaterial({ color: '#b87a45', metalness: 1, roughness: 0.34, emissive: new THREE.Color('#ffa24a'), emissiveIntensity: 0, envMapIntensity: 1.0 });
   const glyphs = [];
@@ -337,9 +337,9 @@ export function create(ctx, segment) {
       titleParticles.u.mix = mix;
       titleParticles.u.noise = 0.05 + 0.25 * (1 - mix);
       const burst = ramp(t, cue('letters3D'), cue('letters3D') + 1.2, ease.outCubic);
-      titleParticles.u.scatter = burst * 6;
+      titleParticles.u.scatter = burst * 3;
       titleParticles.u.swirl = burst * 0.3;
-      const pOp = ramp(t, 3.1, 3.7) * lerp(1, 0.05, ramp(t, tL - 0.2, tL + 0.35)) * (1 - ramp(t, cue('letters3D') + 0.3, cue('letters3D') + 1.1));
+      const pOp = ramp(t, 3.1, 3.7) * lerp(1, 0.05, ramp(t, tL - 0.2, tL + 0.35)) * (1 - ramp(t, cue('letters3D') + 0.05, cue('letters3D') + 0.55));
       titleParticles.u.opacity = pOp;
       titleParticles.visible = pOp > 0.002;
       titleParticles.u.intensity = lerp(0.9, 1.5, mix) + 1.0 * ramp(t, tL - 0.3, tL) * (1 - ramp(t, tL, tL + 0.4));
@@ -392,7 +392,7 @@ export function create(ctx, segment) {
 
       // ---------------------------------------------------------------- lights & glow
       const is3D = ramp(t, l3 - 0.2, l3 + 0.6);
-      key.intensity = lerp(1.2, 2.4, is3D);
+      key.intensity = lerp(1.2, 1.7, is3D);
       key.position.set(lerp(-6, -3, is3D), 7, Z_TITLE + 12);
       key.target.position.set(0, 0, Z_TITLE);
       rim.intensity = lerp(0.3, 4.5, is3D);
@@ -406,7 +406,7 @@ export function create(ctx, segment) {
 
       const bOn = ramp(t, 6.4, 8.0, ease.inQuad);
       beyond.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(0.1 + bOn * 0.6);
-      beyondCore.material.color.setRGB(1.0, 0.92, 0.78).multiplyScalar(0.2 + bOn * 2.2);
+      beyondCore.material.color.setRGB(1.0, 0.92, 0.78).multiplyScalar(0.2 + bOn * 1.4);
       beyond.visible = beyondCore.visible = t > 3.6;
       halo.material.color.setRGB(1.0, 0.68, 0.36).multiplyScalar(0.09 * ramp(t, 4.0, 5.0) * (1 - ramp(t, 7.2, 7.8)) + 0.05 * pulse(T, { decay: 3 }) * ramp(t, 4.5, 5.0));
       halo.visible = t > 3.8;

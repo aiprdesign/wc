@@ -354,6 +354,9 @@ void main(){
   col += albedo * uRimCol * max(dot(N, R), 0.0) * 0.55;
   col += albedo * uCoreCol * max(dot(N, Lc), 0.0) * att;
   col += albedo * uCoreCol * max(dot(-N, Lc), 0.0) * att * 0.3 * (1.0 - bk);
+  vec3 F = normalize(vec3(0.6, -0.1, 1.0));
+  col += albedo * vec3(0.75, 0.62, 0.5) * max(dot(N, F), 0.0) * 0.32 * (1.0 - metal * 0.5);
+  col += vec3(1.0, 0.7, 0.35) * pow(max(dot(N, normalize(F + V)), 0.0), 40.0) * metal * 0.9;
   vec3 H = normalize(L + V);
   float sp = pow(max(dot(N, H), 0.0), mix(24.0, 70.0, metal)) * mix(0.05, 2.2, metal);
   col += uKeyCol * mix(vec3(1.0), gold, metal) * sp;

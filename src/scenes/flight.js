@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { CUES } from '../timeline.js';
 import { clamp, sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
-import { GLSL_NOISE } from '../lib/noise.js';
+import { GLSL_NOISE, fbm2 } from '../lib/noise.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { segmentsLine, progressLine, circlePoints } from '../lib/lines.js';
 import { gridTexture, canvas as mkCanvas, toTexture, brushedMetalTexture } from '../lib/textures.js';
@@ -121,8 +121,8 @@ function airframeSegments() {
       push(V3(x, y + Math.cos(a0) * r, Math.sin(a0) * r), V3(x, y + Math.cos(a1) * r, Math.sin(a1) * r));
     }
   }
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * TAU;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU + Math.PI / 8;
     for (let k = 0; k < 40; k++) {
       const x0 = -FUS_L / 2 + (k / 40) * FUS_L, x1 = -FUS_L / 2 + ((k + 1) / 40) * FUS_L;
       push(V3(x0, fusY(x0) + Math.cos(a) * fusR(x0), Math.sin(a) * fusR(x0)), V3(x1, fusY(x1) + Math.cos(a) * fusR(x1), Math.sin(a) * fusR(x1)));
@@ -199,7 +199,7 @@ function withReveal(mat, edge = '#bfe0ff') {
         vRevX = rvp.x;`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vRevX; uniform float uReveal; uniform vec3 uEdge;')
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n if (vRevX < uReveal) discard;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += uEdge * 5.0 * (1.0 - smoothstep(0.0, 0.1, vRevX - uReveal));');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += uEdge * 1.6 * (1.0 - smoothstep(0.0, 0.05, vRevX - uReveal));');
   };
   mat.customProgramCacheKey = () => 'flight-reveal';
   return mat;
@@ -228,21 +228,18 @@ void main(){
   gl_FragColor = vec4(vColor * t.rgb, a);
 }`;
 function puffTexture(seed = 1) {
-  const S = 128, c = mkCanvas(S), g = c.getContext('2d'), R = rng(seed);
-  for (let i = 0; i < 26; i++) {
-    const x = S / 2 + (R() - 0.5) * S * 0.45, y = S / 2 + (R() - 0.5) * S * 0.4, r = S * (0.12 + R() * 0.2);
-    const gr = g.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, 'rgba(255,255,255,0.28)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, S, S);
-  }
-  const img = g.getImageData(0, 0, S, S), d = img.data;
+  const S = 128, c = mkCanvas(S), g = c.getContext('2d');
+  const img = g.createImageData(S, S), d = img.data;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const i = (y * S + x) * 4, r = Math.hypot(x - S / 2, y - S / 2) / (S / 2);
-    d[i + 3] = Math.min(255, d[i + 3] * 1.6) * smoothstep(1.0, 0.65, r);
+    const u = x / S - 0.5, v = y / S - 0.5, r = Math.hypot(u, v) * 2;
+    const n = fbm2(u * 4 + seed * 7.1, v * 4 - seed * 3.3, 5) * 0.5 + 0.5;
+    const a = sat((1 - r) * 1.4 + (n - 0.55) * 1.6) * smoothstep(1.0, 0.7, r);
+    const i = (y * S + x) * 4;
+    const shade = 0.75 + 0.25 * (0.5 - v) + (n - 0.5) * 0.3;
+    d[i] = d[i + 1] = d[i + 2] = Math.round(sat(shade) * 255); d[i + 3] = Math.round(Math.pow(a, 1.3) * 255);
   }
   g.putImageData(img, 0, 0);
-  const t = toTexture(c, { srgb: false });
-  return t;
+  return toTexture(c, { srgb: false });
 }
 class SoftPoints extends THREE.Points {
   constructor(count, { map, additive = false, near = 1.0 } = {}) {
@@ -282,23 +279,24 @@ void main(){
   vec3 p = normalize(vL);
   vec3 N = normalize(vN), V = normalize(cameraPosition - vW), L = normalize(uSun);
   float c = fbm(p * 1.35 + vec3(3.1, 0.0, 1.7)) + 0.12 * snoise(p * 7.0);
-  float land = smoothstep(0.035, 0.07, c);
-  float coast = smoothstep(0.0, 0.035, c) * (1.0 - land);
+  float land = smoothstep(0.0, 0.03, c);
+  float coast = smoothstep(-0.05, 0.0, c) * (1.0 - land);
   float lat = abs(p.y);
   float ice = smoothstep(0.8, 0.9, lat + 0.06 * snoise(p * 9.0));
   float arid = smoothstep(0.0, 0.5, snoise(p * 2.2 + 5.0)) * (1.0 - smoothstep(0.2, 0.55, lat));
   vec3 ocean = mix(vec3(0.004, 0.018, 0.05), vec3(0.01, 0.05, 0.085), coast);
-  vec3 ground = mix(vec3(0.035, 0.055, 0.025), vec3(0.13, 0.095, 0.05), arid);
+  vec3 ground = mix(vec3(0.05, 0.075, 0.035), vec3(0.2, 0.15, 0.085), arid);
   ground *= 0.8 + 0.4 * snoise(p * 18.0);
   vec3 surf = mix(ocean, ground, land);
   surf = mix(surf, vec3(0.75, 0.8, 0.85), ice);
-  float cl = smoothstep(0.08, 0.55, fbm(p * 2.6 + vec3(uTime * 0.02, 0.0, 0.0)) + 0.1 * snoise(p * 12.0));
+  vec3 cp = p * vec3(3.2, 7.0, 3.2) + vec3(uTime * 0.02, 0.0, 0.0);
+  float cl = smoothstep(0.12, 0.75, fbm(cp) * 0.75 + 0.3 * snoise(p * 16.0) * snoise(p * 3.0 + 7.0)) * 0.85;
   float ndl = dot(N, L);
   float day = smoothstep(-0.12, 0.3, ndl);
-  vec3 col = surf * day * 2.2;
-  col = mix(col, vec3(0.85, 0.88, 0.92) * day * 1.6, cl * 0.85);
+  vec3 col = surf * day * 1.7;
+  col = mix(col, vec3(0.8, 0.84, 0.9) * day * 1.05, cl * 0.8);
   vec3 H = normalize(L + V);
-  col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 70.0) * (1.0 - land) * (1.0 - cl) * day * 1.6;
+  col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 220.0) * (1.0 - land) * (1.0 - cl) * day * 0.6;
   col += vec3(1.0, 0.42, 0.16) * exp(-pow(ndl / 0.1, 2.0)) * 0.12 * (1.0 - cl * 0.5);
   // night side: city lights clustered on land
   vec3 q = p * 150.0; vec3 cell = floor(q); vec3 f = fract(q) - 0.5;
@@ -342,7 +340,7 @@ export function create(ctx, segment) {
   const fill = new THREE.HemisphereLight('#9cc4ff', '#0a1420', 0.5); scene.add(fill);
 
   // sky dome: blueprint void → high-altitude sky
-  const SUN_DIR = V3(0.82, 0.2, -0.54).normalize();
+  const SUN_DIR = V3(0.12, 0.3, -0.95).normalize();
   const skyMat = new THREE.ShaderMaterial({
     uniforms: { uMix: { value: 0 }, uSun: { value: SUN_DIR }, uSpace: { value: 0 } },
     vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
@@ -350,12 +348,12 @@ export function create(ctx, segment) {
       void main(){
         vec3 d = normalize(vD);
         float h = d.y;
-        vec3 zen = mix(vec3(0.02, 0.06, 0.16), vec3(0.002, 0.006, 0.02), uSpace);
-        vec3 hor = mix(vec3(0.42, 0.52, 0.66), vec3(0.05, 0.12, 0.3), uSpace);
+        vec3 zen = mix(vec3(0.008, 0.03, 0.09), vec3(0.001, 0.004, 0.014), uSpace);
+        vec3 hor = mix(vec3(0.2, 0.28, 0.4), vec3(0.03, 0.08, 0.2), uSpace);
         vec3 sky = mix(hor, zen, pow(smoothstep(-0.05, 0.7, h), 0.6));
         sky = mix(sky, vec3(0.08, 0.1, 0.14), smoothstep(0.0, -0.3, h));
         float s = max(dot(d, normalize(uSun)), 0.0);
-        sky += vec3(1.0, 0.8, 0.55) * (pow(s, 8.0) * 0.6 + pow(s, 64.0) * 1.5) * (1.0 - uSpace * 0.6);
+        sky += vec3(1.0, 0.78, 0.52) * (pow(s, 18.0) * 0.22 + pow(s, 120.0) * 1.2) * (1.0 - uSpace * 0.5);
         vec3 bp = vec3(0.004, 0.012, 0.03);
         gl_FragColor = vec4(mix(bp, sky, uMix), 1.0);
       }`,
@@ -364,16 +362,16 @@ export function create(ctx, segment) {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), skyMat);
   sky.renderOrder = -10;
   worldA.add(sky);
-  const sunGlow = glowSprite({ color: '#fff0d8', intensity: 5, scale: 60 });
+  const sunGlow = glowSprite({ color: '#fff0d8', intensity: 2.5, scale: 35 });
   worldA.add(sunGlow);
 
   // --- blueprint sheet
   const sheet = new THREE.Group(); worldA.add(sheet);
   const sheetBase = new THREE.Mesh(new THREE.PlaneGeometry(15, 8.6), new THREE.MeshBasicMaterial({ color: new THREE.Color('#0b2a52').multiplyScalar(0.55), transparent: true }));
-  sheetBase.rotation.x = -Math.PI / 2; sheetBase.position.y = -0.01; sheet.add(sheetBase);
+  sheetBase.rotation.x = -Math.PI / 2; sheetBase.position.y = -0.01; sheetBase.renderOrder = -6; sheet.add(sheetBase);
   const gridTex = gridTexture({ cells: 16, sub: 5 }).clone(); gridTex.needsUpdate = true; gridTex.repeat.set(15 / 4, 8.6 / 4);
   const gridMat = new THREE.MeshBasicMaterial({ map: gridTex, color: new THREE.Color('#7fb2ff').multiplyScalar(0.32), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  const grid = new THREE.Mesh(new THREE.PlaneGeometry(15, 8.6), gridMat); grid.rotation.x = -Math.PI / 2; sheet.add(grid);
+  const grid = new THREE.Mesh(new THREE.PlaneGeometry(15, 8.6), gridMat); grid.rotation.x = -Math.PI / 2; grid.renderOrder = -5; sheet.add(grid);
   const border = segmentsLine([[V3(-7.2, 0, -4.1), V3(7.2, 0, -4.1)], [V3(7.2, 0, -4.1), V3(7.2, 0, 4.1)], [V3(7.2, 0, 4.1), V3(-7.2, 0, 4.1)], [V3(-7.2, 0, 4.1), V3(-7.2, 0, -4.1)],
     [V3(2.4, 0, 2.2), V3(7.2, 0, 2.2)], [V3(2.4, 0, 2.2), V3(2.4, 0, 4.1)], [V3(2.4, 0, 3.1), V3(7.2, 0, 3.1)], [V3(5.2, 0, 3.1), V3(5.2, 0, 4.1)]],
   { color: BP_LINE, intensity: 0.8, stagger: 0.3, seed: 3 });
@@ -381,49 +379,49 @@ export function create(ctx, segment) {
 
   const segs = airframeSegments();
   const orderX = (a, b) => 0.6 * (1 - ((a.x + b.x) / 2 + 2.3) / 4.6);   // nose → tail
-  const mkWire = (intensity = 0.95) => segmentsLine(segs, { color: BP_LINE, headColor: '#ffffff', intensity, orderFn: orderX, stagger: 0.6, head: 0.05 });
+  const mkWire = (intensity = 1.0) => segmentsLine(segs, { color: BP_LINE, headColor: '#ffffff', intensity, orderFn: orderX, stagger: 0.6, head: 0.04, additive: false });
   const A0 = V3(-1.8, 0.0, 1.0);
   // plan view: the real 3D structure, flattened (scale.y → 0); it extrudes during the fold
   const planHolder = new THREE.Group(); planHolder.position.copy(A0); worldA.add(planHolder);
-  const planWire = mkWire(1.0); planHolder.add(planWire);
+  const planWire = mkWire(1.05); planHolder.add(planWire);
   // elevation (side) view: aircraft rotated so its side lies on the sheet, hinged so it can stand up
   const sideHinge = new THREE.Group(); sideHinge.position.set(-1.8, 0.01, -2.35); worldA.add(sideHinge);
   const sideFlat = new THREE.Group(); sideFlat.scale.y = 0.001; sideHinge.add(sideFlat);
-  const sideRot = new THREE.Group(); sideRot.rotation.x = Math.PI / 2; sideRot.position.z = -0.55; sideFlat.add(sideRot);
-  const sideWire = mkWire(0.8); sideRot.add(sideWire);
+  const sideRot = new THREE.Group(); sideRot.rotation.x = -Math.PI / 2; sideRot.position.z = -0.32; sideFlat.add(sideRot);
+  const sideWire = mkWire(0.85); sideRot.add(sideWire);
   // front view: span along sheet X, height along sheet Z
-  const frontFlat = new THREE.Group(); frontFlat.position.set(4.7, 0.01, -0.3); frontFlat.scale.y = 0.001; worldA.add(frontFlat);
-  const frontRot = new THREE.Group(); frontRot.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1)); frontFlat.add(frontRot);
-  const frontWire = mkWire(0.75); frontRot.add(frontWire);
+  const frontFlat = new THREE.Group(); frontFlat.position.set(4.6, 0.01, -0.35); frontFlat.scale.y = 0.001; worldA.add(frontFlat);
+  const frontRot = new THREE.Group(); frontRot.quaternion.setFromRotationMatrix(new THREE.Matrix4().set(0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1)); frontFlat.add(frontRot);
+  const frontWire = mkWire(0.8); frontRot.add(frontWire);
   // dimensions + annotations lying on the sheet
   const anno = new THREE.Group(); anno.rotation.x = -Math.PI / 2; anno.position.y = 0.01; worldA.add(anno);  // anno local (x, y) = sheet (x, -z)
   const dims = [
-    new Dimension(V3(-4.3, -1.0 + 2.55, 0), V3(-4.3, -1.0 - 2.55, 0), 'SPAN 20.4 M', { color: BP_DIM, size: 0.13, tick: 0.12, intensity: 1.0 }),
-    new Dimension(V3(-3.9, 3.35, 0), V3(0.3, 3.35, 0), 'LENGTH 16.8 M', { color: BP_DIM, size: 0.13, tick: 0.12, intensity: 1.0 }),
-    new Dimension(V3(2.25, -0.7, 0), V3(7.1, -0.7, 0), 'TRACK 7.8 M', { color: BP_DIM, size: 0.11, tick: 0.1, intensity: 0.9 }),
+    new Dimension(V3(-4.65, -1.0 + 2.55, 0), V3(-4.65, -1.0 - 2.55, 0), 'SPAN 20.4 M', { color: BP_DIM, size: 0.13, tick: 0.12, intensity: 1.0 }),
+    new Dimension(V3(-3.9, 1.98, 0), V3(0.3, 1.98, 0), 'LENGTH 16.8 M', { color: BP_DIM, size: 0.13, tick: 0.12, intensity: 1.0 }),
+    new Dimension(V3(4.6 - 0.98, -0.62, 0), V3(4.6 + 0.98, -0.62, 0), 'ENGINE CL 7.8 M', { color: BP_DIM, size: 0.1, tick: 0.1, intensity: 0.9 }),
   ];
   dims.forEach((d) => anno.add(d));
   const label = (txt, x, y, h = 0.15, o = {}) => { const tp = new TextPlane(txt, { font: FONTS.mono, height: h, letterSpacing: 0.16, color: BP_LINE, intensity: 1.0, ...o }); tp.position.set(x + tp.worldWidth / 2, y, 0); anno.add(tp); return tp; };
   const labels = [
-    label('FIG. 1 — PLAN', -3.9, -3.95 + 8.0 - 3.55, 0.15),
+    label('FIG. 1 — PLAN', -3.9, -3.88, 0.15),
     label('FIG. 2 — ELEVATION', -3.9, 3.95, 0.15),
-    label('FIG. 3 — FRONT', 2.5, 1.55, 0.15),
+    label('FIG. 3 — FRONT', 2.2, 1.55, 0.15),
     label('GENERAL ARRANGEMENT', 2.6, -2.62, 0.2, { weight: 500 }),
     label('TWIN-ENGINE MONOPLANE · ALL-METAL STRESSED SKIN', 2.6, -2.9, 0.1, { intensity: 0.7 }),
     label('SCALE 1:48', 2.6, -3.6, 0.13),
     label('SHEET 1 / 4', 5.4, -3.6, 0.13),
-    label('AIRFOIL 13% · DIHEDRAL 5°', -3.9, -3.9, 0.11, { intensity: 0.75 }),
+    label('AIRFOIL 13% · DIHEDRAL 5°', -1.3, -3.88, 0.11, { intensity: 0.75 }),
   ];
   // center lines (dash-dot)
   const cl = [];
   for (let i = 0; i < 26; i++) { const x = -4.4 + i * 0.2; if (i % 3 !== 2) cl.push([V3(x, 0.006, 1.0), V3(x + 0.14, 0.006, 1.0)]); }
-  for (let i = 0; i < 30; i++) { const z = -1.9 + i * 0.2; if (i % 3 !== 2) cl.push([V3(-1.8 + 0.4, 0.006, z), V3(-1.8 + 0.4, 0.006, z + 0.14)]); }
+  for (let i = 0; i < 27; i++) { const z = -1.8 + i * 0.2; if (i % 3 !== 2) cl.push([V3(-1.8 + 0.4, 0.006, z), V3(-1.8 + 0.4, 0.006, z + 0.14)]); }
   const centerLines = segmentsLine(cl, { color: BP_DIM, intensity: 0.6, stagger: 0.5, seed: 9 });
   worldA.add(centerLines);
 
   // --- the aircraft
-  const skinMat = withReveal(new THREE.MeshStandardMaterial({ color: '#dfe5ec', metalness: 1, roughness: 0.26, map: brushedMetalTexture(), roughnessMap: brushedMetalTexture(), envMapIntensity: 1.2 }));
-  const darkMat = withReveal(new THREE.MeshStandardMaterial({ color: '#23262b', metalness: 0.7, roughness: 0.35 }));
+  const skinMat = withReveal(new THREE.MeshStandardMaterial({ color: '#d5dbe3', metalness: 1, roughness: 0.36, map: brushedMetalTexture(), roughnessMap: brushedMetalTexture(), envMapIntensity: 1.2 }));
+  const darkMat = withReveal(new THREE.MeshStandardMaterial({ color: '#23262b', metalness: 0.6, roughness: 0.55 }));
   const glassMat = withReveal(new THREE.MeshStandardMaterial({ color: '#05080c', metalness: 0.2, roughness: 0.05, envMapIntensity: 2 }));
   const discMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#aab4c0').multiplyScalar(0.25), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
   const plane = new THREE.Group(); worldA.add(plane);
@@ -441,16 +439,22 @@ export function create(ctx, segment) {
   const CLOUD_N = 1100;
   const clouds = new SoftPoints(CLOUD_N, { map: puffTexture(7), near: 2.5 });
   const cloudData = [];
-  for (let i = 0; i < CLOUD_N; i++) {
+  const pathA = V3(7.2, 2, 1.6), pathB = V3(13, 13, -1.2), pathD = pathB.clone().sub(pathA), pathL = pathD.length(); pathD.normalize();
+  for (let i = 0, guard = 0; cloudData.length < CLOUD_N && guard < 20000; guard++) {
     const layer = i < 700 ? 0 : 1;
     const y = layer === 0 ? 3.5 + R() * 5.5 : 11 + R() * 1.6;
-    cloudData.push({ x: -10 + R() * 90, y, z: -60 + R() * 70, s: layer === 0 ? 3 + R() * 6 : 2 + R() * 3, a: layer === 0 ? 0.35 + R() * 0.3 : 0.12 + R() * 0.12, rot: R() * TAU, layer, top: layer === 0 ? (y - 3.5) / 5.5 : 1 });
+    const cx0 = -10 + R() * 90, cz0 = -60 + R() * 70;
+    const rel = V3(cx0, y, cz0).sub(pathA), along = clamp(rel.dot(pathD), 0, pathL), dist = rel.addScaledVector(pathD, -along).length();
+    const sz = layer === 0 ? 3 + R() * 6 : 2 + R() * 3;
+    if (dist < 1.6 + sz * 0.55) continue;
+    i++;
+    cloudData.push({ x: cx0, y, z: cz0, s: sz, a: layer === 0 ? 0.22 + R() * 0.25 : 0.08 + R() * 0.08, rot: R() * TAU, layer, top: layer === 0 ? (y - 3.5) / 5.5 : 1 });
   }
   worldA.add(clouds);
   // ice-crystal glints above the deck
-  const glints = new SoftPoints(700, { map: puffTexture(11), additive: true, near: 0.3 });
+  const glints = new SoftPoints(400, { map: puffTexture(11), additive: true, near: 0.3 });
   const glintData = [];
-  for (let i = 0; i < 700; i++) glintData.push({ x: -5 + R() * 50, y: 6 + R() * 12, z: -25 + R() * 30, s: 0.05 + R() * 0.08, ph: R() * TAU });
+  for (let i = 0; i < 400; i++) glintData.push({ x: -5 + R() * 50, y: 6 + R() * 12, z: -25 + R() * 30, s: 0.05 + R() * 0.08, ph: R() * TAU });
   worldA.add(glints);
 
   // --- rocket
@@ -488,7 +492,7 @@ export function create(ctx, segment) {
   const smokeData = [];
   for (let i = 0; i < SMOKE_N; i++) smokeData.push({ e: i / SMOKE_N, dx: R() - 0.5, dz: R() - 0.5, s: 0.6 + R() * 0.8, rot: R() * TAU, sh: R() });
   worldA.add(smoke);
-  const PAD = V3(34, 0, -22);
+  const PAD = V3(27, 0, -17);
   const rocketY = (t) => { const tau = t - (tRocket - 0.6); return tau < 0 ? -4 + tau : 2 + 18 * tau + 16 * tau * tau; };
 
   // ================================================================ WORLD B — orbit
@@ -602,7 +606,7 @@ export function create(ctx, segment) {
       camera.position.copy(camPos);
       camera.up.set(0, 1, 0);
       camera.lookAt(look);
-      camera.fov = 35 - ramp(t, tRocket, tSwitch) * 4 + envelope(t, tFly + 0.2, tCloud, 0.15, 0.2) * 6;
+      camera.fov = 35 - ramp(t, tRocket - 0.2, tSwitch, ease.inOutSine) * 9 + envelope(t, tFly + 0.2, tCloud, 0.15, 0.2) * 6;
       camera.near = 0.05; camera.far = 2000;
       camera.updateProjectionMatrix();
       sky.position.copy(camPos);
@@ -625,7 +629,7 @@ export function create(ctx, segment) {
       centerLines.progress = draw; centerLines.opacity = 0.8 * sheetVis;
       sideWire.opacity = sheetVis * (1 - ramp(t, tFold + 0.1, tFold + 0.45));
       frontWire.opacity = sheetVis * (1 - ramp(t, tFold, tFold + 0.35));
-      sideHinge.rotation.x = -ramp(t, tFold, tFold + 0.4, ease.inOutCubic) * Math.PI / 2 * 0.9;   // elevation folds up off the sheet
+      sideHinge.rotation.x = ramp(t, tFold, tFold + 0.4, ease.inOutCubic) * Math.PI / 2 * 0.9;   // elevation folds up off the sheet
       dims.forEach((d, i) => d.reveal(ramp(t, tBp + 0.15 + i * 0.12, tBp + 0.55 + i * 0.12), sheetVis * (1 - ramp(t, tFold, tFold + 0.3))));
       labels.forEach((l, i) => { const p = ramp(t, tBp + 0.1 + i * 0.05, tBp + 0.45 + i * 0.05); l.reveal = p; l.opacity = p > 0 ? sheetVis * (1 - ramp(t, tFold + 0.05, tFold + 0.35)) : 0; });
 
@@ -647,7 +651,7 @@ export function create(ctx, segment) {
       props.forEach((p, i) => { p.rotation.x = t * (4 + spin * 40) + i; });
       discMat.opacity = spin * 0.5;
       sun.position.copy(planePos).add(tmp.set(-3, 9, 6)); sun.target.position.copy(planePos);
-      sun.intensity = 3.2; fill.intensity = 0.5 + skyMix * 0.4;
+      sun.intensity = 2.6 - envelope(t, tFold + 0.3, tCloud, 0.3, 0.3) * 0.8; fill.intensity = 0.5 + skyMix * 0.4;
 
       // ---------------- vapour trails
       const trailOn = ramp(t, tFly + 0.05, tFly + 0.3);
@@ -660,8 +664,8 @@ export function create(ctx, segment) {
           tmp.add(wingTip);
           tmp.y -= age * 0.3;
           trails.P[k * 3] = tmp.x; trails.P[k * 3 + 1] = tmp.y; trails.P[k * 3 + 2] = tmp.z;
-          trails.S[k] = 0.08 + age * 1.6;
-          trails.A[k] = trailOn * (ts > tFly ? 1 : 0) * (1 - i / TRAIL_N) * 0.55;
+          trails.S[k] = 0.06 + age * 0.7;
+          trails.A[k] = trailOn * (ts > tFly ? 1 : 0) * Math.min(1, age * 6) * (1 - i / TRAIL_N) * 0.28;
           trails.Rot[k] = i * 0.7;
         }
         trails.commit(info);
@@ -680,11 +684,11 @@ export function create(ctx, segment) {
           clouds.Rot[i] = c.rot + t * 0.05;
           // sun-lit tops, blue-grey undersides, silver lining toward the sun
           tmp.set(x - camPos.x, y - camPos.y, z - camPos.z).normalize();
-          const fwdScatter = Math.pow(Math.max(0, tmp.dot(SUN_DIR)), 6);
-          const lit = 0.35 + 0.65 * c.top;
-          clouds.C[i * 3] = (0.42 + lit * 0.62 + fwdScatter * 1.4);
-          clouds.C[i * 3 + 1] = (0.47 + lit * 0.56 + fwdScatter * 1.15);
-          clouds.C[i * 3 + 2] = (0.58 + lit * 0.45 + fwdScatter * 0.8);
+          const fwdScatter = Math.pow(Math.max(0, tmp.dot(SUN_DIR)), 14) * 0.8;
+          const lit = c.top * c.top;
+          clouds.C[i * 3] = (0.16 + lit * 0.8 + fwdScatter * 1.1);
+          clouds.C[i * 3 + 1] = (0.2 + lit * 0.74 + fwdScatter * 0.9);
+          clouds.C[i * 3 + 2] = (0.28 + lit * 0.66 + fwdScatter * 0.62);
         }
         clouds.commit(info);
       }
@@ -695,13 +699,13 @@ export function create(ctx, segment) {
           const d = glintData[i];
           glints.P[i * 3] = d.x + t * 0.4; glints.P[i * 3 + 1] = d.y + Math.sin(t + d.ph) * 0.1; glints.P[i * 3 + 2] = d.z;
           glints.S[i] = d.s; glints.A[i] = g * (0.4 + 0.6 * Math.max(0, Math.sin(t * 7 + d.ph * 5)));
-          glints.C[i * 3] = 1.6; glints.C[i * 3 + 1] = 1.5; glints.C[i * 3 + 2] = 1.3;
+          glints.C[i * 3] = 0.9; glints.C[i * 3 + 1] = 0.85; glints.C[i * 3 + 2] = 0.75;
         }
         glints.commit(info);
       }
 
       // ---------------- rocket
-      rocket.visible = t > tRocket - 0.6;
+      rocket.visible = t > tRocket - 0.45;
       rocket.position.set(PAD.x, rY, PAD.z);
       rocket.rotation.z = -ramp(t, tRocket, tSwitch) * 0.12;
       const flick = 0.85 + 0.15 * Math.sin(t * 97) * Math.sin(t * 41);
@@ -719,7 +723,7 @@ export function create(ctx, segment) {
           if (age < 0) { smoke.A[i] = 0; continue; }
           const y0 = rocketY(te) - 0.4;
           const spread = 0.15 + age * 1.3;
-          smoke.P[i * 3] = PAD.x + d.dx * spread * 2 + age * 0.9 - (te - t0) * 1.8 * ramp(te, tRocket, tSwitch) * 0.12 * 10 * 0;
+          smoke.P[i * 3] = PAD.x + d.dx * spread * 2 + age * 0.9;
           smoke.P[i * 3 + 1] = y0 - age * 1.5 + d.sh * 0.2;
           smoke.P[i * 3 + 2] = PAD.z + d.dz * spread * 2;
           smoke.S[i] = d.s * (0.7 + age * 3.2);
@@ -747,7 +751,7 @@ export function create(ctx, segment) {
       const u = ramp(t, tSwitch, DUR, ease.outCubic);
       // camera pulls back — the planet recedes into darkness
       camPos.set(lerp(-1.5, -9.5, u), lerp(2.6, 7.5, u), lerp(27, 58, u)).add(E);
-      look.set(lerp(1.8, 3.2, u), lerp(0.9, 0.3, u), 0).add(E);
+      look.set(lerp(-2.6, -4.2, u), lerp(0.9, 0.3, u), 0).add(E);
       camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(look);
       camera.fov = 35; camera.near = 0.1; camera.far = 1200; camera.updateProjectionMatrix();
       camera.updateMatrixWorld();

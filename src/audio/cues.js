@@ -301,17 +301,8 @@ function finale(S) {
 }
 
 export function arrangeCues(S) {
-  opening(S);
-  classical(S);
-  civic(S);
-  renaissance(S);
-  science(S);
-  industrial(S);
-  electricity(S);
-  medicine(S);
-  flight(S);
-  computing(S);
-  knowledge(S);
-  montage(S);
-  finale(S);
+  const sk = globalThis.__skip || '';
+  for (const fn of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, computing, knowledge, montage, finale]) {
+    if (!sk.includes(fn.name)) fn(S);
+  }
 }

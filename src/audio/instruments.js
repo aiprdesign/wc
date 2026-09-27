@@ -111,17 +111,23 @@ export function harpRoll(S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead
 
 // ======================================================== sustained voices
 
-/** Warm string-ensemble pad: two detuned saws per note spread L/R, one lowpass per side. */
+/**
+ * Warm string-ensemble pad. Notes alternate between a left and a right section
+ * (a few cents apart, one lowpass each); the outer notes are doubled on the
+ * opposite side for width. Static detune only: an LFO on detune would force the
+ * oscillators onto the slow per-sample path.
+ */
 export function strings(S, t0, t1, notes, o = {}) {
   const { level = 0.1, attack = 1.5, release = 1.5, cutoff = 1500, bus = 'pad', width = 0.75, detune = 9 } = o;
   const end = t1 + release;
   const att = Math.min(attack, Math.max(0.02, t1 - t0));
+  const voices = notes.map((m, i) => [m, i % 2 ? 1 : -1]);
+  if (notes.length > 2) voices.push([notes[0], 1], [notes.at(-1), voices.at(-1)[1] * -1]);
   const amp = S.gain(0);
-  ahr(amp.gain, t0, t1, level / Math.sqrt(notes.length * 2), att, release);
+  ahr(amp.gain, t0, t1, level / Math.sqrt(voices.length), att, release);
   S.out(amp, bus);
   const nodes = [amp];
-  let last;
-  // Two sections (left / right), each a set of saws a few cents apart → one lowpass → pan.
+  const sides = {};
   for (const side of [-1, 1]) {
     const lp = S.filter('lowpass', cutoff, 0.6);
     const f = lp.frequency;
@@ -132,16 +138,15 @@ export function strings(S, t0, t1, notes, o = {}) {
     const p = S.panner(side * width);
     lp.connect(p).connect(amp);
     nodes.push(lp, p);
-    for (const m of notes) {
-      const v = S.osc('sawtooth', hz(m), t0, end);
-      // static ensemble detune (an LFO on detune would force the slow per-sample path)
-      v.detune.value = side * detune + S.rand(-4, 4);
-      v.connect(lp);
-      nodes.push(v);
-      last = v;
-    }
+    sides[side] = lp;
   }
-  S.free(last, ...nodes);
+  for (const [m, side] of voices) {
+    const v = S.osc('sawtooth', hz(m), t0, end);
+    v.detune.value = side * detune + S.rand(-4, 4);
+    v.connect(sides[side]);
+    nodes.push(v);
+  }
+  S.free(...nodes);
 }
 
 /** Low brass swell: saws through a lowpass that opens with the dynamics. `sfz` = accented attack. */

@@ -15,7 +15,7 @@
 
 import { DURATION, CUES as C } from '../timeline.js';
 import { Studio } from './core.js';
-import { makeReverb } from './reverb.js';
+import { makeReverb, makeWideMonoReverb } from './reverb.js';
 import { limit, rmsBetween } from './mastering.js';
 import { arrangeMusic } from './music.js';
 import { arrangeCues } from './cues.js';
@@ -57,13 +57,14 @@ function buildMixer(S) {
   // Reverbs are only wired into the graph while they can be heard (a connected
   // ConvolverNode costs CPU even when silent): the hall until just after the drop,
   // the finale "space" from the pullBack on.
-  const hall = makeReverb(ctx, S.random, { seconds: 2.4, preDelay: 0.025, brightHz: 8000, darkHz: 1400 });
+  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.4, preDelay: 0.025, brightHz: 8000, darkHz: 1400 });
   const hallIn = S.gain(1);
-  hallIn.connect(hall).connect(film);
-  S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.disconnect(); });
+  hallIn.connect(hall.input);
+  hall.output.connect(film);
+  S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
   const space = makeReverb(ctx, S.random, { seconds: 4.2, preDelay: 0.04, brightHz: 6000, darkHz: 800 });
   const spaceIn = S.gain(1);
-  S.at(C.pullBack, () => spaceIn.connect(space).connect(finale));
+  S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
 
   // Dotted-8th feedback delay for the synths (wired for the hybrid section only).
   const delay = ctx.createDelay(1);
