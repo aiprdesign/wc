@@ -130,7 +130,7 @@ export class Studio {
         return false;
       });
     };
-    const W = 0.125; // seconds per window; events are built 1–2 windows early
+    const W = 0.25; // seconds per window; events are built 1–2 windows early
     let failure = null;
     buildUntil(2 * W);
     for (let w = W; w < this.duration - W / 2; w += W) {
@@ -162,10 +162,19 @@ export class Studio {
   // --- mixing -----------------------------------------------------------------
 
   /** A mix bus: input gain → `to` (dry), plus any number of [destination, level] sends. */
-  addBus(name, { to, gain = 1, sends = [] }) {
+  addBus(name, { to, gain = 1, sends = [], pan = 0, shelf = 0 }) {
     const g = this.gain(gain);
-    g.connect(to);
-    for (const [dest, level] of sends) if (level > 0) g.connect(this.gain(level)).connect(dest);
+    // stage placement: a (balance) pan and, for sections further back, a little
+    // high-frequency air absorption; sends leave after both
+    let out = g;
+    if (shelf) {
+      const f = this.filter('highshelf', 5000, 0.7);
+      f.gain.value = shelf;
+      out = out.connect(f);
+    }
+    if (pan) out = out.connect(this.panner(pan));
+    out.connect(to);
+    for (const [dest, level] of sends) if (level > 0) out.connect(this.gain(level)).connect(dest);
     this.buses.set(name, g);
     return g;
   }

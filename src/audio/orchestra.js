@@ -310,14 +310,12 @@ export function chord(S, kind, t0, t1, notes, o = {}) {
   lp.connect(amp);
   S.out(amp, bus);
   const nodes = [lp, amp];
-  // humanised: players never enter exactly together (soft entries spread more),
-  // and each note of the voicing has its own weight
+  // humanised: players never enter exactly together (soft entries spread more)
   const spread = att < 0.08 ? 0.012 : Math.min(0.06, att * 0.08);
   for (const m of notes) {
     const src = sectionSource(S, kind, m, t0 + S.rand(0, spread), end);
-    const g = S.gain(S.rand(0.8, 1.12));
-    src.connect(g).connect(lp);
-    nodes.push(src, g);
+    src.connect(lp);
+    nodes.push(src);
   }
   // the bite of the bow on fast string attacks
   if (kind === 'strings' && att <= 0.2) playTransient(S, t0, 'scrape', lv * Math.sqrt(notes.length) * 0.22 * (0.25 / Math.max(0.03, att)) ** 0.3, amp);
@@ -441,7 +439,7 @@ export function spiccato(S, t, midi, { level = 0.1, decay = 0.13, bus = 'spic' }
   perc(g.gain, th, lv, dec, level > 0.14 ? 0.002 : 0.006);
   src.connect(g).connect(S.bus(bus));
   S.free(src, g);
-  if (level > 0.12) playTransient(S, th, 'chiff', lv * 0.35, S.bus(bus));
+  if (level > 0.16) playTransient(S, th, 'chiff', lv * 0.35, S.bus(bus));
 }
 
 /** Tremolo strings: a chord whose amplitude is bowed in fast 32nd-note pulses. */

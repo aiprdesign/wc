@@ -20,7 +20,7 @@
 
 import { DURATION, CUES as C } from '../timeline.js';
 import { Studio } from './core.js';
-import { makeWideMonoReverb } from './reverb.js';
+import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
 import { applyGain, compress, limit, rmsBetween } from './mastering.js';
 import { arrangeMusic } from './music.js';
 import { warmPercussion } from './percussion.js';
@@ -35,7 +35,7 @@ const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
 export function __buildMixer(S) { return buildMixer(S); }
-function buildMixer(S) {
+function buildMixer(S, { space: withSpace = true } = {}) {
   const { ctx } = S;
 
   // Master: subsonic high-pass only; compression, loudness and limiting happen
@@ -77,9 +77,11 @@ function buildMixer(S) {
   hall.output.connect(film);
   S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
 
-  const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027, S.cache);
   const spaceIn = S.filter('highpass', 90, 0.6);
-  S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
+  if (withSpace) { // only studios that play the finale pay for its 5 s convolution
+    const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027, S.cache);
+    S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
+  }
 
   // Spiccato strings sit behind a gentle lowpass; sound effects lose a little
   // top end so they blend into the score instead of clicking on top of it.
@@ -89,24 +91,38 @@ function buildMixer(S) {
   sfxTone.gain.value = -5;
   sfxTone.connect(film);
 
-  const bus = (name, gain, sends, to = film) => S.addBus(name, { to, gain, sends });
-  bus('strings', 1.0, [[hallIn, 0.38]]);
-  bus('choir', 1.0, [[hallIn, 0.6]]);
-  bus('brass', 1.0, [[hallIn, 0.32]]);
-  bus('horn', 1.0, [[hallIn, 0.42]]);
-  bus('piano', 1.0, [[hallIn, 0.75]]);
-  bus('lead', 0.9, [[hallIn, 0.55]]);
+  // Stage: early reflections (true stereo, short) feed the film bus and the hall.
+  const early = makeEarlyReflections(ctx, S.random, S.cache);
+  const earlyIn = S.filter('lowpass', 7000, 0.6);
+  earlyIn.connect(early);
+  const earlyOut = S.gain(0.55);
+  //early.connect(earlyOut);
+  earlyOut.connect(film);
+  earlyOut.connect(hallIn);
+  S.at(C.musicDrop + 1.0, () => { earlyIn.disconnect(); earlyOut.disconnect(); });
+
+  // Seating: strings left-centre, horns centre, brass centre-right and further
+  // back, percussion at the back, choir behind everything and wide. `er` is the
+  // early-reflection send (more = further away), `shelf` the air absorption (dB).
+  const bus = (name, gain, sends, { to = film, pan = 0, shelf = 0, er = 0 } = {}) =>
+    S.addBus(name, { to, gain, pan, shelf, sends });
+  bus('strings', 1.0, [[hallIn, 0.34]], { pan: -0.14, er: 0.3 });
+  bus('choir', 1.0, [[hallIn, 0.6]], { er: 0.45 });
+  bus('brass', 1.0, [[hallIn, 0.34]], { pan: 0.16, er: 0.45 });
+  bus('horn', 1.0, [[hallIn, 0.42]], { pan: 0.06, er: 0.4 });
+  bus('piano', 1.0, [[hallIn, 0.7]], { pan: -0.05, er: 0.25 });
+  bus('lead', 0.9, [[hallIn, 0.55]], { er: 0.2 });
   bus('pad', 0.9, [[hallIn, 0.35]]);
-  bus('far', 1.0, [[hallIn, 1.2]]);          // distant, mostly-wet details
-  bus('spic', 1.0, [[hallIn, 0.22]], spicTone);
-  bus('perc', 0.9, [[hallIn, 0.14]]);
-  bus('drums', 0.9, [[hallIn, 0.04]]);
+  bus('far', 1.0, [[hallIn, 1.2]], { shelf: -5, er: 0.5 });   // distant, mostly-wet details
+  bus('spic', 1.0, [[hallIn, 0.2]], { to: spicTone, er: 0.25 });
+  bus('perc', 0.9, [[hallIn, 0.14]], { er: 0.35 });
+  bus('drums', 0.9, [[hallIn, 0.04]], { er: 0.1 });
   bus('bass', 0.9, []);
-  bus('synth', 0.8, [[hallIn, 0.2]]);
-  bus('sfx', 0.8, [[hallIn, 0.3]], sfxTone);
-  bus('fx', 0.9, [[hallIn, 0.35]]);
-  bus('end', 1.0, [[spaceIn, 0.7]], finale);
-  bus('endDry', 1.0, [[spaceIn, 0.15]], finale);
+  bus('synth', 0.8, [[hallIn, 0.2]], { er: 0.1 });
+  bus('sfx', 0.8, [[hallIn, 0.3]], { to: sfxTone, er: 0.3 });
+  bus('fx', 0.9, [[hallIn, 0.35]], { er: 0.15 });
+  bus('end', 1.0, [[spaceIn, 0.7]], { to: finale });
+  bus('endDry', 1.0, [[spaceIn, 0.15]], { to: finale });
 }
 
 /** Gentle sidechain-style ducking of the strings under the hybrid-section kicks. */
@@ -134,7 +150,8 @@ export async function renderScore(sampleRate = 48000) {
   //   A — the sustained orchestra;  B — rhythm section, hits, transitions, sound design.
   const A = new Studio(sampleRate, DURATION + TAIL, 1492);
   const B = new Studio(sampleRate, DURATION + TAIL, 1815, A);
-  for (const S of [A, B]) buildMixer(S);
+  buildMixer(A, { space: false });
+  buildMixer(B);
   const { kicks } = arrangeMusic(A, 'orchestra');
   arrangeMusic(B, 'rhythm');
   arrangeCues(B);

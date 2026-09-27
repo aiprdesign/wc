@@ -70,3 +70,39 @@ export function makeWideMonoReverb(ctx, random, options, spread = 0.019, cache =
   conv.connect(delay).connect(merge, 0, 1);
   return { input: conv, output: merge };
 }
+
+/**
+ * Stage early reflections: a short true-stereo convolution (≈ 90 ms) of sparse,
+ * progressively duller taps — floor, side walls, stage shell — different on each
+ * side, so a source panned left gets left-wall reflections first. Sections feed
+ * it by how far back they sit; it bridges the dry signal and the late hall so the
+ * orchestra sounds recorded in a room instead of "dry + reverb".
+ */
+export function makeEarlyReflections(ctx, random, cache = null) {
+  const key = 'ir:early';
+  let ir = cache?.get(key);
+  if (!ir) {
+    const sr = ctx.sampleRate, n = Math.ceil(0.095 * sr);
+    ir = ctx.createBuffer(2, n, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let k = 0; k < 22; k++) {
+        const t = 0.004 + (k / 22) ** 1.4 * 0.085 + random() * 0.003;
+        const amp = (1 - t / 0.1) ** 1.5 * (0.5 + random() * 0.5) * (random() < 0.5 ? -1 : 1);
+        // each tap is a tiny smeared (absorbed) click, duller the later it arrives
+        const w = Math.floor((0.0003 + t * 0.012) * sr);
+        const i0 = Math.floor(t * sr);
+        for (let j = 0; j < w && i0 + j < n; j++) d[i0 + j] += amp * Math.sin((Math.PI * j) / w) / Math.sqrt(w);
+      }
+      let e = 0;
+      for (let i = 0; i < n; i++) e += d[i] * d[i];
+      const k = 1 / Math.sqrt(e);
+      for (let i = 0; i < n; i++) d[i] *= k;
+    }
+    cache?.set(key, ir);
+  }
+  const conv = ctx.createConvolver();
+  conv.normalize = false;
+  conv.buffer = ir;
+  return conv;
+}
