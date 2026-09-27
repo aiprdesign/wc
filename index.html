@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Achievements of Western Civilization — A Motion Design Study</title>
+  <meta name="description" content="A 60-second real-time cinematic motion-design study: 3D, particles, typography, VFX and procedural sound, rendered live in WebGL." />
+  <link rel="stylesheet" href="src/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <main id="stage">
+    <canvas id="film" aria-label="Achievements of Western Civilization — real-time film"></canvas>
+  </main>
+
+  <section id="intro" class="overlay">
+    <div class="intro-inner">
+      <p class="eyebrow">A Motion Design Study</p>
+      <h1>Achievements of<br />Western Civilization</h1>
+      <p class="sub">Ideas · Discovery · Engineering · Art · Institutions</p>
+      <div id="loader" class="loader"><span></span></div>
+      <p id="status" class="status">Preparing sequences…</p>
+      <button id="play" class="play" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+        <span>Play film</span>
+      </button>
+      <p class="hint">Sound on · 60 seconds · rendered live in your browser</p>
+      <p class="note">Many of these achievements grew from exchange with, and contributions from, civilizations across the world.</p>
+    </div>
+  </section>
+
+  <nav id="controls" class="controls" aria-label="Playback controls">
+    <button id="btn-play" title="Play / pause (space)" aria-label="Play or pause">
+      <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+      <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+    </button>
+    <span id="time" class="time">0:00.0</span>
+    <div id="scrub" class="scrub" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="60" tabindex="0">
+      <div class="scrub-track"><div id="scrub-fill" class="scrub-fill"></div></div>
+      <div id="chapters" class="chapters"></div>
+      <div id="scrub-tip" class="scrub-tip"></div>
+    </div>
+    <span class="time dim">1:00</span>
+    <button id="btn-mute" title="Mute (m)" aria-label="Mute">
+      <svg class="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z" /></svg>
+      <svg class="i-muted" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4zm15.6 3 2.1-2.1-1.4-1.4-2.1 2.1-2.1-2.1-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4z" /></svg>
+    </button>
+    <button id="btn-rec" title="Record to WebM (r)" aria-label="Record video"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" /></svg></button>
+    <button id="btn-wav" title="Download soundtrack (WAV)" aria-label="Download soundtrack"><svg viewBox="0 0 24 24"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 16.4l-4.7-4.7 1.4-1.4 3.3 3.3V3h2zM5 19h14v2H5z" /></svg></button>
+    <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
+  </nav>
+  <div id="rec-badge" class="rec-badge">● REC</div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
