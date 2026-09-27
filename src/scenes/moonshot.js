@@ -65,7 +65,7 @@ export function create(ctx, segment) {
   const TP = (a, b) => E1.clone().multiplyScalar(a).addScaledVector(E2, b).addScaledVector(E3, b * 0.12);
   const trajPts = [[-4, -11.2], [3, -11.4], [9.5, -8.6], [D * 0.5, 0], [D - 6.5, 5.4], [D - 1, 5.0], [D + 3.1, 3.3], [D + 4.6, 0], [D + 3.1, -3.3], [D - 1, -5.0], [D - 6.5, -5.4], [D * 0.5, 0], [13, 8.2], [5, 11.2]].map(([a, b]) => TP(a, b));
   const trajCurve = new THREE.CatmullRomCurve3(trajPts, false, 'centripetal');
-  const traj = progressTube(trajCurve, { radius: 0.05, segments: 420, radial: 6, color: '#cfe4ff', intensity: 1.1, tail: 0 });
+  const traj = progressTube(trajCurve, { radius: 0.035, segments: 420, radial: 6, color: '#cfe4ff', intensity: 1.1, tail: 0 });
   worldS.add(traj);
   const trajHead = glowSprite({ color: '#eaf4ff', intensity: 3, scale: 1.6 }); worldS.add(trajHead);
   const parking = progressLine(circlePoints(11.2, 200).map((p) => E1.clone().multiplyScalar(p.x).addScaledVector(E2, p.y).addScaledVector(E3, p.y * 0.12)), { color: '#8fb6ec', headColor: '#ffffff', intensity: 0.7, head: 0.03 });
@@ -440,7 +440,7 @@ export function create(ctx, segment) {
       earthS.userData.mat.uniforms.uTime.value = t;
       // trajectory draws from the parking orbit out to the Moon
       const tp = ramp(t, tTL - 0.12, 0.98, ease.inOutSine);
-      traj.progress = tp; traj.opacity = 0.9;
+      traj.progress = tp; traj.opacity = 0.9 - ramp(t, 0.8, 1.02) * 0.65;
       trajCurve.getPointAt(Math.max(0.001, tp), trajHead.position);
       trajHead.material.opacity = tp > 0.005 ? 1 : 0;
       parking.progress = ramp(t, 0, 0.5); parking.opacity = 0.55;

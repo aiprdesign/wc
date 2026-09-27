@@ -393,7 +393,7 @@ export function apolloMaterials(envMap = null) {
     bell: new THREE.MeshStandardMaterial({ color: '#4a4640', metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
     white: new THREE.MeshStandardMaterial({ color: '#9d9d98', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
     sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 0.55, roughness: 0.3, envMapIntensity: 0.9 }),
-    cm: new THREE.MeshStandardMaterial({ color: '#e9ecef', metalness: 0.75, roughness: 0.18, envMapIntensity: 1.0 }),
+    cm: new THREE.MeshStandardMaterial({ color: '#d9dcdf', metalness: 0.7, roughness: 0.3, envMapIntensity: 1.0 }),
     window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#ffffff'), emissiveMap: cabinGlowTexture(), emissiveIntensity: 0.5, envMapIntensity: 1.2 }),
   };
   if (envMap) for (const m of Object.values(M)) m.envMap = envMap;
