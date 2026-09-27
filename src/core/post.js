@@ -82,11 +82,13 @@ export const TransitionShader = {
         vec3 za = zoomBlur(tA, uv, 1.0 + ps * 2.5, ps * 0.6);
         vec3 zb = zoomBlur(tB, uv, 0.45 + 0.55 * ps, (1.0 - ps) * 0.5);
         col = mix(za, zb, smoothstep(0.35, 0.75, p));
-        col += vec3(1.0, 0.95, 0.9) * pow(1.0 - abs(p * 2.0 - 1.0), 4.0) * 0.6;
+        // scenes already bring their own light at the hand-over; only a whisper of lift here
+        col += vec3(1.0, 0.95, 0.9) * pow(1.0 - abs(p * 2.0 - 1.0), 6.0) * 0.08;
+        col *= 1.0 - 0.35 * pow(1.0 - abs(p * 2.0 - 1.0), 2.0);
       } else if (uMode == 3) {
-        float m = smoothstep(0.42, 0.58, p);
-        float f = pow(1.0 - abs(p * 2.0 - 1.0), 3.0);
-        col = mix(A, B, m) * (1.0 + f * 3.0) + vec3(1.0, 0.97, 0.92) * f * 1.6;
+        float m = smoothstep(0.44, 0.56, p);
+        float f = pow(1.0 - abs(p * 2.0 - 1.0), 6.0);   // a short, sharp peak, not a white-out
+        col = mix(A, B, m) * (1.0 + f * 0.8) + vec3(1.0, 0.97, 0.92) * f * 0.35;
       } else if (uMode == 4) {
         float w = 0.28;
         float edge = mix(-w, 1.0 + w, ps);

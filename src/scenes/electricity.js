@@ -111,8 +111,8 @@ export function create(ctx, segment) {
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
     fragmentShader: `uniform float uHead, uLen, uI; varying vec2 vUv;
       void main(){ float d = (vUv.x - uHead) * uLen;
-        float head = d > 0.0 ? exp(-d*d/0.0016) : exp(d/0.35);
-        float trail = d < 0.0 ? exp(d/2.2) * 0.35 : 0.0;
+        float head = d > 0.0 ? exp(-d*d/0.0016) : exp(d/0.12);
+        float trail = d < 0.0 ? exp(d/1.2) * 0.12 : 0.0;
         vec3 c = mix(vec3(1.0,0.55,0.25), vec3(0.85,0.93,1.0), exp(-abs(d)*6.0));
         vec3 col = c * (head * 7.0 + trail) * uI;
         if (dot(col, vec3(1.0)) < 0.01) discard;
@@ -122,7 +122,7 @@ export function create(ctx, segment) {
   const pulseTube = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 1800, 0.019, 8, false), pulseMat);
   pulseTube.frustumCulled = false; scene.add(pulseTube);
   const headGlow = glowSprite({ color: '#dfeeff', intensity: 3.2, scale: 0.35 }); scene.add(headGlow);
-  const headGlow2 = glowSprite({ color: '#9cc8ff', intensity: 0.8, scale: 1.4 }); scene.add(headGlow2);
+  const headGlow2 = glowSprite({ color: '#9cc8ff', intensity: 0.4, scale: 1.4 }); scene.add(headGlow2);
   // crackling micro-arcs around the head (preallocated buffer, rewritten per frame from a seeded hash)
   const ARCS = 4, ARC_SEG = 6;
   const arcPos = new Float32Array(ARCS * ARC_SEG * 2 * 3);
@@ -486,8 +486,8 @@ export function create(ctx, segment) {
     wireCurve.getPointAt(Math.min(1, hu), tmp);
     headGlow.position.copy(tmp); headGlow2.position.copy(tmp);
     const ignite = Math.exp(-Math.max(0, t - 0.25) * 10) * (t > 0.2 ? 1 : 0);
-    headGlow.scale.setScalar(0.22 + ignite * 0.6);
-    headGlow2.scale.setScalar(0.7 + ignite * 1.2);
+    headGlow.scale.setScalar(0.22 + ignite * 0.25);
+    headGlow2.scale.setScalar(0.7 + ignite * 0.4);
     headGlow.visible = headGlow2.visible = t > 0.18 && head < 0.999;
     // micro arcs
     arcLines.visible = headGlow.visible;
@@ -585,8 +585,8 @@ export function create(ctx, segment) {
     dof.focus = cp.distanceTo(ct);
     dof.range = shot === 1 ? 0.12 : shot === 5 ? 0.6 + g * 0.05 : shot === 4 ? dof.focus * 0.6 : dof.focus * 0.25;
     dof.amount = shot === 1 ? 0.6 : shot === 5 ? 0.45 : shot === 4 ? 0.3 : 0.55;
-    bloom.strength = 0.7 + ignite * 0.5;
-    rim.intensity = shot === 2 ? 1.3 : 3.0;
+    bloom.strength = 0.7 + ignite * 0.15;
+    rim.intensity = shot === 1 ? 0.9 : shot === 2 ? 1.3 : 3.0;
 
     // HUD
     labels.forEach(({ tp, a, b }) => { const e = envelope(t, a, b, 0.05, 0.05, ease.linear); tp.opacity = e; tp.reveal = ramp(t, a, a + 0.3, ease.outCubic); });
