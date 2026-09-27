@@ -110,11 +110,11 @@ export class Studio {
 
   // --- mixing -----------------------------------------------------------------
 
-  /** A mix bus: input gain → `to` (dry) and, optionally, → `reverb` via a send. */
-  addBus(name, { to, gain = 1, reverb = null, send = 0 }) {
+  /** A mix bus: input gain → `to` (dry), plus any number of [destination, level] sends. */
+  addBus(name, { to, gain = 1, sends = [] }) {
     const g = this.gain(gain);
     g.connect(to);
-    if (reverb && send > 0) g.connect(this.gain(send)).connect(reverb);
+    for (const [dest, level] of sends) if (level > 0) g.connect(this.gain(level)).connect(dest);
     this.buses.set(name, g);
     return g;
   }

@@ -22,7 +22,7 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 1;
+export const SCORE_VERSION = 2;
 
 const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
@@ -79,15 +79,19 @@ function buildMixer(S) {
   finale.gain.linearRampToValueAtTime(0, DURATION + 0.5);
 
   // Reverbs are only wired into the graph while they can be heard (a connected
-  // ConvolverNode costs CPU even when silent): the hall until just after the drop,
-  // the finale "space" from the pullBack on.
-  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.4, preDelay: 0.025, brightHz: 8000, darkHz: 1400 });
-  const hallIn = S.gain(1);
+  // ConvolverNode costs CPU even when silent). Sends are high-passed so the low
+  // end stays dry, tight and mono.
+  //   hall  — large orchestral hall with pre-delay (until just after the drop)
+  //   space — very long stereo space for the finale (from the pullBack on)
+  // (Percussion carries its own tight room, baked into its one-shots.)
+  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 3.0, preDelay: 0.045, brightHz: 7500, darkHz: 1300 });
+  const hallIn = S.filter('highpass', 170, 0.6);
   hallIn.connect(hall.input);
   hall.output.connect(film);
   S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
-  const space = makeReverb(ctx, S.random, { seconds: 4.2, preDelay: 0.04, brightHz: 6000, darkHz: 800 });
-  const spaceIn = S.gain(1);
+
+  const space = makeReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 });
+  const spaceIn = S.filter('highpass', 90, 0.6);
   S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
 
   // Dotted-8th feedback delay for the synths (wired for the hybrid section only).
@@ -103,28 +107,41 @@ function buildMixer(S) {
   S.at(C.gear - 0.5, () => { dWet.connect(film); dWet.connect(dRev); });
   S.at(C.musicDrop + 1.0, () => dWet.disconnect());
 
-  const bus = (name, gain, send, to = film, reverb = hallIn) => S.addBus(name, { to, gain, reverb, send });
-  bus('pad', 0.9, 0.35);
-  bus('brass', 0.9, 0.3);
-  bus('lead', 0.9, 0.55);
-  bus('far', 1.0, 1.2);    // distant, mostly-wet details
-  bus('drums', 0.9, 0.1);
-  bus('perc', 0.9, 0.28);
-  bus('bass', 0.9, 0);
-  bus('synth', 0.8, 0.2);
-  bus('sfx', 0.9, 0.22);
-  bus('fx', 0.9, 0.35);
-  bus('end', 1.0, 0.7, finale, spaceIn);
-  bus('endDry', 1.0, 0.15, finale, spaceIn);
+  // Spiccato strings sit behind a gentle lowpass; sound effects lose a little
+  // top end so they blend into the score instead of clicking on top of it.
+  const spicTone = S.filter('lowpass', 4200, 0.6);
+  spicTone.connect(film);
+  const sfxTone = S.filter('highshelf', 5500, 0.7);
+  sfxTone.gain.value = -5;
+  sfxTone.connect(film);
+
+  const bus = (name, gain, sends, to = film) => S.addBus(name, { to, gain, sends });
+  bus('strings', 1.0, [[hallIn, 0.38]]);
+  bus('choir', 1.0, [[hallIn, 0.6]]);
+  bus('brass', 1.0, [[hallIn, 0.32]]);
+  bus('horn', 1.0, [[hallIn, 0.42]]);
+  bus('piano', 1.0, [[hallIn, 0.75]]);
+  bus('lead', 0.9, [[hallIn, 0.55]]);
+  bus('pad', 0.9, [[hallIn, 0.35]]);
+  bus('far', 1.0, [[hallIn, 1.2]]);          // distant, mostly-wet details
+  bus('spic', 1.0, [[hallIn, 0.22]], spicTone);
+  bus('perc', 0.9, [[hallIn, 0.14]]);
+  bus('drums', 0.9, [[hallIn, 0.04]]);
+  bus('bass', 0.9, []);
+  bus('synth', 0.8, [[hallIn, 0.2]]);
+  bus('sfx', 0.8, [[hallIn, 0.3]], sfxTone);
+  bus('fx', 0.9, [[hallIn, 0.35]]);
+  bus('end', 1.0, [[spaceIn, 0.7]], finale);
+  bus('endDry', 1.0, [[spaceIn, 0.15]], finale);
   S.bus('synth').connect(S.gain(0.5)).connect(delay);
 }
 
-/** Gentle sidechain-style ducking of the pads under the hybrid-section kicks. */
-function duckPads(S, kicks) {
-  const g = S.bus('pad').gain;
+/** Gentle sidechain-style ducking of the strings under the hybrid-section kicks. */
+function duckStrings(S, kicks) {
+  const g = S.bus('strings').gain;
   const base = g.value;
   for (const t of [...kicks].sort((a, b) => a - b)) {
-    g.setTargetAtTime(base * 0.7, t, 0.006);
+    g.setTargetAtTime(base * 0.78, t, 0.006);
     g.setTargetAtTime(base, t + 0.04, 0.1);
   }
 }
@@ -134,7 +151,7 @@ export async function renderScore(sampleRate = 48000) {
   buildMixer(S);
   const { kicks } = arrangeMusic(S);
   arrangeCues(S);
-  duckPads(S, kicks);
+  duckStrings(S, kicks);
 
   const buffer = await S.render();
   shiftEarlier(buffer, await compressorLatency(sampleRate));

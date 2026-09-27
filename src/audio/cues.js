@@ -4,13 +4,13 @@
 import { CUES as C } from '../timeline.js';
 import * as I from './instruments.js';
 import * as X from './sfx.js';
+import * as O from './orchestra.js';
 
 function opening(S) {
   // Distant atmospheric resonance: sub drone + airy filtered noise, very wet.
   S.at(0, () => {
     I.drone(S, 0, 8.5, 26, { level: 0.13, attack: 2.2, release: 2.5, beat: 0.18 });       // D1
     I.drone(S, 0.3, 8.0, 38, { level: 0.05, attack: 2.5, release: 2.5, beat: 0.31 });    // D2
-    I.drone(S, 0.8, 7.0, 81, { level: 0.01, attack: 2.5, release: 2, beat: 0.9, bus: 'far', pan: 0.3 }); // A5 glint
     X.air(S, 0, 7.5, { level: 0.035, freq: 2400, attack: 1.8, release: 2.5 });
   });
   // pointAppears: a tiny crystalline shimmer
@@ -105,9 +105,9 @@ function science(S) {
   });
   // instruments: clock escapement on 8ths (tick / tock), wind-up at the cue
   S.at(C.instruments, () => X.ratchet(S, C.instruments, 0.3, { level: 0.035, rate: 30, pan: -0.2 }));
-  X.clockwork(S, C.instruments, C.gear, 0.25, { level: 0.05 });
+  X.clockwork(S, C.instruments, C.gear, 0.25, { level: 0.032 });
   // orrery: finer gear teeth on 16ths + a slow metallic ring
-  X.clockwork(S, C.orrery + 0.075, 24.4, 0.125, { level: 0.018 });
+  X.clockwork(S, C.orrery + 0.075, 24.4, 0.125, { level: 0.011 });
   S.at(C.orrery, () => {
     I.metal(S, C.orrery, 520, { level: 0.03, decay: 1.8, pan: 0.3, bus: 'far' });
     I.metal(S, C.orrery + 1.0, 390, { level: 0.02, decay: 1.8, pan: -0.3, bus: 'far' });
@@ -166,7 +166,7 @@ function electricity(S) {
     X.hum(S, C.spark, C.circuitCity, { level: 0.03, freq: 100, cutoff: 1600, pan: -0.2 });
   });
   // telegraph: morse "W C"
-  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.08 }));
+  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.055 }));
   // telephone: a short bell ring
   S.at(C.telephone, () => X.phoneRing(S, C.telephone, 0.45, { level: 0.025 }));
   // radio: tuning sweep through static
@@ -209,13 +209,13 @@ function computing(S) {
   // mechanical calculator: crank ratchet + key clacks
   S.at(C.calculator, () => {
     X.ratchet(S, C.calculator, 0.4, { level: 0.04, rate: 32, freq: 2400, pan: -0.3 });
-    [0, 0.125, 0.25, 0.375].forEach((d) => X.click(S, C.calculator + d, { level: 0.05, freq: 1800, body: 420, decay: 0.03, pan: 0.2 }));
+    [0, 0.125, 0.25, 0.375].forEach((d) => X.click(S, C.calculator + d, { level: 0.035, freq: 1800, body: 420, decay: 0.03, pan: 0.2 }));
   });
   // relays: a clicking bank on the 16th grid
   const bits = [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0];
   bits.forEach((b, k) => {
     const t = C.relays + 0.1 + k * 0.125; // 39.5 … on the grid
-    if (b) S.at(t, () => X.relay(S, t, { level: 0.05, pan: k % 3 === 0 ? -0.4 : 0.35 }));
+    if (b) S.at(t, () => X.relay(S, t, { level: 0.035, pan: k % 3 === 0 ? -0.4 : 0.35 }));
   });
   // vacuum tubes: warm hum
   S.at(C.tubes, () => X.hum(S, C.tubes, C.processor + 0.2, { level: 0.035, freq: 60, cutoff: 500, attack: 0.25, release: 0.35 }));
@@ -286,22 +286,36 @@ function finale(S) {
   });
   // a faint inhale into the impact
   S.at(55.3, () => I.swellIn(S, C.finalImpact, 0.7, { level: 0.02, bus: 'end', top: 5000 }));
-  // FINAL IMPACT: sub boom + low hit + D major bloom into a long tail
+  // FINAL IMPACT — the most powerful moment: sub boom, taiko ensemble, BRAAM and a
+  // D-major bloom of choir, brass and strings into a very long tail; the horns
+  // answer with the head of the theme (D — A — high D) under the final title.
   S.at(C.finalImpact, () => {
     const t = C.finalImpact;
-    I.boom(S, t, { level: 0.95, f0: 110, f1: 34, decay: 4.2, bus: 'endDry' });
-    I.drum(S, t, 0.9, { f: 52, decay: 3.2, skin: 0.9, bus: 'end' });
-    I.drum(S, t + 0.004, 0.45, { f: 78, decay: 1.8, skin: 0.6, pan: 0.3, bus: 'end' });
-    X.thud(S, t, { level: 0.45, f: 45, tone: 400, decay: 1.2, bus: 'end' });
-    I.crash(S, t, 0.09, { decay: 4.0, bus: 'end' });
-    I.brass(S, t, 1.6, [26, 38, 45, 50, 54], { level: 0.34, sfz: true, bright: 1500, release: 2.5, bus: 'end' });
-    I.strings(S, t, t + 1.5, [38, 50, 57, 62, 66, 69], { level: 0.18, attack: 0.05, release: 3.0, cutoff: 1800, bus: 'end' });
+    const D_MAJOR = [38, 50, 57, 62, 66, 69, 74];
+    I.boom(S, t, { level: 1.0, f0: 115, f1: 33, decay: 4.5, bus: 'endDry' });
+    I.taiko(S, t, 0.95, { size: 1, bus: 'end' });
+    I.taiko(S, t + 0.02, 0.6, { size: 0.6, bus: 'end' });
+    X.thud(S, t, { level: 0.4, f: 45, tone: 400, decay: 1.2, bus: 'end' });
+    I.crash(S, t, 0.1, { bus: 'end' });
+    O.braam(S, t, 50, { level: 0.6, power: 1.3, dur: 3.2, bus: 'end' });
+    O.brass(S, t, 2.0, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 3.0, bus: 'end' });
+    O.chord(S, 'choirA', t, t + 2.4, [57, 62, 66, 69, 74, 78], { level: 0.5, attack: 0.06, release: 3.2, cutoff: 5200, bus: 'end' });
+    O.chord(S, 'strings', t, t + 2.2, D_MAJOR, { level: 0.42, attack: 0.05, release: 3.4, cutoff: 3500, bus: 'end' });
+    O.line(S, 'horn', [[t, 62, 0.75], [t + 0.75, 69, 1.25], [t + 2.0, 74, 1.6]], { level: 0.28, cutoff: 2600, bus: 'end', octaves: [0, -12], release: 1.8 });
   });
   // closingLine: faint high shimmer (D major add9)
   S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.012, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));
 }
 
+// Designed air movement on the sequence changes that have no hit of their own.
+function transitionAir(S) {
+  for (const [t, p0] of [[12.0, -0.6], [20.0, 0.6], [28.5, -0.5], [34.5, 0.5], [38.6, -0.4], [42.5, 0.4]]) {
+    S.at(t - 0.35, () => I.whoosh(S, t - 0.35, 0.9, { level: 0.05, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
+  }
+}
+
 export function arrangeCues(S) {
+  transitionAir(S);
   for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, computing, knowledge, montage, finale]) {
     section(S);
   }

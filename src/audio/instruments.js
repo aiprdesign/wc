@@ -1,6 +1,8 @@
-// Musical instruments: orchestral (strings, brass, harp, bells, timpani/taiko),
-// hybrid-electronic (sub pulse, kick, hats, synth arp, blips) and transitional
-// effects (risers, reverse swells, whooshes, booms).
+// Instruments that are not orchestral sections (see orchestra.js for those):
+// piano, celesta, harp and struck sounds (modal voices), the trailer percussion
+// kit (taiko ensemble, toms, sticks, kick, snare, hats, cymbals), hybrid electronic
+// voices (sub pulse, synth pluck, blips) and transition effects (risers, reverse
+// cymbals, swells, whooshes, booms, downers).
 //
 // Every function takes the Studio `S` first and schedules with absolute times.
 
@@ -11,7 +13,7 @@ import { hz, perc, riseTo, ahr, clamp } from './core.js';
 // partials (a recursive complex oscillator per partial — cheap and exactly in
 // tune), cached per pitch, and played back with a single buffer source.
 
-function modalBuffer(S, key, f0, modes, { seconds, noise = 0, attack = 0.002 }) {
+export function modalBuffer(S, key, f0, modes, { seconds, noise = 0, attack = 0.002 }) {
   if (S.cache.has(key)) return S.cache.get(key);
   const sr = S.sr;
   const n = Math.ceil(seconds * sr);
@@ -54,7 +56,7 @@ function modalBuffer(S, key, f0, modes, { seconds, noise = 0, attack = 0.002 }) 
   return buf;
 }
 
-function playBuffer(S, t, buf, { level, pan = 0, bus, rate = 1 }) {
+export function playBuffer(S, t, buf, { level, pan = 0, bus, rate = 1 }) {
   const src = S.buffer(buf, t, rate);
   const g = S.gain(level);
   src.connect(g);
@@ -109,83 +111,39 @@ export function harpRoll(S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead
   notes.forEach((m, i) => pluck(S, t + i * spread, m, { level, bus, pan: -0.5 + i / Math.max(1, notes.length - 1) }));
 }
 
+/** Felt grand piano: paired, slightly detuned inharmonic strings + hammer thump. */
+export function piano(S, t, midi, { level = 0.25, pan = 0, bus = 'piano' } = {}) {
+  const f0 = hz(midi);
+  const T = clamp(4.2 * Math.sqrt(262 / f0), 1.4, 5.5);
+  const modes = [];
+  for (let k = 1; k <= 14; k++) {
+    const ratio = k * Math.sqrt(1 + 0.00038 * k * k);
+    const amp = Math.abs(Math.sin(Math.PI * k * 0.12)) / k ** 1.5;
+    const t60 = T / (1 + 0.4 * (k - 1) ** 1.35);
+    modes.push([ratio, amp, t60], [ratio * 1.0009, amp * 0.8, t60 * 0.8]);
+  }
+  const buf = modalBuffer(S, `piano:${midi}`, f0, modes, { seconds: T * 0.6, noise: 0.25, attack: 0.003 });
+  return playBuffer(S, t, buf, { level, pan: Math.abs(pan) < 0.2 ? 0 : pan, bus });
+}
+
+/** Celesta: soft glockenspiel-like bell an octave above the piano. */
+export function celesta(S, t, midi, { level = 0.05, pan = 0, bus = 'lead' } = {}) {
+  const modes = [[1, 1, 1.6], [3.0, 0.12, 0.5], [4.1, 0.06, 0.25], [1.0015, 0.5, 1.4]];
+  const buf = modalBuffer(S, `celesta:${midi}`, hz(midi), modes, { seconds: 1.5, attack: 0.002, noise: 0.05 });
+  return playBuffer(S, t, buf, { level, pan, bus });
+}
+
+/** Pizzicato string: short, round pluck. */
+export function pizz(S, t, midi, { level = 0.12, pan = 0, bus = 'strings' } = {}) {
+  const f0 = hz(midi);
+  const T = clamp(0.9 * Math.sqrt(196 / f0), 0.25, 1.2);
+  const modes = [];
+  for (let k = 1; k <= 10; k++) modes.push([k, Math.abs(Math.sin(Math.PI * k * 0.3)) / k ** 1.6, T / (1 + 0.8 * (k - 1))]);
+  const buf = modalBuffer(S, `pizz:${midi}`, f0, modes, { seconds: T, noise: 0.1, attack: 0.002 });
+  return playBuffer(S, t, buf, { level, pan, bus });
+}
+
 // ======================================================== sustained voices
-
-/**
- * Warm string-ensemble pad. Notes alternate between a left and a right section
- * (a few cents apart, one lowpass each); the outer notes are doubled on the
- * opposite side for width. Static detune only: an LFO on detune would force the
- * oscillators onto the slow per-sample path.
- */
-export function strings(S, t0, t1, notes, o = {}) {
-  const { level = 0.1, attack = 1.5, release = 1.5, cutoff = 1500, bus = 'pad', width = 0.75, detune = 9 } = o;
-  const end = t1 + release;
-  const att = Math.min(attack, Math.max(0.02, t1 - t0));
-  const voices = notes.map((m, i) => [m, i % 2 ? 1 : -1]);
-  if (notes.length > 2) voices.push([notes[0], 1], [notes.at(-1), voices.at(-1)[1] * -1]);
-  const amp = S.gain(0);
-  ahr(amp.gain, t0, t1, level / Math.sqrt(voices.length), att, release);
-  S.out(amp, bus);
-  const nodes = [amp];
-  const sides = {};
-  for (const side of [-1, 1]) {
-    const lp = S.filter('lowpass', cutoff, 0.6);
-    const f = lp.frequency;
-    f.setValueAtTime(cutoff * 0.45, t0);
-    f.linearRampToValueAtTime(cutoff, t0 + att);
-    f.setValueAtTime(cutoff, t1);
-    f.linearRampToValueAtTime(cutoff * 0.4, end);
-    const p = S.panner(side * width);
-    lp.connect(p).connect(amp);
-    nodes.push(lp, p);
-    sides[side] = lp;
-  }
-  for (const [m, side] of voices) {
-    const v = S.osc('sawtooth', hz(m), t0, end);
-    v.detune.value = side * detune + S.rand(-4, 4);
-    v.connect(sides[side]);
-    nodes.push(v);
-  }
-  S.free(...nodes);
-}
-
-/** Low brass swell: saws through a lowpass that opens with the dynamics. `sfz` = accented attack. */
-export function brass(S, t0, dur, notes, o = {}) {
-  const { level = 0.12, attack = 0.7, release = 1.2, bright = 1600, bus = 'brass', sfz = false } = o;
-  const t1 = t0 + dur;
-  const end = t1 + release * 1.1;
-  const tPeak = t0 + (sfz ? 0.03 : attack);
-  const lp = S.filter('lowpass', 150, 1.1);
-  const f = lp.frequency;
-  f.setValueAtTime(sfz ? 400 : 140, t0);
-  f.exponentialRampToValueAtTime(bright, tPeak);
-  f.setTargetAtTime(bright * (sfz ? 0.35 : 0.6), tPeak, sfz ? 0.25 : dur * 0.5);
-  f.setTargetAtTime(160, t1, release / 4);
-  const amp = S.gain(0);
-  const g = amp.gain;
-  const lv = level / Math.sqrt(notes.length);
-  g.setValueAtTime(0, t0);
-  if (sfz) {
-    g.linearRampToValueAtTime(lv, tPeak);
-    g.setTargetAtTime(lv * 0.4, tPeak, 0.3);
-  } else {
-    g.setTargetAtTime(lv, t0, attack / 2.5);
-  }
-  g.setTargetAtTime(0, t1, release / 5);
-  lp.connect(amp);
-  S.out(amp, bus);
-  // A section of two players per note, a few cents apart (width comes from the hall).
-  const nodes = [lp, amp];
-  for (const m of notes) {
-    for (const cents of [-6, 6]) {
-      const v = S.osc('sawtooth', hz(m), t0, end);
-      v.detune.value = cents + S.rand(-2, 2);
-      v.connect(lp);
-      nodes.push(v);
-    }
-  }
-  S.free(...nodes);
-}
 
 /** Sustained sine drone with slow beating (distant resonance). */
 export function drone(S, t0, t1, midi, { level = 0.1, attack = 2, release = 2, bus = 'pad', beat = 0.25, pan = 0 } = {}) {
@@ -202,91 +160,9 @@ export function drone(S, t0, t1, midi, { level = 0.1, attack = 2, release = 2, b
 }
 
 // ============================================================== percussion
+// Rendered one-shots live in percussion.js; re-exported here for convenience.
 
-export function kick(S, t, level = 0.8, { bus = 'drums', f0 = 150, f1 = 44, decay = 0.55 } = {}) {
-  const o = S.osc('sine', f0, t, t + decay + 0.1);
-  o.frequency.exponentialRampToValueAtTime(f1 * 1.5, t + 0.04);
-  o.frequency.exponentialRampToValueAtTime(f1, t + 0.25);
-  const g = S.gain(0);
-  perc(g.gain, t, level, decay, 0.002);
-  o.connect(g);
-  S.out(g, bus);
-  // beater click
-  const n = S.noise('white', t, t + 0.03);
-  const hp = S.filter('highpass', 2500);
-  const cg = S.gain(0);
-  perc(cg.gain, t, level * 0.5, 0.02, 0.0005);
-  n.connect(hp).connect(cg);
-  S.out(cg, bus);
-  S.free(o, g);
-  S.free(n, hp, cg);
-}
-
-/** Taiko / timpani / low tom: pitched membrane + skin noise. */
-export function drum(S, t, level = 0.6, { f = 70, decay = 1.1, pan = 0, bus = 'perc', skin = 0.5 } = {}) {
-  const dest = pan ? S.panner(pan) : S.bus(bus);
-  if (pan) dest.connect(S.bus(bus));
-  // membrane: pitch-dropping sine + a quickly damped overtone
-  const body = S.osc('sine', f * 1.7, t, t + decay + 0.05);
-  body.frequency.exponentialRampToValueAtTime(f, t + 0.09);
-  const gb = S.gain(0);
-  perc(gb.gain, t, level, decay, 0.003);
-  body.connect(gb).connect(dest);
-  const over = S.osc('triangle', f * 2.4, t, t + decay * 0.3 + 0.05);
-  over.frequency.exponentialRampToValueAtTime(f * 2.3, t + 0.05);
-  const go = S.gain(0);
-  perc(go.gain, t, level * 0.18, decay * 0.3, 0.002);
-  over.connect(go).connect(dest);
-  // skin slap (its own short-lived voice)
-  const n = S.noise('pink', t, t + 0.25);
-  const lp = S.filter('lowpass', 700 + f * 4, 0.9);
-  const gn = S.gain(0);
-  perc(gn.gain, t, level * skin, 0.2, 0.001);
-  n.connect(lp).connect(gn).connect(dest);
-  S.free(n, lp, gn);
-  S.free(over, go);
-  S.free(body, gb, ...(pan ? [dest] : []));
-}
-
-export function snare(S, t, level = 0.3, { pan = 0, bus = 'drums', decay = 0.22 } = {}) {
-  const n = S.noise('white', t, t + decay + 0.05);
-  const bp = S.filter('bandpass', 2200, 0.6);
-  const gn = S.gain(0);
-  perc(gn.gain, t, level, decay, 0.001);
-  const o = S.osc('triangle', 210, t, t + 0.12);
-  o.frequency.exponentialRampToValueAtTime(170, t + 0.08);
-  const go = S.gain(0);
-  perc(go.gain, t, level * 0.6, 0.1, 0.001);
-  const mix = S.gain(1);
-  n.connect(bp).connect(gn).connect(mix);
-  o.connect(go).connect(mix);
-  const p = S.out(mix, bus, pan);
-  S.free(n, n, bp, gn, o, go, mix, p);
-}
-
-export function hat(S, t, level = 0.1, { open = false, pan = 0.3, bus = 'drums' } = {}) {
-  const decay = open ? 0.35 : 0.045;
-  const n = S.noise('white', t, t + decay + 0.02);
-  const hp = S.filter('highpass', open ? 6500 : 8000, 0.9);
-  const g = S.gain(0);
-  perc(g.gain, t, level, decay, 0.0008);
-  n.connect(hp).connect(g);
-  const p = S.out(g, bus, pan);
-  S.free(n, n, hp, g, p);
-}
-
-/** Cymbal crash / swell (stereo noise, bright, long). */
-export function crash(S, t, level = 0.15, { decay = 2.6, bus = 'drums' } = {}) {
-  const n = S.noise('white', t, t + decay + 0.1, { stereo: true });
-  const hp = S.filter('highpass', 4200, 0.6);
-  const pk = S.filter('peaking', 7500, 1.2);
-  pk.gain.value = 5;
-  const g = S.gain(0);
-  perc(g.gain, t, level, decay, 0.003);
-  n.connect(hp).connect(pk).connect(g);
-  S.out(g, bus);
-  S.free(n, n, hp, pk, g);
-}
+export { taiko, tom, kick, snare, stick, hat, crash } from './percussion.js';
 
 // ====================================================== electronic voices
 
@@ -398,6 +274,52 @@ export function swellIn(S, tHit, dur, { level = 0.12, bus = 'fx', top = 9000 } =
   n.connect(lp).connect(g);
   S.out(g, bus);
   S.free(n, n, lp, g);
+}
+
+/** Reverse cymbal into tHit (bright noise swelling exponentially, cut on the hit). */
+export function revCymbal(S, tHit, dur, { level = 0.1, bus = 'fx' } = {}) {
+  const t0 = tHit - dur;
+  const n = S.noise('white', t0, tHit + 0.05, { stereo: true });
+  const hp = S.filter('highpass', 3500, 0.7);
+  const pk = S.filter('peaking', 8000, 1);
+  pk.gain.value = 6;
+  const g = S.gain(0);
+  riseTo(g.gain, t0, tHit, level, 0.02);
+  n.connect(hp).connect(pk).connect(g);
+  S.out(g, bus);
+  S.free(n, hp, pk, g);
+}
+
+/** Downer: a falling sub/saw sweep with a darkening noise tail after a hit. */
+export function downer(S, t, { level = 0.2, dur = 1.6, from = 320, to = 38, bus = 'fx' } = {}) {
+  const end = t + dur + 0.1;
+  const o = S.osc('sawtooth', from, t, end);
+  o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const s = S.osc('sine', from / 2, t, end);
+  s.frequency.exponentialRampToValueAtTime(to / 2 + 10, t + dur);
+  const lp = S.filter('lowpass', 1400, 1.2);
+  lp.frequency.setValueAtTime(1400, t);
+  lp.frequency.exponentialRampToValueAtTime(120, t + dur);
+  const g = S.gain(0);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(level, t + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  const sg = S.gain(0.8);
+  o.connect(lp);
+  s.connect(sg).connect(lp);
+  lp.connect(g);
+  S.out(g, bus);
+  const n = S.noise('pink', t, end, { stereo: true });
+  const nl = S.filter('lowpass', 6000, 0.7);
+  nl.frequency.setValueAtTime(6000, t);
+  nl.frequency.exponentialRampToValueAtTime(200, t + dur);
+  const ng = S.gain(0);
+  ng.gain.setValueAtTime(0, t);
+  ng.gain.linearRampToValueAtTime(level * 0.5, t + 0.03);
+  ng.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  n.connect(nl).connect(ng);
+  S.out(ng, bus);
+  S.free(o, s, lp, g, sg, n, nl, ng);
 }
 
 /** Air whoosh: bandpassed noise sweep with a bell-shaped envelope and moving pan. */

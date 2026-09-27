@@ -5,6 +5,7 @@
 // shaped by JS-generated automation curves, rather than hundreds of tiny nodes.
 
 import { perc, ahr } from './core.js';
+import { modalBuffer, playBuffer } from './instruments.js';
 
 // Smoothed random walk in [0, 1] sampled at `rate` Hz.
 function wander(S, seconds, rate, speed, smooth = 0.9) {
@@ -126,20 +127,15 @@ export function paperSwish(S, t0, dur, { level = 0.12, pan0 = -0.5, pan1 = 0.5, 
   crinkle(S, t0 + dur * 0.1, dur * 0.8, { level: level * 0.6, pan: (pan0 + pan1) / 2, bus, density: 0.05 });
 }
 
-/** Short mechanical click: bandpassed noise tick + resonant body ping. */
+/** Short mechanical click: bandpassed noise tick + resonant body ping (cached one-shot). */
 export function click(S, t, { level = 0.1, freq = 3200, body = 900, q = 3, decay = 0.018, pan = 0, bus = 'sfx' } = {}) {
-  const dest = pan ? S.panner(pan) : S.bus(bus);
-  if (pan) dest.connect(S.bus(bus));
-  const n = S.noise('white', t, t + decay + 0.01);
-  const bp = S.filter('bandpass', freq, q);
-  const g = S.gain(0);
-  perc(g.gain, t, level, decay, 0.0004);
-  n.connect(bp).connect(g).connect(dest);
-  const o = S.osc('sine', body, t, t + decay * 2);
-  const go = S.gain(0);
-  perc(go.gain, t, level * 0.5, decay * 1.6, 0.0008);
-  o.connect(go).connect(dest);
-  S.free(n, bp, g, o, go, ...(pan ? [dest] : []));
+  const f = Math.round(freq / 100) * 100, b = Math.round(body / 20) * 20, d = Math.round(decay * 1000) / 1000;
+  const v = (S.clickRR = ((S.clickRR ?? 0) + 1) % 2);
+  // body ping + noise tick as a modal voice: the tick is the buffer's noise transient
+  const buf = modalBuffer(S, `click:${f}:${b}:${q}:${d}:${v}`, b, [[1, 0.5, d * 1.6], [f / b, 1, d * 0.7 + 0.002]], {
+    seconds: d * 2 + 0.01, noise: 1.2, attack: 0.0003,
+  });
+  playBuffer(S, t, buf, { level, pan, bus });
 }
 
 /** Clock escapement on a grid: alternating tick / tock. */
