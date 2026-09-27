@@ -17,8 +17,9 @@ import { TextPlane, KineticText, FONTS } from '../lib/text.js';
 import { progressTube, progressLine, circlePoints, segmentsLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
 import { BracketFrame } from '../lib/hud.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
-  V3, earthMesh, moonMesh, apolloMaterials, buildLM, buildCSM, buildFlag, buildDSKY, flagTexture,
+  V3, earthMesh, moonMesh, makeEnv, apolloMaterials, buildLM, buildCSM, buildFlag, buildDSKY, flagTexture,
   regolithTextures, bootprintTexture, makeTerrainField, terrainGeometry, segAtlas, SegDigits, SEG,
 } from './moonshot-assets.js';
 
@@ -43,7 +44,7 @@ export function create(ctx, segment) {
   const worldS = new THREE.Group(); scene.add(worldS);
   const SUN_S = V3(-1, 0.25, 0.3).normalize();
   const sunS = new THREE.DirectionalLight('#fff8ee', 4.2); sunS.position.copy(SUN_S).multiplyScalar(200); worldS.add(sunS);
-  const earthS = earthMesh(10, SUN_S, { segs: 144 }); worldS.add(earthS);
+  const earthS = earthMesh(10, SUN_S, { segs: 144, city: 0.35 }); worldS.add(earthS);
   earthS.rotation.z = 0.41;
   const MOON_P = V3(22, 3, -52), MOON_R = 3.2;
   const moon = moonMesh(MOON_R, SUN_S); moon.position.copy(MOON_P); moon.rotation.set(0.3, 2.2, 0); worldS.add(moon);
@@ -59,7 +60,7 @@ export function create(ctx, segment) {
   }
   // free-return figure-8 in the Earth–Moon plane
   const E1 = MOON_P.clone().normalize(), D = MOON_P.length();
-  const E2 = new THREE.Vector3().crossVectors(E1, V3(0, 1, 0)).normalize().negate();
+  const E2 = new THREE.Vector3().crossVectors(E1, V3(0, 1, 0)).normalize();
   const E3 = new THREE.Vector3().crossVectors(E2, E1).normalize();
   const TP = (a, b) => E1.clone().multiplyScalar(a).addScaledVector(E2, b).addScaledVector(E3, b * 0.12);
   const trajPts = [[-4, -11.2], [3, -11.4], [9.5, -8.6], [D * 0.5, 0], [D - 6.5, 5.4], [D - 1, 5.0], [D + 3.1, 3.3], [D + 4.6, 0], [D + 3.1, -3.3], [D - 1, -5.0], [D - 6.5, -5.4], [D * 0.5, 0], [13, 8.2], [5, 11.2]].map(([a, b]) => TP(a, b));
@@ -72,7 +73,10 @@ export function create(ctx, segment) {
   const lunarOrbit = progressLine(circlePoints(MOON_R * 1.45, 160).map((p) => MOON_P.clone().addScaledVector(E1, p.x).addScaledVector(E2, p.y)), { color: '#8fb6ec', headColor: '#ffffff', intensity: 0.6, head: 0.03 });
   worldS.add(lunarOrbit);
   // Apollo stack: CSM + LM (transposed & docked), camera-relative hero object
-  const MAT = apolloMaterials(ctx.env);
+  const LUNAR_ENV = makeEnv(ctx.renderer, { ground: [0.22, 0.21, 0.2] });
+  const SPACE_ENV = makeEnv(ctx.renderer, { ground: [0.02, 0.025, 0.035], glowDir: V3(-0.4, -0.3, 1), glow: [0.35, 0.55, 1.0] });
+  const MAT = apolloMaterials(SPACE_ENV);
+  const setHardwareEnv = (env) => { for (const m of Object.values(MAT)) m.envMap = env; };
   const stack = new THREE.Group(); worldS.add(stack);
   const stackInner = new THREE.Group(); stack.add(stackInner);
   const csm = buildCSM(MAT); stackInner.add(csm);
@@ -81,15 +85,15 @@ export function create(ctx, segment) {
   lmStack.position.z = 3.7 + 3.45 + 6.2 + 0.15;
   stackInner.add(lmStack);
   stackInner.position.z = -3.5;
-  stack.scale.setScalar(0.07);
+  stack.scale.setScalar(0.085);
   const rcs = [0, 1].map(() => { const g = glowSprite({ color: '#ffffff', intensity: 2.2, scale: 6 }); stackInner.add(g); return g; });
   rcs[0].position.set(2.4, 0.3, 1.6); rcs[1].position.set(-2.4, -0.3, 1.6);
 
   // ================================================================ WORLD L — lunar surface
   const L0 = V3(0, -6000, 0);
   const worldL = new THREE.Group(); worldL.position.copy(L0); scene.add(worldL);
-  const SUN_L = V3(1, 0.27, -0.28).normalize();
-  const sunL = new THREE.DirectionalLight('#fff4e6', 12);
+  const SUN_L = V3(1, 0.26, -0.06).normalize();
+  const sunL = new THREE.DirectionalLight('#fff4e6', 9);
   sunL.position.copy(L0).addScaledVector(SUN_L, 160); sunL.target.position.copy(L0);
   sunL.castShadow = true;
   sunL.shadow.mapSize.set(2048, 2048);
@@ -103,7 +107,7 @@ export function create(ctx, segment) {
   const PATCH = 0.9;
   const inPatch = (x, z) => Math.abs(x - PRINT.x) < PATCH / 2 - 0.02 && Math.abs(z - PRINT.z) < PATCH / 2 - 0.02;
   const reg = regolithTextures();
-  const terrainMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#bdb8b0', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
+  const terrainMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#e2ddd4', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
   const terrain = new THREE.Mesh(terrainGeometry(field, { size: 190, segs: 300, k: 1.6, uvScale: 1 / 5, skip: inPatch }), terrainMat);
   terrain.receiveShadow = true; terrain.castShadow = true;
   worldL.add(terrain);
@@ -154,7 +158,7 @@ export function create(ctx, segment) {
       v.multiplyScalar(k); v.y *= 0.62; p.setXYZ(i, v.x, v.y, v.z);
     }
     rockGeo.computeVertexNormals();
-    const rockMat = new THREE.MeshStandardMaterial({ color: '#8f8b84', roughness: 0.9, metalness: 0, bumpMap: reg.bump, bumpScale: 1.5, envMapIntensity: 0.02, flatShading: true });
+    const rockMat = new THREE.MeshStandardMaterial({ color: '#b2ada5', roughness: 0.9, metalness: 0, bumpMap: reg.bump, bumpScale: 1.5, envMapIntensity: 0.02, flatShading: true });
     const N = 140, rocks = new THREE.InstancedMesh(rockGeo, rockMat, N);
     const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), pos = new THREE.Vector3();
     let n = 0, tries = 0;
@@ -202,19 +206,21 @@ export function create(ctx, segment) {
     soleShape.bezierCurveTo(-W * 0.38, -Lh * 0.3, -W * 0.45, -Lh * 0.2, -W * 0.5, 0.03);
     const soleG = new THREE.ExtrudeGeometry(soleShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2 });
     soleG.rotateX(-Math.PI / 2);
-    const soleM = new THREE.MeshStandardMaterial({ envMap: ctx.env, color: '#5d646c', roughness: 0.7, metalness: 0.05, envMapIntensity: 0.3 });
-    const fabric = new THREE.MeshStandardMaterial({ color: '#aeaba4', envMap: ctx.env, roughness: 0.92, metalness: 0, bumpMap: MAT.gold.bumpMap, bumpScale: 1.2, envMapIntensity: 0.3 });
+    const soleM = new THREE.MeshStandardMaterial({ envMap: ctx.env, color: '#4f5860', roughness: 0.7, metalness: 0.05, envMapIntensity: 0.3 });
+    const fabric = new THREE.MeshStandardMaterial({ color: '#9a978f', envMap: ctx.env, roughness: 0.92, metalness: 0, bumpMap: MAT.gold.bumpMap, bumpScale: 1.6, envMapIntensity: 0.25 });
     const sole = new THREE.Mesh(soleG, soleM); sole.position.y = 0.008; boot.add(sole);
     for (let i = 0; i < 12; i++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.012, 0.012), soleM); bar.position.set(0, 0.0, 0.14 - i * 0.026); bar.scale.x = 1 - Math.abs(i - 4) * 0.05; boot.add(bar); }
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.16, 6, 16), fabric); upper.rotation.x = Math.PI / 2; upper.position.set(0, 0.11, 0.02); upper.scale.set(1.05, 1, 0.8); boot.add(upper);
-    const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.078, 0.6, 20), fabric); ankle.position.set(0, 0.42, 0.05); ankle.rotation.x = -0.12; boot.add(ankle);
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.084, 0.012, 8, 24), MAT.dark); strap.rotation.x = Math.PI / 2 - 0.12; strap.position.set(0, 0.22, 0.035); boot.add(strap);
+    const foot = new THREE.Mesh(new RoundedBoxGeometry(0.165, 0.12, 0.345, 4, 0.05), fabric); foot.position.set(0, 0.105, -0.005); boot.add(foot);
+    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.085, 24, 12, 0, TAU, 0, Math.PI / 2), fabric); toe.scale.set(0.98, 0.9, 0.9); toe.position.set(0, 0.1, -0.11); boot.add(toe);
+    const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.095, 0.26, 24), fabric); ankle.position.set(0, 0.27, 0.06); ankle.rotation.x = -0.15; boot.add(ankle);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.7, 24), fabric); leg.position.set(0, 0.72, 0.1); leg.rotation.x = -0.1; boot.add(leg);
+    for (const y of [0.2, 0.36]) { const strap = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.01, 8, 28), MAT.dark); strap.rotation.x = Math.PI / 2 - 0.15; strap.position.set(0, y, 0.06 + (y - 0.2) * 0.1); boot.add(strap); }
     boot.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   }
   // the Earth in the lunar sky
-  const earthL = earthMesh(42, SUN_L, { segs: 128 }); earthL.rotation.z = 0.41; worldL.add(earthL);
+  const earthL = earthMesh(42, SUN_L, { segs: 128, city: 0.15 }); earthL.rotation.z = 0.41; worldL.add(earthL);
   const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.9;
-  const LOOK_E = V3(-0.25, 3.75, 0);
+  const LOOK_E = V3(-0.25, CAM_E.y + Math.tan(THREE.MathUtils.degToRad(5)) * CAM_E.z, 0);
   const EARTH_D = 820;
   const earthDir = new THREE.Vector3();
   const placeEarth = (el) => {       // elevation (rad) above the camera→LM line, slight azimuth offset
@@ -295,9 +301,9 @@ export function create(ctx, segment) {
       const face = new THREE.Mesh(new THREE.CircleGeometry(0.4, 40), new THREE.MeshStandardMaterial({ color: '#0d0f11', roughness: 0.3, metalness: 0.2 })); face.position.set(x, y, -0.37); worldD.add(face);
       const needle = new THREE.Mesh(new THREE.PlaneGeometry(0.02, 0.32), new THREE.MeshBasicMaterial({ color: new THREE.Color('#f2f2e8').multiplyScalar(0.8) })); needle.position.set(x, y + 0.12, -0.355); needle.rotation.z = rr() * 2 - 1; worldD.add(needle);
     }
-    const key = new THREE.DirectionalLight('#fff1dd', 2.2); key.position.set(-3, 5, 6).add(D0); key.target.position.copy(D0); worldD.add(key); scene.add(key.target);
-    const rim = new THREE.DirectionalLight('#bcd6ff', 1.4); rim.position.set(5, 2, -2).add(D0); rim.target.position.copy(D0); worldD.add(rim);
-    const glow = new THREE.PointLight('#9ff2b8', 1.6, 3, 2); glow.position.set(0.49, 0.5, 0.5); worldD.add(glow);
+    const key = new THREE.DirectionalLight('#fff1dd', 1.1); key.position.set(-5, 6, 2.5).add(D0); key.target.position.copy(D0); worldD.add(key); scene.add(key.target);
+    const rim = new THREE.DirectionalLight('#bcd6ff', 0.9); rim.position.set(5, 2, -2).add(D0); rim.target.position.copy(D0); worldD.add(rim);
+    const glow = new THREE.PointLight('#9ff2b8', 1.2, 3, 2); glow.position.set(0.49, -0.35, 0.45); worldD.add(glow);
   }
   // final landing display: P68 (landing confirmation), V06 N43 → Tranquility Base lat/long/alt
   const setDsky = (T, t) => {
@@ -357,9 +363,9 @@ export function create(ctx, segment) {
   const alarmTx = dLab('PROGRAM ALARM  1202', 0.0, 0.72, { height: 0.03, letterSpacing: 0.2, color: AMBER, intensity: 1.6, weight: 500 });
   const amber = new THREE.Color(AMBER), green = new THREE.Color(GREEN);
   // landing + footprint captions
-  const eagle = hudTP('The Eagle has landed.', { font: FONTS.serif, italic: true, weight: 500, height: 0.095 * UI, letterSpacing: 0.02, color: '#f4f1ea', intensity: 1.05 }, 0, -HH * 0.52);
-  const eagleSub = hudTP('TRANQUILITY BASE · 20 JULY 1969 · 20:17 UTC', { font: FONTS.mono, height: 0.022 * UI, letterSpacing: 0.36, color: ICE, intensity: 0.75 }, 0, -HH * 0.52 - 0.095 * UI);
-  const stepTx = hudTP('ONE SMALL STEP', { font: FONTS.mono, height: 0.03 * UI, letterSpacing: 0.62, color: '#f2f0ea', intensity: 1.0 }, 0, -HH * 0.66);
+  const eagle = hudTP('The Eagle has landed.', { font: FONTS.serif, italic: true, weight: 500, height: 0.095 * UI, letterSpacing: 0.02, color: '#f4f1ea', intensity: 1.05 }, 0, -HH * 0.6);
+  const eagleSub = hudTP('TRANQUILITY BASE · 20 JULY 1969 · 20:17 UTC', { font: FONTS.mono, height: 0.022 * UI, letterSpacing: 0.36, color: ICE, intensity: 0.75 }, 0, -HH * 0.6 - 0.095 * UI);
+  const stepTx = hudTP('ONE SMALL STEP', { font: FONTS.mono, height: 0.034 * UI, letterSpacing: 0.62, color: '#f2f0ea', intensity: 1.05 }, 0, -HH * 0.6);
   // earthrise ticker
   const tickTitle = new KineticText('THE AMERICAN CENTURY', { font: FONTS.display, weight: 400, height: 0.074 * UI, letterSpacing: 0.3, color: '#f3f6fb', intensity: 1.12 });
   tickTitle.position.set(0, HH * 0.76, 0); hud.scene.add(tickTitle);
@@ -368,8 +374,8 @@ export function create(ctx, segment) {
   const colW = rowW / ITEMS.length;
   const ticker = ITEMS.map(([y, n], i) => {
     const x = -rowW / 2 + colW * (i + 0.5);
-    const year = hudTP(y, { font: FONTS.sans, weight: 200, height: 0.062 * UI, letterSpacing: 0.06, color: '#f2f6ff', intensity: 1.15 }, x, rowY + 0.035 * UI);
-    const name = hudTP(n, { font: FONTS.mono, weight: 400, height: 0.021 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.9 }, x, rowY - 0.045 * UI);
+    const year = hudTP(y, { font: FONTS.sans, weight: 200, height: 0.07 * UI, letterSpacing: 0.06, color: '#f2f6ff', intensity: 1.15 }, x, rowY + 0.035 * UI);
+    const name = hudTP(n, { font: FONTS.mono, weight: 400, height: 0.027 * UI, letterSpacing: 0.22, color: ICE, intensity: 0.95 }, x, rowY - 0.05 * UI);
     const dot = new THREE.Mesh(new THREE.CircleGeometry(0.008 * UI, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff').multiplyScalar(2.2), toneMapped: false, transparent: true }));
     dot.position.set(x, rowY - 0.1 * UI, 0); hud.scene.add(dot);
     return { year, name, dot, x };
@@ -395,12 +401,12 @@ export function create(ctx, segment) {
   const sCamK = [[0, 0], [0.45, 0.2], [0.72, 0.4], [0.92, 0.6], [1.03, 0.8], [tS1, 1]];
   const sLookCurve = new THREE.CatmullRomCurve3([V3(-0.9, 0.4, 0), V3(2.5, 0.8, -6), V3(15, 2.5, -34), MOON_P.clone(), MOON_P.clone().addScaledVector(nM, MOON_R * 0.6), S_LOOK_END], false, 'centripetal');
   // L camera (descent → landing), Catmull-Rom through keys; then shot-specific moves
-  const lCamCurve = new THREE.CatmullRomCurve3([V3(-5, 40, 33), V3(-10.5, 17, 29.5), V3(-11, 4.6, 21.5), V3(-8.6, 3.1, 19.8)], false, 'centripetal');
+  const lCamCurve = new THREE.CatmullRomCurve3([V3(-4, 36, 28), V3(-8.5, 13, 22), V3(-8.6, 4.0, 15.5), V3(-7.4, 2.7, 15.2)], false, 'centripetal');
   const lCamK = [[tS1, 0], [tS1 + 0.45, 0.33], [tLand, 0.67], [tLand + 0.33, 1]];
-  const MACRO_A = PRINT.clone().add(V3(0.26, 0.3, 0.92)), MACRO_B = PRINT.clone().add(V3(0.18, 0.25, 0.7));
-  const PRINT_LOOK = PRINT.clone().add(V3(0, 0.02, -0.08));
-  const WIN = lmd.winPos.clone();
-  const VERTIGO_W = 2 * PRINT.distanceTo(V3(0, 3.5, 0)) * Math.tan(THREE.MathUtils.degToRad(21));
+  const MACRO_A = PRINT.clone().add(V3(-0.26, 0.3, 0.5)), MACRO_B = PRINT.clone().add(V3(-0.2, 0.26, 0.4));
+  const PRINT_LOOK = PRINT.clone().add(V3(0, 0.0, -0.04));
+  const WIN = lmd.winPos.clone().add(V3(-0.02, -0.02, 0));
+  const VERTIGO_W = 2 * PRINT.distanceTo(V3(0, 3.5, 0)) * Math.tan(THREE.MathUtils.degToRad(19));
   const fovFor = (d) => THREE.MathUtils.radToDeg(2 * Math.atan(VERTIGO_W / (2 * d)));
   const LM_C = V3(0, 3.5, 0);
   const FOV_E = fovFor(CAM_E.clone().setZ(CAM_E.z - 2.2).distanceTo(LM_C));
@@ -417,7 +423,8 @@ export function create(ctx, segment) {
       const inS = t < tS1, inD = t >= tS2, inL = !inS && !inD;
       worldS.visible = inS; worldL.visible = inL; sunL.visible = inL; worldD.visible = inD;
       // r186: scene.environment ignores material.envMapIntensity — hero materials carry an explicit envMap
-      scene.environmentIntensity = inS ? 0.5 : inL ? 0.015 : 0.6;
+      scene.environmentIntensity = inS ? 0.5 : inL ? 0.015 : 0.22;
+      setHardwareEnv(inS ? SPACE_ENV : LUNAR_ENV);
       if (inS) this._space(t, info); else if (inL) this._moon(t, info); else this._dsky(t, info);
       this._hud(t, T);
     },
@@ -432,7 +439,7 @@ export function create(ctx, segment) {
       earthS.userData.body.rotation.y = 1.2 + t * 0.06;
       earthS.userData.mat.uniforms.uTime.value = t;
       // trajectory draws from the parking orbit out to the Moon
-      const tp = ramp(t, tTL - 0.1, tS1 + 0.05, ease.inOutSine) * 0.56;
+      const tp = ramp(t, tTL - 0.12, 0.98, ease.inOutSine);
       traj.progress = tp; traj.opacity = 0.9;
       trajCurve.getPointAt(Math.max(0.001, tp), trajHead.position);
       trajHead.material.opacity = tp > 0.005 ? 1 : 0;
@@ -443,7 +450,7 @@ export function create(ctx, segment) {
       right.set(1, 0, 0).applyQuaternion(camera.quaternion);
       up.set(0, 1, 0).applyQuaternion(camera.quaternion);
       const pass = ramp(t, 0.62, 1.02, ease.inCubic);
-      const dist = lerp(3.3, 0.35, pass), side = lerp(-0.45, -1.7, pass), vert = lerp(-0.32, -0.55, pass);
+      const dist = lerp(3.3, 0.35, pass), side = lerp(-0.3, -1.7, pass), vert = lerp(-0.3, -0.55, pass);
       stack.position.copy(camPos).addScaledVector(fwd, dist).addScaledVector(right, side).addScaledVector(up, vert);
       stack.lookAt(MOON_P);
       stackInner.rotation.z = 0.8 + t * 0.35;
@@ -474,53 +481,50 @@ export function create(ctx, segment) {
       dust.material.uniforms.uOpacity.value = 0.8;
       dust.visible = t > tDesc + 0.2;
       // boot presses into the regolith and lifts away
-      const down = ramp(t, tFoot - 0.2, tFoot, ease.outCubic), lift = ramp(t, tFoot + 0.22, tFoot + 0.45, ease.inCubic);
+      const down = ramp(t, tFoot - 0.2, tFoot, ease.outCubic), lift = ramp(t, tFoot + 0.1, tFoot + 0.3, ease.inCubic);
       pressU.value = ramp(t, tFoot - 0.02, tFoot + 0.1, ease.outCubic);
-      boot.visible = t > tFoot - 0.3 && lift < 1;
-      boot.position.set(PRINT.x + (1 - down) * 0.06 - lift * 0.15, PRINT.y + (1 - down) * 0.34 - pressU.value * 0.03 + lift * 0.55, PRINT.z + (1 - down) * 0.14 - lift * 0.35);
+      boot.visible = t > tFoot - 0.17 && lift < 1;
+      boot.position.set(PRINT.x + (1 - down) * 0.03 - lift * 0.12, PRINT.y + (1 - down) * 0.45 - pressU.value * 0.028 + lift * 0.5, PRINT.z + (1 - down) * 0.1 - lift * 0.32);
       boot.rotation.set(0.3 * (1 - down) - lift * 0.8, PRINT_ANG, 0, 'YXZ');
       // Earth rises behind the LM
-      placeEarth(THREE.MathUtils.degToRad(lerp(3.2, 5.3, ramp(t, tFoot, tAGC, ease.linear))));
+      placeEarth(THREE.MathUtils.degToRad(lerp(7.0, 8.5, ramp(t, tFoot, tAGC, ease.linear))));
       earthL.visible = t > tLand + 0.3;
       flag.visible = t > tLand + 0.3;
       earthL.userData.body.rotation.y = 2.1 + t * 0.05;
       earthL.userData.mat.uniforms.uTime.value = t;
       // LM windows glow from the DSKY and cabin lights; flare as we crash-zoom in
-      MAT.window.emissiveIntensity = 0.35 + ramp(t, tS2 - 0.22, tS2, ease.inQuad) * 3.5;
+      MAT.window.emissiveIntensity = 0.7 + ramp(t, tS2 - 0.35, tS2, ease.inQuad) * 1.8;
 
       // ---------------- camera
       let fov = 35, dofAmt = 0, dofFocus = 10, dofRange = 3;
-      if (t < tFoot - 0.3) {
+      if (t < tFoot - 0.18) {
         lCamCurve.getPoint(sat(timeWarp(t, lCamK)), camPos);
         look.copy(lmP).add(tmp.set(0, 2.4, 0));
         const kL = ramp(t, tS1, tS1 + 0.5, ease.inOutSine);
         tmp.set(0.5, 9, 0); look.lerp(tmp, 1 - kL);
         fov = 35 + (1 - ramp(t, tS1, tS1 + 0.3, ease.outCubic)) * 10;
         // swoop down to the regolith for the footprint
-        const sw = ramp(t, tLand + 0.3, tFoot - 0.3, ease.inOutCubic);
-        if (sw > 0) { camPos.lerp(MACRO_A, sw); look.lerp(PRINT_LOOK, sw); fov = lerp(fov, 40, sw); }
-      } else if (t < tFoot + 0.25) {
-        const k = ramp(t, tFoot - 0.3, tFoot + 0.25, ease.linear);
+        const sw = ramp(t, tLand + 0.2, tFoot - 0.18, ease.inOutCubic);
+        if (sw > 0) { camPos.lerp(MACRO_A, sw); look.lerp(PRINT_LOOK, sw); fov = lerp(fov, 38, sw); }
+      } else if (t < tFoot + 0.3) {
+        const k = ramp(t, tFoot - 0.18, tFoot + 0.3, ease.linear);
         camPos.copy(MACRO_A).lerp(MACRO_B, k);
         look.copy(PRINT_LOOK);
-        fov = 40;
+        fov = 38;
         dofAmt = 0.75; dofFocus = camPos.distanceTo(PRINT_LOOK); dofRange = 0.35;
-      } else if (t < tAGC - 0.22) {
-        // vertigo dolly-zoom: pull back & rise while the fov narrows to keep the LM's size locked
-        const k = ramp(t, tFoot + 0.25, tRise + 0.2, ease.inOutCubic);
-        const creep = ramp(t, tRise + 0.2, tAGC - 0.22, ease.linear);
-        camPos.copy(MACRO_B).lerp(CAM_E, k);
-        camPos.z -= creep * 2.2;
-        const kl = ramp(t, tFoot + 0.25, tRise, ease.inOutSine);
-        look.copy(PRINT_LOOK).lerp(LOOK_E, kl);
-        fov = Math.min(40, fovFor(camPos.distanceTo(LM_C)));
-        dofAmt = 0.75 * (1 - ramp(t, tFoot + 0.25, tFoot + 0.55)); dofFocus = camPos.distanceTo(PRINT_LOOK); dofRange = 0.35 + k * 30;
       } else {
-        // crash zoom through the LM window
-        const k = ramp(t, tAGC - 0.22, tS2, ease.inQuart);
-        camPos.copy(CAM_E); camPos.z -= 2.2 + k * 14;
-        look.copy(LOOK_E).lerp(WIN, ramp(t, tAGC - 0.22, tS2 - 0.05, ease.inOutCubic));
-        fov = lerp(FOV_E, 0.55, k);
+        // vertigo dolly-zoom: pull back & rise while the fov narrows to keep the LM's size locked,
+        // then an accelerating (log-fov) zoom through the LM window
+        const k = ramp(t, tFoot + 0.3, tRise + 0.08, ease.inOutCubic);
+        camPos.copy(MACRO_B).lerp(CAM_E, k);
+        const kl = ramp(t, tFoot + 0.3, tRise, ease.inOutSine);
+        look.copy(PRINT_LOOK).lerp(LOOK_E, kl);
+        fov = Math.min(38, fovFor(camPos.distanceTo(LM_C)));
+        const z = ramp(t, tRise + 0.12, tS2, ease.inCubic);
+        camPos.z -= z * 12;
+        look.lerp(WIN, ramp(t, tRise + 0.3, tS2 - 0.04, ease.inOutCubic));
+        fov = fov * Math.pow(0.5 / fov, z);
+        dofAmt = 0.75 * (1 - ramp(t, tFoot + 0.3, tFoot + 0.55)); dofFocus = camPos.distanceTo(PRINT_LOOK); dofRange = 0.35 + k * 30;
       }
       camera.position.copy(camPos).add(L0);
       tmp2.copy(look).add(L0);
@@ -528,8 +532,8 @@ export function create(ctx, segment) {
       camera.fov = fov; camera.near = t < tFoot + 0.4 && t > tFoot - 0.35 ? 0.02 : 0.1; camera.far = 4000; camera.updateProjectionMatrix();
       api.dof.amount = dofAmt; api.dof.focus = dofFocus; api.dof.range = dofRange;
       const inFlash = envelope(t, tS1 - 0.02, tS1 + 0.22, 0.02, 0.2, ease.outQuad);
-      api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.12, tS2) * 0.4;
-      api.bloom.strength = 0.66 + ramp(t, tS2 - 0.2, tS2) * 0.4;
+      api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.1, tS2) * 0.15;
+      api.bloom.strength = 0.45 + ramp(t, tS2 - 0.15, tS2) * 0.25;
     },
 
     _dsky(t, info) {
@@ -545,8 +549,8 @@ export function create(ctx, segment) {
       dsk.lampAmber.emissiveIntensity = 0;
       api.dof.amount = 0.55; api.dof.focus = camPos.distanceTo(tmp.set(0.49, 0.38, 0.05)); api.dof.range = 0.25 + (1 - k) * 0.5;
       const flash = 1 - ramp(t, tS2, tS2 + 0.25, ease.outCubic);
-      api.exposure = 1 + flash * 0.4;
-      api.bloom.strength = 0.9;
+      api.exposure = 1 + flash * 0.3;
+      api.bloom.strength = 0.85;
     },
 
     _hud(t, T) {
@@ -562,7 +566,7 @@ export function create(ctx, segment) {
       // ---------- descent: site tag + AGC display
       const siteOn = envelope(t, tS1 + 0.05, tLand + 0.1, 0.15, 0.2);
       siteTag.opacity = siteOn; siteTag.reveal = ramp(t, tS1 + 0.05, tS1 + 0.45);
-      const dOn = envelope(t, tS1 + 0.02, tLand + 0.5, 0.12, 0.22);
+      const dOn = envelope(t, tS1 + 0.02, tLand + 0.3, 0.12, 0.2);
       dskyHud.visible = dOn > 0.001;
       if (dskyHud.visible) {
         const u = sat((t - tS1) / (tLand - tS1));
@@ -598,13 +602,13 @@ export function create(ctx, segment) {
         alarmTx.opacity = alarm ? (blink ? 0.5 : 1) * dOn : 0; alarmTx.reveal = ramp(t, tS1 + 0.3, tS1 + 0.38);
       }
       // ---------- landing hush
-      const eOn = envelope(t, tLand + 0.08, tFoot - 0.02, 0.22, 0.2);
-      eagle.opacity = eOn; eagle.reveal = ramp(t, tLand + 0.08, tLand + 0.5, ease.outCubic);
-      eagleSub.opacity = eOn * 0.85; eagleSub.reveal = ramp(t, tLand + 0.2, tLand + 0.55);
-      const sOn = envelope(t, tFoot + 0.02, tRise - 0.02, 0.12, 0.14);
-      stepTx.opacity = sOn; stepTx.reveal = ramp(t, tFoot + 0.02, tFoot + 0.35, ease.outCubic);
+      const eOn = envelope(t, tLand + 0.15, tFoot + 0.14, 0.2, 0.12);
+      eagle.opacity = eOn; eagle.reveal = ramp(t, tLand + 0.15, tLand + 0.5, ease.outCubic);
+      eagleSub.opacity = eOn * 0.85; eagleSub.reveal = ramp(t, tLand + 0.25, tLand + 0.6);
+      const sOn = envelope(t, tFoot + 0.16, tRise, 0.1, 0.12);
+      stepTx.opacity = sOn; stepTx.reveal = ramp(t, tFoot + 0.16, tFoot + 0.42, ease.outCubic);
       // ---------- earthrise ticker (builds left → right on the sixteenths)
-      const tkOn = envelope(t, tRise - 0.05, DUR - 0.08, 0.1, 0.3);
+      const tkOn = envelope(t, tRise - 0.05, tS2 + 0.2, 0.1, 0.25);
       kinetic(tickTitle, tRise - 0.05, 0.022, tkOn);
       tickLine.progress = ramp(t, tRise, tRise + 0.45, ease.outCubic); tickLine.opacity = tkOn;
       tickSeps.progress = ramp(t, tRise + 0.05, tRise + 0.5); tickSeps.opacity = tkOn;

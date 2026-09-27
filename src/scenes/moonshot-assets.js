@@ -19,7 +19,7 @@ void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.x
 // Procedural Earth: oceans, continents, ice, clouds, specular glint, terminator glow, city lights.
 export const EARTH_FRAG = /* glsl */ `
 ${GLSL_NOISE}
-uniform vec3 uSun; uniform float uTime, uGain;
+uniform vec3 uSun; uniform float uTime, uGain, uCity;
 varying vec3 vN; varying vec3 vW; varying vec3 vL;
 float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 6; i++){ s += a * snoise(p); p = p * 2.03 + 11.7; a *= 0.5; } return s; }
 float hash3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -45,13 +45,13 @@ void main(){
   col = mix(col, vec3(0.82, 0.86, 0.92) * day * 1.1, cl * 0.8);
   vec3 H = normalize(L + V);
   col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 220.0) * (1.0 - land) * (1.0 - cl) * day * 0.8;
-  col += vec3(1.0, 0.42, 0.16) * exp(-pow(ndl / 0.1, 2.0)) * 0.1 * (1.0 - cl * 0.5);
+  col += vec3(1.0, 0.42, 0.16) * exp(-pow(ndl / 0.08, 2.0)) * 0.05 * (1.0 - cl * 0.5);
   vec3 q = p * 150.0; vec3 cell = floor(q); vec3 f = fract(q) - 0.5;
   float h = hash3(cell);
   float cluster = smoothstep(0.0, 0.35, snoise(p * 5.0 + 2.0)) * land * (1.0 - ice);
   float dotm = smoothstep(0.3, 0.05, length(f)) * step(0.72 - cluster * 0.35, h) * cluster;
   float night = 1.0 - smoothstep(-0.2, 0.05, ndl);
-  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 2.5;
+  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 2.5 * uCity;
   float rim = 1.0 - max(dot(N, V), 0.0);
   col = mix(col, vec3(0.25, 0.5, 1.0) * day * 0.9, pow(rim, 3.0) * 0.8);
   gl_FragColor = vec4(col * uGain, 1.0);
@@ -106,9 +106,9 @@ void main(){
   gl_FragColor = vec4(col * uGain, 1.0);
 }`;
 
-export function earthMesh(radius, sun, { segs = 128 } = {}) {
+export function earthMesh(radius, sun, { segs = 128, city = 1 } = {}) {
   const g = new THREE.Group();
-  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uTime: { value: 0 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: EARTH_FRAG });
+  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uTime: { value: 0 }, uGain: { value: 1 }, uCity: { value: city } }, vertexShader: PLANET_VERT, fragmentShader: EARTH_FRAG });
   const body = new THREE.Mesh(new THREE.SphereGeometry(radius, segs, Math.round(segs * 0.66)), mat);
   const atmo = (r, power, inten, col, side) => new THREE.Mesh(new THREE.SphereGeometry(radius * r, 96, 64), new THREE.ShaderMaterial({
     uniforms: { uSun: { value: sun }, uPower: { value: power }, uIntensity: { value: inten }, uColor: { value: new THREE.Color(col) } },
@@ -122,6 +122,25 @@ export function earthMesh(radius, sun, { segs = 128 } = {}) {
 export function moonMesh(radius, sun) {
   const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.9 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: MOON_FRAG });
   return new THREE.Mesh(new THREE.SphereGeometry(radius, 160, 110), mat);
+}
+
+// Environment maps for the hardware: black sky, lit regolith (or a blue Earth glow) below.
+export function makeEnv(renderer, { ground = [0.2, 0.19, 0.18], glowDir = null, glow = [0.25, 0.45, 0.9] } = {}) {
+  const sc = new THREE.Scene();
+  const m = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { uGround: { value: new THREE.Vector3(...ground) }, uGlowDir: { value: (glowDir ?? new THREE.Vector3(0, -1, 0)).clone().normalize() }, uGlow: { value: new THREE.Vector3(...glow) }, uHasGlow: { value: glowDir ? 1 : 0 } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vD; uniform vec3 uGround, uGlowDir, uGlow; uniform float uHasGlow;
+      void main(){ vec3 d = normalize(vD); vec3 c = uGround * smoothstep(0.03, -0.3, d.y);
+        c += uGlow * pow(max(dot(d, uGlowDir), 0.0), 6.0) * uHasGlow;
+        gl_FragColor = vec4(c, 1.0); }`,
+  });
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), m));
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(sc, 0.02).texture;
+  pm.dispose();
+  return tex;
 }
 
 // ------------------------------------------------------------------ canvas textures
@@ -146,18 +165,32 @@ export function crinkleTexture(seed = 3, size = 512) {
 // Ascent-stage skin: anodised light-grey panels of varied size, a few black thermal panels, seams, rivets.
 export function panelTexture(seed = 5, size = 512) {
   const r = rng(seed), c = mkCanvas(size), g = c.getContext('2d');
-  g.fillStyle = '#b4b3ae'; g.fillRect(0, 0, size, size);
+  g.fillStyle = '#8a8985'; g.fillRect(0, 0, size, size);
   for (let i = 0; i < 70; i++) {
     const w = size * (0.08 + r() * 0.3), h = size * (0.06 + r() * 0.25), x = r() * size, y = r() * size;
-    const l = 160 + Math.floor(r() * 40);
+    const l = 122 + Math.floor(r() * 30);
     g.fillStyle = `rgb(${l},${l - 2},${l - 6})`; g.fillRect(x, y, w, h);
     g.strokeStyle = 'rgba(60,60,64,0.55)'; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
   }
   g.fillStyle = '#26272a';
-  for (let i = 0; i < 5; i++) { const w = size * (0.1 + r() * 0.18), h = size * (0.08 + r() * 0.14); g.fillRect(r() * size, r() * size, w, h); }
+  for (let i = 0; i < 2; i++) { const w = size * (0.1 + r() * 0.12), h = size * (0.08 + r() * 0.1); g.fillRect(r() * size, r() * size, w, h); }
   g.fillStyle = 'rgba(40,40,40,0.5)';
   for (let i = 0; i < 300; i++) { g.beginPath(); g.arc(r() * size, r() * size, 1, 0, TAU); g.fill(); }
   return toTexture(c, { repeat: true });
+}
+
+// What you glimpse through the LM window: the DSKY's green digits, out of focus, in a dark cabin.
+export function cabinGlowTexture(w = 256, h = 256) {
+  const c = mkCanvas(w, h), g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  const rg = g.createRadialGradient(w * 0.5, h * 0.42, 4, w * 0.5, h * 0.42, w * 0.55);
+  rg.addColorStop(0, 'rgba(120,230,160,0.35)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, w, h);
+  g.filter = 'blur(3px)'; g.fillStyle = 'rgba(170,250,190,0.95)'; g.font = `500 30px "${FONTS.mono}"`; g.textAlign = 'center';
+  ['68', '06   43', '+00067', '+02347'].forEach((txt, i) => g.fillText(txt, w * 0.52, h * (0.22 + i * 0.13)));
+  g.filter = 'none';
+  const t = toTexture(c);
+  return t;
 }
 
 // Service-module skin: polished aluminium with radiator stripes.
@@ -252,9 +285,9 @@ export function bootprintTexture(w = 256, h = 512) {
   // depth
   const d = mkCanvas(w, h), dg = d.getContext('2d');
   dg.save(); dg.clip(sole);
-  dg.fillStyle = 'rgb(170,0,0)'; dg.fillRect(0, 0, w, h);
+  dg.fillStyle = 'rgb(120,0,0)'; dg.fillRect(0, 0, w, h);
   dg.fillStyle = 'rgb(255,0,0)';
-  for (let i = 0; i < 20; i++) { const y = h * 0.12 + i * h * 0.04; dg.fillRect(0, y, w, h * 0.019); }
+  for (let i = 0; i < 17; i++) { const y = h * 0.1 + i * h * 0.048; dg.fillRect(0, y, w, h * 0.024); }
   dg.restore();
   g.filter = 'blur(1.2px)'; g.drawImage(d, 0, 0); g.filter = 'none';
   // cut the rim where the sole is
@@ -351,17 +384,17 @@ export function apolloMaterials(envMap = null) {
   const crinkle = crinkleTexture();
   const panel = panelTexture();
   const M = {
-    gold: new THREE.MeshStandardMaterial({ color: '#e3ad52', metalness: 1, roughness: 0.3, bumpMap: crinkle, bumpScale: 3, envMapIntensity: 0.55 }),
-    goldDark: new THREE.MeshStandardMaterial({ color: '#b07a2c', metalness: 1, roughness: 0.4, bumpMap: crinkle, bumpScale: 2.5, envMapIntensity: 0.5 }),
-    silverFoil: new THREE.MeshStandardMaterial({ color: '#d6d9dd', metalness: 1, roughness: 0.25, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.6 }),
+    gold: new THREE.MeshStandardMaterial({ color: '#b08440', metalness: 1, roughness: 0.46, bumpMap: crinkle, bumpScale: 3, envMapIntensity: 0.55 }),
+    goldDark: new THREE.MeshStandardMaterial({ color: '#8e6428', metalness: 1, roughness: 0.4, bumpMap: crinkle, bumpScale: 2.5, envMapIntensity: 0.5 }),
+    silverFoil: new THREE.MeshStandardMaterial({ color: '#b9bcc0', metalness: 1, roughness: 0.36, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.6 }),
     blackFoil: new THREE.MeshStandardMaterial({ color: '#1b1b1d', metalness: 0.4, roughness: 0.55, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.4 }),
     skin: new THREE.MeshStandardMaterial({ map: panel, metalness: 0.35, roughness: 0.48, envMapIntensity: 0.45 }),
     dark: new THREE.MeshStandardMaterial({ color: '#35363a', metalness: 0.85, roughness: 0.35, envMapIntensity: 0.6 }),
     bell: new THREE.MeshStandardMaterial({ color: '#4a4640', metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    white: new THREE.MeshStandardMaterial({ color: '#e8e8e4', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
-    sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 1, roughness: 0.22, envMapIntensity: 0.9 }),
-    cm: new THREE.MeshStandardMaterial({ color: '#e9ecef', metalness: 1, roughness: 0.12, envMapIntensity: 1.0 }),
-    window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#a8f0c0'), emissiveIntensity: 0.25, envMapIntensity: 1.2 }),
+    white: new THREE.MeshStandardMaterial({ color: '#9d9d98', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
+    sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 0.55, roughness: 0.3, envMapIntensity: 0.9 }),
+    cm: new THREE.MeshStandardMaterial({ color: '#e9ecef', metalness: 0.75, roughness: 0.18, envMapIntensity: 1.0 }),
+    window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#ffffff'), emissiveMap: cabinGlowTexture(), emissiveIntensity: 0.5, envMapIntensity: 1.2 }),
   };
   if (envMap) for (const m of Object.values(M)) m.envMap = envMap;
   return M;
@@ -419,9 +452,10 @@ export function buildLM(M, { folded = false } = {}) {
   // front face upper: two triangular windows angled like the real LM
   const tri = (sx) => {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, sx * 0.62, 0, 0, sx * 0.05, 0.62, 0], 3));
+    g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, sx * 0.7, 0, 0, sx * 0.06, 0.66, 0], 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(sx > 0 ? [0, 0, 1, 0, 0.1, 1] : [1, 0, 0, 0, 0.9, 1], 2));
     g.setIndex(sx > 0 ? [0, 1, 2] : [0, 2, 1]); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, M.window); m.position.set(sx * 0.1, 1.2, 1.22); m.rotation.x = -0.28; return m;
+    const m = new THREE.Mesh(g, M.window); m.position.set(sx * 0.08, 1.14, 1.235); return m;
   };
   const winL = tri(-1), winR = tri(1); as.add(winL, winR);
   const winFrame = (w) => { const e = new THREE.LineSegments(new THREE.EdgesGeometry(w.geometry), new THREE.LineBasicMaterial({ color: '#16171a' })); w.add(e); };
@@ -579,9 +613,9 @@ export function buildDSKY(atlas, M) {
   const g = new THREE.Group();
   const body = new THREE.MeshStandardMaterial({ color: '#3a3e44', metalness: 0.7, roughness: 0.42, envMapIntensity: 0.7 });
   const bezel = new THREE.MeshStandardMaterial({ color: '#23262a', metalness: 0.6, roughness: 0.5, envMapIntensity: 0.6 });
-  const glass = new THREE.MeshStandardMaterial({ color: '#030504', metalness: 0.1, roughness: 0.05, envMapIntensity: 1.4 });
-  const keyM = new THREE.MeshStandardMaterial({ color: '#d0cfca', metalness: 0.05, roughness: 0.55, envMapIntensity: 0.6 });
-  const lampOff = new THREE.MeshStandardMaterial({ color: '#8d8c86', metalness: 0.1, roughness: 0.35, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.02 });
+  const glass = new THREE.MeshStandardMaterial({ color: '#030504', metalness: 0.0, roughness: 0.32, envMapIntensity: 0.6 });
+  const keyM = new THREE.MeshStandardMaterial({ color: '#9d9c97', metalness: 0.05, roughness: 0.55, envMapIntensity: 0.6 });
+  const lampOff = new THREE.MeshStandardMaterial({ color: '#6a6964', metalness: 0.1, roughness: 0.35, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.02 });
   const lampAmber = new THREE.MeshStandardMaterial({ color: '#8d6a3a', metalness: 0.1, roughness: 0.35, emissive: new THREE.Color('#ffb35c'), emissiveIntensity: 0 });
   const box = new THREE.Mesh(new RoundedBoxGeometry(2.1, 2.25, 0.4, 3, 0.06), body); box.position.z = -0.2; g.add(box);
   // lamp panel (left) + display (right)
@@ -604,7 +638,7 @@ export function buildDSKY(atlas, M) {
     const bg = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.055), new THREE.MeshBasicMaterial({ color: new THREE.Color(GREEN).multiplyScalar(0.9), toneMapped: false })); bg.position.set(x, y, 0.001); disp.add(bg);
     const tp = new TextPlane(t, { font: FONTS.sans, weight: 600, height: 0.036, letterSpacing: 0.06, color: '#07100a', intensity: 1, blending: THREE.NormalBlending }); tp.position.set(x, y, 0.003); disp.add(tp);
   };
-  const compActy = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.13), new THREE.MeshBasicMaterial({ color: new THREE.Color(GREEN).multiplyScalar(1.4), toneMapped: false, transparent: true })); compActy.position.set(-0.26, 0.33, 0.001); disp.add(compActy);
+  const compActy = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.13), new THREE.MeshBasicMaterial({ color: new THREE.Color(GREEN).multiplyScalar(0.8), toneMapped: false, transparent: true })); compActy.position.set(-0.26, 0.33, 0.001); disp.add(compActy);
   lab('PROG', 0.2, 0.37); lab('VERB', -0.2, 0.17); lab('NOUN', 0.2, 0.17);
   const cells = [];
   const DH = 0.11, DW = 0.068;
