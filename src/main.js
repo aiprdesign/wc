@@ -32,9 +32,14 @@ async function boot() {
   await loadFonts();
   setLoad(0.1);
   setStatus('Composing score…');
-  const [modules, score] = await Promise.all([loadSceneModules(), loadScore()]);
-  setLoad(0.25);
-  await engine.init(modules, (p, seg) => { setLoad(0.25 + p * 0.75); setStatus(`Building · ${seg.title}`); });
+  // The score renders in an OfflineAudioContext while the sequences are being built.
+  const scorePromise = loadScore();
+  const modules = await loadSceneModules();
+  setLoad(0.2);
+  await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.7); setStatus(`Building · ${seg.title}`); });
+  setStatus('Composing score…');
+  const score = await scorePromise;
+  setLoad(1);
   addEventListener('resize', () => { engine.resize(); if (!player.playing) engine.render(player.time, 0); });
 
   const player = new Player(engine, score?.buffer ?? null);

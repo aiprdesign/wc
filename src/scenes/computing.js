@@ -22,38 +22,54 @@ const DIE_K = 12;          // chip-die local units → die-world pattern units
 // ------------------------------------------------------------------ procedural die layout
 const DIE_GLSL = /* glsl */ `
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+// energy-conserving anti-aliased line: widens with distance but keeps its average brightness
+float lineE(float d, float w, float px){ float ww = max(w, px * 0.6); return (1.0 - smoothstep(ww, ww + px, d)) * (w / ww); }
 vec3 dieColor(vec2 p, float time, float litR, float gain){
-  vec2 fw = fwidth(p); float px = max(fw.x, fw.y);
-  vec2 B = floor(p / 3.0); float hb = h21(B + 0.37);
-  vec3 col = vec3(0.012, 0.014, 0.02) + 0.014 * (0.5 + 0.5 * cos(6.2831 * (hb + vec3(0.0, 0.33, 0.67))));
-  vec2 q = p * 8.0, cq = floor(q), fq = fract(q);
-  float hc = h21(cq + B * 13.1);
-  float cell = step(0.1, fq.x) * step(fq.x, 0.9) * step(0.14, fq.y) * step(fq.y, 0.86);
-  float mem = step(hb, 0.38);
-  float detail = mix(step(0.5, hc), 1.0, mem) * cell * (1.0 - smoothstep(0.03, 0.12, px));
-  col += vec3(0.028, 0.032, 0.042) * detail * (mem > 0.5 ? 0.7 : 1.0);
-  // block outlines
-  vec2 bb = abs(fract(p / 3.0) - 0.5) * 3.0;
-  float blk = smoothstep(1.5 - 0.03 - px, 1.5, max(bb.x, bb.y));
-  vec2 m = abs(fract(p * 4.0) - 0.5) / 4.0;
-  vec2 M = abs(fract(p) - 0.5);
-  float wm = 0.007, wM = 0.016;
-  float ex = wm / (wm + px), eX = wM / (wM + px);
-  float ax = step(0.5, h21(vec2(floor(p.x * 4.0), B.y + 1.7)));
-  float ay = step(0.5, h21(vec2(B.x + 5.3, floor(p.y * 4.0))));
-  float lx = smoothstep(wm + px, 0.0, m.x) * ax, ly = smoothstep(wm + px, 0.0, m.y) * ay;
-  float LX = smoothstep(wM + px * 1.5, 0.0, M.x), LY = smoothstep(wM + px * 1.5, 0.0, M.y);
-  float hx = h21(vec2(floor(p.x * 4.0), 9.1)), hy = h21(vec2(3.3, floor(p.y * 4.0)));
-  float pv = fract(p.y * 0.2 - time * (0.9 + hx * 1.8) + hx * 7.0);
-  float ph = fract(p.x * 0.2 - time * (0.9 + hy * 1.8) + hy * 7.0);
-  float pul = lx * smoothstep(0.9, 1.0, pv) * step(0.55, hx) + ly * smoothstep(0.9, 1.0, ph) * step(0.55, hy);
+  vec2 fw = fwidth(p); float px = max(fw.x, fw.y) + 1e-5;
+  vec2 B = floor(p / 6.0); float hb = h21(B + 0.37);
+  vec3 tint = 0.5 + 0.5 * cos(6.2831 * (hb * 0.7 + vec3(0.0, 0.33, 0.67)));
+  vec3 col = vec3(0.008, 0.01, 0.016) + tint * 0.008;
+  float fineVis = 1.0 - smoothstep(0.012, 0.04, px);
+  if (hb < 0.3) {
+    vec2 f = fract(p * 16.0) - 0.5;
+    float dotm = step(max(abs(f.x), abs(f.y) * 1.6), 0.28);
+    col += vec3(0.028, 0.033, 0.048) * mix(0.42, dotm, fineVis);
+  } else {
+    float row = floor(p.y * 8.0), k = 0.5 + h21(vec2(row, 3.0));
+    float fx = (p.x * 8.0 + h21(vec2(row, B.x)) * 10.0) * k;
+    float cid = floor(fx), fr = fract(fx), fy = fract(p.y * 8.0);
+    float rect = step(0.08, fr) * step(fr, 0.92) * step(0.16, fy) * step(fy, 0.84) * step(0.3, h21(vec2(cid, row)));
+    col += vec3(0.024, 0.028, 0.038) * mix(0.35, rect, fineVis) * (0.6 + 0.4 * h21(vec2(cid, row + 1.0)));
+  }
+  vec2 bb = abs(fract(p / 6.0) - 0.5) * 6.0;
+  float blk = lineE(3.0 - max(bb.x, bb.y), 0.02, px);
+  float glow = 0.0, pul = 0.0;
+  { float gx = p.x * 4.0, ix = floor(gx), d = abs(fract(gx) - 0.5) / 4.0;
+    float on = step(0.45, h21(vec2(ix, floor(p.y + h21(vec2(ix, 1.3))))));
+    float l = lineE(d, 0.005, px) * on;
+    glow += l * 0.5;
+    float hx = h21(vec2(ix, 7.7));
+    pul += l * smoothstep(0.88, 1.0, fract(p.y * 0.35 - time * (0.7 + hx * 1.5) + hx * 9.0)) * step(0.5, hx); }
+  { float iy = floor(p.y), d = abs(fract(p.y) - 0.5);
+    float on = step(0.35, h21(vec2(floor(p.x / 3.0 + h21(vec2(2.1, iy))), iy)));
+    float l = lineE(d, 0.013, px) * on;
+    glow += l * 0.8;
+    float hy = h21(vec2(5.5, iy));
+    pul += l * smoothstep(0.9, 1.0, fract(p.x * 0.18 - time * (0.8 + hy * 1.6) + hy * 9.0)) * step(0.4, hy); }
+  { float d = abs(fract(p.x / 3.0) - 0.5) * 3.0; glow += lineE(d, 0.045, px) * 0.22; }
+  { float gy = p.y * 16.0, iy = floor(gy), d = abs(fract(gy) - 0.5) / 16.0;
+    float on = step(0.62, h21(vec2(floor(p.x * 4.0 + h21(vec2(iy, 4.4)) * 3.0), iy)));
+    glow += lineE(d, 0.0016, px) * on * fineVis * 0.5; }
+  { vec2 v = abs(fract(vec2(p.x * 4.0, p.y)) - 0.5) * vec2(0.25, 1.0);
+    float via = step(max(v.x, v.y), 0.018) * step(0.45, h21(floor(vec2(p.x * 4.0, p.y)))) * fineVis;
+    glow += via * 1.2; }
   float r = length(p);
-  float lit = smoothstep(litR, litR - 2.0, r);
-  float front = smoothstep(1.2, 0.0, abs(r - litR)) * step(0.01, litR);
-  vec3 lane = vec3(0.3, 0.55, 1.0);
-  col += lane * ((lx + ly) * ex * 0.35 + (LX + LY) * eX * 0.55 + blk * 0.25) * lit * gain;
-  col += vec3(0.85, 0.93, 1.0) * pul * ex * 3.2 * lit * gain;
-  col += lane * front * (lx + ly + LX + LY + 0.15) * 0.8 * gain;
+  float lit = smoothstep(litR, litR - 2.5, r);
+  float front = smoothstep(1.5, 0.0, abs(r - litR)) * step(0.01, litR);
+  vec3 lane = vec3(0.32, 0.58, 1.0);
+  col += lane * (glow + blk * 0.3) * lit * gain * 0.55;
+  col += vec3(0.85, 0.93, 1.0) * pul * 3.0 * lit * gain;
+  col += lane * front * (glow + 0.08) * 1.3 * gain;
   return col;
 }`;
 function dieMaterial({ chip = false } = {}) {
@@ -166,10 +182,10 @@ export function create(ctx, segment) {
 
   // ================================================================ WORLD A — the bench
   const worldA = new THREE.Group(); scene.add(worldA);
-  const key = new THREE.SpotLight('#ffe7c4', 60, 20, 0.55, 0.6, 1.4); key.position.set(-2.5, 4.5, 2.5); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
+  const key = new THREE.SpotLight('#ffe7c4', 60, 20, 0.36, 0.55, 1.4); key.position.set(-1.6, 4.6, 2.0); key.target.position.set(0, 0.5, 0); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005;
   worldA.add(key, key.target);
   const rim = new THREE.DirectionalLight('#9cc8ff', 1.6); rim.position.set(3, 2, -4); worldA.add(rim);
-  const floorMat = new THREE.MeshStandardMaterial({ color: '#0a0c10', metalness: 0.6, roughness: 0.42, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#040506', metalness: 0.7, roughness: 0.34, emissive: '#6fa8ff', emissiveMap: null, emissiveIntensity: 0 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 64), floorMat); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; worldA.add(floor);
 
   // ---- materials
@@ -181,10 +197,10 @@ export function create(ctx, segment) {
   const bakelite = new THREE.MeshStandardMaterial({ color: '#17140f', metalness: 0.1, roughness: 0.5 });
   const epoxy = new THREE.MeshStandardMaterial({ color: '#0e0f11', metalness: 0.2, roughness: 0.38 });
   const goldM = new THREE.MeshStandardMaterial({ color: '#f0c46a', metalness: 1, roughness: 0.22 });
-  const glassM = new THREE.MeshStandardMaterial({ color: '#dfe9f5', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.22, envMapIntensity: 2.5, depthWrite: false });
+  const glassM = new THREE.MeshStandardMaterial({ color: '#dfe9f5', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.13, envMapIntensity: 2.2, depthWrite: false });
   const filM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff8a3a').multiplyScalar(4), toneMapped: false });
   const haloM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff9a50').multiplyScalar(0.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const sparkM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe8ff').multiplyScalar(3), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const sparkM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe8ff').multiplyScalar(1.6), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
 
   const inst = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; worldA.add(m); return m; };
   const M = new THREE.Matrix4(), Mb = new THREE.Matrix4(), Mp = new THREE.Matrix4(), qv = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -229,7 +245,7 @@ export function create(ctx, segment) {
   ];
   const armGeo = new THREE.BoxGeometry(0.17, 0.012, 0.1); armGeo.translate(-0.085, 0, 0);
   const armature = inst(armGeo, steelM, 18);
-  const relaySpark = inst(new THREE.SphereGeometry(0.02, 8, 6), sparkM, 18); relaySpark.castShadow = false;
+  const relaySpark = inst(new THREE.SphereGeometry(0.011, 8, 6), sparkM, 18); relaySpark.castShadow = false;
 
   // ---- stage 2: vacuum tubes (8 × 3)
   const TUBES = []; for (let j = 0; j < 3; j++) for (let i = 0; i < 8; i++) TUBES.push(V3((i - 3.5) * 0.3, 0, (j - 1) * 0.4));
@@ -287,7 +303,7 @@ export function create(ctx, segment) {
       const sp = k === 3 ? 0.25 : 0.1;
       pb.set([b.x + (r() - 0.5) * sp, 0.05 + r() * (k === 3 ? 0.04 : 0.25), b.z + (r() - 0.5) * sp], i * 3);
     }
-    const p = new MorphParticles({ count: n, positions: pa, targets: pb, size: 0.018, color: k === 2 ? '#ffd2a0' : '#cfe8ff', intensity: 2.2, opacity: 0, seed: 80 + k, stagger: 0.5 });
+    const p = new MorphParticles({ count: n, positions: pa, targets: pb, size: 0.013, color: k === 2 ? '#ffe2c0' : '#cfe8ff', intensity: 1.5, opacity: 0, seed: 80 + k, stagger: 0.5 });
     p.u.noise = 0.05; p.u.noiseFreq = 2.0;
     worldA.add(p);
     return p;
@@ -373,11 +389,11 @@ export function create(ctx, segment) {
   nn.add(new THREE.LineSegments(edgeGeo, edgeMat));
   const nnCore = glowSprite({ color: '#cfe3ff', intensity: 2.5, scale: 1.6 }); nn.add(nnCore);
 
-  addPanel(swCard, V3(-3.3, 2.1, -9.0), 0.42, 'SOFTWARE', 'Interfaces · languages · systems', tBin + 0.05);
-  addPanel(cmCard, V3(3.4, 2.6, -9.6), -0.42, 'COMMUNICATION', 'Packets across a planet', tBin + 0.15);
-  addPanel(gfx, V3(-2.6, 3.6, -12.6), 0.3, '3D GRAPHICS', 'Geometry · light · pixels', tBin + 0.25, 1.4, 1.3);
-  addPanel(robot, V3(2.7, 1.25, -12.4), -0.3, 'ROBOTICS', 'Sense · plan · act', tBin + 0.32, 1.3, 1.4);
-  addPanel(nn, V3(0, 2.45, -14.2), 0, 'ARTIFICIAL INTELLIGENCE', 'Learning from data', tBin + 0.42, 2.8, 2.2);
+  addPanel(swCard, V3(-3.0, 1.55, -10.2), 0.5, 'SOFTWARE', 'Interfaces · languages · systems', tBin + 0.05);
+  addPanel(cmCard, V3(3.1, 1.75, -10.6), -0.5, 'COMMUNICATION', 'Packets across a planet', tBin + 0.15);
+  addPanel(gfx, V3(-2.1, 2.85, -12.6), 0.3, '3D GRAPHICS', 'Geometry · light · pixels', tBin + 0.25, 1.4, 1.3);
+  addPanel(robot, V3(2.25, 0.95, -12.4), -0.3, 'ROBOTICS', 'Sense · plan · act', tBin + 0.32, 1.3, 1.4);
+  addPanel(nn, V3(0, 1.8, -14.4), 0, 'ARTIFICIAL INTELLIGENCE', 'Learning from data', tBin + 0.42, 2.8, 2.2);
 
   // binary glyph streams: die → interfaces
   const GLYPHS = 1600;
@@ -438,9 +454,9 @@ export function create(ctx, segment) {
   const wheelNow = WHEELS.map((w) => w.clone());
   const camPos = new THREE.Vector3(), look = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), upV = new THREE.Vector3();
   const azK = [[0, -1.25], [tRel, -0.95], [tTr, -0.6], [tDive, -0.18], [tSwitch, 0]];
-  const elK = [[0, 0.16], [tRel, 0.38], [tTube, 0.5], [tTr, 0.62], [tProc, 0.9], [tDive, 1.25], [tSwitch, Math.PI / 2 - 0.0005]];
-  const dK = [[0, 3.9], [tCalc, 3.6], [tRel, 3.1], [tTube, 2.8], [tTr, 2.35], [tProc, 2.1], [tDive, 1.7], [tSwitch, 0.25]];
-  const tgK = [[0, 0.72], [tCalc + 0.2, 0.7], [tRel + 0.1, 0.18], [tTube, 0.2], [tTr, 0.08], [tProc, 0.06], [tDive, DIE_TOP], [tSwitch, DIE_TOP]];
+  const elK = [[0, 0.2], [tRel, 0.38], [tTube, 0.5], [tTr, 0.62], [tProc, 0.9], [tDive, 1.25], [tSwitch, Math.PI / 2 - 0.0005]];
+  const dK = [[0, 4.8], [tCalc, 4.4], [tRel, 3.2], [tTube, 2.8], [tTr, 1.95], [tProc, 2.1], [tDive, 1.7], [tSwitch, 0.25]];
+  const tgK = [[0, 0.76], [tCalc + 0.2, 0.74], [tRel + 0.1, 0.18], [tTube, 0.2], [tTr, 0.08], [tProc, 0.06], [tDive, DIE_TOP], [tSwitch, DIE_TOP]];
   // per-element transition progress: a sweep across X
   const sweep = (t, t0, x, span = 2.4, len = 0.34) => ramp(t, t0 + ((x + span / 2) / span) * 0.22, t0 + ((x + span / 2) / span) * 0.22 + len, ease.inOutCubic);
 
@@ -471,7 +487,7 @@ export function create(ctx, segment) {
       camera.fov = 35; camera.near = 0.01; camera.far = 60; camera.updateProjectionMatrix();
 
       // key light sweeps across the brass in darkness
-      key.position.set(-2.5 + Math.sin(t * 0.6) * 0.6, 4.5, 2.5);
+      key.position.set(-1.6 + Math.sin(t * 0.6) * 0.5, 4.6, 2.0);
       key.intensity = 60 * ramp(t, 0, 0.35) + 20 * beatAt(T) * 0.3;
       floorMat.emissiveIntensity = 0;
 
@@ -575,7 +591,7 @@ export function create(ctx, segment) {
       lid.position.set(0, 0.125 + lidUp * 0.9, -lidUp * 0.3);
       lid.rotation.x = -lidUp * 0.5;
       lid.visible = lidUp < 0.98;
-      subMat.emissiveIntensity = ramp(t, tProc, tProc + 0.35) * (0.8 + beatAt(T) * 0.6);
+      subMat.emissiveIntensity = ramp(t, tProc, tProc + 0.35) * (0.45 + beatAt(T) * 0.35);
       dieChip.uniforms.uTime.value = T; dieChip.uniforms.uLit.value = ramp(t, tDive - 0.2, tSwitch + 0.3) * 8; dieChip.uniforms.uGain.value = 1;
       chipGlow.material.opacity = ramp(t, tProc, tProc + 0.3) * (1 - lidUp) * 0.6;
       floorMat.emissiveIntensity = 0;
@@ -600,10 +616,10 @@ export function create(ctx, segment) {
       const u = ramp(t, tSwitch, DUR, ease.linear);
       const pitch = ramp(t, tSwitch, tBin + 0.1, ease.inOutCubic);
       const push = timeWarp(t, [[tSwitch, 0], [tBin, 1.8], [tBin + 0.6, 5.0], [DUR - 0.5, 8.2], [DUR, 10.8]]);
-      camPos.set(0, lerp(3.0, 1.35, pitch) + ramp(t, tBin, DUR) * 1.0, -push).add(B0);
+      camPos.set(0, lerp(3.0, 1.35, pitch) + ramp(t, tBin, DUR) * 0.45, -push).add(B0);
       tmp.set(0, -1, 0).lerp(tmp2.set(0, -0.28, -1).normalize(), pitch).normalize();
       look.copy(camPos).add(tmp);
-      tmp.set(0, 2.45, -14.2).add(B0);
+      tmp.set(0, 1.8, -14.4).add(B0);
       look.lerp(tmp, ramp(t, tBin + 0.2, DUR - 0.35, ease.inOutSine));
       camera.position.copy(camPos);
       upV.set(0, 0, -1).lerp(tmp2.set(0, 1, 0), smoothstep(0.1, 0.6, pitch)).normalize();
