@@ -1,11 +1,12 @@
-// The music (v5): a three-act trailer score in D minor, 120 BPM, bar = 2 s from t = 0.
+// The music (v6): a three-act trailer score in D minor, 120 BPM, bar = 2 s from t = 0.
 //
 // THEME (8 notes, heroic 5th + octave leaps):  D — A — D' — C' Bb — A — G — A
 //   developed  fragment (piano, 6 s) → gentle full statement (piano + celesta, 12 s)
 //   → horns (36 s: D A D' C', cut off by the Earth) → the MOONSHOT completes it (theme
 //   head D — A on moonLanding, D' C' Bb A G A from earthrise) → EPIC statement (brass +
-//   horns + choir, 49.5 s) → high D on the Picardy D-major chord at the pullBack, and a
-//   D–A–D' button at 60.
+//   horns + choir, 49.5 s) → high D on the Picardy D-major chord at the pullBack → a
+//   tender REPRISE (solo piano, 55.5 s) → the head D — A asked by the piano in the hush
+//   and answered D — A — D' by the horns on the final button (65 s).
 //
 // ACT I   0 – 20    mystery & wonder: drone, distant choir, piano/celesta motif, space;
 //                   designed hits on titleLocked (whoosh-hit), templeReveal (BRAAM),
@@ -25,7 +26,9 @@
 //                   44 16th hats, arps, tremolo · 48 everything + snare build.
 // ACT III 49.5 – 54.5 climax: epic THEME over i–VI–III–iv–V, percussion accelerating
 //                   8ths → 16ths → 32nd snare roll, suck-back, D MAJOR at the pullBack.
-// Finale (cue-pinned): near-silence 55.5–59.9, then the final "button" at 60.0.
+// CODA    54.5 – 72.5 (cue-pinned, see "the CODA" below): the climax blooms and decays
+//                   into a tender reprise that gathers, breathes (ideasLine), swells on the
+//                   sunrise into the final button at 65.0, and resolves in D major.
 
 import { BEAT, CUES as C } from '../timeline.js';
 import * as I from './instruments.js';
@@ -308,7 +311,7 @@ function ostinato(S) {
     hits.push({ t, v: (on ? 1 : 0.65) * (t < 24 ? 0.6 : t < 28 ? 0.8 : 1) * env(t, [[39.4, 1], [39.7, 0.75], [41.6, 0.75], [41.8, 1]]), len: 0.22 });
   }
   hits.push({ t: C.pullBack, v: 1.1, len: 1.4 });
-  S.at(t0, () => I.subPulse(S, t0, C.musicDrop, roots, hits, { level: 0.36 }));
+  S.at(t0, () => I.subPulse(S, t0, C.earthReveal + 0.3, roots, hits, { level: 0.36 }));
 }
 
 // Layer entries, every 4 bars. [from, to, pattern, level(t)?] — the kit thins out over
@@ -389,13 +392,15 @@ function whooshHit(S, t, power = 1, pan = 0.6) {
 }
 
 // Designed hit: sub + taiko (+ BRAAM, harp bloom, downer), with pad ducking.
-function hit(S, t, { power = 1, braam = null, chord = null, down = false, subHz = 85 } = {}) {
+// `ring` (seconds): the BRAAM starts to fade after this and dies away naturally (default:
+// it holds 1.6 + power seconds, then cuts off quickly).
+function hit(S, t, { power = 1, braam = null, chord = null, down = false, subHz = 85, ring = null } = {}) {
   S.at(t, () => {
     I.boom(S, t, { level: 0.5 * power, f0: subHz, f1: 34, decay: 1.4 + power });
     I.taiko(S, t, 0.6 * power, { size: 1 });
     I.crash(S, t, 0.08 * power);
     X.impact(S, t, { level: 0.1 * power, metal: braam != null ? 1 : 0.4 });
-    if (braam != null) O.braam(S, t, braam, { level: 0.42 * power, power, dur: 1.6 + power });
+    if (braam != null) O.braam(S, t, braam, { level: 0.42 * power, power, dur: ring ?? 1.6 + power, close: (1.6 + power) / 3, release: ring ? 0.4 : 0.09 });
     if (chord) I.harpRoll(S, t, CHORDS[chord].choir.concat(CHORDS[chord].choir.at(-1) + 12), { level: 0.08 * power });
     if (down) I.downer(S, t + 0.1, { level: 0.05 * power, dur: 1.0 });
   });
@@ -444,33 +449,189 @@ function accents(S) {
   S.at(C.pageSphere, () => { I.taiko(S, C.pageSphere, 0.4, { size: 0.6 }); I.crash(S, C.pageSphere, 0.04); });
   hit(S, C.earthrise, { power: 0.72, chord: 'Bb' });                             // the noble lift
   hit(S, 49.5, { power: 1.0, chord: 'Dm' });                                     // ACT III
-  hit(S, C.pullBack, { power: 1.3, braam: 50, chord: 'D', subHz: 95 });          // BRAAM 3: the peak
+  hit(S, C.pullBack, { power: 1.3, braam: 50, chord: 'D', subHz: 95, ring: 0.8 }); // BRAAM 3: the peak (blooms, then dies away)
   S.at(C.pullBack, () => { I.taiko(S, C.pullBack + 0.02, 0.6, { size: 0.6 }); I.kick(S, C.pullBack, 0.9); });
   S.at(C.pullBack, () => O.brass(S, C.pullBack, 0.9, CHORDS.D.brass, { level: 0.6, sfz: true, bright: 2800, release: 0.5 }));
   S.at(C.pullBack, () => O.chord(S, 'strings', C.pullBack, C.pullBack + 0.9, CHORDS.D.str, { level: 0.55, attack: 0.03, release: 0.4, cutoff: 5500 }));
 }
 
-// FINAL BUTTON at 60.0: suck-back, then the biggest hit of the film with a long tail
-// (BRAAM 4), D major, and the theme head D — A — D' on horns + piano.
-function finalButton(S) {
-  const t = C.finalImpact;
-  S.at(t - 0.9, () => I.swellIn(S, t - 0.08, 0.82, { level: 0.05, bus: 'end', top: 7000 }));
-  S.at(t, () => {
-    const D_MAJOR = [38, 50, 57, 62, 66, 69, 74];
-    I.boom(S, t, { level: 1.0, f0: 110, f1: 32, decay: 4.5, bus: 'endDry' });
-    I.taiko(S, t, 0.95, { size: 1, bus: 'end' });
-    I.taiko(S, t + 0.02, 0.6, { size: 0.6, bus: 'end' });
-    I.kick(S, t, 0.9, { bus: 'endDry' });
-    I.crash(S, t, 0.1, { bus: 'end' });
-    X.impact(S, t, { level: 0.14, bus: 'end', metal: 1 });
-    O.braam(S, t, 50, { level: 0.6, power: 1.3, dur: 3.2, bus: 'end' });
-    O.brass(S, t, 1.4, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 2.6, bus: 'end' });
-    O.chord(S, 'choirA', t, t + 1.6, [57, 62, 66, 69, 74, 78], { level: 0.45, attack: 0.05, release: 3.0, cutoff: 5200, bus: 'end' });
-    O.chord(S, 'strings', t, t + 1.4, D_MAJOR, { level: 0.4, attack: 0.04, release: 3.2, cutoff: 3800, bus: 'end' });
-    O.line(S, 'horn', [[t, 62, 0.5], [t + 0.5, 69, 0.5], [t + 1.0, 74, 1.8]], { level: 0.28, cutoff: 2400, bus: 'end', octaves: [0, -12], release: 2.0 });
-    I.harpRoll(S, t, [50, 57, 62, 66, 69, 74, 78, 81], { level: 0.08, bus: 'end' });
+// ------------------------------------------------------------------ the CODA (54.5 – 72.5)
+//
+//   54.5 pullBack    the D-major climax hit blooms (strings + choir into the long space) and
+//                    dies away naturally — no cut to silence
+//   55.5 earthReveal tender REPRISE of the theme: solo piano (+ a celesta shadow), a halo of
+//                    high violins on A–D, a low D pedal; lots of air
+//   56.5 – 61        it gathers: violas / cellos (Bb – F – Gm – D/F♯ – Gm – Asus4, the bass
+//                    walking Bb F G F♯ G A), a distant choir from 57.25, soft horns from 58.5
+//   61.0 ideasLine   a hushed breath: piano + choir on A sus4, the piano asks D — A …
+//   63.6 sunrise     … the swell: Bb → C (♭VI – ♭VII) strings, horns, choir and low brass
+//                    crescendo, tremolo, a rising timpani roll and cymbal swell; a short
+//                    suck-back (64.92)
+//   65.0 finalImpact … answered: the loudest moment of the film — sub, taiko ensemble, BRAAM,
+//                    full orchestra + choir on D major, horns (+ trumpets, violins) singing
+//                    the theme head D — A — D'; it rings into the long space
+//   66.8 closingLine piano + celesta echo the head, pp, over the decaying chord
+//   67 – 72          a peaceful D-major resolution (strings, "ooh" choir) fading out over a
+//                    final soft low D (69.0); silence by ~72.3
+//
+// Studio A (orchestra) plays the reprise and the swell on the film buses (hall + stage) and
+// falls silent at the suck-back; studio B plays the bloom, the timpani / cymbals, the final
+// impact and the resolution on the finale buses (5 s space).
+
+// Coda harmony: [start, end, violas/cellos/basses, choir, horns]
+const CODA = [
+  [56.5, 57.25, [34, 46, 53, 58, 62], [58, 62, 65], null],              // Bb
+  [57.25, 58.0, [29, 41, 53, 57, 60], [57, 60, 65], null],              // F
+  [58.0, 58.5, [31, 43, 50, 58, 62], [55, 58, 62], null],               // Gm
+  [58.5, 59.25, [30, 42, 50, 57, 62], [57, 62, 66], [54, 57, 62]],      // D/F♯
+  [59.25, 60.0, [31, 43, 50, 58, 62], [55, 58, 62, 67], [55, 58, 62]],  // Gm
+  [60.0, 61.0, [33, 45, 52, 57, 62, 64], [57, 62, 64, 69], [57, 62, 64]], // A sus4
+];
+// the reprise melody (piano), a bar-and-a-bit slower than the gentle statement
+const REPRISE = [[55.5, 62], [56.0, 69], [56.5, 74], [57.25, 72], [58.0, 70], [58.5, 69], [59.25, 67], [60.0, 69]];
+// the piano's left hand: rolling chord tones under each harmony
+const REPRISE_LH = [
+  [55.5, 38, 1], [56.0, 45, 0.8],
+  [56.5, 46, 1], [56.75, 53], [57.0, 58],
+  [57.25, 41, 1], [57.5, 48], [57.75, 57],
+  [58.0, 43, 1], [58.25, 50],
+  [58.5, 42, 1], [58.75, 50], [59.0, 57],
+  [59.25, 43, 1], [59.5, 50], [59.75, 58],
+  [60.0, 45, 1], [60.25, 52], [60.5, 57], [60.75, 62],
+];
+const SUCK = C.finalImpact - 0.08; // the short suck-back before the button
+const D_MAJOR = [38, 50, 57, 62, 66, 69, 74];
+
+// Studio A: reprise → gathering → hush → swell (film buses)
+function coda(S) {
+  // low D pedal (basses + a soft drone) under the reprise's first phrase
+  S.at(55.2, () => {
+    O.chord(S, 'strings', 55.2, 56.7, [26, 38], { level: 0.15, attack: 0.9, release: 0.7, cutoff: 650, dark: 0.6 });
+    I.drone(S, 55.3, 56.6, 26, { level: 0.03, attack: 0.9, release: 0.9, beat: 0.2 });
   });
-  [[t + 0.0, 74], [t + 0.5, 81], [t + 1.0, 86]].forEach(([u, m]) => S.at(u, () => I.piano(S, u, m, { level: 0.14, bus: 'end' })));
+  // the halo: violins on A–D (a common tone of every chord of the reprise), sul tasto, growing
+  S.at(55.35, () => O.chord(S, 'strings', 55.35, 61.0, [81, 86], { level: 0.085, attack: 1.2, release: 0.6, cutoff: 3400, dark: 0.55, swell: 0.45 }));
+  // solo piano, a celesta shadow for the first phrase
+  REPRISE.forEach(([t, m], i) => S.at(t, () => {
+    I.piano(S, t, m, { level: 0.15, pan: -0.08 });
+    if (i < 5) I.celesta(S, t, m + 12, { level: 0.02, pan: 0.3 });
+  }));
+  REPRISE_LH.forEach(([t, m, accent]) => S.at(t, () => I.piano(S, t, m, { level: accent ? 0.085 * accent : 0.06, pan: -0.2 })));
+  // violas / cellos from storyOne, growing; choir from 57.25; horns from storyTwo
+  CODA.forEach(([a, b, str, choir, horns], k) => {
+    const u = (a - 56.5) / 4;
+    const t0 = k ? a - 0.08 : a;
+    // violas / cellos first; the basses (the lowest note) join on storyTwo
+    S.at(t0, () => O.chord(S, 'strings', t0, b, a < C.storyTwo ? str.slice(1) : str, {
+      level: 0.13 + 0.15 * u, attack: k ? 0.3 : 0.7, release: k === CODA.length - 1 ? 0.8 : 0.45, cutoff: 1700 + 1600 * u, dark: 0.5,
+    }));
+    if (a >= 57.25) S.at(t0, () => O.chord(S, 'choirA', t0, b, choir, { level: 0.05 + 0.07 * u, attack: k === 1 ? 0.6 : 0.3, release: 0.5, cutoff: 3200, dark: 0.5, bus: 'choir' }));
+    if (horns) S.at(t0, () => O.chord(S, 'horn', t0, b, horns, { level: 0.1 + 0.05 * u, attack: k === 3 ? 0.5 : 0.3, release: 0.5, cutoff: 1500, dark: 0.5, bus: 'horn' }));
+  });
+
+  // ideasLine: the hush — piano + choir on A sus4, a thread of violins and a soft low A
+  const h0 = C.ideasLine, h1 = C.sunrise + 0.1;
+  S.at(h0 - 0.1, () => {
+    O.chord(S, 'choirO', h0 - 0.1, h1, [57, 62, 64, 69], { level: 0.1, attack: 0.5, release: 0.5, cutoff: 3000, dark: 0.5, bus: 'choir' });
+    O.chord(S, 'strings', h0 - 0.1, h1, [81, 86, 88], { level: 0.045, attack: 0.6, release: 0.5, cutoff: 3200, dark: 0.55 });
+    O.chord(S, 'strings', h0 - 0.1, h1, [33, 45], { level: 0.07, attack: 0.6, release: 0.5, cutoff: 500, dark: 0.6 });
+  });
+  S.at(h0, () => {
+    I.piano(S, h0, 33, { level: 0.07, pan: -0.2 });
+    [74, 76, 81].forEach((m, i) => I.piano(S, h0 + 0.12 * i, m, { level: 0.09, pan: 0.1 }));
+  });
+  // … the piano asks the theme's question (D — A), leaving D' for the horns to answer
+  [[62.2, 62], [62.7, 69]].forEach(([t, m]) => S.at(t, () => {
+    I.piano(S, t, m, { level: 0.13, pan: -0.08 });
+    I.celesta(S, t, m + 12, { level: 0.018, pan: 0.3 });
+  }));
+
+  // sunrise: the swell, Bb → C, everything crescendo into the suck-back
+  const s0 = C.sunrise, s1 = 64.3;
+  S.at(s0 - 0.05, () => {
+    O.chord(S, 'strings', s0 - 0.05, s1, CHORDS.Bb.str.concat([74, 77]), { level: 0.42, attack: 0.3, release: 0.15, cutoff: 4200, swell: 0.45 });
+    O.chord(S, 'choirA', s0 - 0.05, s1, [58, 62, 65, 70], { level: 0.26, attack: 0.3, release: 0.15, cutoff: 4800, swell: 0.45, bus: 'choir' });
+    O.brass(S, s0, s1 - s0, [46, 53, 58, 62], { kind: 'horn', level: 0.26, attack: 0.55, release: 0.12, bright: 1600, bus: 'horn' });
+    O.brass(S, s0, s1 - s0, CHORDS.Bb.brass, { level: 0.2, attack: 0.6, release: 0.12, bright: 1300 });
+    O.tremolo(S, s0, SUCK, [74, 77, 81, 86], { level: 0.2, cutoff: 5000 });
+  });
+  S.at(s1 - 0.05, () => {
+    O.chord(S, 'strings', s1 - 0.05, SUCK, CHORDS.C.str.concat([72, 76, 79]), { level: 0.66, attack: 0.25, release: 0.03, cutoff: 5500, swell: 0.55 });
+    O.chord(S, 'choirA', s1 - 0.05, SUCK, [55, 60, 64, 67, 72], { level: 0.38, attack: 0.25, release: 0.03, cutoff: 5200, swell: 0.55, bus: 'choir' });
+    O.brass(S, s1, SUCK - s1, [48, 55, 60, 64], { kind: 'horn', level: 0.4, attack: 0.3, release: 0.03, bright: 2200, bus: 'horn' });
+    O.brass(S, s1, SUCK - s1, CHORDS.C.brass, { level: 0.32, attack: 0.3, release: 0.03, bright: 1900 });
+  });
+}
+
+// Studio B: the bloom after the climax, the sunrise percussion, the final button, the echo
+// and the resolution (finale buses: 5 s space)
+function codaFinale(S) {
+  // pullBack: the D-major chord blooms into the long space and decays into the reprise
+  const p = C.pullBack;
+  S.at(p + 0.05, () => {
+    O.chord(S, 'strings', p + 0.05, p + 0.8, [50, 57, 62, 66, 69, 74, 78, 81], { level: 0.2, attack: 0.3, release: 1.7, cutoff: 4200, dark: 0.5, bus: 'end' });
+    O.chord(S, 'choirA', p + 0.1, p + 0.9, [57, 62, 66, 69, 74], { level: 0.13, attack: 0.35, release: 1.5, cutoff: 4500, dark: 0.5, bus: 'end' });
+  });
+
+  // sunrise: a rising timpani roll on D and a cymbal swell into the suck-back
+  const s0 = C.sunrise;
+  for (let t = s0, k = 0; t < SUCK - 0.03; t += STEP / 2, k++) {
+    const u = (t - s0) / (SUCK - s0);
+    S.at(t, () => I.tom(S, t, 0.03 + 0.3 * u * u, { f: 72, pan: k % 2 ? 0.2 : -0.2, bus: 'endDry' }));
+  }
+  S.at(s0, () => {
+    I.riser(S, s0, SUCK, { level: 0.05, from: 300, to: 7500, bus: 'end' });
+    // the sun breaks: a harp sweep up the Bb chord and a soft low bloom
+    I.harpRoll(S, s0, [46, 53, 58, 62, 65, 70, 74, 77, 82], { level: 0.06, spread: 0.04, bus: 'end' });
+    I.boom(S, s0, { level: 0.14, f0: 58, f1: 40, decay: 1.6, bus: 'endDry' });
+  });
+  S.at(SUCK - 1.3, () => I.revCymbal(S, SUCK, 1.3, { level: 0.08, bus: 'end' }));
+  S.at(SUCK - 0.8, () => I.swellIn(S, SUCK, 0.8, { level: 0.06, bus: 'end', top: 7000 }));
+
+  // FINAL IMPACT: the button — the loudest moment of the film
+  const t = C.finalImpact;
+  S.at(t, () => {
+    I.boom(S, t, { level: 1.0, f0: 110, f1: 32, decay: 5, bus: 'endDry' });
+    I.taiko(S, t, 1.0, { size: 1, bus: 'end' });
+    I.taiko(S, t + 0.018, 0.7, { size: 1, bus: 'endDry' });
+    I.taiko(S, t + 0.035, 0.55, { size: 0.6, bus: 'end' });
+    I.kick(S, t, 0.95, { bus: 'endDry' });
+    I.crash(S, t, 0.12, { bus: 'end' });
+    I.crash(S, t + 0.01, 0.08, { bus: 'endDry' });
+    X.impact(S, t, { level: 0.16, bus: 'end', metal: 1 });
+    O.braam(S, t, 50, { level: 0.62, power: 1.3, dur: 1.4, close: 1.0, release: 0.5, bus: 'end' });
+    O.brass(S, t, 1.5, [26, 38, 45, 50, 54, 57], { level: 0.55, sfz: true, bright: 2300, release: 2.4, bus: 'end' });
+    O.chord(S, 'choirA', t, t + 1.4, [57, 62, 66, 69, 74, 78], { level: 0.5, attack: 0.05, release: 2.6, cutoff: 5200, bus: 'end' });
+    O.chord(S, 'strings', t, t + 1.4, D_MAJOR.concat([78, 81, 86]), { level: 0.5, attack: 0.04, release: 2.8, cutoff: 4500, bus: 'end' });
+    I.harpRoll(S, t, [50, 57, 62, 66, 69, 74, 78, 81], { level: 0.09, bus: 'end' });
+    // the answer: horns in octaves (+ trumpets and violins above) sing D — A — D'
+    const head = [[t, 62, 0.5], [t + 0.5, 69, 0.5], [t + 1.0, 74, 1.35]];
+    O.line(S, 'horn', head, { level: 0.5, cutoff: 2600, bus: 'end', octaves: [0, -12], release: 1.8 });
+    O.line(S, 'brass', head, { level: 0.2, cutoff: 3400, bus: 'end', octaves: [12], release: 1.5 });
+    O.line(S, 'strings', head, { level: 0.16, cutoff: 6000, bus: 'end', octaves: [12, 24], release: 2.0 });
+  });
+
+  // closingLine: piano + celesta echo the theme head, pp, over the decaying chord
+  const e = C.closingLine;
+  [[e, 74], [e + 0.5, 81], [e + 1.0, 86]].forEach(([u, m], i) => S.at(u, () => {
+    I.piano(S, u, m, { level: 0.14 - 0.01 * i, bus: 'end', pan: 0.1 });
+    I.celesta(S, u + 0.01, m + 12, { level: 0.028, bus: 'end', pan: 0.3 });
+  }));
+
+  // the resolution: a peaceful D-major bed (strings + "ooh" choir) fading out …
+  S.at(66.6, () => {
+    O.chord(S, 'strings', 66.6, 69.8, [38, 50, 57, 62, 66, 69, 74, 78], { level: 0.17, attack: 1.2, release: 3.5, cutoff: 2600, dark: 0.5, bus: 'end' });
+    O.chord(S, 'choirO', 66.8, 69.6, [57, 62, 66, 69], { level: 0.1, attack: 1.4, release: 3.2, cutoff: 3200, dark: 0.5, bus: 'end' });
+  });
+  // … over a final soft low D (piano, timpani, basses) and one last high glint
+  S.at(68.4, () => O.chord(S, 'strings', 68.4, 69.8, [26], { level: 0.12, attack: 0.8, release: 2.4, cutoff: 500, dark: 0.6, bus: 'end' }));
+  S.at(69.0, () => {
+    I.piano(S, 69.0, 26, { level: 0.08, bus: 'end' });
+    I.piano(S, 69.0, 38, { level: 0.1, bus: 'end' });
+    I.tom(S, 69.0, 0.07, { f: 72, bus: 'end' });
+    I.pluck(S, 69.03, 50, { level: 0.06, bus: 'end' });
+    I.celesta(S, 69.05, 86, { level: 0.014, bus: 'end', pan: 0.25 });
+  });
 }
 
 // ------------------------------------------------------------------ the MOONSHOT
@@ -555,6 +716,16 @@ function preload(S) {
   [55, 57, 58, 62, 67, 69].forEach((m) => pairs.push(['choirO', m]));
   [26, 86, 88, 90, 93].forEach((m) => pairs.push(['strings', m]));
   [50, 62, 67, 69, 74].forEach((m) => pairs.push(['horn', m], ['horn', m - 12]));
+  // the coda (appended, so the loops above render exactly as before)
+  for (const [, , str, choir, horns] of CODA) {
+    str.forEach((m) => pairs.push(['strings', m]));
+    choir.forEach((m) => pairs.push(['choirA', m]));
+    (horns ?? []).forEach((m) => pairs.push(['horn', m]));
+  }
+  [78, 79, 81, 86, 88, 93, 98].forEach((m) => pairs.push(['strings', m]));
+  [64, 66, 69].forEach((m) => pairs.push(['choirO', m]));
+  [46, 48, 53, 55, 58, 60, 64].forEach((m) => pairs.push(['horn', m]));
+  [86].forEach((m) => pairs.push(['brass', m]));
   O.preloadSections(S, pairs);
 }
 
@@ -568,8 +739,10 @@ export function kickTimes() {
 /**
  * Schedule the music into Studio S. The score renders in parallel studios, so
  * `part` selects which layers this studio plays:
- *   'orchestra' — strings, choir, theme, low brass, ostinato, act I colour
- *   'rhythm'    — percussion, arps, transitions, hits, final button
+ *   'orchestra' — strings, choir, theme, low brass, ostinato, act I colour, the coda's
+ *                 reprise and swell
+ *   'rhythm'    — percussion, arps, transitions, hits, the coda's bloom, final button and
+ *                 resolution
  */
 export function arrangeMusic(S, part = 'all') {
   const orch = part === 'all' || part === 'orchestra';
@@ -583,6 +756,7 @@ export function arrangeMusic(S, part = 'all') {
     lowBrass(S);
     moonshot(S);
     actOne(S);
+    coda(S);
   }
   if (rest) {
     rhythm(S, []);
@@ -590,7 +764,7 @@ export function arrangeMusic(S, part = 'all') {
     arps(S);
     transitions(S);
     accents(S);
-    finalButton(S);
+    codaFinale(S);
   }
   duckPads(S);
   return { kicks: kickTimes(), suckBacks: [OST_END, C.finalImpact - 0.08] };

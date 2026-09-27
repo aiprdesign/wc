@@ -308,16 +308,27 @@ function montage(S) {
 }
 
 function finale(S) {
-  // After the drop: only a faint resonance and air remain.
-  const t0 = C.musicDrop - 0.5, t1 = C.finalImpact;
-  S.at(t0, () => {
-    I.drone(S, t0, t1 - 0.4, 38, { level: 0.009, attack: 1.2, release: 0.8, beat: 0.2, bus: 'end' });
-    I.drone(S, t0 + 0.2, t1 - 0.6, 57, { level: 0.0025, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
-    X.air(S, t0, t1 - 0.5, { level: 0.004, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
+  // Everything here sits under the coda on the finale buses (the long space).
+  // pullBack: the camera pulls back from the stars — a slow, wide rush of air
+  S.at(C.pullBack, () => I.whoosh(S, C.pullBack, 1.6, { level: 0.045, f0: 140, f1: 900, pan0: 0.5, pan1: -0.5, peak: 0.25, bus: 'end' }));
+  // earthReveal → sunrise: the faint air of space around the Earth, and a whisper of low resonance
+  S.at(C.earthReveal - 0.3, () => {
+    X.air(S, C.earthReveal - 0.3, C.fadeOut, { level: 0.005, freq: 3000, attack: 1.5, release: 2.0, bus: 'end' });
+    I.drone(S, C.earthReveal, C.ideasLine + 1.5, 50, { level: 0.004, attack: 2.0, release: 1.5, beat: 0.25, bus: 'end', pan: -0.2 });
   });
+  // story lines: a tiny glint as each line of text appears
+  S.at(C.storyOne, () => I.bell(S, C.storyOne, 93, { level: 0.008, decay: 2.2, pan: 0.35, bus: 'end' }));
+  S.at(C.storyTwo, () => I.bell(S, C.storyTwo, 90, { level: 0.008, decay: 2.2, pan: -0.35, bus: 'end' }));
+  // ideasLine: a soft intake of breath into the title, then a glassy suspended shimmer
+  S.at(C.ideasLine - 0.6, () => I.swellIn(S, C.ideasLine, 0.6, { level: 0.012, bus: 'end', top: 3500 }));
+  S.at(C.ideasLine, () => [86, 88, 93].forEach((m, i) => I.bell(S, C.ideasLine + 0.05 + i * 0.07, m, { level: 0.008, decay: 2.8, pan: -0.4 + i * 0.4, bus: 'end' })));
+  // ideasOut: the title lifts away
+  S.at(C.ideasOut - 0.2, () => I.whoosh(S, C.ideasOut - 0.2, 0.7, { level: 0.03, f0: 400, f1: 3000, pan0: -0.3, pan1: 0.4, peak: 0.45, bus: 'end' }));
+  // sunrise: light breaking over the limb — a brightening shimmer of air
+  S.at(C.sunrise, () => X.air(S, C.sunrise, C.finalImpact - 0.1, { level: 0.012, freq: 6500, attack: 1.2, release: 0.05, bus: 'end', drift: 0.3 }));
   // (the final impact itself — the score's button — lives in music.js)
   // closingLine: faint high shimmer (D major add9)
-  S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.012, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));
+  S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.01, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));
 }
 
 // Designed air movement on the sequence changes that have no hit of their own.

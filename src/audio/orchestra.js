@@ -500,21 +500,22 @@ function driveCurve(S) {
  * BRAAM: a huge detuned low-brass + saw cluster, driven into saturation, with a
  * lowpass that rips open then closes, over a sub-octave. `root` is a MIDI note.
  */
-export function braam(S, t, root, { level = 0.5, dur = 2.4, power = 1, bus = 'brass' } = {}) {
-  const end = t + dur + 0.45;
+export function braam(S, t, root, { level = 0.5, dur = 2.4, power = 1, bus = 'brass', close = dur / 3, release = 0.09 } = {}) {
+  // close: time constant of the filter closing after the rip · release: of the fade at t + dur
+  const end = t + dur + Math.max(0.45, release * 5);
   const pre = S.gain(0.9);
   const shaper = S.ctx.createWaveShaper();
   shaper.curve = driveCurve(S);
   const lp = S.filter('lowpass', 90, 3.5);
   lp.frequency.setValueAtTime(90, t);
   lp.frequency.exponentialRampToValueAtTime(900 + 1700 * power, t + 0.09);
-  lp.frequency.setTargetAtTime(420, t + 0.09, dur / 3);
-  lp.frequency.setTargetAtTime(90, t + dur, 0.2);
+  lp.frequency.setTargetAtTime(420, t + 0.09, close);
+  lp.frequency.setTargetAtTime(90, t + dur, Math.max(0.2, release * 1.5));
   const amp = S.gain(0);
   amp.gain.setValueAtTime(0, t);
   amp.gain.linearRampToValueAtTime(level, t + 0.02);
   amp.gain.setTargetAtTime(level * 0.45, t + 0.05, 0.45);
-  amp.gain.setTargetAtTime(0, t + dur, 0.09);
+  amp.gain.setTargetAtTime(0, t + dur, release);
   pre.connect(shaper).connect(lp).connect(amp);
   S.out(amp, bus);
   const nodes = [pre, shaper, lp, amp];

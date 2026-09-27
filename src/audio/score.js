@@ -1,9 +1,11 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v5: the v4 realistic
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v6: the v5 realistic
 // three-act trailer score — humanised, round-robin, modelled timbres, a stage with early
-// reflections, designed sound effects and an analogue-style master — with the Moonshot
-// chapter composed into act II: two bars at 38.5–42.5, everything after it +4 s).
+// reflections, designed sound effects, an analogue-style master and the Moonshot chapter in
+// act II — with a new 18 s coda: the climax blooms into a tender piano reprise of the theme
+// that gathers, breathes, swells on the sunrise into the final button at 65 s and resolves
+// in D major, silent by ~72.3 s. Everything before the pullBack (54.5) is unchanged.)
 //
-// renderScore() synthesises the whole 64 s score (+ tail) offline (Web Audio only: no
+// renderScore() synthesises the whole 72 s score (+ tail) offline (Web Audio only: no
 // samples) and returns an AudioBuffer that the player starts at any offset.
 //
 //   music.js       harmony, the heroic theme, orchestra, rhythm section, trailer hits
@@ -17,9 +19,9 @@
 //
 // Mix topology (rendered as two parallel studios — see renderScore — then summed):
 //   instrument buses ── seating (pan, air absorption) ─┬─ stage early reflections ─┐
-//   instrument buses ─┬─ film bus ── (drops out at CUES.musicDrop) ─┐
-//   hall (3 s) ───────┘                                             ├─ master HP → buffer
-//   end buses ── finale bus (+ 5 s "space") ────────────────────────┘
+//   instrument buses ─┬─ film bus ── (ends at the suck-back before finalImpact) ─┐
+//   hall (3 s) ───────┘                                                           ├─ master HP → buffer
+//   end buses ── finale bus (+ 5 s "space", from the pullBack; fades out at the end) ─┘
 //   then, on the rendered buffer: loudness trim → tape/console saturation →
 //   two-band glue compressor → room tone → limiter at -1 dBFS
 
@@ -34,13 +36,14 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 5;
+export const SCORE_VERSION = 6;
 
 const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
-function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
+// hallUntil: when this studio's film bus (and its hall) has nothing more to play.
+function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.finalImpact } = {}) {
   const { ctx } = S;
 
   // Master: subsonic high-pass only; compression, loudness and limiting happen
@@ -48,8 +51,8 @@ function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
   const master = S.gain(0.5);
   master.connect(S.filter('highpass', 24, 0.6)).connect(ctx.destination);
 
-  // Everything up to the drop lives on the film bus (dry + its own hall reverb),
-  // so a single fade silences the music AND its reverb tail at musicDrop.
+  // Everything up to the final button lives on the film bus (dry + its own hall reverb),
+  // so the suck-back silences the music AND its reverb tail in one move.
   const film = S.gain(1);
   film.connect(master);
   // suck-back before the pullBack: 80 ms of true silence (music AND reverb)
@@ -57,8 +60,10 @@ function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
   film.gain.linearRampToValueAtTime(0, C.pullBack - 0.08);
   film.gain.setValueAtTime(0, C.pullBack - 0.003);
   film.gain.linearRampToValueAtTime(1, C.pullBack);
-  film.gain.setValueAtTime(1, C.musicDrop);
-  film.gain.setTargetAtTime(0, C.musicDrop, 0.07);
+  // … and the short suck-back before the final button: the swell (and its hall) stops
+  // dead 80 ms before the hit; the button and everything after it are on the finale bus
+  film.gain.setValueAtTime(1, C.finalImpact - 0.1);
+  film.gain.linearRampToValueAtTime(0, C.finalImpact - 0.08);
 
   // The finale (resonance, final impact, closing shimmer) has its own long space.
   const finale = S.gain(1);
@@ -67,20 +72,20 @@ function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
   finale.gain.linearRampToValueAtTime(0, C.finalImpact - 0.08);
   finale.gain.setValueAtTime(0, C.finalImpact - 0.003);
   finale.gain.linearRampToValueAtTime(1, C.finalImpact);
-  finale.gain.setValueAtTime(1, C.fadeOut);
-  finale.gain.linearRampToValueAtTime(0, DURATION + 0.5);
+  finale.gain.setValueAtTime(1, C.fadeOut + 0.4);
+  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by ~72.3 s
 
   // Reverbs are only wired into the graph while they can be heard (a connected
   // ConvolverNode costs CPU even when silent). Sends are high-passed so the low
   // end stays dry, tight and mono.
-  //   hall  — large orchestral hall with pre-delay (until just after the drop)
+  //   hall  — large orchestral hall with pre-delay (until the studio's film bus is done)
   //   space — very long stereo space for the finale (from the pullBack on)
   // (Percussion carries its own tight room, baked into its one-shots.)
   const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.6, preDelay: 0.045, brightHz: 7500, darkHz: 1300 }, 0.019, S.cache);
   const hallIn = S.filter('highpass', 170, 0.6);
   hallIn.connect(hall.input);
   hall.output.connect(film);
-  S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
+  S.at(hallUntil, () => { hallIn.disconnect(); hall.output.disconnect(); });
 
   const spaceIn = S.filter('highpass', 90, 0.6);
   if (withSpace) { // only studios that play the finale pay for its 5 s convolution
@@ -106,7 +111,7 @@ function buildMixer(S, { space: withSpace = true, stage = true } = {}) {
     early.output.connect(earlyOut);
     earlyOut.connect(film);
     earlyOut.connect(hallIn);
-    S.at(C.musicDrop + 1.0, () => { earlyOut.disconnect(); });
+    S.at(hallUntil, () => { earlyOut.disconnect(); });
   }
 
   // Seating (strings left-centre, horns centre, brass centre-right, choir wide) is
@@ -158,10 +163,12 @@ export async function renderScore(sampleRate = 48000) {
   // every part gets the same halls, stage and film/finale automation):
   //   A — the orchestra, piano, harp, celesta (with the stage early reflections);
   //   B — rhythm section, hits, transitions, finale and the sound design.
+  // (B's film bus has nothing after the pullBack's hall tail: the coda it plays is all on
+  // the finale buses, so its hall is switched off early.)
   const A = new Studio(sampleRate, DURATION + TAIL, 1492);
   const B = new Studio(sampleRate, DURATION + TAIL, 1815, A);
   buildMixer(A, { space: false });
-  buildMixer(B, { stage: false });
+  buildMixer(B, { stage: false, hallUntil: C.earthReveal + 3.5 });
   const { kicks } = arrangeMusic(A, 'orchestra');
   arrangeMusic(B, 'rhythm');
   arrangeCues(B);
@@ -181,7 +188,7 @@ export async function renderScore(sampleRate = 48000) {
   saturate(buffer, { drive: 0.9 });
   glue2(buffer);
   // the hall never goes digitally silent (fades in with the opening, out at the end)
-  roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (DURATION + 0.8 - t) / 1.5)) });
+  roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (DURATION + 0.3 - t) / 1.5)) });
   const glued = rmsBetween(buffer, C.gear, C.pullBack);
   limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
   return buffer;
