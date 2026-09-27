@@ -21,6 +21,13 @@ export function mulberry32(seed) {
   };
 }
 
+/** 32-bit FNV-1a hash of a string (seeds per-buffer RNGs). */
+export function hashKey(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
 // ---------------------------------------------------------------- envelopes
 
 /** Percussive envelope: short linear attack, exponential decay (`decay` = time to -60 dB). */
@@ -50,16 +57,50 @@ export function ahr(param, t0, t1, peak, attack, release) {
 const NOISE_SECONDS = 4;
 
 export class Studio {
-  constructor(sampleRate, seconds, seed = 1492) {
+  /**
+   * `shared` (another Studio) lets several studios render parts of the score in
+   * parallel (one OfflineAudioContext each) while sharing the noise buffers and
+   * the cache of pre-rendered one-shots / section loops (AudioBuffers are not
+   * tied to a context).
+   */
+  constructor(sampleRate, seconds, seed = 1492, shared = null) {
     this.sr = sampleRate;
     this.duration = seconds;
     this.ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
     this.random = mulberry32(seed);
     this.events = [];
     this.buses = new Map();
-    this.cache = new Map(); // rendered modal-voice buffers
+    this.cache = shared ? shared.cache : new Map(); // rendered one-shots and loops
     this.voices = [];       // live voices awaiting disposal
-    this.buffers = this.#makeNoise();
+    this.buffers = shared ? shared.buffers : this.#makeNoise();
+  }
+
+  /**
+   * A view of this studio with its own RNG seeded from `key`: pre-rendered buffers
+   * are synthesised through it, so they come out identical whoever renders them
+   * first (a build callback or the idle-time warm-up).
+   */
+  seeded(key) {
+    const v = Object.create(this);
+    v.random = mulberry32(hashKey(key));
+    return v;
+  }
+
+  /** Queue buffer synthesis to run on the main thread while the renderer is busy. */
+  warm(fn) { (this.warmups ??= []).push(fn); }
+
+  /** Humanised time: t plus a random offset in ±ms/2 … (one-sided when `late`). */
+  human(t, ms = 10, late = false) {
+    const j = (late ? this.random() : this.random() - 0.5) * ms * 0.001;
+    return Math.max(0, t + j);
+  }
+
+  /** Round-robin index per instrument key (deterministic). */
+  robin(key, n) {
+    this._rr ??= new Map();
+    const v = ((this._rr.get(key) ?? -1) + 1 + (this.random() < 0.3 ? 1 : 0)) % n;
+    this._rr.set(key, v);
+    return v;
   }
 
   rand(a = 0, b = 1) { return a + (b - a) * this.random(); }
@@ -103,7 +144,17 @@ export class Studio {
         ctx.resume();
       });
     }
-    const buffer = await ctx.startRendering();
+    const rendering = ctx.startRendering();
+    // idle-time warm-up: synthesise queued one-shots in small slices between
+    // render windows, while the render thread works through the quiet opening
+    const queue = this.warmups ?? [];
+    const pump = () => {
+      if (!queue.length || failure) return;
+      try { queue.shift()(); } catch (err) { failure = err; }
+      setTimeout(pump, 0);
+    };
+    setTimeout(pump, 0);
+    const buffer = await rendering;
     if (failure) throw failure;
     return buffer;
   }

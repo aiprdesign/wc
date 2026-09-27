@@ -423,20 +423,39 @@ function preload(S) {
   O.preloadSections(S, pairs);
 }
 
-export function arrangeMusic(S) {
+/** Kick times of the rhythm section (for sidechain ducking in any studio). */
+export function kickTimes() {
   const kicks = [];
-  preload(S);
-  stringsLayer(S);
-  choirLayer(S);
-  themeLayer(S);
-  actOne(S);
-  ostinato(S);
-  rhythm(S, kicks);
-  lowBrass(S);
-  arps(S);
-  transitions(S);
-  accents(S);
-  finalButton(S);
-  duckPads(S);
-  return { kicks, suckBacks: [OST_END, C.finalImpact - 0.08] };
+  for (const [a, b, p] of KICK) pattern(a, b, p, (t) => kicks.push(t));
+  return kicks;
 }
+
+/**
+ * Schedule the music into Studio S. The score renders in parallel studios, so
+ * `part` selects which layers this studio plays:
+ *   'orchestra' — sustained orchestra: strings, choir, theme, low brass, ostinato
+ *   'rhythm'    — act I colour, percussion, arps, transitions, hits, final button
+ */
+export function arrangeMusic(S, part = 'all') {
+  const orch = part === 'all' || part === 'orchestra';
+  const rest = part === 'all' || part === 'rhythm';
+  if (orch) {
+    preload(S);
+    stringsLayer(S);
+    choirLayer(S);
+    themeLayer(S);
+    ostinato(S);
+    lowBrass(S);
+  }
+  if (rest) {
+    actOne(S);
+    rhythm(S, []);
+    arps(S);
+    transitions(S);
+    accents(S);
+    finalButton(S);
+  }
+  duckPads(S);
+  return { kicks: kickTimes(), suckBacks: [OST_END, C.finalImpact - 0.08] };
+}
+export const __layers = { preload, stringsLayer, choirLayer, themeLayer, ostinato, lowBrass, actOne, rhythm: (S) => rhythm(S, []), arps, transitions, accents, finalButton };

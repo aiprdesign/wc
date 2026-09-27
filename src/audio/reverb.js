@@ -54,12 +54,15 @@ export function makeImpulse(ctx, random, {
  * Half-price stereo reverb: one mono convolution, widened by feeding the right
  * channel a slightly delayed copy (the noise-like tail decorrelates completely).
  */
-export function makeWideMonoReverb(ctx, random, options, spread = 0.019) {
+export function makeWideMonoReverb(ctx, random, options, spread = 0.019, cache = null) {
   const conv = ctx.createConvolver();
   conv.normalize = false;
   conv.channelCount = 1;
   conv.channelCountMode = 'explicit';
-  conv.buffer = makeImpulse(ctx, random, { ...options, channels: 1 });
+  const key = `ir:${JSON.stringify(options)}`;
+  let ir = cache?.get(key);
+  if (!ir) { ir = makeImpulse(ctx, random, { ...options, channels: 1 }); cache?.set(key, ir); }
+  conv.buffer = ir;
   const delay = ctx.createDelay(0.1);
   delay.delayTime.value = spread;
   const merge = ctx.createChannelMerger(2);

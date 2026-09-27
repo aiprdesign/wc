@@ -23,6 +23,7 @@ import { Studio } from './core.js';
 import { makeWideMonoReverb } from './reverb.js';
 import { applyGain, compress, limit, rmsBetween } from './mastering.js';
 import { arrangeMusic } from './music.js';
+import { warmPercussion } from './percussion.js';
 import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
@@ -33,6 +34,7 @@ const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
+export function __buildMixer(S) { return buildMixer(S); }
 function buildMixer(S) {
   const { ctx } = S;
 
@@ -69,13 +71,13 @@ function buildMixer(S) {
   //   hall  — large orchestral hall with pre-delay (until just after the drop)
   //   space — very long stereo space for the finale (from the pullBack on)
   // (Percussion carries its own tight room, baked into its one-shots.)
-  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.6, preDelay: 0.045, brightHz: 7500, darkHz: 1300 });
+  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.6, preDelay: 0.045, brightHz: 7500, darkHz: 1300 }, 0.019, S.cache);
   const hallIn = S.filter('highpass', 170, 0.6);
   hallIn.connect(hall.input);
   hall.output.connect(film);
   S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
 
-  const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027);
+  const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027, S.cache);
   const spaceIn = S.filter('highpass', 90, 0.6);
   S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
 
@@ -117,14 +119,30 @@ function duckStrings(S, kicks) {
   }
 }
 
-export async function renderScore(sampleRate = 48000) {
-  const S = new Studio(sampleRate, DURATION + TAIL);
-  buildMixer(S);
-  const { kicks } = arrangeMusic(S);
-  arrangeCues(S);
-  duckStrings(S, kicks);
+/** Sum `src` into `dst` (same length / channel count). */
+function mixInto(dst, src) {
+  for (let c = 0; c < dst.numberOfChannels; c++) {
+    const d = dst.getChannelData(c), e = src.getChannelData(c);
+    for (let i = 0; i < d.length; i++) d[i] += e[i];
+  }
+}
 
-  const buffer = await S.render();
+export async function renderScore(sampleRate = 48000) {
+  // Two studios render in parallel (one OfflineAudioContext = one render thread
+  // each), sharing noise and pre-rendered buffers. Both have the same mixer (so
+  // every part gets the same halls, stage and film/finale automation):
+  //   A — the sustained orchestra;  B — rhythm section, hits, transitions, sound design.
+  const A = new Studio(sampleRate, DURATION + TAIL, 1492);
+  const B = new Studio(sampleRate, DURATION + TAIL, 1815, A);
+  for (const S of [A, B]) buildMixer(S);
+  const { kicks } = arrangeMusic(A, 'orchestra');
+  arrangeMusic(B, 'rhythm');
+  arrangeCues(B);
+  warmPercussion(B);
+  duckStrings(A, kicks);
+
+  const [buffer, b2] = await Promise.all([A.render(), B.render()]);
+  mixInto(buffer, b2);
 
   // Master: set the loud body of the film to a consistent level, glue it with a
   // gentle compressor, then brickwall-limit to -1 dBFS.

@@ -13,8 +13,12 @@ import { hz, perc, riseTo, ahr, clamp } from './core.js';
 // partials (a recursive complex oscillator per partial — cheap and exactly in
 // tune), cached per pitch, and played back with a single buffer source.
 
-export function modalBuffer(S, key, f0, modes, { seconds, noise = 0, attack = 0.002 }) {
-  if (S.cache.has(key)) return S.cache.get(key);
+export function modalBuffer(S0, key, f0, modes, { seconds, noise = 0, attack = 0.002, vary = 0, hammer = null }) {
+  if (S0.cache.has(key)) return S0.cache.get(key);
+  const S = S0.seeded(key);
+  // round-robin variation: every rendered take has its own mode balance, decay and
+  // (for struck strings) a hair of mistuning
+  if (vary > 0) modes = modes.map(([r, a, t]) => [r * (1 + (S.random() - 0.5) * vary * 0.002), a * (1 + (S.random() - 0.5) * vary), t * (1 + (S.random() - 0.5) * vary * 0.6)]);
   const sr = S.sr;
   const n = Math.ceil(seconds * sr);
   const buf = S.ctx.createBuffer(1, n, sr);
@@ -43,6 +47,26 @@ export function modalBuffer(S, key, f0, modes, { seconds, noise = 0, attack = 0.
       d[i] += noise * y * (1 - i / m) ** 2;
     }
   }
+  if (hammer) { // felt hammer thump (low knock + soft noise) and damper release at the end
+    const { level: hl, knock, damper = 0 } = hammer;
+    const m = Math.floor(0.03 * sr);
+    let y = 0, y2 = 0;
+    const wk = (2 * Math.PI * knock) / sr;
+    for (let i = 0; i < m; i++) {
+      y += 0.12 * (S.random() * 2 - 1 - y);
+      y2 += 0.3 * (y - y2);
+      const env = (1 - i / m) ** 3;
+      d[i] += hl * (y2 * 2.5 + 0.6 * Math.sin(wk * i)) * env;
+    }
+    if (damper > 0) { // felt settling on the strings: a soft brushed thud near the end
+      const s0 = Math.floor(n * 0.82), dl = Math.min(n - s0, Math.floor(0.12 * sr));
+      let z = 0;
+      for (let i = 0; i < dl; i++) {
+        z += 0.05 * (S.random() * 2 - 1 - z);
+        d[s0 + i] += damper * z * Math.sin((Math.PI * i) / dl);
+      }
+    }
+  }
   const a = Math.max(1, Math.floor(attack * sr));
   const fade = Math.floor(0.05 * sr);
   let peak = 0;
@@ -67,6 +91,9 @@ export function playBuffer(S, t, buf, { level, pan = 0, bus, rate = 1 }) {
 
 /** Harp / felt-piano pluck (inharmonic string partials, low notes ring longer). */
 export function pluck(S, t, midi, { level = 0.25, pan = 0, bus = 'lead', bright = 1 } = {}) {
+  t = S.human(t, 10);
+  const v = S.robin(`pluck:${midi}`, 3);
+  level *= S.rand(0.85, 1.1);
   const f0 = hz(midi);
   const T = clamp(2.6 * Math.sqrt(220 / f0), 0.9, 4.5);
   const modes = [];
@@ -75,34 +102,40 @@ export function pluck(S, t, midi, { level = 0.25, pan = 0, bus = 'lead', bright 
     const amp = (Math.abs(Math.sin(Math.PI * k * 0.21)) / k ** (1.35 - 0.25 * bright));
     modes.push([ratio, amp, T / (1 + 0.55 * (k - 1) ** 1.3)]);
   }
-  const buf = modalBuffer(S, `pluck:${midi}:${bright}`, f0, modes, { seconds: T * 0.85, noise: 0.15 });
+  const buf = modalBuffer(S, `pluck:${midi}:${bright}:${v}`, f0, modes, { seconds: T * 0.85, noise: 0.15 + 0.05 * v, vary: 0.35 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
 /** Glassy crystalline bell (slightly detuned pairs → shimmer). */
 export function bell(S, t, midi, { level = 0.06, pan = 0, bus = 'lead', decay = 2.5 } = {}) {
+  const v = S.robin(`bell:${midi}`, 2);
+  level *= S.rand(0.85, 1.1);
   const modes = [
     [1, 1, decay], [1.0021, 0.7, decay * 0.9], [2.0, 0.22, decay * 0.6],
     [2.76, 0.28, decay * 0.45], [5.4, 0.1, decay * 0.25], [8.93, 0.05, decay * 0.15],
   ];
-  const buf = modalBuffer(S, `bell:${midi}:${decay}`, hz(midi), modes, { seconds: decay * 0.85, attack: 0.004 });
+  const buf = modalBuffer(S, `bell:${midi}:${decay}:${v}`, hz(midi), modes, { seconds: decay * 0.85, attack: 0.004, vary: 0.3, noise: 0.02 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
 /** Struck metal (anvil / piston / gear teeth). */
 export function metal(S, t, f0, { level = 0.3, pan = 0, bus = 'perc', decay = 0.9 } = {}) {
+  // inharmonic plate/bar modes with close pairs (beating), a hard contact transient
+  const v = S.robin(`metal:${f0}`, 3);
   const modes = [
-    [1, 1, decay], [1.47, 0.45, decay * 0.6], [2.76, 0.7, decay * 0.55], [4.1, 0.35, decay * 0.4],
-    [5.4, 0.5, decay * 0.35], [8.93, 0.3, decay * 0.2], [13.34, 0.18, decay * 0.12],
+    [1, 1, decay], [1.007, 0.4, decay * 0.8], [1.47, 0.45, decay * 0.6], [2.09, 0.3, decay * 0.5],
+    [2.76, 0.7, decay * 0.55], [2.78, 0.3, decay * 0.5], [4.1, 0.35, decay * 0.4], [5.4, 0.5, decay * 0.35],
+    [6.83, 0.25, decay * 0.25], [8.93, 0.3, decay * 0.2], [13.34, 0.18, decay * 0.12], [17.2, 0.1, decay * 0.07],
   ];
-  const buf = modalBuffer(S, `metal:${f0}:${decay}`, f0, modes, { seconds: decay * 0.9, noise: 1.2, attack: 0.0005 });
-  return playBuffer(S, t, buf, { level, pan, bus });
+  const buf = modalBuffer(S, `metal:${f0}:${decay}:${v}`, f0, modes, { seconds: decay * 0.9, noise: 1.2 + 0.3 * v, attack: 0.0005, vary: 0.5 });
+  return playBuffer(S, t, buf, { level: level * S.rand(0.85, 1.1), pan, bus, rate: S.rand(0.985, 1.015) });
 }
 
 /** Resonant stone tap (marble). */
 export function stoneTap(S, t, { level = 0.25, pan = 0, bus = 'sfx', f0 = 640 } = {}) {
   const modes = [[1, 1, 0.3], [1.58, 0.7, 0.2], [2.31, 0.55, 0.14], [3.2, 0.4, 0.09], [4.6, 0.25, 0.05]];
-  const buf = modalBuffer(S, `stone:${f0}`, f0, modes, { seconds: 0.4, noise: 1.5, attack: 0.0005 });
+  const v = S.robin('stone', 3);
+  const buf = modalBuffer(S, `stone:${f0}:${v}`, f0, modes, { seconds: 0.4, noise: 1.5, attack: 0.0005, vary: 0.5 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
@@ -111,36 +144,62 @@ export function harpRoll(S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead
   notes.forEach((m, i) => pluck(S, t + i * spread, m, { level, bus, pan: -0.5 + i / Math.max(1, notes.length - 1) }));
 }
 
-/** Felt grand piano: paired, slightly detuned inharmonic strings + hammer thump. */
+/**
+ * Felt grand piano: three slightly mistuned inharmonic strings per note (beating),
+ * velocity-dependent brightness (harder = more upper partials), felt hammer thump,
+ * damper noise, and three round-robin takes per pitch and dynamic.
+ */
 export function piano(S, t, midi, { level = 0.25, pan = 0, bus = 'piano' } = {}) {
+  t = S.human(t, 12);
   const f0 = hz(midi);
-  const T = clamp(4.2 * Math.sqrt(262 / f0), 1.4, 5.5);
-  const modes = [];
-  for (let k = 1; k <= 14; k++) {
-    const ratio = k * Math.sqrt(1 + 0.00038 * k * k);
-    const amp = Math.abs(Math.sin(Math.PI * k * 0.12)) / k ** 1.5;
-    const t60 = T / (1 + 0.4 * (k - 1) ** 1.35);
-    modes.push([ratio, amp, t60], [ratio * 1.0009, amp * 0.8, t60 * 0.8]);
+  const hard = level >= 0.16 ? 1 : 0;              // dynamic layer
+  const v = S.robin(`piano:${midi}:${hard}`, 3);
+  const key = `piano:${midi}:${hard}:${v}`;
+  let buf = S.cache.get(key);
+  if (!buf) {
+    const T = clamp(4.2 * Math.sqrt(262 / f0), 1.4, 5.5);
+    const B = 0.00038 * (f0 < 130 ? 1.6 : 1);        // inharmonicity (stiffer bass strings)
+    const tilt = hard ? 1.25 : 1.7;                    // spectral tilt from hammer velocity
+    const strike = S.rand(0.1, 0.14);                  // hammer position → comb in the spectrum
+    const det = [0, S.rand(0.6, 1.4), -S.rand(0.4, 1.1)]; // cents per string
+    const modes = [];
+    for (let k = 1; k <= 16; k++) {
+      const ratio = k * Math.sqrt(1 + B * k * k);
+      const amp = Math.abs(Math.sin(Math.PI * k * strike)) / k ** tilt;
+      const t60 = T / (1 + 0.4 * (k - 1) ** 1.35);
+      det.forEach((c, j) => modes.push([ratio * 2 ** (c / 1200), amp * (j ? 0.7 : 1), t60 * (j ? 0.85 : 1)]));
+    }
+    // soundboard: a couple of low body modes excited by every note
+    modes.push([95 / f0, 0.04, 0.25], [210 / f0, 0.03, 0.18]);
+    buf = modalBuffer(S, key, f0, modes, {
+      seconds: T * 0.6, noise: hard ? 0.35 : 0.2, attack: hard ? 0.002 : 0.004, vary: 0.25,
+      hammer: { level: hard ? 0.08 : 0.05, knock: 70 + 30 * S.random(), damper: 0.02 },
+    });
   }
-  const buf = modalBuffer(S, `piano:${midi}`, f0, modes, { seconds: T * 0.6, noise: 0.25, attack: 0.003 });
-  return playBuffer(S, t, buf, { level, pan: Math.abs(pan) < 0.2 ? 0 : pan, bus });
+  return playBuffer(S, t, buf, { level: level * S.rand(0.88, 1.08), pan: Math.abs(pan) < 0.2 ? 0 : pan, bus });
 }
 
 /** Celesta: soft glockenspiel-like bell an octave above the piano. */
 export function celesta(S, t, midi, { level = 0.05, pan = 0, bus = 'lead' } = {}) {
-  const modes = [[1, 1, 1.6], [3.0, 0.12, 0.5], [4.1, 0.06, 0.25], [1.0015, 0.5, 1.4]];
-  const buf = modalBuffer(S, `celesta:${midi}`, hz(midi), modes, { seconds: 1.5, attack: 0.002, noise: 0.05 });
-  return playBuffer(S, t, buf, { level, pan, bus });
+  t = S.human(t, 10);
+  const v = S.robin(`celesta:${midi}`, 2);
+  const modes = [[1, 1, 1.6], [3.0, 0.12, 0.5], [4.1, 0.06, 0.25], [1.0015, 0.5, 1.4], [0.5 * 1.0, 0.02, 0.3]];
+  const buf = modalBuffer(S, `celesta:${midi}:${v}`, hz(midi), modes, { seconds: 1.5, attack: 0.002, noise: 0.06, vary: 0.3 });
+  return playBuffer(S, t, buf, { level: level * S.rand(0.85, 1.1), pan, bus });
 }
 
 /** Pizzicato string: short, round pluck. */
 export function pizz(S, t, midi, { level = 0.12, pan = 0, bus = 'strings' } = {}) {
+  t = S.human(t, 10);
+  const v = S.robin(`pizz:${midi}`, 3);
   const f0 = hz(midi);
   const T = clamp(0.9 * Math.sqrt(196 / f0), 0.25, 1.2);
   const modes = [];
-  for (let k = 1; k <= 10; k++) modes.push([k, Math.abs(Math.sin(Math.PI * k * 0.3)) / k ** 1.6, T / (1 + 0.8 * (k - 1))]);
-  const buf = modalBuffer(S, `pizz:${midi}`, f0, modes, { seconds: T, noise: 0.1, attack: 0.002 });
-  return playBuffer(S, t, buf, { level, pan, bus });
+  const pos = 0.26 + 0.04 * v; // plucking point differs per take
+  for (let k = 1; k <= 12; k++) modes.push([k * (1 + 0.0002 * k * k), Math.abs(Math.sin(Math.PI * k * pos)) / k ** 1.6, T / (1 + 0.8 * (k - 1))]);
+  modes.push([290 / f0, 0.08, 0.12]); // body
+  const buf = modalBuffer(S, `pizz:${midi}:${v}`, f0, modes, { seconds: T, noise: 0.14, attack: 0.002, vary: 0.35 });
+  return playBuffer(S, t, buf, { level: level * S.rand(0.85, 1.12), pan, bus });
 }
 
 // ======================================================== sustained voices
@@ -162,7 +221,7 @@ export function drone(S, t0, t1, midi, { level = 0.1, attack = 2, release = 2, b
 // ============================================================== percussion
 // Rendered one-shots live in percussion.js; re-exported here for convenience.
 
-export { taiko, tom, kick, snare, stick, hat, crash } from './percussion.js';
+export { taiko, tom, kick, snare, stick, hat, crash, warmPercussion } from './percussion.js';
 
 // ====================================================== electronic voices
 
