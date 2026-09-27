@@ -99,19 +99,27 @@ function sectionLoop(S, kind, base) {
     const pan = spec.spread * (2 * ((v * 0.618 + 0.3) % 1) - 1); // interleaved so pitch ≠ position
     const gl = Math.cos(((pan + 1) * Math.PI) / 4), gr = Math.sin(((pan + 1) * Math.PI) / 4);
     const inc = (f * TABLE) / sr;
-    // vibrato and amplitude drift as rotating phasors (no per-sample trig)
-    const wv = (2 * Math.PI * vibHz) / sr, cv = Math.cos(wv), sv = Math.sin(wv);
-    const wd = (2 * Math.PI * driftHz) / sr, cd = Math.cos(wd), sd = Math.sin(wd);
+    // Vibrato and amplitude drift are slow, so they are advanced as rotating
+    // phasors once per 32-sample block (no per-sample trig).
+    const B = 32;
+    const wv = (2 * Math.PI * vibHz * B) / sr, cv = Math.cos(wv), sv = Math.sin(wv);
+    const wd = (2 * Math.PI * driftHz * B) / sr, cd = Math.cos(wd), sd = Math.sin(wd);
     let vs = Math.sin(S.rand(0, 6.28)), vc = Math.sqrt(1 - vs * vs);
     let ds = Math.sin(S.rand(0, 6.28)), dc = Math.sqrt(1 - ds * ds);
     let ph = S.rand(0, TABLE);
-    for (let i = 0; i < n; i++) {
-      ph += inc * (1 + vibDepth * vs);
-      if (ph >= TABLE) ph -= TABLE;
-      const j = ph | 0;
-      const y = (table[j] + (table[j + 1] - table[j]) * (ph - j)) * (1 + spec.drift * ds);
-      L[i] += y * gl;
-      R[i] += y * gr;
+    for (let i0 = 0; i0 < n; i0 += B) {
+      const step = inc * (1 + vibDepth * vs);
+      const a = 1 + spec.drift * ds;
+      const al = a * gl, ar = a * gr;
+      const i1 = Math.min(n, i0 + B);
+      for (let i = i0; i < i1; i++) {
+        ph += step;
+        if (ph >= TABLE) ph -= TABLE;
+        const j = ph | 0;
+        const y = table[j] + (table[j + 1] - table[j]) * (ph - j);
+        L[i] += y * al;
+        R[i] += y * ar;
+      }
       let t = vs * cv + vc * sv; vc = vc * cv - vs * sv; vs = t;
       t = ds * cd + dc * sd; dc = dc * cd - ds * sd; ds = t;
     }

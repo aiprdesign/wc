@@ -8,7 +8,9 @@
 //   7.5–12.5  strings swell into the temple reveal: F major, BRAAM, full choir
 //   12–16     THEME on legato violas + celli (civic)
 //   16–25     renaissance / science: piano figures, pizzicato clockwork, choir colours
-//   25–45.5   hybrid: spiccato 16ths, sub pulse, taiko ensemble, kicks, hats, horns,
+//   25–45.5   ACT II, one continuous build: the spiccato ostinato, sub pulse and
+//             quarter-note kick never stop at scene changes; layers accumulate
+//             (hats → sticks/pistons → snare backbeat at the spark → toms → arps);
 //             braams on machine / earthWide / processorDive; THEME on horns in flight
 //   45.5–50.5 montage: bVI – bVII – V under the THEME on brass + choir, percussion
 //             accelerating (beats → 8ths → 16ths + snare roll) and a 5 s riser …
@@ -26,17 +28,17 @@ export const STEP = BEAT / 4; // 16th note, 0.125 s
 
 // str: string voicing (with octave doublings) · choir · brass: low brass · root: sub note
 export const CHORDS = {
-  D5:    { str: [38, 50, 57, 62, 69, 74],         choir: [57, 62, 69],         brass: [38, 45, 50],         root: 38 },
-  Bb9:   { str: [34, 46, 53, 60, 62, 65, 72],     choir: [58, 62, 65, 72],     brass: [34, 41, 46, 50],     root: 34 },
-  Dm9:   { str: [38, 50, 57, 65, 69, 76],         choir: [57, 62, 65, 69, 76], brass: [38, 45, 50, 53],     root: 38 },
-  Dm:    { str: [38, 50, 57, 62, 65, 69, 74],     choir: [57, 62, 65, 69, 74], brass: [38, 45, 50, 53, 57], root: 38 },
-  Bb:    { str: [34, 46, 53, 62, 65, 70, 74],     choir: [58, 62, 65, 70, 74], brass: [34, 41, 46, 50, 53], root: 34 },
-  F:     { str: [29, 41, 53, 57, 60, 65, 69, 72], choir: [57, 60, 65, 69, 72], brass: [29, 41, 45, 48, 53], root: 41 },
-  C:     { str: [36, 48, 55, 60, 64, 67, 72],     choir: [55, 60, 64, 67, 72], brass: [36, 43, 48, 52, 55], root: 36 },
-  Gm:    { str: [31, 43, 50, 58, 62, 67, 70],     choir: [55, 58, 62, 67, 70], brass: [31, 43, 46, 50, 55], root: 31 },
-  Asus4: { str: [33, 45, 52, 57, 62, 64, 69],     choir: [57, 62, 64, 69, 76], brass: [33, 45, 50, 52, 57], root: 33 },
-  A:     { str: [33, 45, 52, 57, 61, 64, 69],     choir: [57, 61, 64, 69, 76], brass: [33, 45, 49, 52, 57], root: 33 },
-  D:     { str: [38, 50, 57, 62, 66, 69, 74, 78], choir: [57, 62, 66, 69, 74, 78], brass: [38, 45, 50, 54, 57], root: 38 },
+  D5:    { str: [38, 50, 57, 62, 69, 74],     choir: [57, 62, 69],         brass: [38, 45, 50],     root: 38 },
+  Bb9:   { str: [34, 46, 53, 60, 62, 65],     choir: [58, 62, 65, 72],     brass: [34, 41, 46, 50], root: 34 },
+  Dm9:   { str: [38, 50, 57, 65, 69, 76],     choir: [57, 62, 65, 69, 76], brass: [38, 45, 50, 53], root: 38 },
+  Dm:    { str: [38, 50, 57, 62, 65, 69],     choir: [57, 62, 65, 69],     brass: [38, 45, 50, 53], root: 38 },
+  Bb:    { str: [34, 46, 53, 62, 65, 70],     choir: [58, 62, 65, 70],     brass: [34, 41, 46, 50], root: 34 },
+  F:     { str: [29, 41, 53, 57, 60, 65],     choir: [57, 60, 65, 69],     brass: [29, 41, 45, 48], root: 41 },
+  C:     { str: [36, 48, 55, 60, 64, 67],     choir: [55, 60, 64, 67],     brass: [36, 43, 48, 52], root: 36 },
+  Gm:    { str: [31, 43, 50, 58, 62, 67],     choir: [55, 58, 62, 67],     brass: [31, 43, 46, 50], root: 31 },
+  Asus4: { str: [33, 45, 52, 57, 62, 64],     choir: [57, 62, 64, 69],     brass: [33, 45, 50, 52], root: 33 },
+  A:     { str: [33, 45, 52, 57, 61, 64],     choir: [57, 61, 64, 69],     brass: [33, 45, 49, 52], root: 33 },
+  D:     { str: [38, 50, 57, 62, 66, 69, 74], choir: [57, 62, 66, 69, 74], brass: [38, 45, 50, 54], root: 38 },
 };
 
 export const HARMONY = [
@@ -76,8 +78,8 @@ export const chordAt = (t) => CHORDS[(HARMONY.find(([a, b]) => t >= a && t < b) 
 // Orchestral intensity 0..1 (string level and brightness follow it).
 const INTENSITY = [
   [0, 0.05], [2, 0.12], [5, 0.4], [8, 0.35], [10.6, 0.7], [12, 0.4], [16, 0.42], [18.4, 0.55],
-  [20, 0.45], [24, 0.55], [25, 0.75], [31.5, 0.7], [32, 0.35], [34.5, 0.45], [35, 0.7],
-  [38.2, 0.9], [39, 0.65], [41.3, 0.85], [45.5, 0.9], [50.5, 1],
+  [20, 0.45], [24, 0.55], [25, 0.7], [31.5, 0.74], [32.5, 0.6], [34.5, 0.66], [35, 0.76],
+  [38.2, 0.88], [39, 0.8], [41.3, 0.88], [45.5, 0.92], [50.5, 1],
 ];
 export function intensity(t) {
   const k = INTENSITY;
@@ -118,8 +120,7 @@ function themeLayer(S) {
   S.at(12.0, () => O.line(S, 'strings', theme(12.0, 0), { level: 0.22, cutoff: 2600, bus: 'strings', octaves: [0, -12], attack: 0.35, overlap: 0.12 }));
   // 3. horns (flight), strings an octave above in the shadow
   S.at(35.0, () => {
-    O.line(S, 'horn', theme(35.0, 0), { level: 0.3, cutoff: 2400, bus: 'horn', octaves: [0, -12] });
-    O.line(S, 'strings', theme(35.0, 12), { level: 0.07, cutoff: 3500, bus: 'strings' });
+    O.line(S, 'horn', theme(35.0, 0), { level: 0.34, cutoff: 2400, bus: 'horn' });
   });
   // 4. climax: horns + brass (trumpet register) + choir in unison
   S.at(44.5, () => {
@@ -140,7 +141,7 @@ function stringsLayer(S) {
     S.at(start, () => O.chord(S, 'strings', start, b, CHORDS[name].str, {
       level: 0.62 * (0.25 + 0.75 * lv) * (a >= 45.5 ? 1.15 : 1),
       attack: name === 'D5' ? 2.8 : name === 'D' ? 0.03 : hybrid ? 0.2 : 0.9,
-      release: hybrid ? 0.4 : 1.2,
+      release: hybrid ? 0.3 : 1.2,
       cutoff: 900 + 4200 * lv,
       swell: swellInto,
       bus: 'strings',
@@ -149,12 +150,15 @@ function stringsLayer(S) {
   // spiccato ostinato (hybrid): root / octave / fifth figure in the low-mid register
   const fig = [0, 0, 12, 0, 7, 0, 12, 0, 0, 0, 12, 0, 7, 12, 7, 0];
   const acc = [1, 0.5, 0.7, 0.5, 0.85, 0.5, 0.7, 0.5, 1, 0.5, 0.7, 0.5, 0.85, 0.6, 0.7, 0.55];
-  for (const [a, b, lv] of [[25.0, 31.5, 1], [34.5, 38.2, 0.9], [39.0, 45.5, 1], [45.5, 50.5, 1.2]]) {
+  // One unbroken ostinato from the gear to the pullBack (only a 16th of air before the
+  // processor-dive hit); the level follows the act-II arc instead of stopping at cuts.
+  const spicLevel = (t) => (t < 31.5 ? 0.9 : t < 34.5 ? 0.65 : t < 41.3 ? 0.9 : t < 45.5 ? 1 : 1.2);
+  for (const [a, b] of [[25.0, 41.125], [41.3, 50.5]]) {
     pattern(a, b, 'x'.repeat(16), (t, v, k) => {
       let r = chordAt(t).root;
       while (r < 45) r += 12;
       while (r > 56) r -= 12;
-      S.at(t, () => O.spiccato(S, t, r + fig[k % 16], { level: 0.2 * lv * acc[k % 16] }));
+      S.at(t, () => O.spiccato(S, t, r + fig[k % 16], { level: 0.2 * spicLevel(t) * acc[k % 16] }));
     });
   }
   // tremolo tension before the big arrivals
@@ -247,52 +251,48 @@ function colourLayer(S) {
 // ---------------------------------------------------------- rhythm section
 
 // 16-step bar patterns. X = accent, x = normal, o = ghost.
-const KICK = [
-  [25.0, 28.5, 'X...x...X...x...'],
-  [28.5, 31.5, 'X.....x...x.....'],
-  [31.75, 34.5, 'X.o.....X.o.....'],   // medicine: heartbeat
-  [34.5, 38.2, 'X...x...X...x...'],
-  [39.5, 41.2, 'X.......x.......'],
-  [41.5, 50.5, 'X...x...X...x...'],
+const KICK = [          // the pulse: quarter notes from the gear to the pullBack
+  [25.0, 41.125, 'X...x...X...x...'],
+  [41.5, 50.5, 'X...x...X...x.x.'],
+];
+const HEART = [         // medicine: a heartbeat "dub" ghosted after each beat 1 and 3
+  [31.5, 34.5, '..o.......o.....'],
 ];
 const TAIKO = [          // ensemble hits
-  [25.5, 28.5, 'X.......x.......'],
-  [28.5, 31.5, 'X...............'],
-  [34.5, 38.2, 'X.......x.....x.'],
+  [25.5, 37.0, 'X.......x.......'],
+  [37.0, 38.2, 'X.x.x.x.X.x.x.x.'],  // rocket: build into earthWide
+  [38.5, 41.125, 'X.......x.......'],
   [41.5, 45.5, 'X.......x.....x.'],
   [45.5, 47.5, 'X...x...X...x...'],  // montage: every beat …
   [47.5, 49.5, 'X.x.x.x.X.x.x.x.'],  // … then 8ths
 ];
 const TOMS = [
-  [36.0, 38.2, '..........x.x.x.'],
-  [40.75, 41.25, '......oxxX......'], // fill into the processor dive
+  [34.5, 38.2, '..........x.x.x.'],
+  [40.75, 41.125, '......oxx.......'], // fill into the processor dive
   [43.0, 45.5, '..x...x...x..xx.'],
   [47.5, 49.5, '.x.x.x.x.x.x.x.x'],
 ];
-const SNARE = [
-  [28.5, 31.5, '....x.......x...'],
-  [36.0, 38.2, '....x.......x...'],
+const SNARE = [          // backbeat enters with the spark and never leaves
+  [28.75, 41.125, '....x.......x...'],
   [41.5, 49.5, '....x.......x...'],
 ];
-const STICKS = [
-  [26.5, 28.5, '..x...x...x...x.'],
+const STICKS = [         // piston/stick layer, from the pistons onward
+  [26.5, 41.125, '..x...x...x...x.'],
   [41.5, 45.5, '..x..x....x..x..'],
   [45.5, 49.5, '..x.x.x...x.x.x.'],
 ];
 const HATS = [
   [26.0, 26.5, 'x.x.x.x.x.x.x.x.'],
-  [26.5, 31.5, 'xoxoXoxoxoxoXoxo'],
-  [31.5, 34.5, 'o...o...o...o...'],
-  [34.5, 38.2, 'xoxoxoxoxoxoxoxo'],
-  [38.5, 39.5, 'o.o.o.o.o.o.o.o.'],
-  [39.5, 50.5, 'xoXoxoxoxoXoxoxo'],
+  [26.5, 41.125, 'xoxoXoxoxoxoXoxo'],
+  [41.3, 50.5, 'xoXoxoxoxoXoxoxo'],
 ];
 
 // Rhythm-section dynamics: calmer through medicine, swelling through the montage.
+// Act II rises steadily; medicine only softens it (never stops it).
 function drive(t) {
-  if (t >= 31.5 && t < 34.5) return 0.55;
   if (t >= 45.5 && t < C.pullBack) return 1.0 + (0.5 * (t - 45.5)) / (C.pullBack - 45.5);
-  return 0.9;
+  if (t >= 31.5 && t < 34.5) return 0.72;
+  return 0.8 + (0.15 * (t - 25)) / 20;
 }
 
 function rhythmLayer(S, kicks) {
@@ -301,6 +301,9 @@ function rhythmLayer(S, kicks) {
       kicks.push(t);
       S.at(t, () => I.kick(S, t, 0.8 * v * drive(t)));
     });
+  }
+  for (const [a, b, p] of HEART) {
+    pattern(a, b, p, (t, v) => S.at(t, () => I.kick(S, t, 0.5 * v)));
   }
   for (const [a, b, p] of TAIKO) {
     pattern(a, b, p, (t, v) => S.at(t, () => I.taiko(S, t, 0.5 * v * drive(t), { size: v > 0.9 ? 1 : 0.6 })));
@@ -348,11 +351,9 @@ function bassLayer(S) {
   const hits = [];
   for (let k = Math.ceil(t0 / (BEAT / 2)); k * (BEAT / 2) < C.pullBack; k++) {
     const t = k * (BEAT / 2);
-    const onBeat = k % 2 === 0;
-    if (t >= 31.5 && t < 34.5) { if (onBeat) hits.push({ t, v: 0.6, len: 0.35 }); continue; } // medicine: calmer
-    if (t >= C.earthWide && t < 39.0) continue;                                                 // breath after earth
-    if (t >= 38.99 && t < 39.5) { if (t === 39) hits.push({ t, v: 0.8, len: 0.6 }); continue; }
-    hits.push({ t, v: onBeat ? 1 : 0.72, len: 0.2 });
+    if (t > 41.1 && t < C.processorDive) continue; // a breath before the dive
+    const soft = t >= 31.5 && t < 34.5 ? 0.7 : 1;
+    hits.push({ t, v: (k % 2 === 0 ? 1 : 0.72) * soft, len: 0.2 });
   }
   hits.push({ t: C.pullBack, v: 1.1, len: 1.5 }); // climax: ring into the drop
   S.at(t0, () => I.subPulse(S, t0, t1, roots, hits, { level: 0.4 }));
@@ -377,7 +378,7 @@ function transitions(S) {
   // reverse cymbals into every major arrival  [hit time, length, level]
   const rev = [
     [C.titleLocked, 1.6, 0.05], [C.templeReveal, 1.5, 0.07], [15.5, 1.0, 0.04], [C.paintBurst, 1.0, 0.06],
-    [C.gear, 2.0, 0.08], [C.spark, 0.8, 0.05], [C.circuitCity, 1.0, 0.06], [C.earthWide, 1.5, 0.08],
+    [C.gear, 2.0, 0.08], [28.75, 0.8, 0.05], [C.circuitCity, 1.0, 0.06], [C.earthWide, 1.5, 0.08],
     [C.processorDive, 1.0, 0.08], [C.network, 0.8, 0.05], [C.pullBack, 2.0, 0.1],
   ];
   for (const [t, d, level] of rev) S.at(t - d, () => I.revCymbal(S, t, d, { level }));
@@ -388,6 +389,9 @@ function transitions(S) {
   // risers
   S.at(9.6, () => I.riser(S, 9.6, C.templeReveal, { level: 0.04, from: 400, to: 5000 }));
   S.at(23.0, () => I.riser(S, 23.0, C.gear, { level: 0.06, from: 300, to: 7000, pitch: [45, 69] }));
+  S.at(C.machine + 0.2, () => I.riser(S, C.machine + 0.2, 28.75, { level: 0.05, from: 500, to: 7000 })); // rails → spark
+  S.at(30.5, () => I.riser(S, 30.5, C.circuitCity, { level: 0.04, from: 400, to: 6000 }));
+  S.at(33.5, () => I.riser(S, 33.5, 34.5, { level: 0.035, from: 400, to: 5000 }));        // medicine → flight
   S.at(36.7, () => I.riser(S, 36.7, C.earthWide, { level: 0.07, from: 300, to: 8000, pitch: [43, 67] }));
   S.at(40.3, () => I.riser(S, 40.3, C.processorDive, { level: 0.1, pitch: [50, 74] }));
   S.at(C.mColumns - 0.1, () => I.riser(S, C.mColumns - 0.1, C.pullBack, { level: 0.2, from: 200, to: 9000, pitch: [38, 74] }));
@@ -401,7 +405,7 @@ function hit(S, t, { power = 1, braam = null, chord = null, cymbal = true, down 
     if (braam != null) O.braam(S, t, braam, { level: 0.42 * power, power, dur: 1.8 + power });
     if (cymbal) I.crash(S, t, 0.09 * power);
     if (chord) I.harpRoll(S, t, CHORDS[chord].choir.concat(CHORDS[chord].choir.at(-1) + 12), { level: 0.1 * power });
-    if (down) I.downer(S, t + 0.15, { level: 0.07 * power, dur: 1.6 });
+    if (down) I.downer(S, t + 0.15, { level: 0.05 * power, dur: 1.0 });
   });
 }
 
@@ -411,7 +415,8 @@ function accents(S) {
   hit(S, C.model3D, { power: 0.45, cymbal: false });
   hit(S, C.paintBurst, { power: 0.7, chord: 'F' });
   hit(S, C.gear, { power: 0.85 });
-  hit(S, C.machine, { power: 0.95, braam: 46, down: true });
+  hit(S, C.machine, { power: 0.95, braam: 46 });
+  hit(S, 28.75, { power: 0.6, cymbal: true });       // the spark lands on the grid
   hit(S, C.circuitCity, { power: 0.8 });
   hit(S, C.earthWide, { power: 1.0, braam: 46, chord: 'Bb', down: true });
   hit(S, C.processorDive, { power: 1.0, braam: 50, down: true });
@@ -442,9 +447,17 @@ function preload(S) {
 
 export function arrangeMusic(S) {
   const kicks = [];
-  const sk = globalThis.__skip || '';
   preload(S);
-  for (const [n, f] of Object.entries({ stringsLayer, choirLayer, brassLayer, themeLayer, colourLayer, snareRoll32, bassLayer, synthLayer, transitions, accents })) if (!sk.includes(n)) f(S);
-  if (!sk.includes('rhythm')) rhythmLayer(S, kicks);
+  stringsLayer(S);
+  choirLayer(S);
+  brassLayer(S);
+  themeLayer(S);
+  colourLayer(S);
+  rhythmLayer(S, kicks);
+  snareRoll32(S);
+  bassLayer(S);
+  synthLayer(S);
+  transitions(S);
+  accents(S);
   return { kicks };
 }

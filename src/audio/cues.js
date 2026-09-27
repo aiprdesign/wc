@@ -199,10 +199,10 @@ function flight(S) {
   // the aircraft folds out of the blueprint
   [0, 0.15, 0.3].forEach((d, i) => S.at(C.aircraftFold + d, () => X.paperSwish(S, C.aircraftFold + d, 0.25, { level: 0.06, pan0: -0.5 + i * 0.4, pan1: -0.2 + i * 0.4 })));
   // jet pass: L → R, peaking on the flyby cue
-  S.at(C.flyby - 1.0, () => X.jetPass(S, C.flyby, { pre: 1.0, post: 1.3, level: 0.18 }));
+  S.at(C.flyby - 1.0, () => X.jetPass(S, C.flyby, { pre: 1.0, post: 1.3, level: 0.13 }));
   S.at(C.clouds, () => I.whoosh(S, C.clouds, 1.4, { level: 0.05, f0: 300, f1: 1400, pan0: 0.5, pan1: -0.5, kind: 'white' }));
   // rocket launch: huge low rumble and crackle, fading as Earth comes into view
-  S.at(C.rocketLaunch, () => X.rocket(S, C.rocketLaunch, 2.3, { level: 0.24 }));
+  S.at(C.rocketLaunch, () => X.rocket(S, C.rocketLaunch, 2.3, { level: 0.16 }));
 }
 
 function computing(S) {
