@@ -124,7 +124,7 @@ export function create(ctx, segment) {
   const iron = ironMat();
   const ironDark = ironMat({ color: '#34373b', roughness: 0.7 });
   const paint = new THREE.MeshStandardMaterial({ color: '#2a1d17', metalness: 0.5, roughness: 0.55, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.4 });
-  const pistonM = steelMat({ roughness: 0.26, color: '#b8c0c8', lathe: false });
+  const pistonM = steelMat({ roughness: 0.3, color: '#8d959d', lathe: false });
   const forged = new THREE.MeshStandardMaterial({ color: '#6d737a', metalness: 1, roughness: 0.38, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.3 });
   const copperM = new THREE.MeshStandardMaterial({ color: '#c77a4a', metalness: 1, roughness: 0.3 });
   const woodM = new THREE.MeshStandardMaterial({ color: '#3b2a1e', metalness: 0, roughness: 0.85, map: surfaceTexture('walnut', 512, 9) });
@@ -373,7 +373,7 @@ export function create(ctx, segment) {
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
   const shafts = [];
   for (let i = 0; i < 3; i++) {
-    const s = lightShaft({ length: 22, radiusTop: 0.6, radiusBottom: 3.5, color: '#ffc89a', intensity: 0.13 });
+    const s = lightShaft({ length: 22, radiusTop: 0.6, radiusBottom: 3.5, color: '#ffc89a', intensity: 0.09 });
     s.position.set(-8 + i * 6.5, 21, -3 + i * 1.5); s.rotation.z = 0.42; s.rotation.x = 0.12; scene.add(s); shafts.push(s);
   }
   const lamps = [];
@@ -547,6 +547,7 @@ export function create(ctx, segment) {
     const lock = pulse(T, { decay: 4 }) * (Math.abs(T - 28.0) < 0.3 ? 1 : 0) * (T >= 28.0 ? 1 : 0);
     rim.intensity = 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * (shotA ? 0.7 : 1) + 4 * lock;
     side.intensity = 1.6 * ramp(t, 3.2, 3.6);
+    shafts.forEach((sh) => { sh.visible = t > 3.25; });
 
     // ---------- steam, sparks, dust ------------------------------------------------
     steam.tick(t, info);

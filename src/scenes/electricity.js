@@ -586,6 +586,7 @@ export function create(ctx, segment) {
     dof.range = shot === 1 ? 0.12 : shot === 5 ? 0.6 + g * 0.05 : dof.focus * 0.25;
     dof.amount = shot === 1 ? 0.6 : shot === 5 ? 0.45 : 0.55;
     bloom.strength = 0.7 + ignite * 0.5;
+    rim.intensity = shot === 2 ? 1.3 : 3.0;
 
     // HUD
     labels.forEach(({ tp, a, b }) => { const e = envelope(t, a, b, 0.05, 0.05, ease.linear); tp.opacity = e; tp.reveal = ramp(t, a, a + 0.3, ease.outCubic); });

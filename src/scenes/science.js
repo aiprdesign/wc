@@ -351,14 +351,14 @@ export function create(ctx, segment) {
   const triShape = new THREE.Shape([triA, triB, triC]);
   const prismGeo = new THREE.ExtrudeGeometry(triShape, { depth: 0.8, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2 });
   prismGeo.translate(0, 0, -0.4);
-  const glassMat = new THREE.MeshPhysicalMaterial({ fog: false, color: '#ffffff', metalness: 0, roughness: 0.0, transmission: 1, thickness: 0.35, ior: 1.52, transparent: true, envMapIntensity: 0.7, specularIntensity: 0.7, clearcoat: 0.6, clearcoatRoughness: 0.02, attenuationColor: new THREE.Color('#dfefff'), attenuationDistance: 3 });
+  const glassMat = new THREE.MeshPhysicalMaterial({ fog: false, color: '#ffffff', metalness: 0, roughness: 0.0, transmission: 1, thickness: 0.35, ior: 1.52, transparent: true, envMapIntensity: 0.45, specularIntensity: 0.5, clearcoat: 0.4, clearcoatRoughness: 0.02, attenuationColor: new THREE.Color('#dfefff'), attenuationDistance: 3 });
   const prismMesh = new THREE.Mesh(prismGeo, glassMat); prism.add(prismMesh);
   const prismEdges = new THREE.LineSegments(new THREE.EdgesGeometry(prismGeo, 30), new THREE.LineBasicMaterial({ color: new THREE.Color('#fff4e6').multiplyScalar(0.9), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
   prism.add(prismEdges);
   const prismFres = new THREE.Mesh(prismGeo, new THREE.ShaderMaterial({
     uniforms: { uO: { value: 0 } },
     vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: `uniform float uO; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0-abs(dot(normalize(vN),normalize(vV))),3.0); gl_FragColor = vec4(vec3(0.85,0.92,1.0)*(0.05+f*0.9)*uO, 1.0); }`,
+    fragmentShader: `uniform float uO; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0-abs(dot(normalize(vN),normalize(vV))),4.0); gl_FragColor = vec4(vec3(0.85,0.92,1.0)*f*0.45*uO, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   prism.add(prismFres);
@@ -597,7 +597,7 @@ export function create(ctx, segment) {
     fanMat.uniforms.uA1.value = lerp(-0.38, -0.72, ease.inOutCubic(sat((hit - 0.1) / 0.85)));
     fan.visible = hit > 0.05;
     fanMat.uniforms.uI.value = 0.5 + 0.5 * Math.exp(-Math.max(0, hit - 0.05) * 4);
-    prismFres.material.uniforms.uO.value = ramp(t, 3.4, 3.9) * (1 + 1.5 * Math.exp(-Math.max(0, hit) * 5) * (hit > 0 ? 1 : 0));
+    prismFres.material.uniforms.uO.value = ramp(t, 3.4, 3.9) * (1 + 0.6 * Math.exp(-Math.max(0, hit) * 5) * (hit > 0 ? 1 : 0));
     const a0 = fanMat.uniforms.uA0.value, a1 = fanMat.uniforms.uA1.value, Lr = Math.min(2.3, fe * 9);
     lamRed.position.set(X.x + Math.cos(a0) * Lr, X.y + Math.sin(a0) * Lr + 0.07, 0.02); lamRed.rotation.z = a0;
     lamVio.position.set(X.x + Math.cos(a1) * Lr * 0.8, X.y + Math.sin(a1) * Lr * 0.8 - 0.07, 0.02); lamVio.rotation.z = a1;
