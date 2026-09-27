@@ -244,12 +244,12 @@ function knowledge(S) {
   for (let k = 0; k < 14; k++) {
     const t = C.pagesFly + k * 0.05 + S.rand(0, 0.03);
     const p = S.rand(-0.8, 0.8);
-    S.at(t, () => X.paperSwish(S, t, S.rand(0.12, 0.22), { level: 0.035, pan0: p, pan1: p + S.rand(-0.3, 0.3) }));
+    S.at(t, () => X.paperSwish(S, t, S.rand(0.12, 0.22), { level: 0.025, pan0: p, pan1: p + S.rand(-0.3, 0.3) }));
   }
   // pages form a sphere: circling whoosh
   S.at(C.pageSphere, () => {
-    I.whoosh(S, C.pageSphere, 0.8, { level: 0.07, f0: 400, f1: 2400, pan0: -0.7, pan1: 0.7 });
-    I.whoosh(S, C.pageSphere + 0.5, 0.7, { level: 0.05, f0: 500, f1: 2000, pan0: 0.7, pan1: -0.5 });
+    I.whoosh(S, C.pageSphere, 0.8, { level: 0.04, f0: 400, f1: 2400, pan0: -0.7, pan1: 0.7, bus: 'sfx' });
+    I.whoosh(S, C.pageSphere + 0.5, 0.7, { level: 0.03, f0: 500, f1: 2000, pan0: 0.7, pan1: -0.5, bus: 'sfx' });
   });
   // books: heavy thud
   S.at(C.books, () => X.thud(S, C.books, { level: 0.2, f: 70, tone: 1400, decay: 0.4 }));
@@ -298,10 +298,10 @@ function finale(S) {
     X.thud(S, t, { level: 0.4, f: 45, tone: 400, decay: 1.2, bus: 'end' });
     I.crash(S, t, 0.1, { bus: 'end' });
     O.braam(S, t, 50, { level: 0.6, power: 1.3, dur: 3.2, bus: 'end' });
-    O.brass(S, t, 2.0, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 3.0, bus: 'end' });
-    O.chord(S, 'choirA', t, t + 2.4, [57, 62, 66, 69, 74, 78], { level: 0.5, attack: 0.06, release: 3.2, cutoff: 5200, bus: 'end' });
-    O.chord(S, 'strings', t, t + 2.2, D_MAJOR, { level: 0.42, attack: 0.05, release: 3.4, cutoff: 3500, bus: 'end' });
-    O.line(S, 'horn', [[t, 62, 0.75], [t + 0.75, 69, 1.25], [t + 2.0, 74, 1.6]], { level: 0.28, cutoff: 2600, bus: 'end', octaves: [0, -12], release: 1.8 });
+    O.brass(S, t, 1.2, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 2.6, bus: 'end' });
+    O.chord(S, 'choirA', t, t + 1.3, [57, 62, 66, 69, 74, 78], { level: 0.5, attack: 0.06, release: 2.8, cutoff: 5200, bus: 'end' });
+    O.chord(S, 'strings', t, t + 1.1, D_MAJOR, { level: 0.42, attack: 0.05, release: 3.0, cutoff: 3500, bus: 'end' });
+    O.line(S, 'horn', [[t, 62, 0.75], [t + 0.75, 69, 1.0], [t + 1.75, 74, 1.0]], { level: 0.24, cutoff: 2400, bus: 'end', octaves: [0, -12], release: 1.6 });
   });
   // closingLine: faint high shimmer (D major add9)
   S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.012, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));

@@ -1,22 +1,27 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack.
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v2, "trailer" score).
 //
 // renderScore() synthesises the whole 60 s score offline (Web Audio only: no
 // samples) and returns an AudioBuffer that the player starts at any offset.
 //
-//   music.js  harmony, orchestral + hybrid layers, rhythm, structural accents
-//   cues.js   sound design pinned to the timeline CUES
-//   instruments.js / sfx.js  the voices;  reverb.js  procedural halls
-//   mastering.js  look-ahead limiter;  wav.js  WAV export
+//   music.js       harmony, the heroic theme, orchestra, rhythm section, trailer hits
+//   cues.js        sound design pinned to the timeline CUES
+//   orchestra.js   ensemble strings / brass / horns / choir, BRAAM
+//   percussion.js  taiko ensemble, toms, sticks, kit — JS-rendered one-shots
+//   instruments.js piano, celesta, harp, electronics, risers, swells, downers
+//   sfx.js         era textures (stone, pencil, paper, clocks, steam, sparks, radio, jet…)
+//   reverb.js      procedural convolution halls;  mastering.js  gain, compressor, limiter
+//   wav.js         WAV export
 //
 // Mix topology:
 //   instrument buses ─┬─ film bus ── (drops out at CUES.musicDrop) ─┐
-//   hall reverb ──────┘                                             ├─ master: HP → compressor → out
-//   end buses ── finale bus (+ long "space" reverb) ────────────────┘   then JS limiter at -1 dBFS
+//   hall (3 s) ───────┘                                             ├─ master HP → buffer
+//   end buses ── finale bus (+ 5 s "space") ────────────────────────┘
+//   then, on the rendered buffer: loudness trim → glue compressor → limiter at -1 dBFS
 
 import { DURATION, CUES as C } from '../timeline.js';
 import { Studio } from './core.js';
-import { makeReverb, makeWideMonoReverb } from './reverb.js';
-import { limit, rmsBetween, shiftEarlier } from './mastering.js';
+import { makeWideMonoReverb } from './reverb.js';
+import { applyGain, compress, limit, rmsBetween } from './mastering.js';
 import { arrangeMusic } from './music.js';
 import { arrangeCues } from './cues.js';
 
@@ -28,42 +33,13 @@ const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
-// Master-bus compressor settings (shared with the latency probe below).
-function makeCompressor(ctx) {
-  const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -18;
-  comp.knee.value = 10;
-  comp.ratio.value = 2.5;
-  comp.attack.value = 0.015;
-  comp.release.value = 0.25;
-  return comp;
-}
-
-// DynamicsCompressorNode looks ahead (6 ms in Chromium), delaying its output.
-// Measure it with a tiny render so the score can be shifted back onto the grid.
-async function compressorLatency(sampleRate) {
-  const n = 2048, at = 256;
-  const ctx = new OfflineAudioContext(1, n, sampleRate);
-  const buf = ctx.createBuffer(1, n, sampleRate);
-  buf.getChannelData(0)[at] = 0.05;
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(makeCompressor(ctx)).connect(ctx.destination);
-  src.start();
-  const out = (await ctx.startRendering()).getChannelData(0);
-  let peak = 0, idx = at;
-  for (let i = 0; i < n; i++) if (Math.abs(out[i]) > peak) { peak = Math.abs(out[i]); idx = i; }
-  return Math.max(0, idx - at);
-}
-
 function buildMixer(S) {
   const { ctx } = S;
 
-  // The mix is trimmed into the compressor so it only glues the loud passages;
-  // absolute loudness is set after rendering.
+  // Master: subsonic high-pass only; compression, loudness and limiting happen
+  // on the rendered buffer (see renderScore).
   const master = S.gain(0.5);
-  const hp = S.filter('highpass', 24, 0.6);
-  master.connect(hp).connect(makeCompressor(ctx)).connect(ctx.destination);
+  master.connect(S.filter('highpass', 24, 0.6)).connect(ctx.destination);
 
   // Everything up to the drop lives on the film bus (dry + its own hall reverb),
   // so a single fade silences the music AND its reverb tail at musicDrop.
@@ -90,7 +66,7 @@ function buildMixer(S) {
   hall.output.connect(film);
   S.at(C.musicDrop + 1.0, () => { hallIn.disconnect(); hall.output.disconnect(); });
 
-  const space = makeReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 });
+  const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027);
   const spaceIn = S.filter('highpass', 90, 0.6);
   S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
 
@@ -154,12 +130,14 @@ export async function renderScore(sampleRate = 48000) {
   duckStrings(S, kicks);
 
   const buffer = await S.render();
-  shiftEarlier(buffer, await compressorLatency(sampleRate));
 
-  // Master: level the loud body of the film to a consistent loudness, then
-  // brickwall-limit to -1 dBFS. (Gain is capped so quiet mixes are not overdriven.)
+  // Master: set the loud body of the film to a consistent level, glue it with a
+  // gentle compressor, then brickwall-limit to -1 dBFS.
   const loud = rmsBetween(buffer, C.gear, C.pullBack);
   const gain = loud > 0 ? Math.min(8, TARGET_LOUD_RMS / loud) : 1;
-  limit(buffer, { gain, ceiling: CEILING, lookahead: 0.004, release: 0.15 });
+  applyGain(buffer, gain);
+  compress(buffer, { threshold: -17, ratio: 2, knee: 8, attack: 0.02, release: 0.3 });
+  const glued = rmsBetween(buffer, C.gear, C.pullBack);
+  limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
   return buffer;
 }

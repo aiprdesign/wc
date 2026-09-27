@@ -136,11 +136,12 @@ function stringsLayer(S) {
   for (const [a, b, name] of HARMONY) {
     const hybrid = a >= C.gear;
     const lv = intensity(a);
-    const start = name === 'D5' ? 1.4 : a;
-    const swellInto = name === 'Bb' && a === 8.0 ? 0.3 : name === 'A' && a === 39.0 ? 0.35 : null;
+    // chords overlap their neighbours (crossfade), so a change never re-attacks
+    const start = name === 'D5' ? 1.4 : name === 'D' ? a : a - (hybrid ? 0.15 : 0.3);
+    const swellInto = name === 'Bb' && a === 8.0 ? 0.6 : name === 'A' && a === 39.0 ? 0.5 : null;
     S.at(start, () => O.chord(S, 'strings', start, b, CHORDS[name].str, {
-      level: 0.62 * (0.25 + 0.75 * lv) * (a >= 45.5 ? 1.15 : 1),
-      attack: name === 'D5' ? 2.8 : name === 'D' ? 0.03 : hybrid ? 0.2 : 0.9,
+      level: 0.62 * (0.25 + 0.75 * lv) * (a >= 45.5 ? 1.3 : 1),
+      attack: name === 'D5' ? 2.8 : name === 'D' ? 0.03 : hybrid ? 0.18 : 0.9,
       release: hybrid ? 0.3 : 1.2,
       cutoff: 900 + 4200 * lv,
       swell: swellInto,
@@ -177,7 +178,7 @@ function stringsLayer(S) {
 const CHOIR = [
   // [start, end, chord, vowel, level, attack, release]
   [1.8, 5.0, 'D5', 'choirO', 0.12, 2.5, 1.0],     // distant, intimate
-  [5.0, 8.0, 'Dm9', 'choirA', 0.34, 0.35, 1.5],   // titleLocked
+  [5.0, 8.4, 'Dm9', 'choirA', 0.34, 0.35, 1.5],   // titleLocked (overlaps into the columns)
   [10.6, 12.4, 'F', 'choirA', 0.44, 0.2, 1.5],    // templeReveal
   [18.4, 20.0, 'F', 'choirO', 0.18, 0.6, 1.0],    // model3D
   [32.8, 34.6, 'Dm', 'choirO', 0.14, 0.8, 0.8],   // anatomy
@@ -211,6 +212,8 @@ const BRASS = [
   [37.0, 1.2, 'Gm', 0.34, { attack: 1.0 }],
   [38.2, 0.8, 'Bb', 0.5, { sfz: true, bright: 2400 }],    // earthWide
   [41.3, 1.7, 'Dm', 0.45, { sfz: true, bright: 2200 }],   // processorDive
+  [42.9, 2.1, 'Bb', 0.3, { attack: 1.2, bright: 1600 }],   // knowledge: brass keeps the floor …
+  [44.9, 0.7, 'C', 0.36, { attack: 0.4, bright: 2000 }],   // … rising into network / montage
   [45.5, 2.0, 'Bb', 0.36, { attack: 0.6 }],               // montage
   [47.5, 2.0, 'C', 0.44, { attack: 0.5, bright: 2200 }],
   [49.5, 1.0, 'Asus4', 0.52, { attack: 0.4, bright: 2600 }],
@@ -262,7 +265,8 @@ const TAIKO = [          // ensemble hits
   [25.5, 37.0, 'X.......x.......'],
   [37.0, 38.2, 'X.x.x.x.X.x.x.x.'],  // rocket: build into earthWide
   [38.5, 41.125, 'X.......x.......'],
-  [41.5, 45.5, 'X.......x.....x.'],
+  [41.5, 44.5, 'X.......x.....x.'],
+  [44.5, 45.5, 'X...x...X.x.x.x.'],  // knowledge: tightening toward network
   [45.5, 47.5, 'X...x...X...x...'],  // montage: every beat …
   [47.5, 49.5, 'X.x.x.x.X.x.x.x.'],  // … then 8ths
 ];
@@ -274,7 +278,9 @@ const TOMS = [
 ];
 const SNARE = [          // backbeat enters with the spark and never leaves
   [28.75, 41.125, '....x.......x...'],
-  [41.5, 49.5, '....x.......x...'],
+  [41.5, 44.5, '....x.......x...'],
+  [44.5, 45.5, '....x...x.x.x.xx'],  // pickup into network / montage
+  [45.5, 49.5, '....x.......x...'],
 ];
 const STICKS = [         // piston/stick layer, from the pistons onward
   [26.5, 41.125, '..x...x...x...x.'],
@@ -290,9 +296,9 @@ const HATS = [
 // Rhythm-section dynamics: calmer through medicine, swelling through the montage.
 // Act II rises steadily; medicine only softens it (never stops it).
 function drive(t) {
-  if (t >= 45.5 && t < C.pullBack) return 1.0 + (0.5 * (t - 45.5)) / (C.pullBack - 45.5);
-  if (t >= 31.5 && t < 34.5) return 0.72;
-  return 0.8 + (0.15 * (t - 25)) / 20;
+  if (t >= 45.5 && t < C.pullBack) return 1.05 + (0.55 * (t - 45.5)) / (C.pullBack - 45.5);
+  if (t >= 31.5 && t < 34.5) return 0.7;
+  return 0.72 + (0.28 * (t - 25)) / 20.5;
 }
 
 function rhythmLayer(S, kicks) {
@@ -394,6 +400,7 @@ function transitions(S) {
   S.at(33.5, () => I.riser(S, 33.5, 34.5, { level: 0.035, from: 400, to: 5000 }));        // medicine → flight
   S.at(36.7, () => I.riser(S, 36.7, C.earthWide, { level: 0.07, from: 300, to: 8000, pitch: [43, 67] }));
   S.at(40.3, () => I.riser(S, 40.3, C.processorDive, { level: 0.1, pitch: [50, 74] }));
+  S.at(44.0, () => I.riser(S, 44.0, C.network, { level: 0.045, from: 500, to: 6000 }));
   S.at(C.mColumns - 0.1, () => I.riser(S, C.mColumns - 0.1, C.pullBack, { level: 0.2, from: 200, to: 9000, pitch: [38, 74] }));
 }
 

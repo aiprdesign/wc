@@ -2,6 +2,14 @@
 
 const peakOf = (L, R, i) => Math.max(Math.abs(L[i]), Math.abs(R[i]));
 
+/** Multiply the whole buffer by a constant (in place). */
+export function applyGain(buffer, gain) {
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i++) d[i] *= gain;
+  }
+}
+
 /** RMS (linear) of the stereo buffer between two times. */
 export function rmsBetween(buffer, t0, t1) {
   const sr = buffer.sampleRate;
@@ -70,12 +78,32 @@ export function limit(buffer, { gain = 1, ceiling = 0.891, lookahead = 0.004, re
   return buffer;
 }
 
-/** Shift the whole buffer earlier by `samples` (compensates processing latency). */
-export function shiftEarlier(buffer, samples) {
-  if (samples <= 0) return;
-  for (let c = 0; c < buffer.numberOfChannels; c++) {
-    const d = buffer.getChannelData(c);
-    d.copyWithin(0, samples);
-    d.fill(0, d.length - samples);
+
+/**
+ * Stereo-linked feed-forward glue compressor (in place): RMS detector with
+ * attack/release smoothing and a soft knee. Levels in dBFS.
+ */
+export function compress(buffer, { threshold = -20, ratio = 2.5, knee = 6, attack = 0.015, release = 0.25, makeup = 0 } = {}) {
+  const sr = buffer.sampleRate;
+  const L = buffer.getChannelData(0);
+  const R = buffer.getChannelData(buffer.numberOfChannels > 1 ? 1 : 0);
+  const kaB = Math.exp(-16 / (attack * sr)), krB = Math.exp(-16 / (release * sr));
+  const km = Math.exp(-1 / (0.01 * sr)); // 10 ms mean-square window
+  const mk = 10 ** (makeup / 20);
+  const B = 16; // gain is computed per 16-sample block (the detector runs per sample)
+  let ms = 0, env = 0;
+  for (let i0 = 0; i0 < L.length; i0 += B) {
+    const i1 = Math.min(L.length, i0 + B);
+    for (let i = i0; i < i1; i++) ms = km * ms + (1 - km) * Math.max(L[i] * L[i], R[i] * R[i]);
+    const over = 10 * Math.log10(ms + 1e-12) - threshold;
+    let red = 0; // gain reduction in dB (soft knee)
+    if (over > knee / 2) red = over * (1 - 1 / ratio);
+    else if (over > -knee / 2) red = ((1 - 1 / ratio) * (over + knee / 2) ** 2) / (2 * knee);
+    env = red > env ? kaB * env + (1 - kaB) * red : krB * env + (1 - krB) * red;
+    const g = mk * 10 ** (-env / 20);
+    for (let i = i0; i < i1; i++) {
+      L[i] *= g;
+      if (R !== L) R[i] *= g;
+    }
   }
 }

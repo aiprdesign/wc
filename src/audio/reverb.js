@@ -50,14 +50,6 @@ export function makeImpulse(ctx, random, {
   return ir;
 }
 
-/** Stereo convolution reverb (true stereo: two convolutions). */
-export function makeReverb(ctx, random, options) {
-  const conv = ctx.createConvolver();
-  conv.normalize = false;
-  conv.buffer = makeImpulse(ctx, random, options);
-  return { input: conv, output: conv };
-}
-
 /**
  * Half-price stereo reverb: one mono convolution, widened by feeding the right
  * channel a slightly delayed copy (the noise-like tail decorrelates completely).
