@@ -42,7 +42,7 @@ function classical(S) {
   S.at(C.columnClay, () => X.stoneGrind(S, C.columnClay, C.templeLit, { level: 0.22, pan: 0.35 }));
   S.at(C.columnClay, () => X.thud(S, C.columnClay, { level: 0.18, f: 70, tone: 900, decay: 0.4 }));
   S.at(C.columnMarble, () => {
-    X.stoneTap(S, C.columnMarble, { level: 0.14, pan: 0.2 });
+    I.stoneTap(S, C.columnMarble, { level: 0.14, pan: 0.2 });
     X.thud(S, C.columnMarble, { level: 0.14, f: 60, tone: 1200 });
   });
   // templeReveal: stone settling under the orchestral hit

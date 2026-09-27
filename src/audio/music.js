@@ -98,18 +98,14 @@ function stringsLayer(S) {
     const hybrid = a >= C.gear;
     const start = name === 'D5' ? 1.4 : a;
     const lv = intensity(a);
-    S.at(start, () => I.strings(S, start, b, CHORDS[name].pad, {
+    const { pad, root } = CHORDS[name];
+    // Before the sub pulse takes over, a cello/bass note doubles the root an octave down.
+    const notes = hybrid || name === 'D5' ? pad : [root >= 36 ? root - 12 : root, ...pad];
+    S.at(start, () => I.strings(S, start, b, notes, {
       level: 0.34 * (0.35 + 0.65 * lv),
       attack: name === 'D5' ? 2.6 : name === 'D' ? 0.03 : hybrid ? 0.25 : 0.9,
       release: hybrid ? 0.45 : 1.1,
       cutoff: 600 + 2600 * lv,
-    }));
-  }
-  // cello/bass octave under the orchestral half (before the sub pulse takes over)
-  for (const [a, b, name] of HARMONY) {
-    if (a >= C.gear || name === 'D5') continue;
-    S.at(a, () => I.strings(S, a, b, [CHORDS[name].root - 12 + (CHORDS[name].root < 36 ? 12 : 0)], {
-      level: 0.09, attack: 0.8, release: 1.0, cutoff: 420, width: 0.2, bus: 'pad',
     }));
   }
 }
@@ -314,13 +310,14 @@ function accents(S) {
 
 export function arrangeMusic(S) {
   const kicks = [];
-  stringsLayer(S);
-  brassLayer(S);
-  harpLayer(S);
-  rhythmLayer(S, kicks);
-  bassLayer(S);
-  synthLayer(S);
-  risersAndSwells(S);
-  accents(S);
+  const sk = globalThis.__skip || '';
+  if (!sk.includes('strings')) stringsLayer(S);
+  if (!sk.includes('brass')) brassLayer(S);
+  if (!sk.includes('harp')) harpLayer(S);
+  if (!sk.includes('rhythm')) rhythmLayer(S, kicks);
+  if (!sk.includes('bass')) bassLayer(S);
+  if (!sk.includes('synth')) synthLayer(S);
+  if (!sk.includes('risers')) risersAndSwells(S);
+  if (!sk.includes('accents')) accents(S);
   return { kicks };
 }

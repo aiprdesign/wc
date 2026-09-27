@@ -4,7 +4,7 @@
 // Irregular textures (grinding, scratching, rustling) use ONE noise source each,
 // shaped by JS-generated automation curves, rather than hundreds of tiny nodes.
 
-import { hz, perc, ahr } from './core.js';
+import { perc, ahr } from './core.js';
 
 // Smoothed random walk in [0, 1] sampled at `rate` Hz.
 function wander(S, seconds, rate, speed, smooth = 0.9) {
@@ -128,18 +128,18 @@ export function paperSwish(S, t0, dur, { level = 0.12, pan0 = -0.5, pan1 = 0.5, 
 
 /** Short mechanical click: bandpassed noise tick + resonant body ping. */
 export function click(S, t, { level = 0.1, freq = 3200, body = 900, q = 3, decay = 0.018, pan = 0, bus = 'sfx' } = {}) {
-  const n = S.noise('white', t, t + decay + 0.02);
+  const dest = pan ? S.panner(pan) : S.bus(bus);
+  if (pan) dest.connect(S.bus(bus));
+  const n = S.noise('white', t, t + decay + 0.01);
   const bp = S.filter('bandpass', freq, q);
   const g = S.gain(0);
   perc(g.gain, t, level, decay, 0.0004);
-  const o = S.osc('sine', body, t, t + decay * 2 + 0.02);
+  n.connect(bp).connect(g).connect(dest);
+  const o = S.osc('sine', body, t, t + decay * 2);
   const go = S.gain(0);
   perc(go.gain, t, level * 0.5, decay * 1.6, 0.0008);
-  const mix = S.gain(1);
-  n.connect(bp).connect(g).connect(mix);
-  o.connect(go).connect(mix);
-  const p = S.out(mix, bus, pan);
-  S.free(o, n, bp, g, o, go, mix, p);
+  o.connect(go).connect(dest);
+  S.free(n, bp, g, o, go, ...(pan ? [dest] : []));
 }
 
 /** Clock escapement on a grid: alternating tick / tock. */
@@ -442,4 +442,3 @@ export function air(S, t0, t1, { level = 0.05, freq = 2600, q = 0.6, attack = 1.
   S.free(n, n, bp, g);
 }
 
-export { hz };

@@ -189,8 +189,8 @@ export function create(ctx, segment) {
   const L2 = letters3D('WESTERN CIVILIZATION', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.1 });
   const s2 = 10.4 / L2.width, s1 = 6.1 / L1.width;
   const Y1 = 0.95, Y2 = -0.3;
-  const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#fff6ea', roughness: 0.28, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.8 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: '#e9b964', metalness: 1, roughness: 0.26, emissive: new THREE.Color('#ffb85a'), emissiveIntensity: 0, envMapIntensity: 1.1 });
+  const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#e6dccb', roughness: 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.8 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: '#e9b964', metalness: 1, roughness: 0.32, emissive: new THREE.Color('#ffb85a'), emissiveIntensity: 0, envMapIntensity: 1.1 });
   const bronzeMat = new THREE.MeshStandardMaterial({ color: '#b87a45', metalness: 1, roughness: 0.34, emissive: new THREE.Color('#ffa24a'), emissiveIntensity: 0, envMapIntensity: 1.0 });
   const glyphs = [];
   const flatParts1 = [], flatParts2 = [];
@@ -218,7 +218,7 @@ export function create(ctx, segment) {
   tgt.set(sampleGeometry(flat1, N1, { seed: 3 }), 0);
   tgt.set(sampleGeometry(flat2, N2, { seed: 4 }), N1 * 3);
   flat1.dispose(); flat2.dispose();
-  const src = sampleBox(NP, 22, 11, 26, { seed: 9, center: [0, 0, 9] });
+  const src = sampleBox(NP, 24, 11, 22, { seed: 9, center: [0, 0, 1] });
   const cols = new Float32Array(NP * 3);
   const cA = new THREE.Color('#fff1dc'), cB = new THREE.Color('#ffc46e'), cC = new THREE.Color('#ff9f4a'), tmp = new THREE.Color();
   for (let i = 0; i < NP; i++) {
@@ -363,13 +363,13 @@ export function create(ctx, segment) {
         // subtle scale-in while locking so the swap from particles feels organic
         const lockS = lerp(0.985, 1, flatOn);
         g.mesh.scale.x *= lockS; g.mesh.scale.y *= lockS;
-        const rot = ex * (g.rnd[0] - 0.5) * 0.8 + flyK * (g.rnd[1] - 0.5) * 1.6;
+        const rot = ex * (g.rnd[0] - 0.5) * 0.45 + flyK * (g.rnd[1] - 0.5) * 1.6;
         g.mesh.rotation.set(flyK * (g.rnd[2] - 0.5) * 0.8, rot, flyK * (g.rnd[3] - 0.5) * 0.4);
         const side = g.line === 0 ? 1 : -1;
         g.mesh.position.set(
-          g.base.x * (1 + flyK * 0.35),
-          g.base.y + side * flyK * (1.4 + g.rnd[0] * 1.2),
-          g.base.z + ex * (g.rnd[1] - 0.5) * 0.5 + flyK * (g.rnd[2] - 0.35) * 9,
+          g.base.x * (1 + flyK * 0.25),
+          g.base.y + side * flyK * (0.45 + g.rnd[0] * 0.9),
+          g.base.z + ex * (g.rnd[1] - 0.5) * 0.5 + flyK * lerp(-15, 3.5, g.rnd[2]),
         );
       }
 
@@ -402,7 +402,7 @@ export function create(ctx, segment) {
       const sw = ramp(t, tL - 0.25, tL + 0.9, ease.inOutSine);
       const sw2 = ramp(t, l3, l3 + 1.2, ease.inOutSine);
       sweep.position.set(lerp(-8, 8, t < l3 ? sw : sw2), 0.6, Z_TITLE + 2.2);
-      sweep.intensity = 18 * (envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4) + envelope(t, l3, l3 + 1.2, 0.3, 0.4));
+      sweep.intensity = 9 * envelope(t, tL - 0.25, tL + 0.9, 0.3, 0.4) + 2.5 * envelope(t, l3, l3 + 1.2, 0.3, 0.4);
 
       const bOn = ramp(t, 6.4, 8.0, ease.inQuad);
       beyond.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(0.1 + bOn * 0.6);

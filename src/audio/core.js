@@ -58,6 +58,7 @@ export class Studio {
     this.events = [];
     this.buses = new Map();
     this.cache = new Map(); // rendered modal-voice buffers
+    this.voices = [];       // live voices awaiting disposal
     this.buffers = this.#makeNoise();
   }
 
@@ -69,7 +70,11 @@ export class Studio {
   /** Register an event; `build()` creates its nodes (all times absolute, >= t). */
   at(t, build) { this.events.push({ t: Math.max(0, t), build }); }
 
-  /** Render the whole score, building events one window ahead of the playhead. */
+  /**
+   * Render the whole score. Events are built one window ahead of the playhead,
+   * and finished voices are disconnected at each window boundary — both keep the
+   * number of nodes the renderer has to visit per quantum small.
+   */
   async render() {
     const { ctx, events } = this;
     events.sort((a, b) => a.t - b.t);
@@ -77,12 +82,30 @@ export class Studio {
     const buildUntil = (limit) => {
       while (next < events.length && events[next].t < limit) events[next++].build();
     };
-    const W = 1; // seconds per window; events are built 1–2 windows early
+    const dispose = (now) => {
+      this.voices = this.voices.filter((v) => {
+        if (v.end > now) return true;
+        for (const n of v.nodes) n.disconnect();
+        return false;
+      });
+    };
+    const W = 0.125; // seconds per window; events are built 1–2 windows early
+    let failure = null;
     buildUntil(2 * W);
     for (let w = W; w < this.duration - W / 2; w += W) {
-      ctx.suspend(w).then(() => { buildUntil(w + 2 * W); ctx.resume(); });
+      ctx.suspend(w).then(() => {
+        try {
+          dispose(w);
+          if (!failure) buildUntil(w + 2 * W);
+        } catch (err) {
+          failure = err; // never leave the context suspended
+        }
+        ctx.resume();
+      });
     }
-    return ctx.startRendering();
+    const buffer = await ctx.startRendering();
+    if (failure) throw failure;
+    return buffer;
   }
 
   // --- mixing -----------------------------------------------------------------
@@ -113,9 +136,14 @@ export class Studio {
     return node;
   }
 
-  /** Disconnect a voice's nodes once its (longest-lived) source has ended. */
-  free(src, ...nodes) {
-    src.onended = () => nodes.forEach((n) => n.disconnect());
+  /** Disconnect these nodes once the last of their sources has stopped. */
+  free(...nodes) {
+    const end = Math.max(...nodes.map((n) => n._end ?? 0));
+    if (globalThis.__acct) {
+      const fr = new Error().stack.split('\n')[2].trim().split(' ')[1];
+      globalThis.__acct[fr] = (globalThis.__acct[fr] || 0) + nodes.length * (end + 0.02 - this.ctx.currentTime);
+    }
+    this.voices.push({ end: end + 0.02, nodes });
   }
 
   // --- node factories ---------------------------------------------------------
@@ -140,23 +168,34 @@ export class Studio {
     return n;
   }
 
+  acct(t0, t1, kind) {
+    return;
+    const fr = new Error().stack.split('\n')[3].trim().split(' ')[1];
+    const k = fr + ':' + kind;
+    globalThis.__acct[k] = (globalThis.__acct[k] || 0) + (t1 - t0);
+  }
+
   osc(type, freq, t0, t1) {
+    this.acct(t0, t1, 'osc');
     const o = this.ctx.createOscillator();
     o.type = type;
     o.frequency.setValueAtTime(freq, t0);
     o.start(t0);
     o.stop(t1);
+    o._end = t1;
     return o;
   }
 
   /** Looping noise source starting at a random point of a shared buffer. */
   noise(kind, t0, t1, { stereo = false, rate = 1 } = {}) {
+    this.acct(t0, t1, 'noise');
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers[stereo ? `${kind}2` : kind];
     src.loop = true;
     src.playbackRate.value = rate;
     src.start(t0, this.rand(0, NOISE_SECONDS - 0.1));
     src.stop(t1);
+    src._end = t1;
     return src;
   }
 
@@ -165,6 +204,7 @@ export class Studio {
     src.buffer = buf;
     src.playbackRate.value = rate;
     src.start(t0);
+    src._end = t0 + buf.duration / rate;
     return src;
   }
 

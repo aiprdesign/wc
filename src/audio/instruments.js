@@ -73,7 +73,7 @@ export function pluck(S, t, midi, { level = 0.25, pan = 0, bus = 'lead', bright 
     const amp = (Math.abs(Math.sin(Math.PI * k * 0.21)) / k ** (1.35 - 0.25 * bright));
     modes.push([ratio, amp, T / (1 + 0.55 * (k - 1) ** 1.3)]);
   }
-  const buf = modalBuffer(S, `pluck:${midi}:${bright}`, f0, modes, { seconds: T * 1.2, noise: 0.15 });
+  const buf = modalBuffer(S, `pluck:${midi}:${bright}`, f0, modes, { seconds: T * 0.85, noise: 0.15 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
@@ -83,7 +83,7 @@ export function bell(S, t, midi, { level = 0.06, pan = 0, bus = 'lead', decay = 
     [1, 1, decay], [1.0021, 0.7, decay * 0.9], [2.0, 0.22, decay * 0.6],
     [2.76, 0.28, decay * 0.45], [5.4, 0.1, decay * 0.25], [8.93, 0.05, decay * 0.15],
   ];
-  const buf = modalBuffer(S, `bell:${midi}:${decay}`, hz(midi), modes, { seconds: decay * 1.1, attack: 0.004 });
+  const buf = modalBuffer(S, `bell:${midi}:${decay}`, hz(midi), modes, { seconds: decay * 0.85, attack: 0.004 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
@@ -93,7 +93,7 @@ export function metal(S, t, f0, { level = 0.3, pan = 0, bus = 'perc', decay = 0.
     [1, 1, decay], [1.47, 0.45, decay * 0.6], [2.76, 0.7, decay * 0.55], [4.1, 0.35, decay * 0.4],
     [5.4, 0.5, decay * 0.35], [8.93, 0.3, decay * 0.2], [13.34, 0.18, decay * 0.12],
   ];
-  const buf = modalBuffer(S, `metal:${f0}:${decay}`, f0, modes, { seconds: decay * 1.1, noise: 1.2, attack: 0.0005 });
+  const buf = modalBuffer(S, `metal:${f0}:${decay}`, f0, modes, { seconds: decay * 0.9, noise: 1.2, attack: 0.0005 });
   return playBuffer(S, t, buf, { level, pan, bus });
 }
 
@@ -111,44 +111,44 @@ export function harpRoll(S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead
 
 // ======================================================== sustained voices
 
-/** Warm string-ensemble pad: two detuned saws per note spread L/R, shared lowpass + vibrato. */
+/** Warm string-ensemble pad: two detuned saws per note spread L/R, one lowpass per side. */
 export function strings(S, t0, t1, notes, o = {}) {
   const { level = 0.1, attack = 1.5, release = 1.5, cutoff = 1500, bus = 'pad', width = 0.75, detune = 9 } = o;
-  const end = t1 + release * 1.4;
+  const end = t1 + release;
   const att = Math.min(attack, Math.max(0.02, t1 - t0));
-  const lp = S.filter('lowpass', cutoff, 0.6);
-  const f = lp.frequency;
-  f.setValueAtTime(cutoff * 0.45, t0);
-  f.linearRampToValueAtTime(cutoff, t0 + att);
-  f.setValueAtTime(cutoff, t1);
-  f.linearRampToValueAtTime(cutoff * 0.4, end);
   const amp = S.gain(0);
   ahr(amp.gain, t0, t1, level / Math.sqrt(notes.length * 2), att, release);
-  lp.connect(amp);
   S.out(amp, bus);
-
-  const lfo = S.osc('sine', S.rand(4.2, 5.2), t0, end);
-  const vib = S.gain(6);
-  lfo.connect(vib);
-  const nodes = [lp, amp, lfo, vib];
-  for (const m of notes) {
-    for (const side of [-1, 1]) {
+  const nodes = [amp];
+  let last;
+  // Two sections (left / right), each a set of saws a few cents apart → one lowpass → pan.
+  for (const side of [-1, 1]) {
+    const lp = S.filter('lowpass', cutoff, 0.6);
+    const f = lp.frequency;
+    f.setValueAtTime(cutoff * 0.45, t0);
+    f.linearRampToValueAtTime(cutoff, t0 + att);
+    f.setValueAtTime(cutoff, t1);
+    f.linearRampToValueAtTime(cutoff * 0.4, end);
+    const p = S.panner(side * width);
+    lp.connect(p).connect(amp);
+    nodes.push(lp, p);
+    for (const m of notes) {
       const v = S.osc('sawtooth', hz(m), t0, end);
-      v.detune.value = side * detune + S.rand(-3, 3);
-      vib.connect(v.detune);
-      const p = S.panner(side * width * S.rand(0.5, 1));
-      v.connect(p).connect(lp);
-      nodes.push(v, p);
+      // static ensemble detune (an LFO on detune would force the slow per-sample path)
+      v.detune.value = side * detune + S.rand(-4, 4);
+      v.connect(lp);
+      nodes.push(v);
+      last = v;
     }
   }
-  S.free(lfo, ...nodes);
+  S.free(last, ...nodes);
 }
 
 /** Low brass swell: saws through a lowpass that opens with the dynamics. `sfz` = accented attack. */
 export function brass(S, t0, dur, notes, o = {}) {
   const { level = 0.12, attack = 0.7, release = 1.2, bright = 1600, bus = 'brass', sfz = false } = o;
   const t1 = t0 + dur;
-  const end = t1 + release * 1.5;
+  const end = t1 + release * 1.1;
   const tPeak = t0 + (sfz ? 0.03 : attack);
   const lp = S.filter('lowpass', 150, 1.1);
   const f = lp.frequency;
@@ -169,26 +169,24 @@ export function brass(S, t0, dur, notes, o = {}) {
   g.setTargetAtTime(0, t1, release / 5);
   lp.connect(amp);
   S.out(amp, bus);
+  // A section of two players per note, a few cents apart (width comes from the hall).
   const nodes = [lp, amp];
-  let last;
-  notes.forEach((m, i) => {
+  for (const m of notes) {
     for (const cents of [-6, 6]) {
       const v = S.osc('sawtooth', hz(m), t0, end);
       v.detune.value = cents + S.rand(-2, 2);
-      const p = S.panner((i / Math.max(1, notes.length - 1) - 0.5) * 0.6 + cents / 30);
-      v.connect(p).connect(lp);
-      nodes.push(v, p);
-      last = v;
+      v.connect(lp);
+      nodes.push(v);
     }
-  });
-  S.free(last, ...nodes);
+  }
+  S.free(...nodes);
 }
 
 /** Sustained sine drone with slow beating (distant resonance). */
 export function drone(S, t0, t1, midi, { level = 0.1, attack = 2, release = 2, bus = 'pad', beat = 0.25, pan = 0 } = {}) {
   const amp = S.gain(0);
   ahr(amp.gain, t0, t1, level / 2, attack, release);
-  const end = t1 + release * 1.4;
+  const end = t1 + release * 1.1;
   const a = S.osc('sine', hz(midi), t0, end);
   const b = S.osc('sine', hz(midi) + beat, t0, end);
   a.connect(amp);
@@ -214,29 +212,34 @@ export function kick(S, t, level = 0.8, { bus = 'drums', f0 = 150, f1 = 44, deca
   perc(cg.gain, t, level * 0.5, 0.02, 0.0005);
   n.connect(hp).connect(cg);
   S.out(cg, bus);
-  S.free(o, o, g, n, hp, cg);
+  S.free(o, g);
+  S.free(n, hp, cg);
 }
 
 /** Taiko / timpani / low tom: pitched membrane + skin noise. */
 export function drum(S, t, level = 0.6, { f = 70, decay = 1.1, pan = 0, bus = 'perc', skin = 0.5 } = {}) {
-  const end = t + decay + 0.1;
-  const body = S.osc('sine', f * 1.7, t, end);
+  const dest = pan ? S.panner(pan) : S.bus(bus);
+  if (pan) dest.connect(S.bus(bus));
+  // membrane: pitch-dropping sine + a quickly damped overtone
+  const body = S.osc('sine', f * 1.7, t, t + decay + 0.05);
   body.frequency.exponentialRampToValueAtTime(f, t + 0.09);
-  const over = S.osc('triangle', f * 2.4, t, t + decay * 0.4 + 0.05);
-  over.frequency.exponentialRampToValueAtTime(f * 2.3, t + 0.05);
-  const gb = S.gain(0), go = S.gain(0);
+  const gb = S.gain(0);
   perc(gb.gain, t, level, decay, 0.003);
+  body.connect(gb).connect(dest);
+  const over = S.osc('triangle', f * 2.4, t, t + decay * 0.3 + 0.05);
+  over.frequency.exponentialRampToValueAtTime(f * 2.3, t + 0.05);
+  const go = S.gain(0);
   perc(go.gain, t, level * 0.18, decay * 0.3, 0.002);
-  const n = S.noise('pink', t, t + 0.3);
+  over.connect(go).connect(dest);
+  // skin slap (its own short-lived voice)
+  const n = S.noise('pink', t, t + 0.25);
   const lp = S.filter('lowpass', 700 + f * 4, 0.9);
   const gn = S.gain(0);
   perc(gn.gain, t, level * skin, 0.2, 0.001);
-  const mix = S.gain(1);
-  body.connect(gb).connect(mix);
-  over.connect(go).connect(mix);
-  n.connect(lp).connect(gn).connect(mix);
-  const p = S.out(mix, bus, pan);
-  S.free(body, body, over, gb, go, n, lp, gn, mix, p);
+  n.connect(lp).connect(gn).connect(dest);
+  S.free(n, lp, gn);
+  S.free(over, go);
+  S.free(body, gb, ...(pan ? [dest] : []));
 }
 
 export function snare(S, t, level = 0.3, { pan = 0, bus = 'drums', decay = 0.22 } = {}) {
