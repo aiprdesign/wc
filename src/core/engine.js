@@ -9,6 +9,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { SEGMENTS, DURATION, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { DofShader, TransitionShader, FinalShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
+import { TitleLayer } from './titles.js';
 import { PALETTE } from '../lib/palette.js';
 
 const shaderMat = (def) => new THREE.ShaderMaterial({
@@ -53,6 +54,7 @@ export class Engine {
     };
 
     this.resize();
+    this.titles = new TitleLayer();
     let i = 0;
     for (const seg of SEGMENTS) {
       const mod = modules[seg.id];
@@ -199,6 +201,8 @@ export class Engine {
     tu.uTime.value = T;
     r.setRenderTarget(this.comp);
     this.transQuad.render(r);
+    // chapter headings and story cards sit above every sequence (before bloom, so they glow softly)
+    if (this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
 
     this.bloom.strength = bloomStrength;
     this.bloom.render(r, null, this.comp, dt, false);

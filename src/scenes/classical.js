@@ -471,8 +471,9 @@ export function create(ctx, segment) {
 
     // --- chapter card
     const cc = envelope(t, tWire + 0.2, dur - 0.3, 0.5, 0.4);
-    chapter.opacity = cc; chapter.reveal = ramp(t, tWire + 0.2, tWire + 1.1, ease.outCubic);
-    chapterSub.opacity = cc * 0.8; chapterSub.reveal = ramp(t, tWire + 0.5, tWire + 1.4, ease.outCubic);
+    // the global title layer (src/core/titles.js) now carries the chapter heading
+    chapter.opacity = 0; chapter.reveal = ramp(t, tWire + 0.2, tWire + 1.1, ease.outCubic) * cc;
+    chapterSub.opacity = 0; chapterSub.reveal = ramp(t, tWire + 0.5, tWire + 1.4, ease.outCubic);
 
     // --- lens: shallow focus on the column, then deep focus on the building
     tmp.copy(camera.position).sub(HERO).setY(0);

@@ -20,7 +20,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, arr) =>
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.resolve(args.out ?? 'renders/film');
 const fps = Number(args.fps ?? 30), width = Number(args.width ?? 1920), workers = Number(args.workers ?? 2);
-const from = Number(args.from ?? 0), to = Number(args.to ?? 64);
+const from = Number(args.from ?? 0), to = Number(args.to ?? 72);
 const framesDir = path.join(out, 'frames');
 fs.mkdirSync(framesDir, { recursive: true });
 
