@@ -165,7 +165,7 @@ function lift(t) {
   if (t < 5) return 0.18;
   if (t < 12) return 0.34;
   if (t < 20) return 0.42;
-  if (t < 45.5) return 0.42 + 0.4 * (t - 20) / 25.5;
+  if (t < 45.5) return 0.46 + 0.38 * (t - 20) / 25.5;
   return 0.95;
 }
 
@@ -177,6 +177,9 @@ const MOON_STR = {
   41.8: { level: 0.5, attack: 0.08, release: 0.3, cutoff: 5500, hi: true },
 };
 
+// The sub pulse's pitch for a chord (act II): its root, an octave up if below A1.
+const subRoot = (c) => c.root + (c.root < 33 ? 12 : 0);
+
 function stringsLayer(S) {
   for (const [a, b, name] of HARMONY) {
     if (a >= C.pullBack) break;
@@ -184,7 +187,10 @@ function stringsLayer(S) {
     const first = a === 0;
     const start = first ? 1.0 : a - 0.12;
     const moon = MOON_STR[a];
-    S.at(start, () => O.chord(S, 'strings', start, b, CHORDS[name].str, moon ?? {
+    // while the sub pulse runs, it owns the bass fundamental: a string note in unison
+    // with it would only beat against it (slow, deep cancellations of the low end)
+    const notes = a >= 20 ? CHORDS[name].str.filter((m) => m !== subRoot(CHORDS[name])) : CHORDS[name].str;
+    S.at(start, () => O.chord(S, 'strings', start, b, notes, moon ?? {
       level: 0.55 * lv, attack: first ? 3 : a < 20 ? 0.6 : 0.15, release: a < 20 ? 1.2 : 0.3,
       cutoff: 900 + 4000 * lv, swell: a === 8.0 ? 0.6 : null,
     }));
@@ -192,7 +198,7 @@ function stringsLayer(S) {
     if (a >= 28 && (!moon || moon.hi)) {
       const u = ot(a);
       S.at(a - 0.1, () => O.chord(S, 'strings', a - 0.1, b, CHORDS[name].hi.map((m) => m + (u >= 40 ? 12 : 0)), {
-        level: 0.1 + 0.12 * (u - 28) / 22, attack: 0.2, release: 0.25, cutoff: 5500,
+        level: 0.13 + 0.09 * (u - 28) / 22, attack: 0.2, release: 0.25, cutoff: 5500,
       }));
     }
   }
@@ -295,11 +301,11 @@ function ostinato(S) {
   });
   // sub pulse (mono): one voice for the whole act
   const t0 = 20.0;
-  const roots = HARMONY.filter(([, b]) => b > t0).map(([a, , n]) => [Math.max(a, t0), CHORDS[n].root + (CHORDS[n].root < 33 ? 12 : 0)]);
+  const roots = HARMONY.filter(([, b]) => b > t0).map(([a, , n]) => [Math.max(a, t0), subRoot(CHORDS[n])]);
   const hits = [];
   for (let t = t0; t < OST_END - 1e-6; t += BEAT / 2) {
     const on = Math.round(t / (BEAT / 2)) % 2 === 0;
-    hits.push({ t, v: (on ? 1 : 0.72) * (t < 24 ? 0.6 : t < 28 ? 0.8 : 1) * env(t, [[39.4, 1], [39.7, 0.75], [41.6, 0.75], [41.8, 1]]), len: 0.22 });
+    hits.push({ t, v: (on ? 1 : 0.65) * (t < 24 ? 0.6 : t < 28 ? 0.8 : 1) * env(t, [[39.4, 1], [39.7, 0.75], [41.6, 0.75], [41.8, 1]]), len: 0.22 });
   }
   hits.push({ t: C.pullBack, v: 1.1, len: 1.4 });
   S.at(t0, () => I.subPulse(S, t0, C.musicDrop, roots, hits, { level: 0.36 }));
@@ -350,7 +356,7 @@ function lowBrass(S) {
   for (const [a, b, name] of HARMONY) {
     if (a < 24 || a >= 49.5 || (a >= 39.6 && a < M1)) continue;
     const u = ot(a);
-    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.16 + 0.2 * (u - 24) / 21, attack: Math.min(1.4, (b - a) * 0.7), release: 0.25, bright: 1400 + 1200 * (u - 24) / 21 }));
+    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.2 + 0.16 * (u - 24) / 21, attack: Math.min(1.4, (b - a) * 0.7), release: 0.5, bright: 1400 + 1200 * (u - 24) / 21 }));
   }
   for (const [a, b, name] of HARMONY) {
     if (a < 49.5 || a >= C.pullBack) continue;
@@ -427,10 +433,10 @@ function accents(S) {
   hit(S, C.templeReveal, { power: 0.85, braam: 53, chord: 'F', down: true });   // BRAAM 1
   whooshHit(S, C.model3D, 0.7, -0.6);
   S.at(C.model3D, () => I.harpRoll(S, C.model3D, [57, 61, 64, 69, 73, 76], { level: 0.07 }));
-  hit(S, 20.0, { power: 0.38 });                                                 // act II begins
+  hit(S, 20.0, { power: 0.45 });                                                 // act II begins
   hit(S, C.gear, { power: 0.55 });
   hit(S, 28.0, { power: 0.6 });                                                  // layer 3, bar line (train)
-  S.at(C.spark, () => I.taiko(S, C.spark, 0.26, { size: 0.6 }));
+  S.at(C.spark, () => I.taiko(S, C.spark, 0.35, { size: 0.6 }));
   hit(S, 32.0, { power: 0.6 });
   hit(S, 36.0, { power: 0.7 });
   hit(S, C.earthWide, { power: 1.0, braam: 41, chord: 'F', down: true });        // BRAAM 2
@@ -500,14 +506,15 @@ function moonshot(S) {
 function moonshotRhythm(S) {
   for (const t of [40.0, 41.0]) S.at(t, () => I.kick(S, t, 0.24));
   // soft low tom roll swelling into the landing
-  for (let t = 39.875; t < C.moonLanding - 0.02; t += STEP) {
-    const u = (t - 39.875) / (C.moonLanding - 39.875);
-    S.at(t, () => I.tom(S, t, 0.03 + 0.1 * u * u, { f: 78, pan: Math.round(t / STEP) % 2 ? 0.25 : -0.25 }));
+  // (it stops a beat short, so the landing arrives in a held breath of strings and choir)
+  for (let t = 39.875; t < C.moonLanding - 0.2; t += STEP) {
+    const u = (t - 39.875) / (C.moonLanding - 0.2 - 39.875);
+    S.at(t, () => I.tom(S, t, 0.03 + 0.07 * u * u, { f: 78, pan: Math.round(t / STEP) % 2 ? 0.25 : -0.25 }));
   }
   const tl = C.moonLanding;
   S.at(tl, () => {
-    I.boom(S, tl, { level: 0.24, f0: 62, f1: 30, decay: 2.4 });
-    I.taiko(S, tl, 0.2, { size: 1 });
+    I.boom(S, tl, { level: 0.3, f0: 62, f1: 30, decay: 2.4 });
+    I.taiko(S, tl, 0.24, { size: 1 });
     I.harpRoll(S, tl, [50, 57, 62, 66, 69, 74, 78], { level: 0.05 });
   });
   // footprint: a soft shimmer (bells + celesta on D major)

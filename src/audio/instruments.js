@@ -247,7 +247,7 @@ export function subPulse(S, t0, t1, roots, hits, { level = 0.35, bus = 'bass' } 
   g.setValueAtTime(0, t0);
   for (const { t, v, len = 0.2 } of hits) { // v in 0..1
     g.setTargetAtTime(level * v, t, 0.004);
-    g.setTargetAtTime(level * v * 0.42, t + 0.03, len / 3);  // pumps, but never drops out
+    g.setTargetAtTime(level * v * 0.22, t + 0.03, len / 3);
   }
   g.setTargetAtTime(0, t1, 0.08);
   S.out(amp, bus);

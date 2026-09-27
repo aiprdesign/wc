@@ -159,14 +159,14 @@ function industrial(S) {
 function electricity(S) {
   // spark: big crackle + arc zap, then a live crackle bed through the section
   S.at(C.spark, () => {
-    X.sparks(S, C.spark, 0.5, { level: 0.16, bursts: 1.5 });
+    X.sparks(S, C.spark, 0.5, { level: 0.2, bursts: 1.5 });
     X.zap(S, C.spark, { level: 0.08 });
     X.zap(S, C.spark + 0.12, { level: 0.05, from: 3800, to: 400, pan: 0.4 });
     X.sparks(S, C.spark + 0.4, C.circuitCity + 0.3 - C.spark - 0.4, { level: 0.05, bursts: 0.8, pan: 0.2 });
     X.hum(S, C.spark, C.circuitCity, { level: 0.03, freq: 100, cutoff: 1600, pan: -0.2 });
   });
   // telegraph: morse "W C"
-  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.075 }));
+  S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.055 }));
   // telephone: a short bell ring
   S.at(C.telephone, () => X.phoneRing(S, C.telephone, 0.45, { level: 0.025 }));
   // radio: tuning sweep through static
@@ -214,7 +214,7 @@ function moonshot(S) {
   });
   [[0.0, -0.5], [0.14, 0.45], [0.5, -0.3], [0.62, 0.5]].forEach(([d, p]) => S.at(C.translunar + d, () => X.thrusterPuff(S, C.translunar + d, { level: 0.035, pan: p })));
   // lunarDescent: the descent engine through the structure, shutting down on contact
-  S.at(C.lunarDescent - 0.2, () => X.descentRumble(S, C.lunarDescent - 0.2, C.moonLanding - 0.05, { level: 0.07, attack: 0.5, release: 0.35 }));
+  S.at(C.lunarDescent - 0.2, () => X.descentRumble(S, C.lunarDescent - 0.2, C.moonLanding - 0.05, { level: 0.1, attack: 0.5, release: 0.35 }));
   S.at(C.lunarDescent + 0.45, () => X.thrusterPuff(S, C.lunarDescent + 0.45, { level: 0.025, pan: 0.4 }));
   // air-to-ground: Quindar intro, a burst of the loop, Quindar outro …
   const q = C.lunarDescent + 0.1;
@@ -229,7 +229,7 @@ function moonshot(S) {
     X.quindar(S, C.moonLanding + 0.37, { level: 0.008, freq: 2475, pan: 0.35 });
   });
   // footprint: the boot presses into the regolith
-  S.at(C.footprint, () => X.crunch(S, C.footprint, { level: 0.05, pan: -0.1 }));
+  S.at(C.footprint, () => X.crunch(S, C.footprint, { level: 0.03, pan: -0.1 }));
   // guidanceComputer: DSKY relays and the "1202" alarm beeps
   [0, 0.06, 0.125, 0.19, 0.25].forEach((d, k) => S.at(C.guidanceComputer + d, () => X.relay(S, C.guidanceComputer + d, { level: 0.028, pan: k % 2 ? 0.35 : -0.25 })));
   [0.05, 0.2].forEach((d) => S.at(C.guidanceComputer + d, () => I.blip(S, C.guidanceComputer + d, 1202, { level: 0.014, type: 'square', decay: 0.09, pan: 0.3 })));
