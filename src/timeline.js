@@ -8,7 +8,10 @@ export const FILM_ASPECT = 2.39;         // anamorphic frame; every scene is com
 // exact 2.39 horizontal view and the frame extends above/below, so nothing composed is ever cropped.
 export const OUTPUT_ASPECT = (() => {
   try {
-    const a = new URLSearchParams(globalThis.location?.search ?? '').get('aspect');
+    // ?aspect=1 / ?aspect=16:9, or a hash (#square, #16x9, #wide) — hashes survive embedded viewers
+    const hash = (globalThis.location?.hash ?? '').slice(1).toLowerCase();
+    const fromHash = { square: '1', '1x1': '1', '16x9': '16:9', '4x5': '4:5', wide: '' }[hash];
+    const a = fromHash ?? new URLSearchParams(globalThis.location?.search ?? '').get('aspect');
     if (!a) return FILM_ASPECT;
     const [x, y] = a.split(/[:x/]/).map(Number);
     const v = y ? x / y : x;

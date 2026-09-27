@@ -86,7 +86,7 @@ export function create(ctx, segment) {
   stackInner.add(lmStack);
   stackInner.position.z = -3.5;
   stack.scale.setScalar(0.085);
-  const rcs = [0, 1].map(() => { const g = glowSprite({ color: '#ffffff', intensity: 2.2, scale: 6 }); stackInner.add(g); return g; });
+  const rcs = [0, 1].map(() => { const g = glowSprite({ color: '#ffffff', intensity: 1.3, scale: 2.6 }); stackInner.add(g); return g; });
   rcs[0].position.set(2.4, 0.3, 1.6); rcs[1].position.set(-2.4, -0.3, 1.6);
 
   // ================================================================ WORLD L — lunar surface
@@ -220,7 +220,7 @@ export function create(ctx, segment) {
   // the Earth in the lunar sky
   const earthL = earthMesh(42, SUN_L, { segs: 128, city: 0.15 }); earthL.rotation.z = 0.41; worldL.add(earthL);
   const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.9;
-  const LOOK_E = V3(-0.25, CAM_E.y + Math.tan(THREE.MathUtils.degToRad(5)) * CAM_E.z, 0);
+  const LOOK_E = V3(-0.25, CAM_E.y + Math.tan(THREE.MathUtils.degToRad(5.5)) * CAM_E.z, 0);
   const EARTH_D = 820;
   const earthDir = new THREE.Vector3();
   const placeEarth = (el) => {       // elevation (rad) above the camera→LM line, slight azimuth offset

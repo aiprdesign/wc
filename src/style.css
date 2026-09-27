@@ -57,3 +57,4 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 @keyframes blink { 50% { opacity: 0.3; } }
 .hide-cursor, .hide-cursor * { cursor: none !important; }
 @media (max-width: 560px) { #btn-wav, #btn-rec { display: none; } .controls { gap: 6px; } }
+.controls button.fmt { width: auto; padding: 0 8px; font: inherit; font-size: 10px; letter-spacing: 0.08em; border: 1px solid rgba(255, 255, 255, 0.18); }

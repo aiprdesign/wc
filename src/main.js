@@ -99,6 +99,10 @@ function setupUI(player, score) {
   $('play').addEventListener('click', () => { begin(player); syncPlaying(); });
   $('btn-play').addEventListener('click', async () => { await player.toggle(); syncPlaying(); });
   $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); body.classList.toggle('muted', player.muted); });
+  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9']];
+  const cur = fmts.findIndex(([h]) => h === location.hash.slice(1));
+  $('btn-format').textContent = fmts[Math.max(0, cur)][1];
+  $('btn-format').addEventListener('click', () => { location.hash = fmts[(Math.max(0, cur) + 1) % fmts.length][0]; });
   $('btn-fs').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()));
   $('btn-wav').addEventListener('click', () => {
     if (!score?.encodeWav) return;
@@ -164,6 +168,9 @@ function download(blob, name) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+
+// Switching the frame format (#square, #16x9, #wide) needs a fresh engine.
+addEventListener('hashchange', () => location.reload());
 
 boot().catch((e) => {
   console.error(e);

@@ -5,7 +5,7 @@
 // pulses) matched at the same scale in a second world; then data-flow visualisation: streams
 // of 0/1 glyphs flowing into floating UI (software, communication, 3D graphics, robotics, AI).
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { clamp, sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
 import { TextPlane, FONTS } from '../lib/text.js';
@@ -322,7 +322,7 @@ export function create(ctx, segment) {
   // floating interfaces
   const panels = [];
   const addPanel = (obj, pos, rotY, label, sub, t0, w = 2.2, h = 1.4) => {
-    const g = new THREE.Group(); g.position.copy(pos); g.rotation.y = rotY; worldB.add(g);
+    const g = new THREE.Group(); g.position.copy(pos); g.position.x *= OUTPUT_ASPECT < 1.5 ? 0.8 : 1; g.rotation.y = rotY; worldB.add(g);
     g.add(obj);
     const fr = new BracketFrame(w + 0.2, h + 0.2, { len: 0.16, color: '#cfe3ff', intensity: 1.1 }); g.add(fr);
     const lt = new TextPlane(label, { font: FONTS.mono, weight: 500, height: 0.11, letterSpacing: 0.22, color: '#e6f2ff', intensity: 1.3 });
@@ -392,10 +392,10 @@ export function create(ctx, segment) {
   const nnCore = glowSprite({ color: '#cfe3ff', intensity: 2.5, scale: 1.6 }); nn.add(nnCore);
 
   addPanel(swCard, V3(-3.0, 1.55, -10.2), 0.5, 'SOFTWARE', 'Interfaces · languages · systems', tBin + 0.05);
-  addPanel(cmCard, V3(3.1, 1.75, -10.6), -0.5, 'COMMUNICATION', 'Packets across a planet', tBin + 0.15);
+  addPanel(cmCard, V3(3.1, 1.75, -10.6), -0.5, 'ARPANET 1969 — INTERNET', 'Packets across a planet', tBin + 0.15);
   addPanel(gfx, V3(-2.1, 2.85, -12.6), 0.3, '3D GRAPHICS', 'Geometry · light · pixels', tBin + 0.25, 1.4, 1.3);
   addPanel(robot, V3(2.25, 0.95, -12.4), -0.3, 'ROBOTICS', 'Sense · plan · act', tBin + 0.32, 1.3, 1.4);
-  addPanel(nn, V3(0, 1.8, -14.4), 0, 'ARTIFICIAL INTELLIGENCE', 'Learning from data', tBin + 0.42, 2.8, 2.2);
+  addPanel(nn, V3(0, 1.8, -14.4), 0, 'ARTIFICIAL INTELLIGENCE', 'Dartmouth 1956 · learning from data', tBin + 0.42, 2.8, 2.2);
 
   // binary glyph streams: die → interfaces
   const GLYPHS = 1100;
@@ -443,13 +443,16 @@ export function create(ctx, segment) {
   // ================================================================ screen HUD: era captions + evolution timeline
   const hud = ctx.makeHUD();
   const A = ctx.aspect;
-  const STAGES = [['1822', 'MECHANICAL CALCULATION', tCalc - 0.3], ['1937', 'ELECTROMECHANICAL RELAY', tRel], ['1946', 'VACUUM TUBE', tTube], ['1947', 'TRANSISTOR', tTr], ['1971', 'MICROPROCESSOR', tProc]];
-  const capYear = STAGES.map(([y]) => { const tp = new TextPlane(y, { font: FONTS.sans, weight: 200, height: 0.1, letterSpacing: 0.05, color: '#e6f0ff', intensity: 1.1 }); tp.position.set(-A + 0.2 + tp.worldWidth / 2, -0.7, 0); hud.scene.add(tp); return tp; });
-  const capName = STAGES.map(([, n]) => { const tp = new TextPlane(n, { font: FONTS.mono, height: 0.034, letterSpacing: 0.22, color: '#bcd4f2', intensity: 0.9 }); tp.position.set(-A + 0.22 + tp.worldWidth / 2, -0.8, 0); hud.scene.add(tp); return tp; });
-  const TL_X0 = -A + 0.22, TL_X1 = -A + 1.5, TL_Y = -0.87;
+  // open-matte delivery (?aspect=1 …): keep the captions anchored bottom-left and scale them up to stay legible
+  const HH = FILM_ASPECT / OUTPUT_ASPECT, UI = Math.sqrt(HH) * (OUTPUT_ASPECT < 1.5 ? 1.25 : 1);
+  const HX = (dx) => -A + dx * UI, HY = (y) => -HH + (1 + y) * UI;
+  const STAGES = [['1822', 'MECHANICAL CALCULATION · BABBAGE', tCalc - 0.3], ['1937', 'ELECTROMECHANICAL RELAY · BELL LABS', tRel], ['1946', 'VACUUM TUBE · ENIAC · PHILADELPHIA', tTube], ['1947', 'TRANSISTOR · BELL LABS', tTr], ['1971', 'MICROPROCESSOR · SILICON VALLEY', tProc]];
+  const capYear = STAGES.map(([y]) => { const tp = new TextPlane(y, { font: FONTS.sans, weight: 200, height: 0.1 * UI, letterSpacing: 0.05, color: '#e6f0ff', intensity: 1.1 }); tp.position.set(HX(0.2) + tp.worldWidth / 2, HY(-0.7), 0); hud.scene.add(tp); return tp; });
+  const capName = STAGES.map(([, n]) => { const tp = new TextPlane(n, { font: FONTS.mono, height: 0.034 * UI, letterSpacing: 0.22, color: '#bcd4f2', intensity: 0.9 }); tp.position.set(HX(0.22) + tp.worldWidth / 2, HY(-0.8), 0); hud.scene.add(tp); return tp; });
+  const TL_X0 = HX(0.22), TL_X1 = HX(1.5), TL_Y = HY(-0.87);
   const tlBase = segmentsLine([[V3(TL_X0, TL_Y, 0), V3(TL_X1, TL_Y, 0)]], { color: '#6f8fb8', intensity: 0.6, orderFn: () => 0, stagger: 0 });
-  const tlTicks = segmentsLine(STAGES.map((_, i) => { const x = lerp(TL_X0, TL_X1, i / 4); return [V3(x, TL_Y - 0.012, 0), V3(x, TL_Y + 0.012, 0)]; }), { color: '#9cc8ff', intensity: 0.9, orderFn: (a, b, i) => i / 5, stagger: 0.8 });
-  const tlDot = new THREE.Mesh(new THREE.CircleGeometry(0.009, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#e6f2ff').multiplyScalar(2), toneMapped: false }));
+  const tlTicks = segmentsLine(STAGES.map((_, i) => { const x = lerp(TL_X0, TL_X1, i / 4); return [V3(x, TL_Y - 0.012 * UI, 0), V3(x, TL_Y + 0.012 * UI, 0)]; }), { color: '#9cc8ff', intensity: 0.9, orderFn: (a, b, i) => i / 5, stagger: 0.8 });
+  const tlDot = new THREE.Mesh(new THREE.CircleGeometry(0.009 * UI, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#e6f2ff').multiplyScalar(2), toneMapped: false }));
   hud.scene.add(tlBase, tlTicks, tlDot);
 
   // ================================================================ animation
