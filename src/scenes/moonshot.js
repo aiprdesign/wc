@@ -11,7 +11,7 @@
 // Composed for 1:1 first (subjects and type centred, HUD laid out in the open-matte height).
 import * as THREE from 'three';
 import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
-import { clamp, sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
+import { sat, lerp, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
 import { TextPlane, KineticText, FONTS } from '../lib/text.js';
 import { progressTube, progressLine, circlePoints, segmentsLine } from '../lib/lines.js';
@@ -26,7 +26,6 @@ import {
 const GREEN = '#a8f0bf';
 const AMBER = '#ffb766';
 const ICE = '#d6e8ff';
-const WARM = '#ffe3b8';
 
 export function create(ctx, segment) {
   const cue = (n) => CUES[n] - segment.start;
@@ -281,7 +280,7 @@ export function create(ctx, segment) {
   const D0 = V3(0, 4000, 0);
   const worldD = new THREE.Group(); worldD.position.copy(D0); scene.add(worldD);
   const atlas = segAtlas();
-  const dsky = buildDSKY(atlas, MAT); worldD.add(dsky);
+  const dsky = buildDSKY(atlas); worldD.add(dsky);
   const dsk = dsky.userData;
   {
     // surrounding LM panel: dark anodised plate with toggle switches and round gauges (context, soft in DOF)
@@ -429,7 +428,7 @@ export function create(ctx, segment) {
       this._hud(t, T);
     },
 
-    _space(t, info) {
+    _space(t) {
       const u = sat(timeWarp(t, sCamK));
       sCamCurve.getPoint(u, camPos);
       sLookCurve.getPoint(u, look);
@@ -460,7 +459,7 @@ export function create(ctx, segment) {
       api.dof.amount = 0;
       api.exposure = 1 + envelope(t, tS1 - 0.12, tS1 + 0.2, 0.12, 0.2, ease.inQuad) * 0.9;
       api.bloom.strength = 0.72;
-      void info;
+
     },
 
     _moon(t, info) {
@@ -625,6 +624,5 @@ export function create(ctx, segment) {
   };
   // prime the Earth position for the shader warm-up
   placeEarth(0.06);
-  void clamp; void smoothstep; void WARM; void fovFor;
   return api;
 }

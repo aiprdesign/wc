@@ -3,8 +3,7 @@
 // seven-segment "DSKY" digit system shared by the HUD and the 3D guidance computer.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { GLSL_NOISE, fbm2, noise2, noise4 } from '../lib/noise.js';
+import { GLSL_NOISE, fbm2, noise4 } from '../lib/noise.js';
 import { rng, TAU } from '../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { TextPlane, FONTS } from '../lib/text.js';
@@ -430,7 +429,6 @@ export function buildLM(M, { folded = false } = {}) {
     add(strut(lowB, mid, 0.04, M.silverFoil));
     const pad = add(new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.34, 0.16, 24), M.silverFoil));
     pad.position.copy(foot).setY(foot.y - 0.2);
-    if (!folded && k !== 0) add(strut(pad.position.clone(), pad.position.clone().add(V3(0, -1.2, 0)).add(V3(s * 0.3, 0, c * 0.3)), 0.012, M.silverFoil, 4)).visible = false;
     legs.push({ top, foot, pad });
   }
   // front porch + ladder on the +Z leg
@@ -480,13 +478,12 @@ export function buildLM(M, { folded = false } = {}) {
   // rendezvous radar (front-top) and S-band steerable dish (top-right)
   const rr = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 12, 0, TAU, 0, Math.PI * 0.32), M.white), as);
   rr.position.set(0, 2.45, 0.85); rr.rotation.x = -1.1;
-  const boom = add(strut(V3(1.0, 2.1, -0.5), V3(1.35, 2.75, -0.7), 0.03, M.silverFoil), as);
+  add(strut(V3(1.0, 2.1, -0.5), V3(1.35, 2.75, -0.7), 0.03, M.silverFoil), as);
   const dish = add(new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 12, 0, TAU, 0, Math.PI * 0.3), M.white), as);
   dish.position.set(1.35, 2.9, -0.7); dish.rotation.set(-0.5, 0, -0.6);
   [V3(-1.2, 2.1, -1.2), V3(0.6, 2.1, -1.7)].forEach((b) => add(strut(b, b.clone().add(V3(0, 0.7, 0.1)), 0.012, M.silverFoil, 4), as));
   lm.userData = { ascent: as, bell, windows: [winL, winR], legs, bellY: DS_Y - 1.0, winPos: V3(-0.35, as.position.y + 1.42, 1.3) };
   lm.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  void boom;
   return lm;
 }
 
@@ -539,7 +536,7 @@ export const SEG = { blank: 10, plus: 11, minus: 12 };
 export function segAtlas() {
   const CW = 96, CH = 160, c = mkCanvas(CW * 16, CH), g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
-  const T = 13, L = 50, M = 12;                 // thickness, segment length, margin
+  const T = 13, L = 50;                         // segment thickness, length
   const x0 = (CW - L - T) / 2, y0 = (CH - 2 * L - T) / 2;
   const hseg = (x, y) => { g.beginPath(); g.moveTo(x + 2, y); g.lineTo(x + T / 2 + 2, y - T / 2); g.lineTo(x + L - T / 2 - 2, y - T / 2); g.lineTo(x + L - 2, y); g.lineTo(x + L - T / 2 - 2, y + T / 2); g.lineTo(x + T / 2 + 2, y + T / 2); g.closePath(); g.fill(); };
   const vseg = (x, y) => { g.beginPath(); g.moveTo(x, y + 2); g.lineTo(x + T / 2, y + T / 2 + 2); g.lineTo(x + T / 2, y + L - T / 2 - 2); g.lineTo(x, y + L - 2); g.lineTo(x - T / 2, y + L - T / 2 - 2); g.lineTo(x - T / 2, y + T / 2 + 2); g.closePath(); g.fill(); };
@@ -559,9 +556,7 @@ export function segAtlas() {
     for (const s of MAP[k]) segs[s](ox);
     if (k === SEG.plus) g.fillRect(ox + x0 + T / 2 + L / 2 - T / 2, y0 + T / 2 + L - L * 0.42, T, L * 0.84);
   }
-  void M;
-  const t = toTexture(c, { srgb: false });
-  return t;
+  return toTexture(c, { srgb: false });
 }
 
 // Instanced digit field. `cells`: [{x, y, h}] in local units. setDigit(i, idx), setColor(i, color, intensity).
@@ -609,7 +604,7 @@ export class SegDigits extends THREE.Mesh {
 }
 
 // 3D DSKY: anodised body, lamp panel, EL display window, 19-key keypad. Width ≈ 2 units. Faces +Z.
-export function buildDSKY(atlas, M) {
+export function buildDSKY(atlas) {
   const g = new THREE.Group();
   const body = new THREE.MeshStandardMaterial({ color: '#3a3e44', metalness: 0.7, roughness: 0.42, envMapIntensity: 0.7 });
   const bezel = new THREE.MeshStandardMaterial({ color: '#23262a', metalness: 0.6, roughness: 0.5, envMapIntensity: 0.6 });
@@ -662,6 +657,5 @@ export function buildDSKY(atlas, M) {
   const screwG = new THREE.CylinderGeometry(0.03, 0.03, 0.02, 12);
   for (const [x, y] of [[-0.98, 1.05], [0.98, 1.05], [-0.98, -1.05], [0.98, -1.05]]) { const s = new THREE.Mesh(screwG, bezel); s.rotation.x = Math.PI / 2; s.position.set(x, y, 0.01); g.add(s); }
   g.userData = { digits, compActy, lamps, lampAmber, disp };
-  void M; void mergeGeometries; void noise2;
   return g;
 }
