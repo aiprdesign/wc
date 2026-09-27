@@ -1,4 +1,4 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v2, "trailer" score).
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v3, three-act trailer score).
 //
 // renderScore() synthesises the whole 60 s score offline (Web Audio only: no
 // samples) and returns an AudioBuffer that the player starts at any offset.
@@ -27,7 +27,7 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 2;
+export const SCORE_VERSION = 3;
 
 const TAIL = 1.5;              // seconds rendered past DURATION
 const CEILING = 0.891;         // -1 dBFS
@@ -45,12 +45,21 @@ function buildMixer(S) {
   // so a single fade silences the music AND its reverb tail at musicDrop.
   const film = S.gain(1);
   film.connect(master);
+  // suck-back before the pullBack: 80 ms of true silence (music AND reverb)
+  film.gain.setValueAtTime(1, C.pullBack - 0.1);
+  film.gain.linearRampToValueAtTime(0, C.pullBack - 0.08);
+  film.gain.setValueAtTime(0, C.pullBack - 0.003);
+  film.gain.linearRampToValueAtTime(1, C.pullBack);
   film.gain.setValueAtTime(1, C.musicDrop);
   film.gain.setTargetAtTime(0, C.musicDrop, 0.07);
 
   // The finale (resonance, final impact, closing shimmer) has its own long space.
   const finale = S.gain(1);
   finale.connect(master);
+  finale.gain.setValueAtTime(1, C.finalImpact - 0.1);   // suck-back before the button
+  finale.gain.linearRampToValueAtTime(0, C.finalImpact - 0.08);
+  finale.gain.setValueAtTime(0, C.finalImpact - 0.003);
+  finale.gain.linearRampToValueAtTime(1, C.finalImpact);
   finale.gain.setValueAtTime(1, C.fadeOut);
   finale.gain.linearRampToValueAtTime(0, DURATION + 0.5);
 
@@ -60,7 +69,7 @@ function buildMixer(S) {
   //   hall  — large orchestral hall with pre-delay (until just after the drop)
   //   space — very long stereo space for the finale (from the pullBack on)
   // (Percussion carries its own tight room, baked into its one-shots.)
-  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 3.0, preDelay: 0.045, brightHz: 7500, darkHz: 1300 });
+  const hall = makeWideMonoReverb(ctx, S.random, { seconds: 2.6, preDelay: 0.045, brightHz: 7500, darkHz: 1300 });
   const hallIn = S.filter('highpass', 170, 0.6);
   hallIn.connect(hall.input);
   hall.output.connect(film);
@@ -69,19 +78,6 @@ function buildMixer(S) {
   const space = makeWideMonoReverb(ctx, S.random, { seconds: 5.0, preDelay: 0.05, brightHz: 6000, darkHz: 700 }, 0.027);
   const spaceIn = S.filter('highpass', 90, 0.6);
   S.at(C.pullBack, () => { spaceIn.connect(space.input); space.output.connect(finale); });
-
-  // Dotted-8th feedback delay for the synths (wired for the hybrid section only).
-  const delay = ctx.createDelay(1);
-  delay.delayTime.value = 0.375;
-  const fb = S.gain(0.3);
-  const dlp = S.filter('lowpass', 3200);
-  delay.connect(dlp).connect(fb).connect(delay);
-  const dWet = S.gain(0.35);
-  dlp.connect(dWet);
-  const dRev = S.gain(0.3);
-  dRev.connect(hallIn);
-  S.at(C.gear - 0.5, () => { dWet.connect(film); dWet.connect(dRev); });
-  S.at(C.musicDrop + 1.0, () => dWet.disconnect());
 
   // Spiccato strings sit behind a gentle lowpass; sound effects lose a little
   // top end so they blend into the score instead of clicking on top of it.
@@ -109,7 +105,6 @@ function buildMixer(S) {
   bus('fx', 0.9, [[hallIn, 0.35]]);
   bus('end', 1.0, [[spaceIn, 0.7]], finale);
   bus('endDry', 1.0, [[spaceIn, 0.15]], finale);
-  S.bus('synth').connect(S.gain(0.5)).connect(delay);
 }
 
 /** Gentle sidechain-style ducking of the strings under the hybrid-section kicks. */

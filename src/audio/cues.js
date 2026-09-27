@@ -179,7 +179,7 @@ function electricity(S) {
   // circuitCity: arc + synth stab
   S.at(C.circuitCity, () => {
     X.zap(S, C.circuitCity, { level: 0.08, from: 7000, to: 300, dur: 0.25 });
-    [60, 64, 67, 72].forEach((m) => I.synthPluck(S, C.circuitCity, m, { level: 0.05, decay: 0.6, cutoff: 4500 }));
+    [58, 62, 65, 70].forEach((m) => I.synthPluck(S, C.circuitCity, m, { level: 0.05, decay: 0.6, cutoff: 4500 }));
   });
 }
 
@@ -284,25 +284,7 @@ function finale(S) {
     I.drone(S, 51.2, 55.4, 57, { level: 0.0025, attack: 1.5, release: 0.8, beat: 0.35, bus: 'end', pan: 0.2 });
     X.air(S, 51.0, 55.5, { level: 0.004, freq: 3200, attack: 1.2, release: 0.8, bus: 'end' });
   });
-  // a faint inhale into the impact
-  S.at(55.3, () => I.swellIn(S, C.finalImpact, 0.7, { level: 0.02, bus: 'end', top: 5000 }));
-  // FINAL IMPACT — the most powerful moment: sub boom, taiko ensemble, BRAAM and a
-  // D-major bloom of choir, brass and strings into a very long tail; the horns
-  // answer with the head of the theme (D — A — high D) under the final title.
-  S.at(C.finalImpact, () => {
-    const t = C.finalImpact;
-    const D_MAJOR = [38, 50, 57, 62, 66, 69, 74];
-    I.boom(S, t, { level: 1.0, f0: 115, f1: 33, decay: 4.5, bus: 'endDry' });
-    I.taiko(S, t, 0.95, { size: 1, bus: 'end' });
-    I.taiko(S, t + 0.02, 0.6, { size: 0.6, bus: 'end' });
-    X.thud(S, t, { level: 0.4, f: 45, tone: 400, decay: 1.2, bus: 'end' });
-    I.crash(S, t, 0.1, { bus: 'end' });
-    O.braam(S, t, 50, { level: 0.6, power: 1.3, dur: 3.2, bus: 'end' });
-    O.brass(S, t, 1.2, [26, 38, 45, 50, 54, 57], { level: 0.5, sfz: true, bright: 2200, release: 2.6, bus: 'end' });
-    O.chord(S, 'choirA', t, t + 1.3, [57, 62, 66, 69, 74, 78], { level: 0.5, attack: 0.06, release: 2.8, cutoff: 5200, bus: 'end' });
-    O.chord(S, 'strings', t, t + 1.1, D_MAJOR, { level: 0.42, attack: 0.05, release: 3.0, cutoff: 3500, bus: 'end' });
-    O.line(S, 'horn', [[t, 62, 0.75], [t + 0.75, 69, 1.0], [t + 1.75, 74, 1.0]], { level: 0.24, cutoff: 2400, bus: 'end', octaves: [0, -12], release: 1.6 });
-  });
+  // (the final impact itself — the score's button — lives in music.js)
   // closingLine: faint high shimmer (D major add9)
   S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.012, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));
 }
