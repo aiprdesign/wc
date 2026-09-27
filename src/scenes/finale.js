@@ -1,131 +1,155 @@
-// FINALE (50.0–60.0 s) — large-scale particle systems + restrained, elegant title design.
+// FINALE (54.0–72.0 s) — an unhurried coda: from the montage's stars to an orbital sunrise.
 //
-//   50.0  dissolve in from the montage starfield: the camera sits inside a cloud of stars
-//   50.5  pullBack    — the camera pulls back; the stars fall into orbital shells and rings
-//                       around a procedural night-side Earth (70k particles, warm → cool)
-//   51.5  musicDrop   — everything calms: slow orbital drift, twinkling, city lights
-//   52.5  ideasLine   — "IDEAS BUILD UPON IDEAS." emerges letter by letter (Cinzel, glow)
-//                       while the camera cranes up and Earth sinks to the bottom of frame
-//   55.0  ideasOut    — the line dissolves upward; pause
-//   56.0  finalImpact — ACHIEVEMENTS / OF WESTERN CIVILIZATION lands with one impact: a
-//                       white-hot flash cooling to gold, a light sweep across the letters,
-//                       a hairline rule and a shockwave pulse through the particle field
-//   57.4  closingLine — "A MOTION DESIGN STUDY" (IBM Plex Mono, wide tracking)
-//   59.0  fadeOut     — everything eases down; the engine fades to black over the last 0.6 s
-// Text lives in the 3D scene (child of the camera, depth-writing) so DOF can soften the
-// background while the typography stays razor sharp.
+//   54.0  dissolve in: montage stars stream away as the camera pulls back fast; only the
+//         dark limb of Earth, rim-lit by a hidden sun, sits at the bottom of frame
+//   54.5  pullBack    — speed ramp: the camera decelerates majestically, tilts down; the
+//                       streaming stars curve into orbit and become a halo of golden motes
+//   55.5  earthReveal — sunlight sweeps across a large procedural Earth (≈70 % of the
+//                       square): oceans with glint, deserts, forests, clouds with shadows,
+//                       city lights on the night side, a thin blue limb. Four luminous
+//                       orbital arcs trace themselves around it.
+//   56.5  storyOne    — "From the agora to the Moon," (Cormorant italic, per-letter)
+//   58.5  storyTwo    — "twenty-five centuries of reason, courage and invention."
+//   61.0  ideasLine   — IDEAS BUILD UPON IDEAS. (Cinzel, tracking in) while the camera
+//                       begins to push in and tilt up towards the limb
+//   63.4  ideasOut
+//   63.6  sunrise     — the limb catches fire (Mie forward scattering); ≈64.1 the sun breaks
+//                       over the horizon: hot core, restrained anamorphic streak, golden wash
+//   65.0  finalImpact — ACHIEVEMENTS / OF WESTERN CIVILIZATION lands above the sunlit limb:
+//                       heat cooling to gold, light sweep, hairline rule, a shockwave through
+//                       the motes
+//   66.8  closingLine — A MOTION DESIGN STUDY
+//   67–70 calm hold: slow drift, the sun settles higher, the flare relaxes
+//   70.0  fadeOut     — everything eases down to black by 72.0 (engine adds its last 0.6 s)
+// Composed for the 1:1 delivery first (typography in the dark sky above Earth); the 2.39
+// layout moves the story to the left of an Earth framed on the right.
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../timeline.js';
 import { TextPlane, KineticText, FONTS } from '../lib/text.js';
 import { MorphParticles } from '../lib/particles.js';
-import { GLSL_NOISE } from '../lib/noise.js';
-import { sat, lerp, smoothstep, ease, rng, envelope, TAU } from '../lib/math.js';
+import { sat, lerp, smoothstep, ease, rng, envelope, timeWarp, TAU } from '../lib/math.js';
+import { makeRig, EARTH_R } from './finale-rig.js';
+import { bakeEarth, earthVert, earthFrag, atmoVert, atmoFrag } from './finale-earth.js';
 
-const RE = 1.6;
+const R = EARTH_R;
+const EARTH_SPIN0 = 1.1;
 
-const earthVert = /* glsl */ `
-uniform float uRot;
-varying vec3 vN; varying vec3 vO; varying vec3 vW;
-void main(){
-  float c = cos(uRot), s = sin(uRot);
-  vO = vec3(c * position.x + s * position.z, position.y, -s * position.x + c * position.z) / ${RE.toFixed(2)};
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vW = w.xyz;
-  vN = normalize(mat3(modelMatrix) * normal);
-  gl_Position = projectionMatrix * viewMatrix * w;
-}`;
-const earthFrag = /* glsl */ `
-${GLSL_NOISE}
-uniform vec3 uSun; uniform float uTime, uCity, uAtmo, uBright;
-varying vec3 vN; varying vec3 vO; varying vec3 vW;
-float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * snoise(p); p = p * 2.03 + 11.7; a *= 0.5; } return s; }
-float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-void main(){
-  vec3 n = normalize(vO);
-  float cont = fbm(n * 1.6 + vec3(4.2, 1.3, -2.0)) + 0.18 * snoise(n * 6.0);
-  float land = smoothstep(0.03, 0.075, cont);
-  float lat = abs(n.y);
-  float ice = smoothstep(0.84, 0.92, lat + 0.04 * snoise(n * 9.0));
-  vec3 N = normalize(vN);
-  vec3 V = normalize(cameraPosition - vW);
-  float ndl = dot(N, uSun);
-  float day = smoothstep(-0.1, 0.3, ndl);
-  vec3 ocean = vec3(0.004, 0.012, 0.028);
-  float g = snoise(n * 11.0) * 0.5 + 0.5;
-  vec3 ground = mix(vec3(0.07, 0.058, 0.04), vec3(0.11, 0.09, 0.06), g);
-  ground = mix(ground, vec3(0.035, 0.055, 0.03), smoothstep(0.45, 0.0, lat) * 0.55);
-  vec3 alb = mix(ocean, ground, land);
-  alb = mix(alb, vec3(0.45, 0.5, 0.55), ice);
-  float clouds = smoothstep(0.05, 0.55, fbm(n * 2.6 + vec3(uTime * 0.012, 0.0, 0.0)) + 0.15 * snoise(n * 9.0));
-  vec3 sunCol = vec3(1.0, 0.95, 0.88) * 2.4;
-  vec3 col = alb * max(ndl, 0.0) * sunCol;
-  vec3 H = normalize(uSun + V);
-  col += (1.0 - land) * (1.0 - ice) * pow(max(dot(N, H), 0.0), 70.0) * 0.9 * day * vec3(1.0, 0.88, 0.7) * (1.0 - clouds * 0.8);
-  col = mix(col, vec3(0.7, 0.72, 0.75) * max(ndl, 0.0) * 1.6, clouds * 0.55);
-  col += alb * vec3(1.0, 0.45, 0.18) * exp(-pow(ndl / 0.09, 2.0)) * 0.8;
-  // city lights: clustered speckles on land, strongest near coasts, only on the night side
-  float dens = smoothstep(-0.1, 0.55, fbm(n * 5.0 + vec3(7.0))) * land * (1.0 - ice);
-  dens *= 0.6 + 0.8 * smoothstep(0.16, 0.06, cont);
-  float sp = hash(floor(n * 220.0));
-  float sp2 = hash(floor(n * 520.0) + 3.0);
-  float lights = (step(0.86, sp) * 0.7 + step(0.93, sp2) * 0.6) * dens + smoothstep(0.35, 0.9, dens) * 0.18;
-  col += vec3(1.0, 0.6, 0.26) * lights * (1.0 - day) * uCity * (1.0 - clouds * 0.6);
-  // inner atmospheric rim
-  float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  col += vec3(0.28, 0.55, 1.0) * fr * smoothstep(-0.35, 0.5, ndl) * 1.3 * uAtmo;
-  gl_FragColor = vec4(col * uBright, 1.0);
-}`;
-const atmoFrag = /* glsl */ `
-uniform vec3 uSun; uniform float uAtmo;
-varying vec3 vN; varying vec3 vW;
-void main(){
-  vec3 N = normalize(vN);
-  vec3 V = normalize(cameraPosition - vW);
-  float rim = pow(clamp(0.72 + dot(N, V), 0.0, 1.0), 5.0);   // backside shell: bright just outside the limb
-  float sun = smoothstep(-0.45, 0.6, dot(N, uSun));
-  vec3 c = mix(vec3(1.0, 0.55, 0.3), vec3(0.35, 0.65, 1.0), smoothstep(-0.1, 0.4, dot(N, uSun)));
-  gl_FragColor = vec4(c * rim * sun * 2.6 * uAtmo, 1.0);
-}`;
-
-const orbVert = /* glsl */ `
-attribute vec4 aOrb;   // radius, inclination, node, phase
+// ---- motes: the montage's stars → streaming → orbital halo ---------------------------
+const moteCommon = /* glsl */ `
+attribute vec3 aStart;
+attribute vec4 aOrb;    // radius, inclination, node, phase
 attribute vec4 aSeed;
 attribute vec3 aColor;
-uniform float uSpin, uForm, uStagger, uSize, uViewport, uWaveR, uWaveAmp, uTime, uTwinkle;
-varying vec3 vColor; varying float vAlpha;
-void main(){
+uniform float uT, uForm, uStagger, uTravel, uWaveR, uWaveAmp;
+uniform vec3 uFlow;
+float gM; float gWave;
+vec3 motePos(){
   float r = aOrb.x;
-  float th = aOrb.w + uSpin * 0.55 * pow(r / 2.0, -1.5) * (0.8 + 0.4 * aSeed.x);
-  vec3 p = vec3(cos(th), 0.0, sin(th)) * r;
-  p.y += (aSeed.y - 0.5) * 0.05 * r;
+  float th = aOrb.w + uT * 0.16 * pow(r / ${(R * 1.3).toFixed(3)}, -1.5) * (0.75 + 0.5 * aSeed.x);
+  vec3 p = vec3(cos(th), (aSeed.y - 0.5) * 0.03, sin(th)) * r;
   float ci = cos(aOrb.y), si = sin(aOrb.y);
   p = vec3(p.x, p.y * ci - p.z * si, p.y * si + p.z * ci);
   float cn = cos(aOrb.z), sn = sin(aOrb.z);
   p = vec3(cn * p.x + sn * p.z, p.y, -sn * p.x + cn * p.z);
+  vec3 s = aStart + uFlow * uTravel * (0.6 + 0.8 * aSeed.w);
   float m = clamp((uForm - aSeed.z * uStagger) / (1.0 - uStagger), 0.0, 1.0);
   m = m * m * (3.0 - 2.0 * m);
-  vec3 q = mix(position, p, m);
-  q += (aSeed.wxy - 0.5) * sin(3.14159 * m) * 1.5;
+  gM = m;
+  vec3 q = mix(s, p, m);
+  // fall into orbit along a curve rather than a straight line
+  q += cross(normalize(p), vec3(0.0, 1.0, 0.0)) * sin(3.14159 * m) * (0.4 + aSeed.x * 0.5);
   float rr = length(q);
-  float wave = exp(-pow((rr - uWaveR) / 0.6, 2.0)) * uWaveAmp;
-  q += q / max(rr, 1e-3) * wave * 0.3;
+  gWave = exp(-pow((rr - uWaveR) / 0.32, 2.0)) * uWaveAmp;
+  q += q / max(rr, 1e-3) * gWave * 0.09;
+  return q;
+}`;
+const moteVert = /* glsl */ `
+${moteCommon}
+uniform float uSize, uViewport, uMaxPx, uTwinkle;
+varying vec3 vColor; varying float vAlpha;
+void main(){
+  vec3 q = motePos();
   vec4 mv = modelViewMatrix * vec4(q, 1.0);
   gl_Position = projectionMatrix * mv;
-  float s = uSize * (0.4 + aSeed.w * 1.2);
-  gl_PointSize = clamp(s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z), 1.0, 18.0);
-  vColor = aColor * (1.0 + wave * 3.0);
-  vAlpha = smoothstep(0.6, 2.2, -mv.z) * (1.0 - uTwinkle + uTwinkle * (0.5 + 0.5 * sin(uTime * (1.5 + aSeed.x * 5.0) + aSeed.y * 40.0)));
+  float s = uSize * (0.35 + 1.3 * aSeed.w * aSeed.w);
+  gl_PointSize = clamp(s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z), 1.0, uMaxPx);
+  vColor = aColor * (1.0 + gWave * 2.5);
+  float tw = 1.0 - uTwinkle + uTwinkle * (0.5 + 0.5 * sin(uT * (0.8 + aSeed.x * 3.0) + aSeed.y * 40.0));
+  vAlpha = tw * smoothstep(0.25, 0.9, -mv.z);
 }`;
-const orbFrag = /* glsl */ `
+const moteFrag = /* glsl */ `
 uniform float uOpacity, uIntensity;
 varying vec3 vColor; varying float vAlpha;
 void main(){
   float d = length(gl_PointCoord - 0.5);
   float a = smoothstep(0.5, 0.0, d); a *= a;
-  if (a * vAlpha * uOpacity < 0.003) discard;
-  gl_FragColor = vec4(vColor * uIntensity, a * vAlpha * uOpacity);
+  float o = a * vAlpha * uOpacity;
+  if (o < 0.003) discard;
+  gl_FragColor = vec4(vColor * uIntensity, o);
+}`;
+// the same motes drawn as motion streaks while they stream past (2 vertices per mote)
+const streakVert = /* glsl */ `
+${moteCommon}
+attribute float aEnd;
+uniform float uStreakLen;
+varying vec3 vColor; varying float vAlpha;
+void main(){
+  vec3 q = motePos();
+  q -= uFlow * aEnd * uStreakLen * (0.6 + 0.8 * aSeed.w) * (1.0 - gM);
+  vec4 mv = modelViewMatrix * vec4(q, 1.0);
+  gl_Position = projectionMatrix * mv;
+  vColor = aColor;
+  vAlpha = (1.0 - aEnd) * (1.0 - gM) * smoothstep(0.2, 0.8, -mv.z);
+}`;
+const streakFrag = /* glsl */ `
+uniform float uOpacity, uIntensity;
+varying vec3 vColor; varying float vAlpha;
+void main(){ float o = vAlpha * uOpacity; if (o < 0.003) discard; gl_FragColor = vec4(vColor * uIntensity, o); }`;
+
+// ---- orbital arcs: thin luminous comets tracing their orbits ----------------------------
+const arcVert = /* glsl */ `
+varying float vU; varying vec3 vW; varying vec3 vN;
+void main(){ vU = uv.x; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const arcFrag = /* glsl */ `
+uniform float uHead, uLen, uIntensity, uBase, uFlash;
+uniform vec3 uColor, uHeadColor;
+varying float vU; varying vec3 vW; varying vec3 vN;
+void main(){
+  float d = fract(uHead - vU);                 // 0 at the head, growing along the tail
+  float tail = uLen > 0.0 ? pow(clamp(1.0 - d / uLen, 0.0, 1.0), 2.2) : 0.0;
+  float head = exp(-d * 180.0) * step(0.0, uLen) * smoothstep(0.0, 0.02, uLen);
+  float edge = abs(dot(normalize(vN), normalize(cameraPosition - vW)));   // soft tube profile
+  float prof = smoothstep(0.0, 0.8, edge) * smoothstep(1.3, 2.3, length(cameraPosition - vW));
+  vec3 c = uColor * (tail * (1.0 + uFlash) + uBase) + uHeadColor * head * 5.0;
+  float o = (tail + uBase + head) * prof;
+  if (o < 0.002) discard;
+  gl_FragColor = vec4(c * uIntensity * prof, 1.0);
 }`;
 
+// ---- sun core (in the 3D scene so Earth occludes it exactly) ----------------------------
+const sunFrag = /* glsl */ `
+uniform float uI; varying vec2 vUv;
+void main(){
+  float r = length(vUv - 0.5) * 2.0;
+  float core = smoothstep(0.1, 0.06, r);
+  float glow = (exp(-r * 7.0) * 0.8 + exp(-r * 2.5) * 0.12) * smoothstep(1.0, 0.55, r);
+  vec3 c = vec3(1.0, 0.97, 0.9) * core * 14.0 + vec3(1.0, 0.78, 0.5) * glow * 4.0;
+  float o = max(core, glow);
+  if (o * uI < 0.002) discard;
+  gl_FragColor = vec4(c * uI, 1.0);
+}`;
+// ---- lens flare pieces (HUD, screen space) ---------------------------------------------
+const flareFrag = /* glsl */ `
+uniform float uI; uniform int uKind; uniform vec3 uColor; varying vec2 vUv;
+void main(){
+  vec2 p = vUv - 0.5;
+  float a;
+  if (uKind == 0) { float r = length(p) * 2.0; a = exp(-r * 4.0) * 0.8 + exp(-r * 1.6) * 0.25; a *= smoothstep(1.0, 0.7, r); }
+  else if (uKind == 1) { a = exp(-pow(p.y * 2.0 / 0.07, 2.0)) * pow(max(1.0 - abs(p.x) * 2.0, 0.0), 2.4); a += exp(-pow(p.y * 2.0 / 0.012, 2.0)) * pow(max(1.0 - abs(p.x) * 2.0, 0.0), 1.2) * 0.8; }
+  else { float r = length(p) * 2.0; a = smoothstep(1.0, 0.8, r) * smoothstep(0.35, 0.95, r) * 0.6 + smoothstep(1.0, 0.0, r) * 0.08; }
+  if (a * uI < 0.002) discard;
+  gl_FragColor = vec4(uColor * a * uI, 1.0);
+}`;
 const sweepFrag = /* glsl */ `
 uniform sampler2D uMap; uniform float uS, uW, uOpacity; uniform vec3 uColor;
 varying vec2 vUv;
@@ -137,232 +161,385 @@ void main(){
   if (o < 0.002) discard;
   gl_FragColor = vec4(uColor * o, o);
 }`;
+const quadVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 
 function sweepOverlay(tp) {
   const m = new THREE.Mesh(tp.geometry, new THREE.ShaderMaterial({
-    uniforms: { uMap: { value: tp.material.uniforms.uMap.value }, uS: { value: -1 }, uW: { value: 0.06 }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.86, 0.6).multiplyScalar(3) } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: sweepFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uMap: { value: tp.material.uniforms.uMap.value }, uS: { value: -1 }, uW: { value: 0.06 }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.86, 0.62).multiplyScalar(1.6) } },
+    vertexShader: quadVert, fragmentShader: sweepFrag, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
   }));
   m.renderOrder = 12;
-  m.position.z = 0.002;
   return m;
 }
-
-// Text that writes depth where its glyphs are (so DOF keeps it sharp).
-const solid = (tp) => { tp.material.depthWrite = true; return tp; };
+function flarePiece(kind, color) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    uniforms: { uI: { value: 0 }, uKind: { value: kind }, uColor: { value: new THREE.Color(color) } },
+    vertexShader: quadVert, fragmentShader: flareFrag, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  }));
+  m.renderOrder = 5;
+  return m;
+}
+// visual width of a KineticText line (letter centres + one glyph)
+function kineticWidth(k, h) {
+  let a = Infinity, b = -Infinity;
+  for (const l of k.letters) { a = Math.min(a, l.base.x); b = Math.max(b, l.base.x); }
+  return b - a + h * 0.6;
+}
 
 export function create(ctx, segment) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.05, 400);
   scene.add(camera);
-  const cue = (n) => CUES[n] - segment.start;
-  const C_PULL = cue('pullBack'), C_DROP = cue('musicDrop'), C_IDEAS = cue('ideasLine'), C_OUT = cue('ideasOut');
-  const C_IMPACT = cue('finalImpact'), C_CLOSE = cue('closingLine'), C_FADE = cue('fadeOut');
-  const DUR = segment.end - segment.start;
-  const r = rng(6060);
-  const sunDir = new THREE.Vector3(0.95, 0.32, -0.42).normalize();
+  const G = (n) => CUES[n];                           // global cue seconds (update works in global T)
+  const C_PULL = G('pullBack'), C_REVEAL = G('earthReveal'), C_S1 = G('storyOne'), C_S2 = G('storyTwo');
+  const C_IDEAS = G('ideasLine'), C_OUT = G('ideasOut'), C_SUN = G('sunrise'), C_IMPACT = G('finalImpact');
+  const C_CLOSE = G('closingLine'), C_FADE = G('fadeOut');
+  const END = segment.end;
+  const r = rng(7272);
+  const rig = makeRig(THREE, { outAspect: OUTPUT_ASPECT, filmAspect: FILM_ASPECT });
+  const W = rig.wide;                                 // 0 = square layout, 1 = 2.39 layout
+  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, update };
 
-  // ---- Earth -----------------------------------------------------------------
+  // ---- Earth -----------------------------------------------------------------------
+  const maps = bakeEarth(ctx.renderer, { width: 4096 });
+  const sunDir = new THREE.Vector3(0, 0, -1), sunObj = new THREE.Vector3(), shadeDir = new THREE.Vector3();
   const earthMat = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sunDir }, uTime: { value: 0 }, uRot: { value: 0 }, uCity: { value: 3 }, uAtmo: { value: 1 }, uBright: { value: 1 } },
+    uniforms: {
+      uSurf: { value: maps.surf }, uAux: { value: maps.aux }, uSun: { value: sunDir }, uSunObj: { value: sunObj }, uShade: { value: shadeDir },
+      uCloudOff: { value: 0 }, uCity: { value: 1 }, uBright: { value: 1 }, uWarm: { value: 0 }, uTime: { value: 0 },
+    },
     vertexShader: earthVert, fragmentShader: earthFrag,
   });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(RE, 160, 96), earthMat);
-  earth.rotation.z = 0.35;
-  scene.add(earth);
+  const tilt = new THREE.Group();
+  tilt.rotation.set(0.12, 0, 0.41);
+  scene.add(tilt);
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 256, 160), earthMat);
+  tilt.add(earth);
   const atmoMat = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sunDir }, uAtmo: { value: 1 } },
-    vertexShader: `varying vec3 vN; varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: atmoFrag, side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uSun: { value: sunDir }, uShade: { value: shadeDir }, uR: { value: R }, uHs: { value: R * 0.0085 }, uAtmo: { value: 1 }, uMie: { value: 0 }, uWarm: { value: 0 } },
+    vertexShader: atmoVert, fragmentShader: atmoFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
-  const atmo = new THREE.Mesh(new THREE.SphereGeometry(RE * 1.06, 96, 48), atmoMat);
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(R * 1.07, 160, 96), atmoMat);
+  atmo.renderOrder = 3;
   scene.add(atmo);
 
-  // ---- orbital particle field (the montage's stars fall into these shells) ------
-  const N = 72000;
-  const start = new Float32Array(N * 3), orb = new Float32Array(N * 4), seeds = new Float32Array(N * 4), cols = new Float32Array(N * 3);
-  const families = [];
-  for (let f = 0; f < 9; f++) families.push({ inc: 0.15 + r() * 1.25, node: r() * TAU, r0: 2.1 + r() * 3.4, w: 0.05 + r() * 0.25 });
-  const warm = new THREE.Color(1.0, 0.74, 0.42), gold = new THREE.Color(1.0, 0.86, 0.62), ice = new THREE.Color(0.62, 0.8, 1.0), white = new THREE.Color(0.92, 0.95, 1.0);
-  const c = new THREE.Color();
-  for (let i = 0; i < N; i++) {
-    const u = r();
-    let rad, inc, node;
-    if (u < 0.3) {           // main disc, like a ring system of achievements
-      rad = 2.1 + Math.pow(r(), 1.1) * 3.2; inc = 0.3 + (r() - 0.5) * 0.04; node = 0.25;
-    } else if (u < 0.8) {     // thin inclined orbital rings
-      const fm = families[Math.floor(r() * families.length)];
-      rad = fm.r0 + (r() - 0.5) * fm.w; inc = fm.inc + (r() - 0.5) * 0.02; node = fm.node;
-    } else {                  // diffuse shell
-      rad = 2.0 + Math.pow(r(), 1.5) * 6.0; inc = Math.acos(r() * 2 - 1); node = r() * TAU;
-    }
-    orb.set([rad, inc, node, r() * TAU], i * 4);
-    seeds.set([r(), r(), r(), r()], i * 4);
-    // start: the starfield of the montage's last shot, spread around the opening camera
-    start.set([(r() - 0.5) * 22 + 2.5, (r() - 0.5) * 12, (r() - 0.5) * 16 - 2], i * 3);
-    const k = sat((rad - 2.1) / 4.5);
-    c.copy(warm).lerp(gold, sat(k * 2)).lerp(ice, sat(k * 1.6 - 0.5));
-    if (r() < 0.15) c.copy(white);
-    const b = 0.6 + r() * 0.6;
-    cols.set([c.r * b, c.g * b, c.b * b], i * 3);
-  }
-  const og = new THREE.BufferGeometry();
-  og.setAttribute('position', new THREE.BufferAttribute(start, 3));
-  og.setAttribute('aOrb', new THREE.BufferAttribute(orb, 4));
-  og.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 4));
-  og.setAttribute('aColor', new THREE.BufferAttribute(cols, 3));
-  const orbMat = new THREE.ShaderMaterial({
-    uniforms: {
-      uSpin: { value: 0 }, uForm: { value: 0 }, uStagger: { value: 0.55 }, uSize: { value: 0.017 }, uViewport: { value: 800 },
-      uWaveR: { value: -10 }, uWaveAmp: { value: 0 }, uTime: { value: 0 }, uTwinkle: { value: 0.35 }, uOpacity: { value: 1 }, uIntensity: { value: 2.0 },
-    },
-    vertexShader: orbVert, fragmentShader: orbFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  });
-  const field = new THREE.Points(og, orbMat);
-  field.frustumCulled = false;
-  scene.add(field);
-  const ou = orbMat.uniforms;
-
-  // distant stars
-  const NB = 5000, bp = new Float32Array(NB * 3);
+  // ---- distant stars -----------------------------------------------------------------
+  const NB = 5000, bp = new Float32Array(NB * 3), bc = new Float32Array(NB * 3);
   for (let i = 0; i < NB; i++) {
-    const u = r() * 2 - 1, th = r() * TAU, s = Math.sqrt(1 - u * u), d = 90 + r() * 40;
+    const u = r() * 2 - 1, th = r() * TAU, s = Math.sqrt(1 - u * u), d = 110 + r() * 40;
     bp.set([s * Math.cos(th) * d, u * d, s * Math.sin(th) * d], i * 3);
+    const warm = r();
+    bc.set([0.85 + 0.15 * warm, 0.88 + 0.06 * warm, 1.0 - 0.2 * warm], i * 3);
   }
-  const bg = new MorphParticles({ count: NB, positions: bp, size: 0.3, intensity: 0.9, color: '#dfe8ff', seed: 3 });
-  bg.u.twinkle = 0.5; bg.u.sizeJitter = 0.8;
+  const bg = new MorphParticles({ count: NB, positions: bp, colors: bc, size: 0.32, intensity: 0.85, color: '#ffffff', seed: 3 });
+  bg.u.twinkle = 0.45; bg.u.sizeJitter = 0.85;
   scene.add(bg);
 
-  // ---- typography (child of the camera, at distance ZT) ---------------------------
-  const ZT = 6;
-  const typo = new THREE.Group();
-  typo.position.z = -ZT;
-  camera.add(typo);
-  const halfH = ZT * Math.tan(THREE.MathUtils.degToRad(17.5));
+  // ---- orbital families (shared by arcs and motes) -------------------------------------
+  const FAM = [
+    { r: 1.13, inc: 0.30, node: 0.5, speed: 0.021, head: 0.10, len: 0.34 },
+    { r: 1.21, inc: -0.46, node: 1.9, speed: -0.016, head: 0.55, len: 0.28 },
+    { r: 1.30, inc: 0.12, node: 3.4, speed: 0.013, head: 0.80, len: 0.40 },
+    { r: 1.39, inc: 0.72, node: 5.0, speed: -0.011, head: 0.30, len: 0.25 },
+  ];
+  const arcs = FAM.map((f, i) => {
+    const pts = [];
+    for (let k = 0; k <= 256; k++) { const a = (k / 256) * TAU; pts.push(new THREE.Vector3(Math.cos(a) * f.r * R, 0, Math.sin(a) * f.r * R)); }
+    const curve = new THREE.CatmullRomCurve3(pts, true);
+    const geo = new THREE.TubeGeometry(curve, 720, 0.0042, 6, true);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uHead: { value: 0 }, uLen: { value: 0 }, uIntensity: { value: 1 }, uBase: { value: 0.03 }, uFlash: { value: 0 },
+        uColor: { value: new THREE.Color(1.0, 0.72, 0.36).multiplyScalar(1.1) }, uHeadColor: { value: new THREE.Color(1.0, 0.93, 0.8).multiplyScalar(0.45) },
+      },
+      vertexShader: arcVert, fragmentShader: arcFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.set(0, f.node, 0, 'YXZ');
+    const g = new THREE.Group(); g.add(mesh);
+    mesh.rotation.set(f.inc, 0, 0); g.rotation.y = f.node;
+    mesh.renderOrder = 4;
+    scene.add(g);
+    return { f, mesh, mat, i };
+  });
 
-  const ideas = new KineticText('IDEAS BUILD UPON IDEAS.', { font: FONTS.display, weight: 400, height: 0.2, letterSpacing: 0.34, color: '#f6ead2', intensity: 1.15, shadow: 22 });
-  ideas.position.y = halfH * 0.5;
-  ideas.letters.forEach((l) => solid(l.mesh));
-  typo.add(ideas);
+  // ---- motes ---------------------------------------------------------------------------
+  const NM = 6500, NS = 2200;
+  const aStart = new Float32Array(NM * 3), aOrb = new Float32Array(NM * 4), aSeed = new Float32Array(NM * 4), aColor = new Float32Array(NM * 3);
+  const p0 = new THREE.Vector3(), q0 = new THREE.Quaternion(), p1 = new THREE.Vector3(), q1 = new THREE.Quaternion();
+  rig.pose(54.0, p0, q0); rig.pose(54.6, p1, q1);
+  const flow = new THREE.Vector3(0, 0, -1).applyQuaternion(q0);          // camera forward at 54.0: stars recede along it
+  const camR = new THREE.Vector3(1, 0, 0).applyQuaternion(q0), camU = new THREE.Vector3(0, 1, 0).applyQuaternion(q0);
+  const gold = new THREE.Color(1.0, 0.7, 0.36), pale = new THREE.Color(1.0, 0.88, 0.68), cool = new THREE.Color(0.8, 0.88, 1.0);
+  const col = new THREE.Color(), tv = new THREE.Vector3();
+  for (let i = 0; i < NM; i++) {
+    const u = r();
+    let rad, inc, node;
+    if (u < 0.55) { const f = FAM[Math.floor(r() * FAM.length)]; rad = f.r * R * (1 + (r() - 0.5) * 0.035); inc = f.inc + (r() - 0.5) * 0.03; node = f.node + (r() - 0.5) * 0.03; }
+    else { rad = R * (1.08 + Math.pow(r(), 1.6) * 0.85); inc = Math.acos(r() * 2 - 1) - Math.PI / 2; node = r() * TAU; }
+    aOrb.set([rad, inc, node, r() * TAU], i * 4);
+    aSeed.set([r(), r(), r(), r()], i * 4);
+    // streaming start: a tube of stars around the camera's line of sight, from behind it to far ahead
+    const along = -1.5 + r() * 7.0, ang = r() * TAU, rr = 0.25 + Math.pow(r(), 0.7) * 3.2;
+    tv.copy(p0).addScaledVector(flow, along).addScaledVector(camR, Math.cos(ang) * rr * 1.2).addScaledVector(camU, Math.sin(ang) * rr);
+    aStart.set([tv.x, tv.y, tv.z], i * 3);
+    const k = (rad / R - 1.08) / 0.85;
+    col.copy(gold).lerp(pale, sat(k * 1.6 + (r() - 0.5) * 0.5)).lerp(cool, sat(k * 1.4 - 0.4 + (r() - 0.5) * 0.4));
+    const b = 0.5 + r() * 0.7;
+    aColor.set([col.r * b, col.g * b, col.b * b], i * 3);
+  }
+  const moteUniforms = {
+    uT: { value: 0 }, uForm: { value: 0 }, uStagger: { value: 0.6 }, uTravel: { value: 0 }, uFlow: { value: flow },
+    uWaveR: { value: -10 }, uWaveAmp: { value: 0 },
+  };
+  const mg = new THREE.BufferGeometry();
+  mg.setAttribute('position', new THREE.BufferAttribute(aStart, 3));
+  mg.setAttribute('aStart', new THREE.BufferAttribute(aStart, 3));
+  mg.setAttribute('aOrb', new THREE.BufferAttribute(aOrb, 4));
+  mg.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 4));
+  mg.setAttribute('aColor', new THREE.BufferAttribute(aColor, 3));
+  const moteMat = new THREE.ShaderMaterial({
+    uniforms: { ...moteUniforms, uSize: { value: 0.012 }, uViewport: { value: 800 }, uMaxPx: { value: 5 }, uTwinkle: { value: 0.4 }, uOpacity: { value: 1 }, uIntensity: { value: 1.6 } },
+    vertexShader: moteVert, fragmentShader: moteFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const motes = new THREE.Points(mg, moteMat);
+  motes.frustumCulled = false; motes.renderOrder = 5;
+  scene.add(motes);
+  // streaks for the first NS motes
+  const sg = new THREE.BufferGeometry();
+  const dup = (src, n) => { const o = new Float32Array(NS * 2 * n); for (let i = 0; i < NS; i++) for (let e = 0; e < 2; e++) for (let c = 0; c < n; c++) o[(i * 2 + e) * n + c] = src[i * n + c]; return o; };
+  const sStart = dup(aStart, 3);
+  sg.setAttribute('position', new THREE.BufferAttribute(sStart, 3));
+  sg.setAttribute('aStart', new THREE.BufferAttribute(sStart, 3));
+  sg.setAttribute('aOrb', new THREE.BufferAttribute(dup(aOrb, 4), 4));
+  sg.setAttribute('aSeed', new THREE.BufferAttribute(dup(aSeed, 4), 4));
+  sg.setAttribute('aColor', new THREE.BufferAttribute(dup(aColor, 3), 3));
+  const aEnd = new Float32Array(NS * 2); for (let i = 0; i < NS; i++) aEnd[i * 2 + 1] = 1;
+  sg.setAttribute('aEnd', new THREE.BufferAttribute(aEnd, 1));
+  const streakMat = new THREE.ShaderMaterial({
+    uniforms: { ...moteUniforms, uStreakLen: { value: 0 }, uOpacity: { value: 1 }, uIntensity: { value: 1.2 } },
+    vertexShader: streakVert, fragmentShader: streakFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const streaks = new THREE.LineSegments(sg, streakMat);
+  streaks.frustumCulled = false; streaks.renderOrder = 5;
+  scene.add(streaks);
 
-  const titleY = halfH * 0.16;
-  const title = solid(new TextPlane('ACHIEVEMENTS', { font: FONTS.display, weight: 600, height: 0.44, letterSpacing: 0.13, color: '#f4e3c1', intensity: 1.1, shadow: 3 }));
-  title.position.y = titleY;
-  const sub = solid(new TextPlane('OF WESTERN CIVILIZATION', { font: FONTS.display, weight: 400, height: 0.19, letterSpacing: 0.36, color: '#eadcc0', intensity: 1.0, shadow: 2 }));
-  const pad = 0.25 * 0.44 * 2;                                                  // canvas padding on both sides
-  const wTitle = title.worldWidth - pad, wSub = sub.worldWidth - 0.25 * 0.19 * 2;
-  const subScale = (wTitle * 0.985) / wSub;
-  sub.scale.setScalar(subScale);
-  sub.position.y = titleY - 0.44 * 0.62 - 0.19 * subScale * 0.55;
-  const rule = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.0045), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.85, 0.6).multiplyScalar(1.4), transparent: true, depthWrite: true }));
-  rule.position.y = titleY - 0.44 * 0.5;
-  rule.renderOrder = 10;
+  // ---- sun core -------------------------------------------------------------------------
+  const sunCore = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    uniforms: { uI: { value: 0 } }, vertexShader: quadVert, fragmentShader: sunFrag,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  sunCore.renderOrder = 6;
+  scene.add(sunCore);
+
+  // ---- HUD: typography + lens flare (x ∈ [-2.39, 2.39], y ∈ [-M, M]) ------------------------
+  const hud = ctx.makeHUD();
+  self.hud = hud;
+  const M = FILM_ASPECT / OUTPUT_ASPECT;
+  const HX = FILM_ASPECT;
+  const flareGlow = flarePiece(0, '#ffd9a8'), flareStreak = flarePiece(1, '#ffe6c8'), ghostA = flarePiece(2, '#9fc4ff'), ghostB = flarePiece(2, '#ffcf96');
+  hud.scene.add(flareGlow, flareStreak, ghostA, ghostB);
+
+  const L = (sq, wd) => lerp(sq, wd, W);
+  // story (Cormorant italic, per-letter)
+  const story1 = new KineticText('From the agora to the Moon,', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, letterSpacing: 0.01, color: '#f1e6d0', intensity: 1.0 });
+  const story2 = new KineticText('twenty-five centuries of reason, courage and invention.', { font: FONTS.serif, italic: true, weight: 400, height: 0.2, letterSpacing: 0.012, color: '#e7dcc6', intensity: 0.95 });
+  story1.scale.setScalar(L(3.05, 1.7) / kineticWidth(story1, 0.2));
+  story2.scale.setScalar(L(4.15, 2.05) / kineticWidth(story2, 0.2));
+  story1.position.set(L(0, -1.1), L(0.735, 0.16) * M, 0);
+  story2.position.set(L(0, -1.1), L(0.585, 0.0) * M, 0);
+  hud.scene.add(story1, story2);
+  // IDEAS BUILD UPON IDEAS.
+  const ideas = new KineticText('IDEAS BUILD UPON IDEAS.', { font: FONTS.display, weight: 400, height: 0.2, letterSpacing: 0.32, color: '#f6ead2', intensity: 1.05 });
+  const ideasScale = L(3.7, 2.05) / kineticWidth(ideas, 0.2);
+  ideas.scale.setScalar(ideasScale);
+  ideas.position.set(L(0, -1.1), L(0.66, 0.08) * M, 0);
+  hud.scene.add(ideas);
+  // title
+  const title = new TextPlane('ACHIEVEMENTS', { font: FONTS.display, weight: 600, height: 0.3, letterSpacing: 0.12, color: '#f4e3c1', intensity: 1.0, depthWrite: false });
+  const sub = new TextPlane('OF WESTERN CIVILIZATION', { font: FONTS.display, weight: 400, height: 0.3, letterSpacing: 0.34, color: '#ecdfc4', intensity: 0.95, depthWrite: false });
+  const inkW = (tp, h) => tp.worldWidth - 0.25 * h * 2;
+  const titleW = L(3.75, 2.55);
+  const tS = titleW / inkW(title, 0.3), sS = (titleW * 0.985) / inkW(sub, 0.3);
+  const titleH = 0.3 * tS, subH = 0.3 * sS;
+  const titleY = L(0.53, 0.5) * M;
+  const subY = titleY - titleH * 0.62 - subH * 0.62;
+  title.position.set(0, titleY, 0); sub.position.set(0, subY, 0);
   const sweepT = sweepOverlay(title), sweepS = sweepOverlay(sub);
-  sweepT.position.copy(title.position).setZ(0.002);
-  sweepS.position.copy(sub.position).setZ(0.002); sweepS.scale.copy(sub.scale);
-  typo.add(title, sub, rule, sweepT, sweepS);
+  sweepT.position.copy(title.position); sweepS.position.copy(sub.position);
+  const rule = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.84, 0.58).multiplyScalar(1.2), transparent: true, depthWrite: false, depthTest: false }));
+  rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002, 0);
+  rule.renderOrder = 11;
+  const closing = new TextPlane('A MOTION DESIGN STUDY', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
+  const cS = L(2.45, 1.6) / inkW(closing, 0.2);
+  closing.scale.setScalar(cS);
+  closing.position.set(0, subY - subH * 0.5 - L(0.34, 0.2) * M * 0.5 - 0.2 * cS * 0.5, 0);
+  hud.scene.add(title, sub, sweepT, sweepS, rule, closing);
+  for (const o of [title, sub, closing]) o.renderOrder = 10;
+  const TITLE_GOLD = new THREE.Color('#f4e3c1'), SUB_GOLD = new THREE.Color('#ecdfc4');
 
-  const closing = solid(new TextPlane('A MOTION DESIGN STUDY', { font: FONTS.mono, weight: 400, height: 0.088, letterSpacing: 0.6, color: '#e4eaf3', intensity: 1.05 }));
-  closing.position.y = sub.position.y - 0.34;
-  typo.add(closing);
-
-  const self = { scene, camera, background: 0x000000, dof: { focus: ZT, range: 2.2, amount: 0 }, bloom: { strength: 0.75 }, exposure: 1, update };
-
-  // ---- camera path ---------------------------------------------------------------
-  const P0 = new THREE.Vector3(2.9, 0.7, 3.4), T0 = new THREE.Vector3(3.6, 0.3, -1.0);
-  const P1 = new THREE.Vector3(0, 0.9, 11.0), T1 = new THREE.Vector3(0, 0.55, 0);
-  const P2 = new THREE.Vector3(0, 1.2, 10.2), T2 = new THREE.Vector3(0, 3.25, 0);
-  const pos = new THREE.Vector3(), tgt = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
-  const TITLE_GOLD = new THREE.Color('#f4e3c1');
+  // ---- per-frame scratch ----------------------------------------------------------------------
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), qa = new THREE.Quaternion();
+  const ndc = new THREE.Vector3(), cdir = new THREE.Vector3(), inv = new THREE.Quaternion();
+  const travelKeys = [[53.9, -0.5], [54.0, 0], [54.5, 2.3], [55.1, 3.05], [55.8, 3.25], [57, 3.3]];
 
   function update(t, info) {
-    // pull back (fast → slow), then a slow majestic crane that sinks Earth to the bottom of frame
-    const pull = ease.outCubic(sat((t - (C_PULL - 0.2)) / 2.3));
-    const crane = ease.inOutSine(sat((t - (C_IDEAS - 0.2)) / (C_IMPACT - C_IDEAS)));
-    a.copy(P0).lerp(P1, pull); b.copy(T0).lerp(T1, pull);
-    pos.copy(a).lerp(P2, crane); tgt.copy(b).lerp(T2, crane);
-    pos.z += t * 0.03 - (1 - pull) * 0.25 * t;
-    const drift = 0.12 - t * 0.022;
-    const cs = Math.cos(drift), sn = Math.sin(drift);
-    pos.set(cs * pos.x + sn * pos.z, pos.y, -sn * pos.x + cs * pos.z);
-    // impact: tiny camera kick
-    const kt = t - C_IMPACT;
-    const kick = kt > 0 ? Math.exp(-kt * 5) : 0;
-    pos.y += Math.sin(kt * 50) * 0.012 * kick;
+    const T = segment.start + t;
+
+    // camera
+    const d = rig.pose(T, pos, quat);
     camera.position.copy(pos);
-    camera.lookAt(tgt);
-    camera.fov = 35 + (1 - pull) * 10 - kick * 0.8;
+    camera.quaternion.copy(quat);
+    camera.fov = 35;
     camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
 
-    // Earth
-    earthMat.uniforms.uTime.value = t;
-    earthMat.uniforms.uRot.value = 0.6 + t * 0.035;
-    const fade = 1 - sat((t - C_FADE) / (DUR - C_FADE)) * 0.7;
-    const revealE = smoothstep(0.1, 1.6, t);
-    earthMat.uniforms.uBright.value = revealE * fade * (1 - smoothstep(C_IMPACT - 1.2, C_IMPACT, t) * 0.2 + kick * 0.15);
-    earthMat.uniforms.uCity.value = 3.0 * revealE * fade;
-    atmoMat.uniforms.uAtmo.value = revealE * fade * (1 + kick * 0.8);
-    earthMat.uniforms.uAtmo.value = revealE * fade * (1 + kick * 0.5);
+    // sun + Earth
+    rig.sun(T, pos, quat, sunDir);
+    earth.rotation.y = EARTH_SPIN0 + (T - 54) * 0.018;
+    earth.updateMatrixWorld();
+    inv.copy(earth.getWorldQuaternion(qa)).invert();
+    // at sunrise the shading light leans towards the camera so a golden crescent washes over the clouds
+    const lean = smoothstep(62.6, 64.8, T) * 0.44;
+    shadeDir.copy(sunDir).lerp(cdir.copy(pos).normalize(), lean).normalize();
+    sunObj.copy(shadeDir).applyQuaternion(inv);
+    const eu = earthMat.uniforms;
+    const fadeK = smoothstep(C_FADE, END, T);                     // 0 → 1 over the last two seconds
+    const fade = 1 - fadeK;
+    const reveal = smoothstep(54.3, 55.9, T);
+    const swell = smoothstep(C_SUN, C_SUN + 1.4, T);                // the sunrise
+    eu.uCloudOff.value = (T - 54) * 0.0009;
+    eu.uBright.value = lerp(0.55, 1, reveal) * lerp(1, 0.55, fadeK);
+    eu.uCity.value = lerp(0.5, 1, reveal) * fade;
+    eu.uWarm.value = swell * 0.5;
+    const au = atmoMat.uniforms;
+    au.uAtmo.value = lerp(2.6, 1, reveal) * lerp(1, 0.5, fadeK);
+    const elev = rig.sunElev(T);
+    au.uMie.value = lerp(0.03, 0, smoothstep(55.6, 56.4, T)) + smoothstep(C_SUN - 0.5, C_SUN + 0.6, T) * (1.0 + 0.5 * envelope(T, C_SUN, C_IMPACT + 1.5, 0.8, 1.5)) * lerp(1, 0.6, fadeK) * L(1, 0.65);
+    au.uWarm.value = swell * 0.8;
 
-    // particles: form during the pull-back, calm after the drop, pulse on the impact
-    ou.uForm.value = ease.inOutSine(sat((t - 0.05) / 2.5));
-    ou.uSpin.value = t * 0.35 + ease.outCubic(sat(t / 1.5)) * 0.9;
-    ou.uTime.value = t;
-    ou.uViewport.value = info.height;
-    ou.uWaveR.value = kt > 0 ? RE + kt * 4.5 : -10;
-    ou.uWaveAmp.value = kt > 0 ? Math.exp(-kt * 0.6) * 1.4 : 0;
-    const preDim = 1 - envelope(t, C_IMPACT - 0.9, C_IMPACT + 0.02, 0.8, 0.02) * 0.35;
-    ou.uIntensity.value = (2.1 + (1 - sat((t - C_PULL) / 1.5)) * 0.8 - smoothstep(C_IMPACT, C_IMPACT + 1.5, t) * 0.5) * preDim * fade * (1 + kick * 0.6);
-    ou.uOpacity.value = sat(t / 0.25 + 0.5);
+    // sun core: sits along sunDir far behind Earth; the depth test lets the limb clip it
+    const sunVis = smoothstep(-0.5, 0.45, elev);                    // fraction of the disc above the limb (deg)
+    sunCore.position.copy(pos).addScaledVector(sunDir, 150);
+    sunCore.quaternion.copy(quat);
+    sunCore.scale.setScalar(150 * 0.07 * L(1, 0.6));
+    sunCore.material.uniforms.uI.value = smoothstep(C_SUN - 0.2, C_SUN + 0.3, T) * lerp(1, 0.4, fadeK);
+    sunCore.visible = T > C_SUN - 0.3;
+
+    // lens flare in screen space
+    rig.projectDir(sunDir, quat, ndc);
+    const onScreen = ndc.z < 0 ? 1 : 0;
+    const fl = onScreen * sunVis * smoothstep(C_SUN, C_SUN + 0.8, T) * (0.75 + 0.45 * envelope(T, C_SUN + 0.4, C_IMPACT + 2.2, 0.8, 1.8)) * lerp(1, 0.35, fadeK);
+    const sx = ndc.x * HX, sy = ndc.y * M;
+    flareGlow.position.set(sx, sy, 0); flareGlow.scale.setScalar(L(1.3, 0.8));
+    flareGlow.material.uniforms.uI.value = fl * 0.3;
+    flareStreak.position.set(sx, sy, 0); flareStreak.scale.set(HX * 2.6, L(0.5, 0.35), 1);
+    flareStreak.material.uniforms.uI.value = fl * 0.55;
+    ghostA.position.set(-sx * 0.55, -sy * 0.55, 0); ghostA.scale.setScalar(0.22);
+    ghostA.material.uniforms.uI.value = 0;
+    ghostB.position.set(-sx * 1.1, -sy * 1.1, 0); ghostB.scale.setScalar(0.42);
+    ghostB.material.uniforms.uI.value = 0;
+    for (const o of [flareGlow, flareStreak, ghostA, ghostB]) o.visible = o.material.uniforms.uI.value > 0.002;
+
+    // arcs trace themselves after the pull-back, then glide
+    const draw = ease.inOutSine(sat((T - 54.9) / 2.6));
+    const kt = T - C_IMPACT;
+    const wave = kt > 0 ? Math.exp(-kt * 0.9) : 0;
+    for (const a of arcs) {
+      const u = a.mat.uniforms;
+      u.uHead.value = a.f.head + (T - 54) * a.f.speed + draw * 0.18 * Math.sign(a.f.speed);
+      u.uLen.value = a.f.len * draw;
+      u.uBase.value = 0.008 * draw;
+      u.uFlash.value = (kt > 0 ? Math.exp(-Math.pow((kt - 0.25 - a.i * 0.12) / 0.25, 2)) : 0) * 1.2;
+      u.uIntensity.value = (1.0 + swell * 0.35) * fade;
+      a.mesh.visible = draw > 0.001;
+    }
+
+    // motes: stream away, fall into orbit, drift; shockwave on the title hit
+    const travel = timeWarp(T, travelKeys);
+    for (const m of [moteMat, streakMat]) {
+      const u = m.uniforms;
+      u.uT.value = T - 54;
+      u.uForm.value = ease.inOutSine(sat((T - 54.35) / 2.5));
+      u.uTravel.value = travel;
+      u.uWaveR.value = kt > 0 ? R * 1.02 + kt * 1.8 : -10;
+      u.uWaveAmp.value = wave;
+    }
+    const speed = (timeWarp(T + 0.02, travelKeys) - timeWarp(T - 0.02, travelKeys)) / 0.04;
+    streakMat.uniforms.uStreakLen.value = speed * 0.045;
+    streakMat.uniforms.uOpacity.value = sat(speed / 1.5) * 0.55;
+    streaks.visible = T < 55.6;
+    const mu = moteMat.uniforms;
+    mu.uViewport.value = info.height;
+    mu.uMaxPx.value = Math.max(2, 5 * info.width / 1920 * (OUTPUT_ASPECT < 1.5 ? 1.4 : 1));
+    mu.uIntensity.value = (1.5 + 1.6 * (1 - reveal)) * (1 + 0.3 * swell) * fade;
+    mu.uOpacity.value = 0.85;
     bg.tick(t, info);
-    bg.u.opacity = revealE * fade;
+    bg.u.opacity = fade * (1 - 0.25 * swell);
 
-    // IDEAS BUILD UPON IDEAS.
-    const n = ideas.letters.length;
-    ideas.letters.forEach((l, i) => {
-      const s0 = C_IDEAS + l.u * 1.4;
-      const k = ease.outCubic(sat((t - s0) / 0.9));
-      const o0 = C_OUT + l.u * 0.25;
-      const out = ease.inCubic(sat((t - o0) / 0.4));
-      l.mesh.opacity = k * (1 - out);
-      l.mesh.position.set(l.base.x, l.base.y - (1 - k) * 0.05 + out * 0.08, 0);
-      l.mesh.scale.setScalar(1 + (1 - k) * 0.25);
-      l.mesh.intensity = 1.15 + (1 - k) * 1.5 + envelope(t, C_IDEAS + 1.6 + i * 0.03, C_IDEAS + 2.3 + i * 0.03, 0.3, 0.4) * 0.35;
+    // story lines
+    const storyOut = (u) => ease.inOutSine(sat((T - (60.35 + u * 0.35)) / 0.55));
+    story1.letters.forEach((l) => {
+      const k = ease.outCubic(sat((T - (C_S1 + l.u * 1.1)) / 1.0));
+      const o = storyOut(l.u);
+      l.mesh.opacity = k * (1 - o) * fade;
+      l.mesh.position.set(l.base.x, l.base.y - (1 - k) * 0.06 + o * 0.05, 0);
+      l.mesh.intensity = 1.0 + (1 - k) * 0.9;
     });
-    ideas.visible = t > C_IDEAS - 0.1 && t < C_OUT + 1.2;
+    story2.letters.forEach((l) => {
+      const k = ease.outCubic(sat((T - (C_S2 + l.u * 1.3)) / 1.0));
+      const o = storyOut(l.u);
+      l.mesh.opacity = k * (1 - o) * 0.95 * fade;
+      l.mesh.position.set(l.base.x, l.base.y - (1 - k) * 0.06 + o * 0.05, 0);
+      l.mesh.intensity = 0.95 + (1 - k) * 0.9;
+    });
+    story1.visible = T > C_S1 - 0.1 && T < 61.5;
+    story2.visible = T > C_S2 - 0.1 && T < 61.5;
 
-    // final title — one impact
+    // IDEAS BUILD UPON IDEAS. — letters drift in from wide tracking and settle
+    ideas.letters.forEach((l, i) => {
+      const k = ease.outCubic(sat((T - (C_IDEAS + l.u * 1.0)) / 1.1));
+      const o = ease.inOutSine(sat((T - (C_OUT - 0.5 + l.u * 0.2)) / 0.3));
+      l.mesh.opacity = k * (1 - o);
+      l.mesh.position.set(l.base.x * (1 + (1 - k) * 0.08), l.base.y + o * 0.06, 0);
+      l.mesh.intensity = 1.05 + (1 - k) * 1.2 + envelope(T, C_IDEAS + 1.3 + l.u * 0.6, C_IDEAS + 2.0 + l.u * 0.6, 0.3, 0.4) * 0.3;
+    });
+    ideas.visible = T > C_IDEAS - 0.1 && T < C_OUT + 0.1;
+
+    // final title — lands on the hit
     const on = kt >= 0 ? 1 : 0;
-    const attack = sat(kt / 0.05);
-    title.opacity = attack * on * fade;
-    sub.opacity = sat((kt - 0.08) / 0.25) * on * fade;
-    const heat = kt > 0 ? Math.exp(-kt * 3.0) : 0;
-    title.intensity = 1.1 + heat * 2.2;
-    sub.intensity = 1.0 + heat * 1.4;
-    title.color.setRGB(1, 1, 1).lerp(TITLE_GOLD, 1 - heat);
-    title.scale.setScalar(1 + heat * 0.035);
-    const sw = sat((kt - 0.15) / 1.4);
+    const heat = kt > 0 ? Math.exp(-kt * 2.6) : 0;
+    const land = ease.outCubic(sat(kt / 1.4));
+    const textFade = 1 - smoothstep(C_FADE + 0.1, END - 0.35, T);
+    title.opacity = on * sat(kt / 0.1) * textFade;
+    title.intensity = 1.0 + heat * 0.7;
+    title.color.setRGB(1, 0.98, 0.94).lerp(TITLE_GOLD, 1 - heat);
+    title.scale.set(tS * (1 + (1 - land) * 0.03), tS * (1 + (1 - land) * 0.03), 1);
+    title.position.y = titleY - (1 - land) * 0.012;
+    const sk = ease.outCubic(sat((kt - 0.12) / 0.9));
+    sub.opacity = on * sk * textFade;
+    sub.intensity = 0.95 + heat * 0.4;
+    sub.color.copy(SUB_GOLD);
+    sub.scale.set(sS * (1 + (1 - sk) * 0.05), sS, 1);
+    const sw = sat((kt - 0.2) / 1.5);
+    sweepT.scale.copy(title.scale); sweepT.position.copy(title.position);
     sweepT.material.uniforms.uS.value = lerp(-0.15, 1.15, ease.inOutSine(sw));
-    sweepT.material.uniforms.uOpacity.value = on * (sw > 0 && sw < 1 ? 1 : 0) * fade;
-    sweepS.material.uniforms.uS.value = lerp(-0.15, 1.15, ease.inOutSine(sat((kt - 0.3) / 1.4)));
-    sweepS.material.uniforms.uOpacity.value = on * (kt > 0.3 && kt < 1.7 ? 0.8 : 0) * fade;
-    const rl = ease.inOutCubic(sat((kt - 0.35) / 1.1));
-    rule.scale.x = Math.max(0.001, rl * wTitle * 0.55);
-    rule.material.opacity = rl * 0.8 * fade;
+    sweepT.material.uniforms.uOpacity.value = on * (sw > 0 && sw < 1 ? 1 : 0) * textFade;
+    const sw2 = sat((kt - 0.4) / 1.5);
+    sweepS.scale.copy(sub.scale);
+    sweepS.material.uniforms.uS.value = lerp(-0.15, 1.15, ease.inOutSine(sw2));
+    sweepS.material.uniforms.uOpacity.value = on * (sw2 > 0 && sw2 < 1 ? 0.8 : 0) * textFade;
+    sweepT.visible = sweepT.material.uniforms.uOpacity.value > 0; sweepS.visible = sweepS.material.uniforms.uOpacity.value > 0;
+    const rl = ease.inOutCubic(sat((kt - 0.35) / 1.3));
+    rule.scale.set(Math.max(0.001, rl * titleW * 0.42), 0.0042 * L(1.2, 1), 1);
+    rule.material.opacity = rl * 0.75 * textFade;
     rule.visible = on && rl > 0;
-    rule.position.y = (title.position.y + sub.position.y) / 2 + 0.01;
-    title.visible = title.opacity > 0.001;
+    closing.opacity = sat((T - C_CLOSE) / 0.5) * 0.85 * textFade;
+    closing.reveal = ease.outCubic(sat((T - C_CLOSE) / 1.3));
 
-    closing.opacity = sat((t - C_CLOSE) / 0.4) * 0.9 * fade;
-    closing.reveal = ease.outCubic(sat((t - C_CLOSE) / 1.0));
-
-    // lens + grade
-    self.dof.focus = ZT;
-    self.dof.range = 2.2;
-    self.dof.amount = smoothstep(C_DROP, C_IDEAS, t) * 0.7 + smoothstep(C_IMPACT - 0.8, C_IMPACT, t) * 0.2;
-    self.bloom.strength = 0.8 + kick * 0.4;
-    self.exposure = (1 + kick * 0.25) * lerp(1, 0.75, sat((t - C_FADE) / (DUR - C_FADE)));
+    // grade
+    self.bloom.strength = 0.55 + swell * 0.25 * (1 - smoothstep(C_IMPACT + 2, C_FADE, T) * 0.5);
+    self.exposure = lerp(1, 0.25, ease.inQuad(fadeK));
   }
 
   return self;

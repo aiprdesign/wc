@@ -26,7 +26,7 @@ void main(){
   float coast = 1.0 - smoothstep(0.0, 0.14, elev);
   float moist = fbm(p * 2.1 + vec3(11.0, 2.0, 5.0), 6) * 0.9 + 0.5 + coast * 0.22;
   float belt = exp(-pow((alat - 0.27) / 0.1, 2.0));
-  float dry = clamp(belt * 1.25 - moist * 0.85 + 0.3 + 0.2 * snoise(p * 5.0), 0.0, 1.0);
+  float dry = clamp(belt * 1.2 - moist * 0.85 + 0.2 + 0.2 * snoise(p * 5.0), 0.0, 1.0);
   float mtn = ridge(q * 3.2 + 2.0, 5);
   if (uMode == 0) {
     vec3 forest = vec3(0.018, 0.04, 0.016), grass = vec3(0.06, 0.075, 0.03), sav = vec3(0.15, 0.115, 0.055);
@@ -49,10 +49,11 @@ void main(){
     gl_FragColor = vec4(sqrt(alb), water);
   } else {
     // city lights: clustered by population (coasts, temperate latitudes), speckled at two scales
-    float pop = smoothstep(-0.05, 0.45, fbm(p * 3.6 + vec3(7.0), 6)) * land;
-    pop *= (0.35 + 1.0 * coast) * (1.0 - smoothstep(0.52, 0.72, alat)) * (1.0 - 0.85 * smoothstep(0.55, 0.85, dry));
-    float s1 = hash3(floor(p * 300.0)), s2 = hash3(floor(p * 820.0) + 3.0);
-    float lights = pop * (step(0.82, s1) * 0.55 + step(0.9, s2) * 0.8) + smoothstep(0.4, 0.95, pop) * 0.4;
+    float pop = smoothstep(0.05, 0.5, fbm(p * 3.6 + vec3(7.0), 6)) * land;
+    pop *= (0.5 + 0.6 * coast) * (1.0 - smoothstep(0.52, 0.72, alat)) * (1.0 - 0.9 * smoothstep(0.5, 0.8, dry));
+    float metro = smoothstep(0.35, 0.8, fbm(p * 11.0 + vec3(3.0), 4) + pop * 0.5);
+    float s1 = hash3(floor(p * 520.0)), s2 = hash3(floor(p * 1300.0) + 3.0);
+    float lights = pop * (step(0.955 - 0.1 * metro, s1) * 0.5 + step(0.965 - 0.08 * metro, s2) * 0.8) + pop * metro * 0.025;
     // clouds: warped fbm, streaky storm bands, fewer over the desert belts
     vec3 cw = vec3(snoise(p * 1.3 + 2.0), snoise(p * 1.3 + 7.0), snoise(p * 1.3 + 13.0));
     vec3 cp = p + 0.35 * cw;
@@ -101,14 +102,18 @@ void main(){
 export const earthFrag = /* glsl */ `
 ${GLSL_NOISE}
 uniform sampler2D uSurf, uAux;
-uniform vec3 uSun, uSunObj;
+uniform vec3 uSun, uSunObj, uShade;
 uniform float uCloudOff, uCity, uBright, uWarm, uTime;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vO;
 void main(){
   vec4 s = texture2D(uSurf, vUv);
   vec3 alb = s.rgb * s.rgb; float water = s.a;
+  vec3 n0 = normalize(vO);
+  float fine = snoise(n0 * 260.0);
+  alb *= 0.88 + 0.24 * (fine * 0.5 + 0.5) * (1.0 - water * 0.7);
   vec2 cuv = vUv + vec2(uCloudOff, 0.0);
   float cloud = texture2D(uAux, cuv).g;
+  cloud = clamp(cloud + (snoise(n0 * 90.0 + 3.0) * 0.6 + fine * 0.4) * 0.16 * cloud * (1.0 - cloud) * 4.0, 0.0, 1.0);
   float lights = texture2D(uAux, vUv).r;
   vec3 n = normalize(vO);
   float sinT = max(length(n.xz), 0.05);
@@ -116,7 +121,7 @@ void main(){
   vec3 north = cross(n, east);
   vec3 N = normalize(vN);
   vec3 V = normalize(cameraPosition - vW);
-  vec3 L = uSun;
+  vec3 L = uShade;                 // shading light (the sun, nudged towards camera at sunrise)
   float ndl = dot(N, L);
   float mu = max(dot(N, V), 0.0);
   // cloud shadow: sample the cloud layer one cloud-height towards the sun
@@ -127,9 +132,9 @@ void main(){
   vec3 sunCol = mix(vec3(1.0, 0.36, 0.12), vec3(1.0, 0.95, 0.88), smoothstep(-0.02, 0.32, ndl));
   sunCol = mix(sunCol, sunCol * vec3(1.0, 0.78, 0.5) * 1.15, uWarm);
   float E = 2.1;
-  float diff = max(ndl + 0.04, 0.0) / 1.04;
+  float diff = max(ndl, 0.0);
   float cdiff = smoothstep(-0.08, 1.0, ndl);
-  vec3 ground = alb * diff * (1.0 - 0.6 * cshadow * (1.0 - cloud));
+  vec3 ground = alb * diff * (1.0 - 0.38 * cshadow * (1.0 - cloud));
   // ocean: two-lobe GGX glint with Schlick fresnel
   vec3 H = normalize(L + V);
   float nh = max(dot(N, H), 0.0);
@@ -137,17 +142,18 @@ void main(){
   float a1 = 0.06, a2 = 0.0045;
   float d1 = a1 / (3.1416 * pow(nh * nh * (a1 - 1.0) + 1.0, 2.0));
   float d2 = a2 / (3.1416 * pow(nh * nh * (a2 - 1.0) + 1.0, 2.0));
-  float spec = water * (1.0 - cloud) * (1.0 - 0.6 * cshadow) * (d1 * 0.8 + d2 * 0.12) * F / (4.0 * max(mu, 0.08)) * smoothstep(0.0, 0.08, ndl);
+  float spec = water * (1.0 - cloud) * (1.0 - 0.6 * cshadow) * (d1 * 0.4 + d2 * 0.12) * min(F, 0.12) / (4.0 * max(mu, 0.2)) * smoothstep(0.0, 0.08, ndl) * smoothstep(0.08, 0.4, mu);
   vec3 col = mix(ground, vec3(0.8, 0.82, 0.85) * cdiff * (0.85 + 0.15 * cloud), cloud) * sunCol * E;
   col += spec * sunCol * E * vec3(1.0, 0.92, 0.8);
   // atmosphere seen through: blue haze towards the limb on the day side, thin veil everywhere lit
-  float day = smoothstep(-0.18, 0.35, ndl);
+  float day = smoothstep(-0.06, 0.4, ndl);
   float haze = pow(1.0 - mu, 2.2);
-  vec3 sky = mix(vec3(0.9, 0.42, 0.2), vec3(0.16, 0.36, 0.9), smoothstep(-0.05, 0.35, ndl));
-  col = col * (1.0 - 0.45 * haze * day) + sky * (0.05 + 0.75 * haze) * day * 0.55;
+  vec3 sky = mix(vec3(0.7, 0.36, 0.2), vec3(0.16, 0.36, 0.9), smoothstep(0.0, 0.3, ndl));
+  sky = mix(sky, vec3(0.85, 0.55, 0.3), uWarm * 0.45);
+  col = col * (1.0 - 0.45 * haze * day) + sky * (0.04 + 0.7 * haze) * day * 0.5;
   // night-side city lights, dimmed by cloud
   float night = 1.0 - smoothstep(-0.12, 0.08, ndl);
-  col += vec3(1.0, 0.6, 0.26) * lights * 1.9 * uCity * night * (1.0 - cloud * 0.75);
+  col += vec3(1.0, 0.62, 0.3) * lights * 0.85 * uCity * night * (1.0 - cloud * 0.8);
   gl_FragColor = vec4(col * uBright, 1.0);
 }`;
 
@@ -158,7 +164,7 @@ export const atmoVert = /* glsl */ `
 varying vec3 vW;
 void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 export const atmoFrag = /* glsl */ `
-uniform vec3 uSun; uniform float uR, uHs, uAtmo, uMie, uWarm;
+uniform vec3 uSun, uShade; uniform float uR, uHs, uAtmo, uMie, uWarm;
 varying vec3 vW;
 void main(){
   vec3 O = cameraPosition;
@@ -167,14 +173,16 @@ void main(){
   vec3 Pc = O + dir * b;
   float h = length(Pc);
   float x = (h - uR) / uHs;
-  float g = x > 0.0 ? exp(-x) + 0.12 * exp(-x * 0.22) : exp(x * 0.2) * 0.55 + 0.45 * exp(x * 1.5);
+  float g = x > 0.0 ? exp(-x) + 0.05 * exp(-x * 0.3) : exp(x * 0.25) * 0.4 + 0.6 * exp(x * 1.5);
   vec3 nc = Pc / max(h, 1e-4);
-  float sl = dot(nc, uSun);
-  float lit = smoothstep(-0.28, 0.22, sl);
-  vec3 ray = mix(vec3(1.0, 0.42, 0.14) * 1.3, vec3(0.22, 0.52, 1.0), smoothstep(-0.08, 0.35, sl));
+  float sl = dot(nc, uShade);
+  float lit = smoothstep(-0.2, 0.3, sl);
+  vec3 ray = mix(vec3(1.0, 0.45, 0.18) * 0.8, vec3(0.22, 0.52, 1.0), smoothstep(-0.12, 0.25, sl));
   float cs = max(dot(dir, uSun), 0.0);
-  float mie = uMie * (pow(cs, 900.0) * 7.0 + pow(cs, 90.0) * 2.2 + pow(cs, 14.0) * 0.8 + pow(cs, 3.0) * 0.18);
+  ray = mix(ray, vec3(1.0, 0.66, 0.36) * 1.2, uWarm * pow(cs, 6.0));
+  float mie = uMie * (pow(cs, 900.0) * 7.0 + pow(cs, 90.0) * 2.0 + pow(cs, 14.0) * 0.35 + pow(cs, 4.0) * 0.03);
   vec3 mieCol = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.86, 0.62), pow(cs, 60.0));
-  vec3 col = g * (ray * lit * 1.35 + mieCol * mie * smoothstep(-0.45, 0.05, sl) * (1.0 + uWarm));
+  float gm = x > 0.0 ? g : g * 0.35;
+  vec3 col = g * ray * lit * 1.35 + gm * mieCol * mie * smoothstep(-0.45, 0.05, dot(nc, uSun)) * (1.0 + uWarm);
   gl_FragColor = vec4(col * uAtmo, 1.0);
 }`;
