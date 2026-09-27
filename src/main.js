@@ -46,7 +46,7 @@ async function boot() {
   player.time = start;
   engine.render(start, 0);
 
-  if (params.has('still')) { document.body.classList.add('still'); intro.classList.add('hidden'); window.__film.ready = true; return; }
+  if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
 
   setupUI(player, score);
   intro.classList.add('ready');

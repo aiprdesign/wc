@@ -26,6 +26,8 @@ export class Engine {
     this.renderer.toneMapping = THREE.NoToneMapping;       // tone mapping happens in the final grade
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.autoClear = false;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.instances = new Map();
     this.width = 2; this.height = 1;
     this.lastT = 0;
@@ -127,8 +129,9 @@ export class Engine {
     r.setClearColor(bg, 1);
     r.clear(true, true, true);
     r.render(inst.scene, inst.camera);
-    if (inst.hud) { r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); }
     const dof = inst.dof;
+    // The HUD is composited after depth of field so screen-space typography stays razor sharp.
+    const drawHUD = (target) => { if (inst.hud) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
     if (dof && dof.amount > 0.01) {
       const u = this.dofQuad.material.uniforms;
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
@@ -136,8 +139,10 @@ export class Engine {
       u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.height / 800) * 14;
       r.setRenderTarget(dofRT);
       this.dofQuad.render(r);
+      drawHUD(dofRT);
       return dofRT.texture;
     }
+    drawHUD(rt);
     return rt.texture;
   }
 

@@ -92,7 +92,7 @@ void main(){
   float edge = uReveal * (1.0 + uSoft) - uSoft;
   float r = smoothstep(edge + uSoft, edge, coord);
   float a = t.a * uOpacity * r;
-  if (a < 0.002) discard;
+  if (a < 0.02) discard;
   // bright leading edge during the wipe
   float lead = (uReveal > 0.0 && uReveal < 1.0) ? smoothstep(uSoft, 0.0, abs(coord - edge - uSoft * 0.5)) * 1.5 : 0.0;
   gl_FragColor = vec4(uColor * uIntensity * (1.0 + lead), a);
@@ -119,7 +119,9 @@ export class TextPlane extends THREE.Mesh {
         uRevealDir: { value: revealDir === 'y' ? 1 : 0 },
       },
       vertexShader: textVert, fragmentShader: textFrag,
-      transparent: true, depthWrite: false, blending, side: THREE.DoubleSide,
+      // depthWrite on (glyph pixels only, thanks to the discard) so depth of field treats text
+      // at its true distance instead of blurring it like the background behind it.
+      transparent: true, depthWrite: opts.depthWrite ?? true, blending, side: THREE.DoubleSide,
     });
     super(geo, mat);
     this.worldWidth = worldW;
