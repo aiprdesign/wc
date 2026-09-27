@@ -28,7 +28,7 @@ export class Callout extends THREE.Group {
     this.line.progress = sat(p * 1.6); this.line.opacity = opacity;
     this.dot.material.opacity = sat(p * 5) * opacity; this.dot.visible = p > 0;
     this.label.reveal = sat(p * 1.6 - 0.6); this.label.opacity = p > 0.35 ? opacity : 0;
-    if (this.sub) { this.sub.reveal = sat(p * 1.6 - 0.75); this.sub.opacity = p > 0.45 ? opacity : 0; }
+    if (this.sub) { this.sub.reveal = sat((p * 1.6 - 0.75) / 0.85); this.sub.opacity = p > 0.45 ? opacity : 0; }
   }
 }
 
