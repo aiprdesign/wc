@@ -102,7 +102,7 @@ void main(){
   vec3 L = normalize(uSun);
   float ndl = max(dot(N, L), 0.0);
   float body = smoothstep(-0.02, 0.06, dot(normalize(vN), L));
-  vec3 col = vec3(0.96, 0.95, 0.93) * alb * pow(ndl, 0.85) * body * 2.4;
+  vec3 col = vec3(0.96, 0.95, 0.93) * alb * pow(ndl, 0.85) * body * 1.45;
   gl_FragColor = vec4(col * uGain, 1.0);
 }`;
 
@@ -143,20 +143,20 @@ export function crinkleTexture(seed = 3, size = 512) {
   return toTexture(c, { srgb: false, repeat: true });
 }
 
-// Ascent-stage skin: light grey panels, black thermal paint and panel seams.
+// Ascent-stage skin: anodised light-grey panels of varied size, a few black thermal panels, seams, rivets.
 export function panelTexture(seed = 5, size = 512) {
   const r = rng(seed), c = mkCanvas(size), g = c.getContext('2d');
-  g.fillStyle = '#b8bbbf'; g.fillRect(0, 0, size, size);
-  const cells = 8, s = size / cells;
-  for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) {
-    const v = r();
-    g.fillStyle = v < 0.22 ? '#2a2b2e' : v < 0.5 ? '#c9cbce' : v < 0.7 ? '#a8abb0' : '#bfc1c4';
-    g.fillRect(x * s, y * s, s, s);
+  g.fillStyle = '#b4b3ae'; g.fillRect(0, 0, size, size);
+  for (let i = 0; i < 70; i++) {
+    const w = size * (0.08 + r() * 0.3), h = size * (0.06 + r() * 0.25), x = r() * size, y = r() * size;
+    const l = 160 + Math.floor(r() * 40);
+    g.fillStyle = `rgb(${l},${l - 2},${l - 6})`; g.fillRect(x, y, w, h);
+    g.strokeStyle = 'rgba(60,60,64,0.55)'; g.lineWidth = 1.5; g.strokeRect(x, y, w, h);
   }
-  g.strokeStyle = 'rgba(40,40,44,0.8)'; g.lineWidth = 2;
-  for (let i = 0; i <= cells; i++) { g.beginPath(); g.moveTo(i * s, 0); g.lineTo(i * s, size); g.stroke(); g.beginPath(); g.moveTo(0, i * s); g.lineTo(size, i * s); g.stroke(); }
-  g.fillStyle = 'rgba(30,30,30,0.6)';
-  for (let i = 0; i < 260; i++) { g.beginPath(); g.arc(r() * size, r() * size, 1.2, 0, TAU); g.fill(); }
+  g.fillStyle = '#26272a';
+  for (let i = 0; i < 5; i++) { const w = size * (0.1 + r() * 0.18), h = size * (0.08 + r() * 0.14); g.fillRect(r() * size, r() * size, w, h); }
+  g.fillStyle = 'rgba(40,40,40,0.5)';
+  for (let i = 0; i < 300; i++) { g.beginPath(); g.arc(r() * size, r() * size, 1, 0, TAU); g.fill(); }
   return toTexture(c, { repeat: true });
 }
 
@@ -201,8 +201,8 @@ export function regolithTextures(size = 512, seed = 9) {
     H[y * size + x] = s * 0.35;
   }
   // craterlets (wrapped so the tile stays seamless)
-  for (let i = 0; i < 220; i++) {
-    const cx = r() * size, cy = r() * size, rad = 2 + Math.pow(r(), 3) * 26, depth = 0.25 + r() * 0.35;
+  for (let i = 0; i < 140; i++) {
+    const cx = r() * size, cy = r() * size, rad = 2 + Math.pow(r(), 3) * 26, depth = 0.12 + r() * 0.2;
     const R2 = rad * 1.8;
     for (let dy = -R2; dy <= R2; dy++) for (let dx = -R2; dx <= R2; dx++) {
       const q = Math.hypot(dx, dy) / rad; if (q > 1.8) continue;
@@ -213,12 +213,12 @@ export function regolithTextures(size = 512, seed = 9) {
   }
   // pebbles
   const peb = new Float32Array(size * size);
-  for (let i = 0; i < 1600; i++) {
-    const cx = r() * size, cy = r() * size, rad = 0.8 + r() * 2.2;
+  for (let i = 0; i < 1100; i++) {
+    const cx = r() * size, cy = r() * size, rad = 0.7 + r() * 1.6;
     for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
       const q = Math.hypot(dx, dy) / rad; if (q > 1) continue;
       const X = ((Math.round(cx + dx) % size) + size) % size, Y = ((Math.round(cy + dy) % size) + size) % size;
-      H[Y * size + X] += Math.sqrt(1 - q * q) * 0.35; peb[Y * size + X] = 1;
+      H[Y * size + X] += Math.sqrt(1 - q * q) * 0.22; peb[Y * size + X] = 0.5;
     }
   }
   const ca = mkCanvas(size), cb = mkCanvas(size);
@@ -226,7 +226,7 @@ export function regolithTextures(size = 512, seed = 9) {
   for (let i = 0; i < size * size; i++) {
     const h = H[i];
     const hv = Math.max(0, Math.min(255, 128 + h * 150));
-    const al = Math.max(0, Math.min(255, 150 + h * 40 + peb[i] * 30 + (r() - 0.5) * 22));
+    const al = Math.max(0, Math.min(255, 150 + h * 30 + peb[i] * 18 + (r() - 0.5) * 18));
     ia.data[i * 4] = al; ia.data[i * 4 + 1] = al * 0.985; ia.data[i * 4 + 2] = al * 0.955; ia.data[i * 4 + 3] = 255;
     ib.data[i * 4] = ib.data[i * 4 + 1] = ib.data[i * 4 + 2] = hv; ib.data[i * 4 + 3] = 255;
   }
@@ -347,15 +347,15 @@ const strut = (a, b, r, mat, seg = 8) => {
   return m;
 };
 
-export function apolloMaterials() {
+export function apolloMaterials(envMap = null) {
   const crinkle = crinkleTexture();
   const panel = panelTexture();
-  return {
+  const M = {
     gold: new THREE.MeshStandardMaterial({ color: '#e3ad52', metalness: 1, roughness: 0.3, bumpMap: crinkle, bumpScale: 3, envMapIntensity: 0.55 }),
     goldDark: new THREE.MeshStandardMaterial({ color: '#b07a2c', metalness: 1, roughness: 0.4, bumpMap: crinkle, bumpScale: 2.5, envMapIntensity: 0.5 }),
     silverFoil: new THREE.MeshStandardMaterial({ color: '#d6d9dd', metalness: 1, roughness: 0.25, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.6 }),
     blackFoil: new THREE.MeshStandardMaterial({ color: '#1b1b1d', metalness: 0.4, roughness: 0.55, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.4 }),
-    skin: new THREE.MeshStandardMaterial({ map: panel, metalness: 0.45, roughness: 0.42, envMapIntensity: 0.55 }),
+    skin: new THREE.MeshStandardMaterial({ map: panel, metalness: 0.35, roughness: 0.48, envMapIntensity: 0.45 }),
     dark: new THREE.MeshStandardMaterial({ color: '#35363a', metalness: 0.85, roughness: 0.35, envMapIntensity: 0.6 }),
     bell: new THREE.MeshStandardMaterial({ color: '#4a4640', metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
     white: new THREE.MeshStandardMaterial({ color: '#e8e8e4', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
@@ -363,6 +363,8 @@ export function apolloMaterials() {
     cm: new THREE.MeshStandardMaterial({ color: '#e9ecef', metalness: 1, roughness: 0.12, envMapIntensity: 1.0 }),
     window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#a8f0c0'), emissiveIntensity: 0.25, envMapIntensity: 1.2 }),
   };
+  if (envMap) for (const m of Object.values(M)) m.envMap = envMap;
+  return M;
 }
 
 // Lunar Module. Origin at the footpad contact plane; front (windows, hatch, ladder) faces +Z.
