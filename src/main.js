@@ -58,6 +58,8 @@ async function boot() {
     setTimeout(() => location.replace(url), 600);
   });
   window.__film.player = player;
+  window.__film.explore = (filmT, view) => { explorer.view(filmT, view); return filmT; };   // automation: explore views
+  window.__film.exploreExit = () => explorer.exit();
   // Deterministic frame access for automated rendering / screenshots.
   window.__film.renderFrame = (T) => { engine.render(T, 1 / 30); return T; };            // film seconds
   window.__film.renderStory = (t) => { engine.render(t * TIME_SCALE, 1 / 30); return t; };  // story seconds

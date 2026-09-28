@@ -171,7 +171,7 @@ export class Engine {
     }
     // explore mode: the viewer's rig drives this sequence's camera; headings step aside
     const ex = this.explore?.active && this.explore.inst === inst ? this.explore : null;
-    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.apply(inst.camera); } else this.words3d?.apply(inst, T);
+    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else this.words3d?.apply(inst, T);
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);

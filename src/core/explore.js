@@ -3,6 +3,10 @@
 // time), then its camera is taken over by an orbit / fly rig. Headings, captions, HUD and depth
 // of field step aside so the scene itself is on show; leaving explore hands the camera back.
 //   drag: look around (orbit)   right-drag / shift-drag / two fingers: pan   wheel / pinch: zoom
+// Scenes stay presentable: the rig is kept within a window around the film's own view
+// (scene-overridable `exploreLimits`), and a scene may export `explore(t)`, called after every
+// update while exploring, to swap camera cheats for complete geometry (e.g. a close-up's lone
+// boot becomes the whole astronaut). `exploreEnd()` undoes anything update() doesn't reset.
 //   W A S D (arrows): fly   R / F: up / down   double-click: back to the film's camera   E / Esc: leave
 import * as THREE from 'three';
 import { TIME_SCALE } from '../timeline.js';
@@ -35,7 +39,10 @@ export class Explorer {
     cam.matrixWorld.decompose(pos, q, new THREE.Vector3());
     const focus = this.inst.dof?.focus > 0 ? this.inst.dof.focus : 5;
     this.home = { pos: pos.clone(), q: q.clone(), focus };
+    // limits: yaw ± around the film's view, pitch window, zoom range, fly radius (× distance)
+    this.lim = { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.9, zoomIn: 0.3, zoomOut: 3.5, fly: 2.5, ...(this.inst.exploreLimits ?? {}) };
     this.reset();
+    this.homeTarget = this.target.clone(); this.homeYaw = this.yaw; this.homePitch = this.pitch;
     this.active = true;
     e.explore = this;
     this.canvas.classList.add('exploring');
@@ -44,6 +51,7 @@ export class Explorer {
 
   exit() {
     if (!this.active) return;
+    try { this.inst.exploreEnd?.(); } catch { /* scene hook */ }
     this.active = false;
     this.engine.explore = null;
     this.keys.clear();
@@ -63,8 +71,27 @@ export class Explorer {
     this.pitch = Math.asin(THREE.MathUtils.clamp(off.y / this.dist, -1, 1));
   }
 
-  // Engine hook: pose the sequence's camera from the rig.
+  // keep the rig inside the scene's presentable window
+  clamp() {
+    const L = this.lim, d = THREE.MathUtils;
+    let dy = this.yaw - this.homeYaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    this.yaw = this.homeYaw + d.clamp(dy, -L.yaw, L.yaw);
+    this.pitch = d.clamp(this.pitch, Math.max(-1.45, this.homePitch - L.pitchDown), Math.min(1.45, this.homePitch + L.pitchUp));
+    this.dist = d.clamp(this.dist, this.dist0 * L.zoomIn, this.dist0 * L.zoomOut);
+    const off = this._u.copy(this.target).sub(this.homeTarget), r = this.dist0 * L.fly;
+    if (off.length() > r) this.target.copy(this.homeTarget).addScaledVector(off.normalize(), r);
+  }
+
+  // Engine hook, after the sequence's update: complete the set, then pose the camera.
+  prepare(t) {
+    try { this.inst.explore?.(t); } catch (e) { if (!this._warned) { console.warn('[explore] scene hook failed', e); this._warned = true; } }
+    this.apply(this.inst.camera);
+  }
+
+  // Pose the sequence's camera from the rig.
   apply(cam) {
+    this.clamp();
     const cp = Math.cos(this.pitch);
     cam.position.set(
       this.target.x + this.dist * cp * Math.sin(this.yaw),
@@ -74,6 +101,14 @@ export class Explorer {
     cam.up.set(0, 1, 0);
     cam.lookAt(this.target);
     cam.updateMatrixWorld();
+  }
+
+  // Automation: enter at filmT and offset the view (radians / zoom factor / fly in units of distance).
+  view(filmT, { yaw = 0, pitch = 0, zoom = 1, fly = [0, 0, 0] } = {}) {
+    this.enter(filmT);
+    this.yaw += yaw; this.pitch += pitch; this.dist *= zoom;
+    this.target.add(this._v.set(...fly).multiplyScalar(this.dist0));
+    this.render();
   }
 
   render() {
@@ -103,9 +138,7 @@ export class Explorer {
     this.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k);
   }
 
-  _zoom(f) {
-    this.dist = THREE.MathUtils.clamp(this.dist * f, this.dist0 * 0.03, this.dist0 * 40);
-  }
+  _zoom(f) { this.dist *= f; }   // clamp() bounds it
 
   _bind() {
     const c = this.canvas;
@@ -132,7 +165,7 @@ export class Explorer {
         if (p.pan) this._pan(dx, dy);
         else {
           this.yaw -= dx * 0.005;
-          this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.005, -1.5, 1.5);
+          this.pitch += dy * 0.005;
         }
       }
       this.render();
