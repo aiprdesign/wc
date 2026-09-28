@@ -1,5 +1,11 @@
 // Offline, frame-exact render of the whole film to an MP4 (picture + score).
-//   node tools/render.mjs --out renders/film --fps 30 --width 1920 --workers 3 [--from 0 --to 60] [--ffmpeg /path/to/ffmpeg]
+//   node tools/render.mjs --gpu --aspect 1 --width 1080 --out renders/1x1        (square)
+//   node tools/render.mjs --gpu --aspect 16:9 --width 1920 --out renders/16x9    (landscape)
+//   node tools/render.mjs --gpu --aspect 9:16 --width 1080 --out renders/9x16    (vertical)
+// Options: --gpu (use your graphics card: opens browser windows while it renders; without it
+// Chromium renders in software, which is slow), --fps 30, --workers 2, --from/--to (film s),
+// --noaudio, --ffmpeg /path/to/ffmpeg (else ffmpeg-static from npm, then ffmpeg on PATH).
+// Or simply: npm run render:1x1 / render:16x9 / render:9x16 / render:all
 // Every frame is rendered deterministically through window.__film.renderFrame(T), so the
 // result is identical to real-time playback but never drops a frame.
 import { createRequire } from 'node:module';
@@ -24,7 +30,7 @@ const from = Number(args.from ?? 0), to = Number(args.to ?? 108.3);
 const framesDir = path.join(out, 'frames');
 fs.mkdirSync(framesDir, { recursive: true });
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2' };
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg' };
 const server = http.createServer((req, res) => {
   let p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
@@ -35,8 +41,10 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const port = server.address().port;
 
+// --gpu: a visible (headed) browser gets the real graphics card; headless falls back to software
 const gl = args.gpu ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
-const browser = await chromium.launch({ args: [...gl, '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ headless: !args.gpu, args: [...gl, '--ignore-gpu-blocklist'] });
+if (args.gpu) console.log('Rendering on the GPU: browser windows will open and close by themselves. Leave them be.');
 const quality = width > 1920 ? 'high' : width > 1280 ? 'medium' : 'low';
 
 async function openPage(extra = '') {
@@ -98,14 +106,18 @@ await Promise.all(Array.from({ length: workers }, (_, w) => worker(w)));
 await browser.close();
 server.close();
 
-const ffmpeg = args.ffmpeg ?? process.env.FFMPEG;
+// ffmpeg: --ffmpeg, $FFMPEG, the ffmpeg-static npm package, or ffmpeg on the PATH
+let ffmpeg = args.ffmpeg ?? process.env.FFMPEG;
+if (!ffmpeg) { try { ffmpeg = require('ffmpeg-static'); } catch { /* not installed */ } }
+if (!ffmpeg) { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); ffmpeg = 'ffmpeg'; } catch { /* not on PATH */ } }
 if (ffmpeg) {
-  const mp4 = path.join(out, 'achievements-of-western-civilization.mp4');
+  const tag = args.aspect ? '-' + (String(args.aspect) === '1' ? '1x1' : String(args.aspect).replace(':', 'x')) : '';
+  const mp4 = path.join(out, `achievements-of-western-civilization${tag}.mp4`);
   const a = ['-y', '-framerate', String(fps), '-i', path.join(framesDir, 'f_%05d.jpg')];
   if (fs.existsSync(wavPath) && from === 0) a.push('-i', wavPath, '-c:a', 'aac', '-b:a', '256k', '-shortest');
   a.push('-c:v', 'libx264', '-preset', 'slow', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', mp4);
   execFileSync(ffmpeg, a, { stdio: 'inherit' });
   console.log('film →', mp4);
 } else {
-  console.log('Frames in', framesDir, '— pass --ffmpeg to encode an MP4.');
+  console.log('Frames in', framesDir, '— install ffmpeg (npm i) or pass --ffmpeg to encode an MP4.');
 }

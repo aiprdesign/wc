@@ -1,0 +1,20 @@
+{
+  "name": "achievements-of-western-civilization",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A real-time WebGL film: Achievements of Western Civilization (three.js + Web Audio).",
+  "type": "module",
+  "scripts": {
+    "start": "http-server -p 8080 -c-1 -o",
+    "render:1x1": "node tools/render.mjs --gpu --aspect 1 --width 1080 --out renders/1x1",
+    "render:16x9": "node tools/render.mjs --gpu --aspect 16:9 --width 1920 --out renders/16x9",
+    "render:9x16": "node tools/render.mjs --gpu --aspect 9:16 --width 1080 --out renders/9x16",
+    "render:all": "npm run render:1x1 && npm run render:16x9 && npm run render:9x16",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "http-server": "^14.1.1",
+    "playwright": "^1.50.0"
+  }
+}
