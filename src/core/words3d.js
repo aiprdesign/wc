@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { letters3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
+import { glowSprite } from '../lib/materials.js';
 import { ease, sat, lerp, ramp } from '../lib/math.js';
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
@@ -52,7 +53,7 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <common>', '#include <common>\nuniform mat4 uWordInv; varying vec3 vWordPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash; uniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine; uniform vec3 uTint;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
@@ -60,9 +61,11 @@ function letterMaterial(era, env, shared, invert = false) {
       // soft highlight knee: letters stay crisp under the bloom threshold instead of hazing out
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
-          if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }`);
+          if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
+        // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
+        gl_FragColor.rgb += uTint * band * uShine * 1.6;`);
   };
-  m.customProgramCacheKey = () => 'word3d-v4';
+  m.customProgramCacheKey = () => 'word3d-v5';
   return m;
 }
 
@@ -94,7 +97,7 @@ export class Words3D {
     const seg = inst.segment;
     const era = eraOf(t0);
     const shared = {
-      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uWordInv: { value: new THREE.Matrix4() },
+      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() },
       uTint: { value: new THREE.Color(era.color).lerp(new THREE.Color('#ffffff'), 0.55) },
     };
     const glyphs = letters3D(text, { size: 1, depth: 0.32, bevel: 0.035, tracking: 0.1 });
@@ -133,6 +136,12 @@ export class Words3D {
       transparent: true, depthWrite: false, fog: false,
     }));
     back.position.z = -0.45;
+    // star glint that rides the leading edge of the shine
+    const glint = glowSprite({ color: '#fff4d6', intensity: 1.7, scale: 0.6 });
+    glint.material.depthTest = false;
+    glint.position.set(0, capH / 2 + 0.02, 0.25);
+    glint.visible = false;
+    group.add(glint);
     back.renderOrder = -1;
     group.add(back);
     // a real light that rides the sweep and spills onto the scene around the word
@@ -154,7 +163,7 @@ export class Words3D {
     const d = focus * (swap ? 0.55 : 0.62);
     const lockPos = new THREE.Vector3(), lockQuat = new THREE.Quaternion();
     cam.matrixWorld.decompose(lockPos, lockQuat, new THREE.Vector3());
-    return { text, inst, group, letters, plinth, light, shared, back, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
+    return { text, inst, group, letters, plinth, light, shared, back, glint, capH, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
   }
 
   // Called by the engine after a sequence's update and before it is rendered.
@@ -225,6 +234,14 @@ export class Words3D {
       // light sweep crosses the word once, after the letters stand
       const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
+      // first show: the sweep is a real shine — bright band plus a star glint on its leading edge
+      const shine = Math.sin(Math.PI * sweepP) * fade;
+      it.shared.uShine.value = shine;
+      it.glint.visible = shine > 0.02;
+      it.glint.position.x = it.shared.uSweep.value;
+      it.glint.scale.setScalar((0.22 + 0.36 * shine) * (1 + 0.15 * Math.sin(t * 40)));
+      it.glint.material.opacity = shine;
+      it.glint.material.rotation = t * 1.5;
       it.light.position.x = it.shared.uSweep.value;
       it.light.intensity = Math.sin(Math.PI * sweepP) * 1.1 * k * k * fade;
       // plinth shoots out from the centre with the letters, retracts into it as they leave

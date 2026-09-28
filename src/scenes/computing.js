@@ -2,18 +2,19 @@
 // Technique: morphing hard-surface evolution — a brass difference engine whose parts shrink,
 // fly and re-arrange (with carried-over particles) into relays → vacuum tubes → transistors →
 // a microprocessor; a dive through the package into a procedural die (glowing lanes, data
-// pulses) matched at the same scale in a second world; then data-flow visualisation: streams
-// of 0/1 glyphs flowing into floating UI (software, communication, 3D graphics, robotics, AI).
+// pulses) matched at the same scale in a second world; then 0/1 glyph streams rise into a glowing
+// neural core that grows five luminous branches of intelligence — CHAT · IMAGE · VIDEO · CODING ·
+// ROBOTICS — each ending in a live UI card (see computing-ai.js); the camera then zooms into the core.
 import * as THREE from 'three';
 import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { clamp, sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, sampleSphere } from '../lib/particles.js';
-import { segmentsLine, revealLines, progressLine } from '../lib/lines.js';
+import { segmentsLine } from '../lib/lines.js';
 import { canvas as mkCanvas, toTexture, brushedMetalTexture } from '../lib/textures.js';
 import { glowSprite } from '../lib/materials.js';
-import { BracketFrame } from '../lib/hud.js';
+import { buildBranches } from './computing-ai.js';
 
 const STEEL_BLUE = '#9cc8ff';
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -114,60 +115,6 @@ function traceTexture(seed = 5) {
   }
   return toTexture(c, { srgb: false });
 }
-function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
-function cardBase(W, H, title) {
-  const c = mkCanvas(W, H), g = c.getContext('2d');
-  roundRect(g, 4, 4, W - 8, H - 8, 22); g.fillStyle = 'rgba(12,18,28,0.82)'; g.fill();
-  g.strokeStyle = 'rgba(160,200,255,0.35)'; g.lineWidth = 2; g.stroke();
-  g.fillStyle = 'rgba(160,200,255,0.08)'; g.fillRect(6, 6, W - 12, 58);
-  ['#6f8fb8', '#8fb0d8', '#b8d4f5'].forEach((col, i) => { g.beginPath(); g.arc(34 + i * 26, 35, 7, 0, TAU); g.fillStyle = col; g.fill(); });
-  g.fillStyle = 'rgba(220,235,255,0.92)'; g.font = `600 26px "${FONTS.sans}"`; g.textBaseline = 'middle'; g.fillText(title, 120, 36);
-  return { c, g };
-}
-function softwareCard() {
-  const W = 900, H = 560, { c, g } = cardBase(W, H, 'kernel.c — Editor');
-  const R = rng(12);
-  const toks = [['#8fb8ff', 'fn'], ['#e6eefc', 'compute'], ['#b8c7dc', '('], ['#f0d9a8', 'data'], ['#b8c7dc', ')'], ['#8fb8ff', 'return'], ['#9fe0d0', '0x1F'], ['#6d7f99', '// carry'], ['#e6eefc', 'bits'], ['#e6eefc', 'shift'], ['#8fb8ff', 'let'], ['#f0d9a8', '"signal"']];
-  g.font = `400 22px "${FONTS.mono}"`;
-  for (let l = 0; l < 13; l++) {
-    const y = 96 + l * 34; let x = 70 + (l % 4 === 0 ? 0 : 28 * (1 + (l % 3)));
-    g.fillStyle = 'rgba(120,140,170,0.6)'; g.fillText(String(l + 1).padStart(2, ' '), 22, y);
-    const n = 2 + Math.floor(R() * 4);
-    for (let k = 0; k < n; k++) { const [col, s] = toks[Math.floor(R() * toks.length)]; g.fillStyle = col; g.fillText(s, x, y); x += g.measureText(s).width + 14; if (x > 520) break; }
-  }
-  // chart
-  g.strokeStyle = 'rgba(160,200,255,0.25)'; g.lineWidth = 1;
-  for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo(590, 120 + i * 60); g.lineTo(860, 120 + i * 60); g.stroke(); }
-  g.strokeStyle = '#bfe0ff'; g.lineWidth = 3; g.beginPath();
-  for (let i = 0; i <= 30; i++) { const x = 590 + i * 9, y = 330 - (Math.pow(i / 30, 2) * 170 + Math.sin(i * 0.9) * 14 + 20); i ? g.lineTo(x, y) : g.moveTo(x, y); }
-  g.stroke();
-  g.fillStyle = 'rgba(191,224,255,0.9)'; g.font = `300 44px "${FONTS.sans}"`; g.fillText('10⁹ ops/s', 590, 400);
-  g.fillStyle = 'rgba(160,190,230,0.7)'; g.font = `400 18px "${FONTS.mono}"`; g.fillText('THROUGHPUT · LIVE', 592, 440);
-  for (let i = 0; i < 8; i++) { g.fillStyle = `rgba(143,184,255,${0.25 + (i % 3) * 0.2})`; g.fillRect(592 + i * 33, 470 + (i % 2) * 6, 24, 40 - (i % 2) * 6); }
-  return toTexture(c);
-}
-function commCard() {
-  const W = 900, H = 560, { c, g } = cardBase(W, H, 'Network — Global Packets');
-  const R = rng(19);
-  const pts = [];
-  for (let y = 90; y < 520; y += 13) for (let x = 30; x < 870; x += 13) {
-    const u = x / W, v = y / H;
-    const land = Math.sin(u * 9.1 + Math.sin(v * 5.3) * 1.6) * Math.cos(v * 7.2 - u * 3.1) + Math.sin(u * 21 + v * 13) * 0.25;
-    if (land > 0.25) { g.fillStyle = 'rgba(150,190,240,0.32)'; g.fillRect(x, y, 4, 4); if (R() < 0.05) pts.push([x + 2, y + 2]); }
-  }
-  g.lineWidth = 2;
-  for (let i = 0; i < 16; i++) {
-    const a = pts[Math.floor(R() * pts.length)], b = pts[Math.floor(R() * pts.length)];
-    if (!a || !b) continue;
-    const mx = (a[0] + b[0]) / 2, my = Math.min(a[1], b[1]) - 60 - R() * 80;
-    g.strokeStyle = `rgba(191,224,255,${0.35 + R() * 0.45})`;
-    g.beginPath(); g.moveTo(a[0], a[1]); g.quadraticCurveTo(mx, my, b[0], b[1]); g.stroke();
-    for (const p of [a, b]) { g.beginPath(); g.arc(p[0], p[1], 5, 0, TAU); g.fillStyle = '#e6f2ff'; g.fill(); }
-  }
-  g.fillStyle = 'rgba(191,224,255,0.9)'; g.font = `300 34px "${FONTS.sans}"`; g.fillText('4.2 Tb/s', 40, 525);
-  return toTexture(c);
-}
-
 export function create(ctx, segment) {
   const cue = (name) => CUES[name] - segment.start;
   const tCalc = cue('calculator'), tRel = cue('relays'), tTube = cue('tubes'), tTr = cue('transistors'), tProc = cue('processor'), tDive = cue('processorDive'), tBin = cue('binary');
@@ -319,100 +266,28 @@ export function create(ctx, segment) {
   // the die-world plane shader uses world xz → offset for B0 is irrelevant in x/z
   const lightB = new THREE.DirectionalLight('#dfeaff', 2.4); lightB.position.set(-3, 6, 4).add(B0); lightB.target.position.copy(B0); scene.add(lightB, lightB.target);
 
-  // floating interfaces
-  const panels = [];
-  const addPanel = (obj, pos, rotY, label, sub, t0, w = 2.2, h = 1.4) => {
-    const g = new THREE.Group(); g.position.copy(pos); g.position.x *= OUTPUT_ASPECT < 1.5 ? 0.8 : 1; g.rotation.y = rotY; worldB.add(g);
-    g.add(obj);
-    const fr = new BracketFrame(w + 0.2, h + 0.2, { len: 0.16, color: '#cfe3ff', intensity: 1.1 }); g.add(fr);
-    const lt = new TextPlane(label, { font: FONTS.mono, weight: 500, height: 0.11, letterSpacing: 0.22, color: '#e6f2ff', intensity: 1.3 });
-    lt.position.set(-w / 2 - 0.1 + lt.worldWidth / 2, h / 2 + 0.28, 0); g.add(lt);
-    const st = new TextPlane(sub, { font: FONTS.sans, weight: 300, height: 0.08, letterSpacing: 0.04, color: '#aac8ee', intensity: 0.9 });
-    st.position.set(-w / 2 - 0.1 + st.worldWidth / 2, h / 2 + 0.15, 0); g.add(st);
-    const p = { g, obj, fr, lt, st, t0 };
-    panels.push(p);
-    return p;
-  };
-  const cardMat = (tex) => new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
-  const swCard = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2 * 560 / 900), cardMat(softwareCard()));
-  const cmCard = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2 * 560 / 900), cardMat(commCard()));
-  // 3D graphics: displaced icosphere, wire + faceted shading
-  const gfx = new THREE.Group();
-  const icoGeo = new THREE.IcosahedronGeometry(0.55, 3);
-  { const p = icoGeo.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 1 + 0.12 * Math.sin(v.x * 7) * Math.sin(v.y * 6 + 1) * Math.cos(v.z * 5); v.multiplyScalar(k); p.setXYZ(i, v.x, v.y, v.z); } icoGeo.computeVertexNormals(); }
-  const gfxSolid = new THREE.Mesh(icoGeo, new THREE.MeshStandardMaterial({ color: '#8fa6c4', metalness: 0.3, roughness: 0.5, flatShading: true, transparent: true, opacity: 0 }));
-  const gfxWire = revealLines(icoGeo, { mode: 'wire', order: 'y', color: '#bfe0ff', headColor: '#ffffff', intensity: 0.9 });
-  gfx.add(gfxSolid, gfxWire);
-  // robotics: articulated arm
-  const robot = new THREE.Group();
-  const rSteel = new THREE.MeshStandardMaterial({ color: '#d5dde6', metalness: 0.9, roughness: 0.3 });
-  const rDark = new THREE.MeshStandardMaterial({ color: '#2b3038', metalness: 0.8, roughness: 0.4 });
-  const rbase = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.12, 32), rDark); rbase.position.y = -0.55; robot.add(rbase);
-  const yaw = new THREE.Group(); yaw.position.y = -0.49; robot.add(yaw);
-  const sh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 16), rDark); sh.position.y = 0.1; yaw.add(sh);
-  const shoulder = new THREE.Group(); shoulder.position.y = 0.1; yaw.add(shoulder);
-  const up1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), rSteel); up1.position.y = 0.3; shoulder.add(up1);
-  const elbow = new THREE.Group(); elbow.position.y = 0.6; shoulder.add(elbow);
-  elbow.add(new THREE.Mesh(new THREE.SphereGeometry(0.075, 20, 14), rDark));
-  const fore = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), rSteel); fore.position.y = 0.25; elbow.add(fore);
-  const wrist = new THREE.Group(); wrist.position.y = 0.5; elbow.add(wrist);
-  wrist.add(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), rDark));
-  const fingers = [-1, 1].map((s) => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, 0.05), rSteel); f.position.set(s * 0.04, 0.09, 0); wrist.add(f); return f; });
-  const robotEdges = new THREE.Group(); robot.add(robotEdges);
-  // AI: neural network graph with travelling pulses
-  const nn = new THREE.Group();
-  const LAYERS = [4, 7, 9, 7, 3];
-  const nodes = [];
-  LAYERS.forEach((n, li) => { for (let k = 0; k < n; k++) nodes.push({ p: V3((li - 2) * 0.62, (k - (n - 1) / 2) * 0.24, Math.sin(k * 1.7 + li) * 0.1), li }); });
-  const nodeMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color('#dff0ff').multiplyScalar(2.2), toneMapped: false }), nodes.length);
-  nodes.forEach((n, i) => nodeMesh.setMatrixAt(i, M.makeTranslation(n.p.x, n.p.y, n.p.z)));
-  nn.add(nodeMesh);
-  const edgePos = [], edgeT = [], edgeH = [];
-  for (let i = 0; i < nodes.length; i++) for (let j = 0; j < nodes.length; j++) {
-    if (nodes[j].li !== nodes[i].li + 1) continue;
-    if (R() > 0.72) continue;
-    edgePos.push(nodes[i].p.x, nodes[i].p.y, nodes[i].p.z, nodes[j].p.x, nodes[j].p.y, nodes[j].p.z);
-    const h = R(); edgeT.push(0, 1); edgeH.push(h, h);
-  }
-  const edgeGeo = new THREE.BufferGeometry();
-  edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePos, 3));
-  edgeGeo.setAttribute('aT', new THREE.Float32BufferAttribute(edgeT, 1));
-  edgeGeo.setAttribute('aH', new THREE.Float32BufferAttribute(edgeH, 1));
-  const edgeMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uReveal: { value: 0 } },
-    vertexShader: `attribute float aT; attribute float aH; varying float vT; varying float vH; varying float vX; void main(){ vT = aT; vH = aH; vX = position.x; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `uniform float uTime, uOpacity, uReveal; varying float vT; varying float vH; varying float vX;
-      void main(){ if ((vX + 1.3) / 2.6 > uReveal * 1.1) discard;
-        float ph = fract(vT * 0.5 - uTime * 1.6 + vH * 3.0);
-        float p = smoothstep(0.06, 0.0, abs(ph - 0.5)) * step(0.35, vH);
-        gl_FragColor = vec4(vec3(0.45, 0.65, 1.0) * (0.35 + p * 4.0), uOpacity * (0.45 + p)); }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  });
-  nn.add(new THREE.LineSegments(edgeGeo, edgeMat));
-  const nnCore = glowSprite({ color: '#cfe3ff', intensity: 2.5, scale: 1.6 }); nn.add(nnCore);
+  // branches of intelligence: neural core + five live UI cards (computing-ai.js)
+  const AI_Y0 = 5.0, AI_ZC = -13, AI_DREF = 9;
+  const ai = buildBranches({ Y0: AI_Y0, Zc: AI_ZC, D_REF: AI_DREF, tStart: tBin + 0.06 });
+  worldB.add(ai.group);
+  const coreW = ai.core.clone().add(B0);
 
-  addPanel(swCard, V3(-3.0, 1.55, -10.2), 0.5, 'SOFTWARE', 'Interfaces · languages · systems', tBin + 0.05);
-  addPanel(cmCard, V3(3.1, 1.75, -10.6), -0.5, 'ARPANET 1969 — INTERNET', 'Packets across a planet', tBin + 0.15);
-  addPanel(gfx, V3(-2.1, 2.85, -12.6), 0.3, '3D GRAPHICS', 'Geometry · light · pixels', tBin + 0.25, 1.4, 1.3);
-  addPanel(robot, V3(2.25, 0.95, -12.4), -0.3, 'ROBOTICS', 'Sense · plan · act', tBin + 0.32, 1.3, 1.4);
-  addPanel(nn, V3(0, 1.8, -14.4), 0, 'ARTIFICIAL INTELLIGENCE', 'Dartmouth 1956 · learning from data', tBin + 0.42, 2.8, 2.2);
-
-  // binary glyph streams: die → interfaces
-  const GLYPHS = 1100;
+  // binary glyph streams: die floor → the neural core
+  const GLYPHS = 700;
   const atlas = (() => { const c = mkCanvas(256, 128), g = c.getContext('2d'); g.fillStyle = '#fff'; g.font = `500 104px "${FONTS.mono}"`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('0', 64, 68); g.fillText('1', 192, 68); return toTexture(c, { srgb: false }); })();
   const gGeo = new THREE.InstancedBufferGeometry();
   gGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
   gGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
   gGeo.setIndex([0, 1, 2, 0, 2, 3]);
   const aS = new Float32Array(GLYPHS * 3), aE = new Float32Array(GLYPHS * 3), aC = new Float32Array(GLYPHS * 3), aP = new Float32Array(GLYPHS * 4);
-  const targets = panels.map((p) => p.g.position);
+  const tgt = ai.core;
   for (let i = 0; i < GLYPHS; i++) {
-    const tgt = targets[i % targets.length];
-    const sx = (R() - 0.5) * 6 + tgt.x * 0.3, sz = -1.5 - R() * 9;
+    const sx = (R() - 0.5) * 12, sz = AI_ZC + (R() - 0.5) * 13;
     aS.set([Math.round(sx * 4) / 4, 0.02, sz], i * 3);
-    aE.set([tgt.x + (R() - 0.5) * 1.6, tgt.y + (R() - 0.5) * 1.0, tgt.z + 0.05], i * 3);
-    aC.set([lerp(sx, tgt.x, 0.3), 0.8 + R() * 1.4, lerp(sz, tgt.z, 0.5)], i * 3);
-    aP.set([R(), 0.55 + R() * 0.5, R(), 0.03 + R() * 0.03], i * 4);
+    const th = R() * TAU, rr = 0.2 + R() * 0.45;
+    aE.set([tgt.x + Math.cos(th) * rr, tgt.y + Math.sin(th) * rr, tgt.z], i * 3);
+    aC.set([lerp(sx, tgt.x, 0.35), 1.2 + R() * 2.8, lerp(sz, tgt.z, 0.4)], i * 3);
+    aP.set([R(), 0.3 + R() * 0.25, R(), 0.03 + R() * 0.03], i * 4);
   }
   gGeo.setAttribute('aS', new THREE.InstancedBufferAttribute(aS, 3));
   gGeo.setAttribute('aE', new THREE.InstancedBufferAttribute(aE, 3));
@@ -420,7 +295,7 @@ export function create(ctx, segment) {
   gGeo.setAttribute('aP', new THREE.InstancedBufferAttribute(aP, 4));
   gGeo.instanceCount = GLYPHS;
   const glyphMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uStart: { value: tBin - 0.1 }, uSpan: { value: 1.3 }, uMap: { value: atlas }, uOpacity: { value: 1 } },
+    uniforms: { uTime: { value: 0 }, uStart: { value: tBin - 0.45 }, uSpan: { value: 0.38 }, uMap: { value: atlas }, uOpacity: { value: 1 } },
     vertexShader: /* glsl */ `attribute vec3 aS; attribute vec3 aE; attribute vec3 aC; attribute vec4 aP;
       uniform float uTime, uStart, uSpan; varying vec2 vUv; varying float vA; varying float vBit;
       void main(){
@@ -618,54 +493,38 @@ export function create(ctx, segment) {
     },
     _die(t, info) {
       const T = info.T;
-      // matched to the end of the dive: same framing, 12× scale, then pitch into a glide
-      const u = ramp(t, tSwitch, DUR, ease.linear);
-      const pitch = ramp(t, tSwitch, tBin + 0.1, ease.inOutCubic);
-      const push = timeWarp(t, [[tSwitch, 0], [tBin, 1.8], [tBin + 0.6, 5.0], [DUR - 0.5, 8.2], [DUR, 10.8]]);
-      camPos.set(0, lerp(3.0, 1.35, pitch) + ramp(t, tBin, DUR) * 0.45, -push).add(B0);
-      tmp.set(0, -1, 0).lerp(tmp2.set(0, -0.28, -1).normalize(), pitch).normalize();
+      // matched to the end of the dive (same framing, 12× scale), then a crane-up + pitch into a level
+      // glide that settles on the neural core, and finally a rapid push INTO the core ('zoom' hand-over).
+      const pitch = ramp(t, tSwitch, tBin + 0.12, ease.inOutCubic);
+      const rise = ramp(t, tSwitch, tBin + 0.3, ease.inOutSine);
+      const zoom = ramp(t, DUR - 0.5, DUR, ease.inQuad);
+      const push = timeWarp(t, [[tSwitch, 0], [tBin, 1.9], [tBin + 0.3, -(AI_ZC + AI_DREF)], [DUR - 0.5, -(AI_ZC + AI_DREF) + 0.3], [DUR, -AI_ZC - 0.55]]);
+      camPos.set(0, lerp(3.0, AI_Y0, rise), -push).add(B0);
+      camPos.y = lerp(camPos.y, coreW.y, ramp(t, DUR - 0.5, DUR, ease.inOutSine));
+      tmp.set(0, -1, 0).lerp(tmp2.set(0, 0, -1), pitch).normalize();
       look.copy(camPos).add(tmp);
-      tmp.set(0, 1.8, -14.4).add(B0);
-      look.lerp(tmp, ramp(t, tBin + 0.2, DUR - 0.35, ease.inOutSine));
+      tmp.set(camPos.x, coreW.y, coreW.z);
+      look.lerp(tmp, zoom);
       camera.position.copy(camPos);
       upV.set(0, 0, -1).lerp(tmp2.set(0, 1, 0), smoothstep(0.1, 0.6, pitch)).normalize();
       camera.up.copy(upV); camera.lookAt(look);
-      camera.fov = 35 + ramp(t, DUR - 0.6, DUR, ease.inQuad) * 6; camera.near = 0.02; camera.far = 200; camera.updateProjectionMatrix();
+      camera.fov = 35 + ramp(t, DUR - 0.45, DUR, ease.inQuad) * 7; camera.near = 0.02; camera.far = 200; camera.updateProjectionMatrix();
 
       dieWorldMat.uniforms.uTime.value = T;
       dieWorldMat.uniforms.uLit.value = ramp(t, tDive - 0.2, tSwitch + 0.3) * 8 + ramp(t, tSwitch, tBin + 0.4, ease.inQuad) * 60;
-      dieWorldMat.uniforms.uGain.value = 1 - ramp(t, tBin + 0.3, DUR, ease.inOutSine) * 0.45;
+      const calm = ramp(t, tBin - 0.2, tBin + 0.35, ease.inOutSine);
+      dieWorldMat.uniforms.uGain.value = 1 - calm * 0.55;
+      dieWorldMat.uniforms.uFog.value = 0.045 + calm * 0.07;
 
       glyphMat.uniforms.uTime.value = t;
-      glyphs.visible = t > tBin - 0.15;
-      panels.forEach((p, i) => {
-        const k = ramp(t, p.t0, p.t0 + 0.35, ease.outCubic);
-        p.g.visible = k > 0.001;
-        if (!p.g.visible) return;
-        p.g.scale.setScalar(0.85 + 0.15 * k);
-        p.fr.reveal(k, 1);
-        p.lt.reveal = ramp(t, p.t0 + 0.05, p.t0 + 0.35); p.lt.opacity = 1;
-        p.st.reveal = ramp(t, p.t0 + 0.12, p.t0 + 0.42); p.st.opacity = 1;
-        if (p.obj.material?.map) p.obj.material.opacity = k * 0.95;
-      });
-      // content motion
-      gfx.rotation.set(0.3, t * 0.9, 0);
-      gfxWire.progress = ramp(t, panels[2].t0, panels[2].t0 + 0.4); gfxWire.opacity = 0.85;
-      gfxSolid.material.opacity = ramp(t, panels[2].t0 + 0.2, panels[2].t0 + 0.6) * 0.8;
-      yaw.rotation.y = Math.sin(t * 1.8) * 0.8;
-      shoulder.rotation.z = 0.35 + Math.sin(t * 2.2) * 0.25;
-      elbow.rotation.z = -0.9 + Math.sin(t * 2.6 + 1) * 0.35;
-      wrist.rotation.z = 0.4 + Math.sin(t * 3.0) * 0.3;
-      fingers.forEach((f, s) => { f.position.x = (s ? 1 : -1) * (0.03 + 0.02 * (0.5 + 0.5 * Math.sin(t * 5))); });
-      edgeMat.uniforms.uTime.value = T; edgeMat.uniforms.uOpacity.value = ramp(t, panels[4].t0, panels[4].t0 + 0.3); edgeMat.uniforms.uReveal.value = ramp(t, panels[4].t0, panels[4].t0 + 0.5);
-      nodeMesh.visible = t > panels[4].t0;
-      nn.rotation.y = Math.sin(t * 0.8) * 0.25;
-      nnCore.material.opacity = ramp(t, panels[4].t0 + 0.2, DUR) * (0.6 + 0.4 * beatAt(T));
-      nnCore.scale.setScalar(1.6 + ramp(t, DUR - 0.6, DUR) * 2.5);
+      glyphMat.uniforms.uOpacity.value = 1;
+      glyphs.visible = t > tBin - 0.45 && t < tBin + 0.5;
+
+      ai.update(t, T, zoom, ramp(t, tSwitch + 0.05, tBin + 0.05, ease.outCubic));
       api.dof.amount = 0;
       const flash = 1 - ramp(t, tSwitch, tSwitch + 0.25);
       api.exposure = 1.0 + flash * 0.25;
-      api.bloom.strength = 0.8;
+      api.bloom.strength = 0.72;
     },
     _hud(t) {
       const cur = t < tRel - 0.1 ? 0 : t < tTube - 0.1 ? 1 : t < tTr - 0.1 ? 2 : t < tProc - 0.1 ? 3 : 4;
