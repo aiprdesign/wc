@@ -10,6 +10,7 @@ import { SEGMENTS, DURATION, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../tim
 import { DofShader, TransitionShader, FinalShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
+import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
 
 const shaderMat = (def) => new THREE.ShaderMaterial({
@@ -71,6 +72,8 @@ export class Engine {
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
       onProgress(++i / SEGMENTS.length, seg);
     }
+    // 3D chapter words live inside each sequence's scene (built after every scene exists)
+    this.words3d = new Words3D(this);
   }
 
   // Fit the canvas to the window at the film aspect (letterbox / pillarbox via CSS).
@@ -143,6 +146,7 @@ export class Engine {
       // A faulty sequence must never stop the film: log once, keep rendering its last pose.
       if (!inst._warned) { console.error(`[${inst.segment.id}] update failed at T=${T.toFixed(2)}`, e); inst._warned = true; }
     }
+    this.words3d?.apply(inst, T);
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);

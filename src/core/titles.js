@@ -99,11 +99,11 @@ export class TitleLayer {
     this.words = [];
     for (const seg of SEGMENTS) {
       const c = CHAPTERS[seg.id];
-      if (CONCEPT[seg.id]) this.words.push(this.makeWord(CONCEPT[seg.id], seg.start + 0.28, seg.start + 1.55, c?.n, seg));
+      if (false && CONCEPT[seg.id]) this.words.push(this.makeWord(CONCEPT[seg.id], seg.start + 0.28, seg.start + 1.55, c?.n, seg));
       if (!c || !c.heading) continue;
       this.cards.push(this.makeCard(seg, c));
     }
-    SWAPS.forEach(([cue, w], i) => {
+    if (false) SWAPS.forEach(([cue, w], i) => {
       const t = CUES[cue], next = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
       this.words.push(this.makeWord(w, t - 0.05, next - 0.05, null, SEGMENTS.find((sg) => sg.id === 'montage'), { swap: true }));
     });
@@ -258,14 +258,14 @@ export class TitleLayer {
     g.scale.setScalar(this.scale);
     const color = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(seg.start + 1)) / 2));
     const era = new TextPlane(`${c.n}   ·   ${c.era}`, { font: FONTS.mono, weight: 400, height: 0.034, letterSpacing: 0.42, color, intensity: 1.1 });
-    era.position.y = 0.105;
+    era.position.y = 0.06;
     const heading = new KineticText(c.heading, { font: FONTS.display, weight: 600, height: 0.092, letterSpacing: 0.2, color, intensity: 1.35 });
     const half = Math.min(0.9, heading.letters.length * 0.05 + 0.25);
     const ruleL = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
     const ruleR = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
-    ruleL.position.y = ruleR.position.y = 0.062;
+    ruleL.position.y = ruleR.position.y = 0.022;
     const story = new TextPlane(c.story, { font: FONTS.serif, italic: true, weight: 500, height: 0.052, color, intensity: 1.05 });
-    story.position.y = -0.095;
+    story.position.y = -0.03;
     // soft scrim so type reads over bright plates
     const scrim = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), new THREE.ShaderMaterial({
       uniforms: { uO: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false,
@@ -273,12 +273,12 @@ export class TitleLayer {
       fragmentShader: 'uniform float uO; varying vec2 vUv; void main(){ vec2 d = (vUv - 0.5) * vec2(1.0, 2.2); gl_FragColor = vec4(0.0, 0.0, 0.0, uO * 0.42 * smoothstep(0.5, 0.0, length(d))); }',
     }));
     scrim.renderOrder = -1;
-    g.add(scrim, era, ruleL, ruleR, heading, story);
+    g.add(scrim, era, ruleL, ruleR, story);   // the chapter word itself is 3D, in the scene (words3d.js)
     [era, story, ...heading.letters.map((l) => l.mesh)].forEach((m) => { m.material.depthTest = false; });
     this.scene.add(g);
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
-    const t0 = seg.start + 1.55, t1 = seg.start + Math.min(3.7, dur - 0.55);
+    const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
     return { g, era, heading, ruleL, ruleR, story, scrim, t0, t1 };
   }
 
