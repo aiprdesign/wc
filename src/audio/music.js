@@ -604,7 +604,7 @@ function accents(S) {
 // 38.5, after BRAAM 2 — have theirs already; 60.0 is the zoom through the A of STARS.)
 const CHAPTERS = [
   // [segment start, power]  act I soft, act II fuller
-  [7.5, 0.5], [12.0, 0.5], [15.5, 0.5], [24.5, 0.9], [28.5, 1.0], [31.5, 1.0], [34.5, 1.0], [42.5, 1.0], [46.5, 1.0],
+  [7.5, 0.5], [12.0, 0.5], [15.5, 0.5], [24.5, 0.8], [28.5, 0.85], [31.5, 0.85], [34.5, 0.85], [42.5, 0.85], [46.5, 0.85],
 ];
 function chapters(S) {
   for (const [b, p] of CHAPTERS) {
@@ -612,7 +612,8 @@ function chapters(S) {
     S.at(t - 0.5, () => I.revCymbal(S, t, 0.5, { level: 0.03 * p }));
     S.at(t, () => {
       I.taiko(S, t, 0.38 * p, { size: p < 0.6 ? 0.6 : 1 });
-      I.boom(S, t, { level: 0.18 * p, f0: 72, f1: 34, decay: 1.1 });
+      // (the sub only where no kit is playing: under the groove it would pump the master's glue)
+      if (t < 20) I.boom(S, t, { level: 0.18 * p, f0: 72, f1: 34, decay: 1.1 });
       if (p >= 0.6) I.crash(S, t, 0.045 * p);
     });
     const glint = chordAt(hud).choir.at(-1) + 24;
@@ -621,7 +622,7 @@ function chapters(S) {
   // montage → finale: the heading's A zooms toward us (60.0 – 60.5): a rush of air through the
   // letter that peaks into the suck-back, landing on the pullBack's D major
   // (lower and fuller than the climb's riser, so it reads as its own movement on top of it)
-  S.at(59.95, () => I.whoosh(S, 59.95, 0.6, { level: 0.5, f0: 180, f1: 3600, pan0: -0.15, pan1: 0.15, peak: 0.72, kind: 'pink' }));
+  S.at(59.95, () => I.whoosh(S, 59.95, 0.55, { level: 0.9, f0: 250, f1: 6000, pan0: -0.2, pan1: 0.2, peak: 0.8, kind: 'white' }));
   S.at(60.25, () => I.bell(S, 60.25, 93, { level: 0.012, decay: 1.2, pan: -0.3, bus: 'far' }));
 }
 
