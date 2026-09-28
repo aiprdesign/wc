@@ -593,7 +593,7 @@ export function buildWebb(env, goldEnv = env) {
   kap.map.repeat.set(1.5, 1.5); kap.bump.repeat.set(3, 3);
   const layers = [];
   for (let i = 0; i < 5; i++) {
-    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#d9c8df' : i === 4 ? '#c9a7c9' : '#c4adc6', map: kap.map, bumpMap: kap.bump, bumpScale: 0.35, metalness: 0.82, roughness: 0.26 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 1.25 });
+    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#eadcf0' : i === 4 ? '#dcb9d8' : '#d9c3dc', map: kap.map, bumpMap: kap.bump, bumpScale: 0.35, metalness: 0.45, roughness: 0.3 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 2.2 });
     const L = new THREE.Mesh(layerGeo(i), m); L.receiveShadow = true; L.castShadow = i === 0;
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.map(([x, z]) => V3(x, -(0.12 + i * 0.1), z))), new THREE.LineBasicMaterial({ color: new THREE.Color('#f1e6f4').multiplyScalar(0.8), transparent: true, opacity: 0.8 }));
     L.add(edge);
@@ -1118,8 +1118,17 @@ export function buildGreenhouse(r = 5.5, M) {
     const n = Math.floor(len / 0.42);
     for (let j = 0; j < n; j++) plants.push([-len / 2 + (j + 0.5) * len / n + (R() - 0.5) * 0.12, 0.55 + R() * 0.08, i * 1.6 + (R() - 0.5) * 0.25, 0.24 + R() * 0.14, R()]);
   }
-  const leafGeo = new THREE.IcosahedronGeometry(1, 1);
-  const leaf = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+  const leafGeo = new THREE.IcosahedronGeometry(1, 2).toNonIndexed();
+  {
+    const p = leafGeo.attributes.position, col = new Float32Array(p.count * 3), v = V3();
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const k = 0.75 + 0.35 * hash3(Math.round(v.x * 3), Math.round(v.y * 3), Math.round(v.z * 3)); v.multiplyScalar(k); p.setXYZ(i, v.x, v.y, v.z); }
+    for (let f = 0; f < p.count; f += 3) {
+      const y = (p.getY(f) + p.getY(f + 1) + p.getY(f + 2)) / 3, l = (0.35 + 0.65 * Math.max(0, (y + 1) / 2)) * (0.7 + 0.3 * hash3(f, 1, 7));
+      for (let j = 0; j < 3; j++) col.set([l, l, l], (f + j) * 3);
+    }
+    leafGeo.setAttribute('color', new THREE.BufferAttribute(col, 3)); leafGeo.computeVertexNormals();
+  }
+  const leaf = new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true });
   const bush = new THREE.InstancedMesh(leafGeo, leaf, plants.length);
   plants.forEach(([x, y, z, s, k], i) => {
     _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(0, k * 6, 0)), _s.set(s, s * 0.85, s));

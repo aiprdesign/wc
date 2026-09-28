@@ -186,7 +186,10 @@ export function create(ctx, segment) {
   const skirt = (() => {
     const geo = new THREE.RingGeometry(122, 420, 96, 14); geo.rotateX(-Math.PI / 2);
     const p = geo.attributes.position;
-    for (let i = 0; i < p.count; i++) p.setY(i, mf(p.getX(i), p.getZ(i)) - 0.35);
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), r = Math.hypot(x, z), k = Math.min(1, 128 / r);
+      p.setY(i, mf(x * k, z * k) - 0.35 + (r - 128) * 0.02 * (1 + 0.6 * Math.sin(x * 0.021 + 1.7) * Math.sin(z * 0.017 - 0.6)));
+    }
     geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, marsMat); m.receiveShadow = true; m.visible = false; wM.add(m); return m;
   })();
@@ -456,14 +459,13 @@ export function create(ctx, segment) {
 
   // EXPLORE: the backdrop and stars follow the viewer's camera, and on Mars the camera is kept above the ground
   let exploring = false;
-  scene.onBeforeRender = (renderer, sc, cam) => {
+  const explorePosed = (cam) => {
     if (!exploring) return;
     if (wM.visible) {
       const gy = mf(cam.position.x, cam.position.z) + 0.5;
       if (cam.position.y < gy) { cam.position.y = gy; cam.updateMatrixWorld(); }
     }
-    sky.position.copy(cam.position); sky.updateMatrixWorld();
-    stars.position.copy(cam.position); stars.updateMatrixWorld();
+    sky.position.copy(cam.position); stars.position.copy(cam.position);
   };
   let shotNow = 0;
   const EX_LIM = { 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
@@ -474,7 +476,9 @@ export function create(ctx, segment) {
     explore(t) {
       exploring = true;
       skirt.visible = wM.visible;
+      webb.sweep.uSweepK.value = 0;              // the light sweep is a film accent: off while the set is explored
     },
+    explorePosed,
     exploreEnd() { exploring = false; skirt.visible = false; },
     dof: { focus: 6, range: 3, amount: 0 },
     bloom: { strength: 0.7 },

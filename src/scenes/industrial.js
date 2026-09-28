@@ -741,13 +741,19 @@ export function create(ctx, segment) {
   const bloom = { strength: 0.6 };
   // explore: complete the sets (see explore() below)
   let exMode = false, lastInfo = null;
-  const out = { scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update, explore, exploreEnd };
+  let lastT = 0;
+  const out = {
+    scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update, explore, exploreEnd, explorePosed,
+    // shot A is a macro a few units off the gear wall: a wide yaw only grazes the wall edge-on (gear rims
+    // filling the lens); the engine hall and railway take the default window
+    get exploreLimits() { return lastT < tPist ? { yaw: 0.75, pitchUp: 0.7 } : {}; },
+  };
 
   // clockwork tick: advance one step per beat with an eased, slightly overshooting snap
   const tick = (T, len = 0.22) => { const n = Math.floor(T / BEAT), ph = sat((T - n * BEAT) / len); return n + ease.outBack(ph); };
 
   function update(t, info) {
-    lastInfo = info;
+    lastInfo = info; lastT = t;
     const T = info?.T ?? t + segment.start;
     const shotA = t < tPist;
 
@@ -793,6 +799,7 @@ export function create(ctx, segment) {
     calloutA.reveal(ramp(t, tGear + 0.05, tGear + 0.55), 1 - smoothstep(1.35, 1.6, t));
     calloutB.reveal(ramp(t, tGear + 0.3, tGear + 0.8), 1 - smoothstep(1.35, 1.6, t));
     calloutA.visible = calloutB.visible = set1;
+    calloutA.quaternion.identity(); calloutB.quaternion.identity();   // (explorePosed turns them to the viewer)
 
     // ---------- engine --------------------------------------------------------------
     // half a revolution per beat (60 rpm): a dead centre lands on every beat, with a slight surge
@@ -886,6 +893,8 @@ export function create(ctx, segment) {
     if (t < tPist) wallMat.roughness = Math.max(wallMat.roughness, 0.55);
   }
   function exploreEnd() { exMode = false; }
+  // the macro callouts are read-outs pinned to the gears: keep them facing the viewer from any angle
+  function explorePosed(cam) { calloutA.quaternion.copy(cam.quaternion); calloutB.quaternion.copy(cam.quaternion); }
 
   return out;
 }
