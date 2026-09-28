@@ -499,7 +499,8 @@ export function create(ctx, segment) {
         civicSub.opacity = 1 - out;
       }
       // LAW: stamped down with a seal ring shockwave
-      lawWord.visible = t > wL - 0.05 && t < wR + 0.15;
+      // the flat LAW word is retired: the chapter's 3D heading (core/words3d.js) carries it now
+      lawWord.visible = false;
       if (lawWord.visible) {
         const out = ramp(t, wR - 0.45, wR - 0.05, ease.inCubic);
         for (const L of lawWord.letters) {
