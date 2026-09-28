@@ -349,7 +349,7 @@ export function create(ctx, segment) {
     return { core, out };
   });
   const shipGlow = glowSprite({ color: '#dfe9ff', intensity: 1.3, scale: 6 }); shipGlow.position.set(0, -37, 0); ship.group.add(shipGlow);
-  const SUN_Y = vDir(0.45, 0.85, 0.35);
+  const SUN_Y = vDir(0.2, 0.9, 0.4);
   const EARTH_Y = vDir(1, 0.12, -1.0);
   const MOON_Y = vDir(1, -0.36, 0.42);
   const EARTH_ROT = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.4, 2.2, 0.1)));
@@ -403,7 +403,7 @@ export function create(ctx, segment) {
   hud.scene.add(rail, railTicks, railFill, railDot);
   // the vision line, centred
   const leap = new TextPlane('The next giant leap.', { font: FONTS.serif, italic: true, weight: 500, height: 0.1 * Math.sqrt(HH), letterSpacing: 0.02, color: '#f6efe4', intensity: 1.1 });
-  leap.position.set(0, SQ ? HH * 0.42 : -0.42, 0); leap.opacity = 0; hud.scene.add(leap);
+  leap.position.set(0, SQ ? HH * 0.42 : 0.6, 0); leap.opacity = 0; hud.scene.add(leap);
   // callouts pinned to 3D anchors (projected every frame through the delivered lens)
   const CS = 0.03 * UI;
   const callHeli = new Callout('INGENUITY · 1.8 KG', { dx: 0.3 * UI, dy: 0.2 * UI, size: CS, color: ICE, intensity: 1.2, sub: 'FIRST FLIGHT · 19 APRIL 2021' });

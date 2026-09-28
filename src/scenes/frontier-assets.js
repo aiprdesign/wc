@@ -656,11 +656,10 @@ export function buildDomeFrame(r, M) {
   for (let k = 0; k < 8; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(r, 0.1, 6, 40, Math.PI), M.dark); rib.rotation.set(0, k / 8 * Math.PI, 0); rib.castShadow = true; g.add(rib); }
   addTo(g, new THREE.TorusGeometry(r, 0.12, 8, 48), M.dark, [0, 0.05, 0], [Math.PI / 2, 0, 0]);
   const skinMat = M.fabric.clone(); skinMat.side = THREE.DoubleSide;
-  const skin = addTo(g, new THREE.SphereGeometry(r * 0.985, 40, 14, 0, TAU, Math.PI / 2 - 0.02, 0.02), skinMat);
-  // the skin is a band from the base up to the rising edge: rebuild its latitude window via scale-free geometry swap
+  // the skin is a band from the base up to the rising edge: twelve prebuilt latitude windows, swapped (no per-frame allocation)
   const bands = [];
   for (let i = 1; i <= 12; i++) { const th = (Math.PI / 2) * i / 12; bands.push(new THREE.SphereGeometry(r * 0.985, 40, Math.max(2, i + 1), 0, TAU, Math.PI / 2 - th, th)); }
-  skin.geometry = bands[0];
+  const skin = addTo(g, bands[0], skinMat);
   const seam = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 6, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd49a').multiplyScalar(2.2), toneMapped: false }));
   seam.rotation.x = Math.PI / 2; g.add(seam);
   function grow(k) {
@@ -691,12 +690,23 @@ export function buildGreenhouse(r = 5.5, M) {
   addTo(g, new THREE.TorusGeometry(r, 0.14, 8, 64), M.dark, [0, 0.05, 0], [Math.PI / 2, 0, 0]);
   // planting beds: dark trays topped with luminous green foliage
   const bed = new THREE.MeshStandardMaterial({ color: '#2a2622', roughness: 0.8 });
-  const leaf = new THREE.MeshBasicMaterial({ color: new THREE.Color('#7fd35a').multiplyScalar(1.15), toneMapped: true });
+  // foliage: clumps of leafy mounds under grow lights (instanced, per-plant tint)
+  const R = rng(404), plants = [], cA = new THREE.Color('#5fbf4a'), cB = new THREE.Color('#b4e68a'), c = new THREE.Color();
   for (let i = -2; i <= 2; i++) {
     const len = 2 * Math.sqrt(Math.max(0, (r - 0.9) ** 2 - (i * 1.6) ** 2));
     addTo(g, new THREE.BoxGeometry(len, 0.5, 0.8), bed, [0, 0.25, i * 1.6]);
-    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, Math.max(0.1, len - 0.8), 4, 8), leaf); f.rotation.z = Math.PI / 2; f.scale.set(1, 1, 1.1); f.position.set(0, 0.6, i * 1.6); g.add(f);
+    const n = Math.floor(len / 0.42);
+    for (let j = 0; j < n; j++) plants.push([-len / 2 + (j + 0.5) * len / n + (R() - 0.5) * 0.12, 0.55 + R() * 0.08, i * 1.6 + (R() - 0.5) * 0.25, 0.24 + R() * 0.14, R()]);
   }
+  const leafGeo = new THREE.IcosahedronGeometry(1, 1);
+  const leaf = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+  const bush = new THREE.InstancedMesh(leafGeo, leaf, plants.length);
+  plants.forEach(([x, y, z, s, k], i) => {
+    _m.compose(_v.set(x, y, z), _q.setFromEuler(_e.set(0, k * 6, 0)), _s.set(s, s * 0.85, s));
+    bush.setMatrixAt(i, _m); bush.setColorAt(i, c.copy(cA).lerp(cB, k).multiplyScalar(0.75 + 0.45 * R()));
+  });
+  bush.instanceMatrix.needsUpdate = true; bush.instanceColor.needsUpdate = true;
+  g.add(bush);
   const lamp = glowTexSprite('#b8eea0', 0.22, r * 1.9); lamp.position.y = r * 0.35; g.add(lamp);
   // light spill on the regolith around the dome
   const spillM = new THREE.ShaderMaterial({
