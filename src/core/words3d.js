@@ -144,12 +144,12 @@ export class Words3D {
       const k = Math.min((visW * (OUTPUT_ASPECT < 1.9 ? 0.64 : 0.46)) / it.width, (H * 0.12) / 0.7);
       // place: world-locked at the lock pose, blended 65% towards the live camera so it stays framed
       cam.matrixWorld.decompose(camPos, camQuat, fwd);
-      pos.copy(it.lockPos).lerp(camPos, 0.8);
-      quat.copy(it.lockQuat).slerp(camQuat, 0.8);
+      pos.copy(camPos);          // locked dead-centre in the frame
+      quat.copy(camQuat);
       fwd.set(0, 0.0, -it.d * (1 - 0.07 * ease.inOutSine(drift))).applyQuaternion(quat);   // slow dolly-in
       it.group.position.copy(pos).add(fwd);
       it.group.quaternion.copy(quat);
-      it.group.rotateY(lerp(0.16, -0.08, ease.inOutSine(drift)));   // three-quarter turn reveals the extrusion
+      it.group.rotateY(lerp(0.09, -0.09, ease.inOutSine(drift)));   // gentle symmetric turn reveals the extrusion
       it.group.rotateX(-0.08);
       it.group.scale.setScalar(k);
       it.group.updateMatrixWorld();
@@ -160,19 +160,23 @@ export class Words3D {
       const outStart = it.t1 - (it.swap ? 0.06 : 0.2);
       const outDur = it.swap ? 0.16 : 0.45;
       const fade = sat(t / 0.1);
+      // stagger by distance from the centre: the middle letters lead, the ends follow
+      const mid = (n - 1) / 2, maxD = Math.max(1, mid);
       it.letters.forEach((l) => {
-        const u = sat((t - l.i * st) / inDur);
+        const c = Math.abs(l.i - mid) / maxD;                 // 0 at the centre … 1 at the ends
+        const d0 = c * st * n * 0.55;
+        const u = sat((t - d0) / inDur);
         const kin = ease.outBack(u), kc = ease.outCubic(u);
-        const kout = ease.inCubic(sat((T - outStart - l.i * st * 0.4) / outDur));
-        // ENTRANCE: hinge up from lying flat while the tracking tightens from wide to set
-        // EXIT: lift, tip back a touch and spread apart as they dissolve (first in, first out)
-        l.pivot.position.x = l.x * (1 + 0.45 * (1 - kc) + 0.22 * kout);
-        l.pivot.position.z = (1 - kc) * 0.45 + kout * 0.25;
-        l.pivot.rotation.x = (1 - kin) * -Math.PI / 2 - kout * 0.35;
-        l.mesh.position.y = l.mesh.position.y * 0 + (l.mesh.userData.h ?? (l.mesh.userData.h = l.mesh.position.y)) + kout * 0.3;
-        l.mesh.scale.setScalar(0.86 + 0.14 * kc);
-        // landing flash: a quick pulse as each letter reaches upright
-        const land = t - l.i * st - inDur * 0.62;
+        const kout = ease.inCubic(sat((T - outStart - (1 - c) * st * n * 0.3) / outDur));
+        // ENTRANCE: every letter emerges from the centre point, spreading outward to its place
+        //           while hinging up from lying flat; EXIT: they fold back into the centre
+        l.pivot.position.x = l.x * kc * (1 - kout * 0.85);
+        l.pivot.position.z = (1 - kc) * 0.35;
+        l.pivot.rotation.x = (1 - kin) * -Math.PI / 2 + kout * -0.5;
+        l.mesh.position.y = (l.mesh.userData.h ?? (l.mesh.userData.h = l.mesh.position.y));
+        l.mesh.scale.setScalar((0.8 + 0.2 * kc) * (1 - kout * 0.4));
+        // landing flash as each letter reaches its place
+        const land = t - d0 - inDur * 0.62;
         l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.9 : 0;
         l.mat.opacity = fade * sat(u * 3) * (1 - kout);
       });
