@@ -3,6 +3,7 @@
 // story-only cards carry the narrative between chapters. Pure function of time.
 import * as THREE from 'three';
 import { SEGMENTS, CUES, OUTPUT_ASPECT, TIME_SCALE, warmthAt } from '../timeline.js';
+import { LAYOUT } from './words3d.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
 import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
@@ -19,6 +20,7 @@ const CHAPTERS = {
   flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.' },
   moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
   computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.' },
+  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb and Mars: America keeps reaching further.' },
   knowledge:   { n: 'XI',   era: '1450 — TODAY',                heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
 };
 
@@ -51,7 +53,7 @@ const TECHNIQUE = {
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.25, end: 3.0, text: 'Every achievement begins as an idea.' },
-  { start: 49.9, end: 54.2, text: 'Standing on the shoulders of giants.', cite: 'ISAAC NEWTON · 1675', low: true },
+  { start: 55.9, end: 60.2, text: 'Standing on the shoulders of giants.', cite: 'ISAAC NEWTON · 1675', low: true },
 ];
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
@@ -299,21 +301,35 @@ export class TitleLayer {
     g.scale.setScalar(this.scale);
     const color = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(seg.start + 1)) / 2));
     // era line: mono, widely tracked, numbers count up (drawn live)
-    const era = new LiveText({ height: 0.034, chars: 40, align: 'center', spacing: 0.42 });
+    const align = LAYOUT[seg.id]?.align ?? 'center';
+    const era = new LiveText({ height: 0.034, chars: 40, align, spacing: 0.42 });
     era.position.y = 0.062;
     const eraText = `${c.n}   ·   ${c.era}`;
     // story: italic serif, word by word
     const story = new WordLine(c.story, { height: 0.056, color: INK, intensity: 1.0 });
     story.position.y = -0.032;
     const half = Math.min(1.05, story.width / 2 + 0.06);
-    const ruleL = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-half, 0, 0)], { color: ACCENT, intensity: 1.3, head: 0.1 });
-    const ruleR = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(half, 0, 0)], { color: ACCENT, intensity: 1.3, head: 0.1 });
+    // side-aligned cards: text flush to the edge, a single rule drawing from that edge
+    const V = (x) => new THREE.Vector3(x, 0, 0);
+    let ruleL, ruleR;
+    if (align === 'center') {
+      ruleL = progressLine([V(0), V(-half)], { color: ACCENT, intensity: 1.3, head: 0.1 });
+      ruleR = progressLine([V(0), V(half)], { color: ACCENT, intensity: 1.3, head: 0.1 });
+    } else {
+      const sgn = align === 'left' ? 1 : -1;
+      ruleL = progressLine([V(-sgn * half), V(sgn * half)], { color: ACCENT, intensity: 1.3, head: 0.1 });
+      ruleR = progressLine([V(-sgn * half), V(-sgn * half + sgn * 0.001)], { color: ACCENT, intensity: 0, head: 0.1 });
+      story.position.x = sgn * (story.width / 2 - half);
+      era.position.x = -sgn * half;
+      const a = OUTPUT_ASPECT;
+      g.position.x = sgn * (-a + 0.1 * a + half * this.scale);
+    }
     ruleL.position.y = ruleR.position.y = 0.022;
     // soft scrim so type reads over bright plates
     const scrim = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), new THREE.ShaderMaterial({
       uniforms: { uO: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform float uO; varying vec2 vUv; void main(){ vec2 d = (vUv - 0.5) * vec2(1.0, 2.2); gl_FragColor = vec4(0.0, 0.0, 0.0, uO * 0.42 * smoothstep(0.5, 0.0, length(d))); }',
+      fragmentShader: 'uniform float uO; varying vec2 vUv; void main(){ vec2 d = (vUv - 0.5) * vec2(1.0, 2.2); gl_FragColor = vec4(0.0, 0.0, 0.0, uO * 0.82 * smoothstep(0.5, 0.12, length(d))); }',
     }));
     scrim.renderOrder = -1;
     g.add(scrim, era, ruleL, ruleR, story);   // the chapter word itself is 3D, in the scene (words3d.js)
@@ -321,6 +337,7 @@ export class TitleLayer {
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
     const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
+    scrim.position.x = align === 'center' ? 0 : (align === 'left' ? 1 : -1) * (story.width / 2 - half);
     return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, scrim, t0, t1 };
   }
 
