@@ -558,12 +558,14 @@ export function create(ctx, segment) {
   {
     const cen = tA.clone().add(tB).add(tC).multiplyScalar(1 / 3);
     const zY = DEPTH / 2 + 0.035, yBar = baseY - 0.06;
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, zY * 2 + 0.05), brassPolish); bar.position.set(cen.x * 0, yBar, 0); prism.add(bar);
+    // (dark patinated bronze: polished brass this close to the orrery's sun bloomed into glowing bars through the glass)
+    const yokeMat = new THREE.MeshStandardMaterial({ color: '#4a3220', metalness: 1, roughness: 0.5 });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, zY * 2 + 0.05), yokeMat); bar.position.set(cen.x * 0, yBar, 0); prism.add(bar);
     for (const sz of [-1, 1]) {
       const h = cen.y - yBar;
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045, h + 0.04, 0.018), brassPolish);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.036, h + 0.04, 0.016), yokeMat);
       arm.position.set(cen.x * 0.5, yBar + h / 2, sz * zY); arm.rotation.z = Math.atan2(cen.x, h) * -1; prism.add(arm);
-      const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 28), brassPolish); boss.rotation.x = Math.PI / 2; boss.position.set(cen.x, cen.y, sz * (zY - 0.005)); prism.add(boss);
+      const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 28), yokeMat); boss.rotation.x = Math.PI / 2; boss.position.set(cen.x, cen.y, sz * (zY - 0.005)); prism.add(boss);
       const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.04, 16), bronzeDark); knob.rotation.x = Math.PI / 2; knob.position.set(cen.x, cen.y, sz * (zY + 0.03)); prism.add(knob);
     }
     const collarY = baseY - 0.05 - standLen * 0.42;

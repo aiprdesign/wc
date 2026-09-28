@@ -6,7 +6,8 @@
 // Scenes stay presentable: the rig is kept within a window around the film's own view
 // (scene-overridable `exploreLimits`), and a scene may export `explore(t)`, called after every
 // update while exploring, to swap camera cheats for complete geometry (e.g. a close-up's lone
-// boot becomes the whole astronaut). `exploreEnd()` undoes anything update() doesn't reset.
+// boot becomes the whole astronaut). `explorePosed(camera)` runs after the explore camera is
+// posed (billboards, camera-facing labels). `exploreEnd()` undoes anything update() doesn't reset.
 //   W A S D (arrows): fly   R / F: up / down   double-click: back to the film's camera   E / Esc: leave
 import * as THREE from 'three';
 import { TIME_SCALE } from '../timeline.js';
@@ -87,6 +88,8 @@ export class Explorer {
   prepare(t) {
     try { this.inst.explore?.(t); } catch (e) { if (!this._warned) { console.warn('[explore] scene hook failed', e); this._warned = true; } }
     this.apply(this.inst.camera);
+    // after posing: scenes can turn camera-facing labels / billboards toward the explore camera
+    try { this.inst.explorePosed?.(this.inst.camera); } catch { /* scene hook */ }
   }
 
   // Pose the sequence's camera from the rig.
