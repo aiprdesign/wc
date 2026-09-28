@@ -44,7 +44,7 @@ await page.goto(`http://localhost:${port}/?${q}`);
 await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 240000 });
 for (const t of times) {
   const t0 = Date.now();
-  await page.evaluate((T) => window.__film.renderFrame(T), t);
+  await page.evaluate((T) => window.__film.renderStory(T), t);
   const file = path.join(out, `f_${t.toFixed(2).padStart(6, '0')}.png`);
   await page.locator('#film').screenshot({ path: file });
   console.log(`t=${t} → ${file} (${Date.now() - t0} ms)`);

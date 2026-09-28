@@ -1,7 +1,7 @@
 // Transport: audio-clock-driven playback, seeking, pause, mute and WebM recording.
 // The soundtrack is pre-rendered into an AudioBuffer, so the audio clock is the master
 // and picture stays locked to sound even under load.
-import { DURATION } from '../timeline.js';
+import { FILM_DURATION as DURATION } from '../timeline.js';
 
 export class Player {
   constructor(engine, buffer) {

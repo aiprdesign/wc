@@ -2,7 +2,7 @@
 // Each chapter gets an era line, a kinetic heading and one line of story; a few
 // story-only cards carry the narrative between chapters. Pure function of time.
 import * as THREE from 'three';
-import { SEGMENTS, CUES, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
+import { SEGMENTS, CUES, OUTPUT_ASPECT, TIME_SCALE, warmthAt } from '../timeline.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
 import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
@@ -163,7 +163,7 @@ export class TitleLayer {
       this.corners.material.uniforms.uColor.value.copy(col);
       const segs = SEGMENTS.filter((sg) => T >= sg.start);
       const cur = segs.at(-1), idx = SEGMENTS.indexOf(cur);
-      this.tcText.set(tc(T), col, 0.75 * o);
+      this.tcText.set(tc(T * TIME_SCALE), col, 0.75 * o);
       this.idxText.set(`${String(idx + 1).padStart(2, '0')} / ${String(SEGMENTS.length).padStart(2, '0')}  ${cur.id.toUpperCase()}`, col, 0.75 * o);
       // technique tag types on at each chapter start
       const tech = TECHNIQUE[cur.id] ?? '';

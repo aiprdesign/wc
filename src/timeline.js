@@ -2,7 +2,11 @@
 // All times are GLOBAL seconds. Segments overlap by ~0.5 s; the overlap is where
 // the compositor blends the outgoing and incoming sequences with `transition`.
 
-export const DURATION = 72;
+export const DURATION = 72;             // story time: every segment, cue and beat below is authored on this clock
+// The film plays the story slowed by TIME_SCALE (72 s of story → 100 s of film, 120 → 86.4 BPM),
+// giving every concept more room. The score is rendered at the same scale, so sync is exact.
+export const TIME_SCALE = 100 / 72;
+export const FILM_DURATION = DURATION * TIME_SCALE;
 export const FILM_ASPECT = 2.39;         // anamorphic frame; every scene is composed for this aspect
 // Delivery aspect (?aspect=1, ?aspect=16:9 …). Other aspects render "open matte": each camera keeps its
 // exact 2.39 horizontal view and the frame extends above/below, so nothing composed is ever cropped.

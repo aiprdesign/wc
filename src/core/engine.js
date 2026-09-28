@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { SEGMENTS, DURATION, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
+import { SEGMENTS, DURATION, TIME_SCALE, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { DofShader, TransitionShader, FinalShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
@@ -181,7 +181,9 @@ export class Engine {
     return rt.texture;
   }
 
-  render(T, dt = 1 / 60) {
+  // T is film time (seconds of the delivered film); everything inside runs on story time.
+  render(filmT, filmDt = 1 / 60) {
+    const T = filmT / TIME_SCALE, dt = filmDt / TIME_SCALE;
     const r = this.renderer;
     const segs = this.activeSegments(T);
     const tu = this.transQuad.material.uniforms;

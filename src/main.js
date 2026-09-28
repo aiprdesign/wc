@@ -3,7 +3,7 @@ import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
-import { SEGMENTS, DURATION } from './timeline.js';
+import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE } from './timeline.js';
 
 const params = new URLSearchParams(location.search);
 const QUALITY = { low: 1280, medium: 1920, high: 2560, ultra: 3840 };
@@ -57,9 +57,10 @@ async function boot() {
   });
   window.__film.player = player;
   // Deterministic frame access for automated rendering / screenshots.
-  window.__film.renderFrame = (T) => { engine.render(T, 1 / 30); return T; };
+  window.__film.renderFrame = (T) => { engine.render(T, 1 / 30); return T; };            // film seconds
+  window.__film.renderStory = (t) => { engine.render(t * TIME_SCALE, 1 / 30); return t; };  // story seconds
 
-  const start = parseFloat(params.get('t') ?? '0') || 0;
+  const start = (parseFloat(params.get('t') ?? '0') || 0) * TIME_SCALE;   // ?t= is story time
   player.time = start;
   engine.render(start, 0);
 
@@ -86,7 +87,7 @@ function fmt(t) {
 function setupUI(player, score) {
   const body = document.body;
   const scrub = $('scrub'), fill = $('scrub-fill'), tip = $('scrub-tip'), time = $('time');
-  $('chapters').innerHTML = SEGMENTS.slice(1).map((s) => `<i style="left:${(s.start / DURATION) * 100}%"></i>`).join('');
+  $('chapters').innerHTML = SEGMENTS.slice(1).map((s) => `<i style="left:${(s.start * TIME_SCALE / DURATION) * 100}%"></i>`).join('');
 
   player.onTick = (t) => {
     fill.style.width = `${(t / DURATION) * 100}%`;
@@ -116,7 +117,7 @@ function setupUI(player, score) {
   });
 
   // Scrubbing
-  const chapterAt = (t) => [...SEGMENTS].reverse().find((s) => t >= s.start + 0.25) ?? SEGMENTS[0];
+  const chapterAt = (t) => [...SEGMENTS].reverse().find((s) => t / TIME_SCALE >= s.start + 0.25) ?? SEGMENTS[0];
   const tAt = (e) => {
     const r = scrub.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * DURATION;
@@ -155,7 +156,7 @@ function setupUI(player, score) {
     else if (k === 'f') $('btn-fs').click();
     else if (k === 'r') $('btn-rec').click();
     else if (k === 'h') controls.classList.toggle('show');
-    else if (/^[0-9]$/.test(k)) { player.seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start + 0.01); showControls(); }
+    else if (/^[0-9]$/.test(k)) { player.seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start * TIME_SCALE + 0.01); showControls(); }
   });
   const origPlay = player.play.bind(player);
   player.play = async (...a) => { await origPlay(...a); syncPlaying(); showControls(); };
