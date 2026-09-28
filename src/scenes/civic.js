@@ -82,10 +82,13 @@ function withDissolve(material, edgeColor = '#ffc070', key = 'a') {
         float dn = dNoise(vDisW * 3.1) * 0.65 + dNoise(vDisW * 9.0) * 0.35;
         float dd = dn - (uDissolve * 1.12 - 0.06);
         if (dd < 0.0) discard;`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        // no UVs on the baked architecture: a world-space two-octave stone mottle keeps it from reading as flat plastic
+        diffuseColor.rgb *= 0.84 + 0.26 * (dNoise(vDisW * 7.0) * 0.6 + dNoise(vDisW * 23.0) * 0.4);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += uEdge * uEdgeGain * (1.0 - smoothstep(0.0, 0.06, dd)) * step(0.001, uDissolve) * step(uDissolve, 0.999);`);
   };
-  material.customProgramCacheKey = () => 'civic-dissolve-' + key;
+  material.customProgramCacheKey = () => 'civic-dissolve-v2-' + key;
   return material;
 }
 
@@ -269,7 +272,7 @@ export function create(ctx, segment) {
   const NDOC = 42000;
   docDefs.forEach(([x, y, z, ry], i) => {
     const { tex, inkCanvas } = legalDoc(i);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, side: THREE.DoubleSide, transparent: true, opacity: 0, envMapIntensity: 0.6, color: '#f4ead8' });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffe2b8', emissiveIntensity: 0.22, roughness: 0.78, side: THREE.DoubleSide, transparent: true, opacity: 0, envMapIntensity: 0.6, color: '#f4ead8' });
     const sh = new FoldSheet(docW, docH, 3, mat);
     sh.position.set(x, y, z); sh.rotation.y = ry;
     scene.add(sh);
@@ -421,7 +424,7 @@ export function create(ctx, segment) {
 
   for (const w of [civicWord, lawWord, repWord]) for (const L of w.letters) L.mesh.material.depthTest = false;
   civicSub.material.depthTest = false; lawSub.material.depthTest = false;
-  const pos = new THREE.Vector3(), look = new THREE.Vector3();
+  const pos = new THREE.Vector3(), look = new THREE.Vector3(), sv = new THREE.Vector3();
   const bloom = { strength: 0.8 };
 
   return {
@@ -433,6 +436,7 @@ export function create(ctx, segment) {
       const shake = Math.exp(-Math.max(0, t - wL - 0.12) * 9) * (t > wL + 0.12 ? 1 : 0) * 0.03;
       camera.position.set(pos.x + Math.sin(t * 73) * shake, pos.y + Math.cos(t * 61) * shake, pos.z);
       camera.lookAt(look);
+      camera.updateMatrixWorld();
       const faceQ = camera.quaternion;
 
       // ------------------------------------------------ parchment sheets
@@ -445,7 +449,13 @@ export function create(ctx, segment) {
         S.sh.position.copy(S.base).addScaledVector(S.drift, t);
         S.sh.rotation.set(S.rot[0] + t * 0.05, S.rot[1] + S.spin * t, S.rot[2] + (1 - k) * 0.6);
         S.sh.scale.setScalar(lerp(0.7, 1, k));
-        S.mat.opacity = ramp(t, -0.2, 0.25) * (1 - 0.35 * ramp(t, 2.6, 3.6));
+        // a sheet that drifts up to the lens would sweep across the frame as a huge out-of-focus slab: fade it out first
+        const dCam = S.sh.position.distanceTo(pos);
+        // from the documents on, the stage is the frame centre: sheets drifting across it step back
+        sv.copy(S.sh.position).project(camera);
+        const onStage = (sv.z < 1 ? 1 : 0) * (1 - smoothstep(0.3, 0.6, Math.abs(sv.x))) * (1 - smoothstep(1.6, 2.3, Math.abs(sv.y))) * ramp(t, 1.5, 1.9);   // NDC y spans ±2.39 in the square open matte
+        S.mat.opacity = ramp(t, -0.2, 0.25) * (1 - 0.35 * ramp(t, 2.6, 3.6)) * smoothstep(2.2, 4.2, dCam) * (1 - 0.9 * onStage);
+        S.sh.visible = S.mat.opacity > 0.002;
       }
 
       // ------------------------------------------------ greek → particles → documents → particles → parliament

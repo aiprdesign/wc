@@ -17,10 +17,10 @@ import { TextPlane, KineticText, FONTS } from '../lib/text.js';
 import { progressTube, progressLine, circlePoints, segmentsLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
 import { BracketFrame } from '../lib/hud.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {
   V3, earthMesh, moonMesh, makeEnv, apolloMaterials, buildLM, buildCSM, buildFlag, buildDSKY,
   regolithTextures, bootprintTexture, makeTerrainField, terrainGeometry, segAtlas, SegDigits, SEG,
+  suitMaterials, suitEnv, buildBootLeg, buildSuitFigure,
 } from './moonshot-assets.js';
 
 const GREEN = '#a8f0bf';
@@ -213,35 +213,34 @@ export function create(ctx, segment) {
   flagU.uSunCol.value.set('#fff4e6').multiplyScalar(sunL.intensity / Math.PI);
   const FC = FLAG_P.clone().addScaledVector(FLAG_F, 0.03 + flag.userData.width / 2);        // centre of the cloth
   FC.y += flag.userData.top - flag.userData.height / 2 - 0.02;
-  // boot
-  const boot = new THREE.Group(); worldL.add(boot);
+  // A7L suits: a dedicated environment (sunlit regolith below, black sky, the low sun) so the Beta cloth
+  // gets its bounce fill from the ground and the gold visor mirrors the horizon
+  const SUIT_ENV = suitEnv(ctx.renderer, { sun: SUN_L, ground: [0.4, 0.38, 0.35] });
+  const SUIT = suitMaterials({ envMap: SUIT_ENV });
+  const REG_DUST = new THREE.Color(0.5, 0.48, 0.45);
+  // boot: a lunar overshoe (its sole's 16 tread bars are the print's ribs) and the leg above it
+  const boot = buildBootLeg(SUIT, { dust: REG_DUST }); worldL.add(boot);
+  // the second moonwalker salutes the flag from its hoist side (revealed as the camera tilts up off the print)
+  const salute = buildSuitFigure(SUIT, {
+    dust: REG_DUST, curl: [0.35, 0.06],
+    legs: [
+      { hip: V3(0.1, 1.0, 0.0), knee: V3(0.125, 0.6, 0.045), ankle: V3(0.14, 0.23, 0.0), yaw: 0.16 },
+      { hip: V3(-0.1, 1.0, 0.0), knee: V3(-0.12, 0.6, 0.03), ankle: V3(-0.13, 0.23, -0.02), yaw: -0.2 },
+    ],
+  });
+  salute.setArm(0, V3(0.34, 0.99, 0.09), V3(0.35, 0, -1).normalize());
+  salute.setArm(1, V3(-0.15, 1.82, 0.2), V3(-1, -0.15, 0.35).normalize(), V3(-0.2, -0.55, 0.8).normalize());
+  // left of the hoist and a step behind it: clear of the cloth from the print, the hero and the wide angles;
+  // from the footprint macro he stands exactly behind the (defocused) foreground leg, which hides his switch-on
+  const SALUTE_P = FLAG_P.clone().addScaledVector(FLAG_F, -0.5).addScaledVector(FLAG_N, -0.45); SALUTE_P.y = field(SALUTE_P.x, SALUTE_P.z) - 0.01;
+  salute.group.position.copy(SALUTE_P);
   {
-    const soleShape = new THREE.Shape();
-    const W = 0.155, Lh = 0.33;
-    soleShape.moveTo(-W * 0.5, 0.03);
-    soleShape.bezierCurveTo(-W * 0.55, Lh * 0.62, W * 0.55, Lh * 0.62, W * 0.5, 0.03);
-    soleShape.bezierCurveTo(W * 0.45, -Lh * 0.2, W * 0.38, -Lh * 0.3, W * 0.34, -Lh * 0.36);
-    soleShape.bezierCurveTo(W * 0.3, -Lh * 0.46, -W * 0.3, -Lh * 0.46, -W * 0.34, -Lh * 0.36);
-    soleShape.bezierCurveTo(-W * 0.38, -Lh * 0.3, -W * 0.45, -Lh * 0.2, -W * 0.5, 0.03);
-    const soleG = new THREE.ExtrudeGeometry(soleShape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2 });
-    soleG.rotateX(-Math.PI / 2);
-    const soleM = new THREE.MeshStandardMaterial({ envMap: ctx.env, color: '#4f5860', roughness: 0.7, metalness: 0.05, envMapIntensity: 0.3 });
-    const fabric = new THREE.MeshStandardMaterial({ color: '#9a978f', envMap: ctx.env, roughness: 0.92, metalness: 0, bumpMap: MAT.gold.bumpMap, bumpScale: 1.6, envMapIntensity: 0.25 });
-    const sole = new THREE.Mesh(soleG, soleM); sole.position.y = 0.008; boot.add(sole);
-    for (let i = 0; i < 12; i++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.012, 0.012), soleM); bar.position.set(0, 0.0, 0.14 - i * 0.026); bar.scale.x = 1 - Math.abs(i - 4) * 0.05; boot.add(bar); }
-    const foot = new THREE.Mesh(new RoundedBoxGeometry(0.165, 0.12, 0.345, 4, 0.05), fabric); foot.position.set(0, 0.105, -0.005); boot.add(foot);
-    const toe = new THREE.Mesh(new THREE.SphereGeometry(0.085, 24, 12, 0, TAU, 0, Math.PI / 2), fabric); toe.scale.set(0.98, 0.9, 0.9); toe.position.set(0, 0.1, -0.11); boot.add(toe);
-    // one continuous lathe from ankle to shin, with the suit's convolute rings
-    const legPts = [];
-    for (let i = 0; i <= 48; i++) {
-      const y = 0.12 + i / 48 * 1.1, k = Math.min(1, Math.max(0, (y - 0.3) / 0.35));
-      const conv = y > 0.62 && y < 1.02 ? 0.006 * Math.pow(Math.abs(Math.sin((y - 0.62) / 0.4 * Math.PI * 4)), 0.6) : 0;
-      legPts.push(new THREE.Vector2(0.097 + (0.14 - 0.097) * k * k * (3 - 2 * k) + conv, y));
-    }
-    const leg = new THREE.Mesh(new THREE.LatheGeometry(legPts, 40), fabric); leg.position.set(0, 0, 0.06); leg.rotation.x = -0.08; boot.add(leg);
-    for (const [y, r] of [[0.2, 0.1], [0.36, 0.104]]) { const strap = new THREE.Mesh(new THREE.TorusGeometry(r, 0.009, 8, 32), MAT.dark); strap.rotation.x = Math.PI / 2; strap.position.y = y; leg.add(strap); }
-    boot.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    // faces the flag, turned a little toward the wide lens (the salute reads three-quarter on)
+    const toFlag = FC.clone().sub(SALUTE_P).setY(0).normalize(), toCam = V3(0.6, 0, 62).sub(SALUTE_P).setY(0).normalize();
+    const f = toFlag.lerp(toCam, 0.55);
+    salute.group.rotation.y = Math.atan2(f.x, f.z);
   }
+  worldL.add(salute.group);
   // the Earth in the lunar sky
   const earthL = earthMesh(48, SUN_L, { segs: 128, city: 0.04 }); earthL.rotation.z = 0.41; worldL.add(earthL);
   const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.35;   // low: flag and LM stand against the sky
@@ -560,6 +559,7 @@ export function create(ctx, segment) {
       grains.material.uniforms.uTime.value = t; grains.material.uniforms.uViewport.value = info.height; grains.visible = t > tFoot - 0.02 && t < tFoot + 1.2;
       boot.rotation.set(0.3 * (1 - down) - lift * 0.8, PRINT_ANG, 0, 'YXZ');
       earthL.visible = t > tFoot;
+      salute.group.visible = t > tFoot - 0.05;               // switched on while he is still above the macro frame
       // the flag is raised on its pole at Tranquility Base (a hinge up from the regolith), then the
       // twisted pole lets it swing a few degrees and ring down slowly — there is no air to damp it
       const tPl = tLand + 0.02, rise = ramp(t, tPl, tPl + 0.18, ease.outCubic), tw = t - tPl - 0.18;

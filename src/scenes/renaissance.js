@@ -479,7 +479,7 @@ export function create(ctx, segment) {
       spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede);
       spot.target.position.set(lerp(-0.45, 0, lift), lerp(0.5, -0.2, lift), lerp(0, C3.z, lift));
       key.intensity = 2.4 * lift;
-      canvasMat.color.setRGB(0.95, 0.92, 0.87).multiplyScalar(1 - 0.72 * recede);
+      canvasMat.color.setRGB(0.95, 0.92, 0.87).multiplyScalar(1 - 0.86 * recede);   // the emptied canvas settles into shadow, not a grey card
       rim.intensity = 2.8 * lift;
       kick.intensity = 1.2 * lift;
       beam.material.uniforms.uIntensity.value = 0.08 + 0.05 * ramp(t, 0.1, cC);

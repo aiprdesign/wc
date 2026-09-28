@@ -6,7 +6,7 @@
 // wrapped in a holographic HUD (ring gauges, beat-locked ECG, MRI-style scan slice and
 // rapid-fire callouts: anatomy → sanitation → vaccination → imaging → medical technology).
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../timeline.js';
 import { sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
 import { GLSL_NOISE, noise3 } from '../lib/noise.js';
@@ -424,16 +424,24 @@ export function create(ctx, segment) {
   // ---------------------------------------------------------------- screen HUD
   const hud = ctx.makeHUD();
   const A = ctx.aspect;
+  // open-matte delivery (1:1 …): the HUD frame is HH× taller — scale the instruments up (UI) so they stay
+  // legible, and spread them into the extra headroom / footroom instead of the 2.39 band
+  const SQ = OUTPUT_ASPECT < 1.5, UI = SQ ? 1.7 : 1;
+  // NDC (projected with the authored 2.39 camera) → HUD units of the delivered frame: the engine opens the
+  // matte with tan(fov/2)·(2.39/aspect)^0.85, so both axes scale by (2.39/aspect)^0.15
+  const PK = Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.15);
+  const TOP = SQ ? 1.32 : 0.83;
   const hudG = new THREE.Group(); hud.scene.add(hudG);
-  const leftText = (txt, x, y, o) => { const tp = new TextPlane(txt, { font: FONTS.mono, height: 0.042, letterSpacing: 0.18, color: ICE, intensity: 1.1, ...o }); tp.position.set(x + tp.worldWidth / 2, y, 0); hudG.add(tp); return tp; };
-  const hTitle = leftText('CARDIAC MODEL  ·  VOLUMETRIC RECONSTRUCTION', -A + 0.22, 0.83, {});
-  const hSub = leftText('FIG. VI  ·  FROM ENGRAVING TO HOLOGRAM  ·  1543 → TODAY', -A + 0.22, 0.76, { height: 0.03, intensity: 0.6 });
-  const hRule = segmentsLine([[V3(-A + 0.22, 0.715, 0), V3(-A + 1.5, 0.715, 0)]], { color: ICE, intensity: 0.6, orderFn: () => 0, stagger: 0 });
+  const leftText = (txt, x, y, o = {}) => { const tp = new TextPlane(txt, { font: FONTS.mono, letterSpacing: 0.18, color: ICE, intensity: 1.1, ...o, height: (o.height ?? 0.042) * UI }); tp.position.set(x + tp.worldWidth / 2, y, 0); hudG.add(tp); return tp; };
+  const hTitle = leftText('CARDIAC MODEL  ·  VOLUMETRIC RECONSTRUCTION', -A + 0.22, TOP, {});
+  const hSub = leftText('FIG. VI  ·  FROM ENGRAVING TO HOLOGRAM  ·  1543 → TODAY', -A + 0.22, TOP - 0.07 * UI, { height: 0.03, intensity: 0.6 });
+  const hRule = segmentsLine([[V3(-A + 0.22, TOP - 0.115 * UI, 0), V3(-A + 0.22 + 1.28 * UI, TOP - 0.115 * UI, 0)]], { color: ICE, intensity: 0.6, orderFn: () => 0, stagger: 0 });
   hudG.add(hRule);
-  const bracket = new BracketFrame(1.55, 1.62, { len: 0.1, color: '#bfeee6', intensity: 0.8 });
+  const bracket = new BracketFrame(1.55 * PK, 1.62 * PK, { len: 0.1 * UI, color: '#bfeee6', intensity: 0.8 });
   hudG.add(bracket);
   // ECG monitor
-  const ECG_N = 360, ECG_W = 1.15, ECG_H = 0.17, ECG_X = A - 0.2 - ECG_W, ECG_Y = -0.7;
+  const UE = SQ ? 1.5 : 1;
+  const ECG_N = 360, ECG_W = 1.15 * UE, ECG_H = 0.17 * UE, ECG_X = A - (SQ ? 0.3 : 0.2) - ECG_W, ECG_Y = SQ ? -1.42 : -0.7;
   const ecgPos = new Float32Array(ECG_N * 3), ecgX = new Float32Array(ECG_N);
   for (let i = 0; i < ECG_N; i++) { ecgX[i] = i / (ECG_N - 1); ecgPos[i * 3] = ECG_X + ecgX[i] * ECG_W; ecgPos[i * 3 + 1] = ECG_Y; }
   const ecgGeo = new THREE.BufferGeometry();
@@ -455,14 +463,16 @@ export function create(ctx, segment) {
   const ecgGrid = segmentsLine(ecgGridSegs, { color: '#5fb8ae', intensity: 0.18, stagger: 0.5, seed: 5 });
   hudG.add(ecgGrid);
   const ecgLab = leftText('ECG · LEAD II', ECG_X, ECG_Y + ECG_H * 1.75, { height: 0.03, intensity: 0.7 });
-  const hrLab = new TextPlane('HR 120', { font: FONTS.mono, weight: 500, height: 0.07, letterSpacing: 0.08, color: '#bff8ee', intensity: 1.3 });
+  const hrLab = new TextPlane('HR 120', { font: FONTS.mono, weight: 500, height: 0.07 * UI, letterSpacing: 0.08, color: '#bff8ee', intensity: 1.3 });
   hrLab.position.set(ECG_X + ECG_W - hrLab.worldWidth / 2 + 0.03, ECG_Y + ECG_H * 1.95, 0); hudG.add(hrLab);
   const bpmLab = leftText('BPM', ECG_X + ECG_W - 0.02, ECG_Y + ECG_H * 1.62, { height: 0.026, intensity: 0.6 });
   bpmLab.position.x = ECG_X + ECG_W - bpmLab.worldWidth / 2 + 0.03;
   // left column of small readouts with ring gauges
   const gauges = [];
   [['SpO₂', '98 %', 0.78], ['PERFUSION', '4.2 L/MIN', 0.55], ['CT DOSE', '1.1 mSv', 0.34]].forEach(([k, v, f], i) => {
-    const g = new THREE.Group(); g.position.set(A - 1.55 + i * 0.5, 0.8, 0); hudG.add(g);
+    const g = new THREE.Group(); hudG.add(g);
+    // wide: a row top-right · square: a column bottom-left, opposite the ECG
+    if (SQ) { g.position.set(-A + 0.36, -1.02 - i * 0.36, 0); g.scale.setScalar(UI); } else g.position.set(A - 1.55 + i * 0.5, 0.8, 0);
     const ring = new RingGauge(0.075, { ticks: 36, color: '#8fe8d8', intensity: 0.6, tickLen: 0.012, majorEvery: 9 });
     const arc = progressLine(circlePoints(0.06, 48, { start: Math.PI / 2, end: Math.PI / 2 - TAU * f }), { color: '#e9fffb', intensity: 1.5, head: 0.05 });
     g.add(ring, arc);
@@ -479,7 +489,8 @@ export function create(ctx, segment) {
     ['IMAGING', '1895 · X-RAY → MRI', [-0.45, -0.6, 0.45], -0.6, -0.08],
     ['MEDICAL TECHNOLOGY', '1958 · PACEMAKER', [0.35, -1.3, 0.2], -0.7, -0.14],
   ].map(([label, sub, anchor, dx, dy], i) => {
-    const c = new Callout(label, { dx, dy, size: 0.048, color: i % 2 ? '#dffcf6' : '#bff8ee', sub, intensity: 1.35 });
+    const UC = SQ ? 1.45 : 1;
+    const c = new Callout(label, { dx: dx * UC * 0.85, dy: dy * UC, size: 0.048 * UC, color: i % 2 ? '#dffcf6' : '#bff8ee', sub, intensity: 1.35 });
     hudG.add(c);
     return { c, anchor: new THREE.Vector3(...anchor), t0: tHud + i * 0.22 };
   });
@@ -610,7 +621,7 @@ export function create(ctx, segment) {
         hSub.reveal = ramp(t, tHud, tHud + 0.4); hSub.opacity = hSub.reveal > 0 ? 1 : 0;
         hRule.progress = hA; hRule.opacity = 0.8;
         bracket.reveal(ramp(t, tAnat + 0.45, tAnat + 0.8, ease.outCubic), 0.9);
-        tmp.copy(heartFocus).project(camera); bracket.position.set(tmp.x * A, tmp.y + 0.02, 0);
+        tmp.copy(heartFocus).project(camera); bracket.position.set(tmp.x * A * PK, tmp.y * PK + 0.02, 0);
         const eIn = ramp(t, tHud + 0.05, tHud + 0.3);
         ecgMat.uniforms.uOpacity.value = eIn;
         const period = 2.0, head = (T / period) % 1;
@@ -634,7 +645,7 @@ export function create(ctx, segment) {
           c.visible = p > 0;
           if (!c.visible) continue;
           tmp.copy(anchor).applyMatrix4(heart.matrixWorld).project(camera);
-          c.position.set(tmp.x * A, tmp.y, 0);
+          c.position.set(tmp.x * A * PK, tmp.y * PK, 0);
           c.reveal(p, 1);
           if (c.sub) c.sub.reveal = sat((p - 0.4) / 0.5); // (lib Callout never finishes the sub-label wipe)
         }

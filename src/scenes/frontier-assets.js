@@ -9,7 +9,7 @@ import { rng, TAU } from '../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { GLSL_NOISE } from '../lib/noise.js';
 import { FONTS } from '../lib/text.js';
-import { drawUSFlag, crinkleTexture } from './moonshot-assets.js';
+import { drawUSFlag, crinkleTexture, suitMaterials, buildSuitFigure } from './moonshot-assets.js';
 
 export const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -580,56 +580,19 @@ export function buildMarsShip(M) {
   }
   return { group: g, lander: L, wings, exits };
 }
-// a suited astronaut (1.9 m); legs posed in a stride, arms solved each frame to grip a point (2-bone IK)
-export function buildAstronaut() {
-  const g = new THREE.Group();
-  const suit = new THREE.MeshStandardMaterial({ color: '#d6d1c7', roughness: 0.84, metalness: 0 });
-  const soft = new THREE.MeshStandardMaterial({ color: '#a7a298', roughness: 0.88, metalness: 0 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#2b2c30', roughness: 0.5, metalness: 0.5 });
-  const visor = new THREE.MeshStandardMaterial({ color: '#e0ac52', metalness: 1, roughness: 0.1 });
-  const red = new THREE.MeshStandardMaterial({ color: '#8e2a2a', roughness: 0.7 });
-  addTo(g, new THREE.CapsuleGeometry(0.22, 0.3, 6, 18), suit, [0, 1.33, 0], [0, 0, 0], [1.22, 1, 0.9]);
-  addTo(g, new THREE.SphereGeometry(0.2, 18, 12), suit, [0, 1.0, 0], [0, 0, 0], [1.15, 0.82, 0.95]);
-  addTo(g, new THREE.TorusGeometry(0.215, 0.028, 8, 28), soft, [0, 1.1, 0], [Math.PI / 2, 0, 0], [1.15, 0.95, 1]);
-  addTo(g, new RoundedBoxGeometry(0.54, 0.68, 0.27, 2, 0.06), suit, [0, 1.41, -0.31]);
-  addTo(g, new THREE.BoxGeometry(0.34, 0.1, 0.05), soft, [0, 1.19, -0.45]);
-  addTo(g, new RoundedBoxGeometry(0.24, 0.13, 0.11, 2, 0.02), soft, [0, 1.27, 0.23]);
-  addTo(g, new THREE.CylinderGeometry(0.14, 0.16, 0.09, 18), soft, [0, 1.6, 0]);
-  addTo(g, new THREE.SphereGeometry(0.178, 26, 18), suit, [0, 1.77, 0.0]);
-  addTo(g, new THREE.SphereGeometry(0.181, 26, 14, Math.PI / 2 - 0.95, 1.9, 0.72, 1.05), visor, [0, 1.77, 0.0]);
-  addTo(g, new THREE.BoxGeometry(0.1, 0.035, 0.005), red, [0.22, 1.44, 0.17], [0, 0.55, 0]);
-  const seg = (a, b, r, m) => { const s = strut(a, b, r, m, 14); s.castShadow = s.receiveShadow = true; g.add(s); return s; };
-  const ball = (p, r, m) => addTo(g, new THREE.SphereGeometry(r, 14, 10), m, [p.x, p.y, p.z]);
-  // legs (a stride: left forward, knees soft)
-  for (const [hip, knee, ank] of [[V3(0.11, 0.98, 0.03), V3(0.13, 0.57, 0.17), V3(0.13, 0.15, 0.07)], [V3(-0.11, 0.98, -0.03), V3(-0.13, 0.56, -0.1), V3(-0.14, 0.16, -0.3)]]) {
-    seg(hip, knee, 0.108, suit); seg(knee, ank, 0.094, suit); ball(knee, 0.108, soft); ball(hip, 0.108, suit);
-    addTo(g, new RoundedBoxGeometry(0.17, 0.14, 0.34, 2, 0.035), soft, [ank.x, ank.y - 0.08, ank.z + 0.06]);
-  }
-  // arms: unit cylinders re-aimed every frame
-  const unit = new THREE.CylinderGeometry(1, 1, 1, 14, 1);
-  const arms = [1, -1].map((sx) => {
-    const sh = V3(sx * 0.28, 1.47, 0.02);
-    ball(sh, 0.115, suit);
-    const up = addTo(g, unit, suit), fo = addTo(g, unit, suit);
-    const el = addTo(g, new THREE.SphereGeometry(0.085, 12, 8), soft), hand = addTo(g, new THREE.SphereGeometry(0.072, 12, 8), soft);
-    return { sh, up, fo, el, hand };
+// a suited astronaut (≈1.85 m) in a modern Mars EVA suit (white Beta-cloth with grey panels, hard upper torso,
+// gold visor, slim life-support pack; built by moonshot-assets' suit kit); legs posed in a stride, arms solved
+// each frame to grip a point (2-bone IK). setArm(i, palmTarget, elbowHint): i = 0 left (+X), 1 right.
+export function buildAstronaut({ envMap = null } = {}) {
+  const M = suitMaterials({ envMap, modern: true });
+  const fig = buildSuitFigure(M, {
+    modern: true, dust: new THREE.Color(0.78, 0.55, 0.42), curl: [1.05, 1.05],
+    legs: [
+      { hip: V3(0.105, 0.99, 0.04), knee: V3(0.125, 0.6, 0.15), ankle: V3(0.13, 0.2, 0.08), yaw: 0.06 },
+      { hip: V3(-0.105, 0.99, -0.03), knee: V3(-0.13, 0.58, -0.08), ankle: V3(-0.14, 0.26, -0.28), yaw: -0.05, pitch: -0.42 },
+    ],
   });
-  const Y = V3(0, 1, 0), d = V3(), e = V3(), h = V3(), tmp = V3();
-  const aim = (m, a, b, r) => { m.position.copy(a).lerp(b, 0.5); tmp.subVectors(b, a); m.scale.set(r, tmp.length(), r); m.quaternion.setFromUnitVectors(Y, tmp.normalize()); };
-  const L1 = 0.31, L2 = 0.3;
-  // hand target (group-local) and an elbow hint direction
-  function setArm(i, target, hint) {
-    const A = arms[i];
-    d.subVectors(target, A.sh); let dist = d.length(); d.normalize();
-    dist = Math.min(dist, L1 + L2 - 0.005);
-    h.copy(A.sh).addScaledVector(d, dist);
-    const a = (L1 * L1 - L2 * L2 + dist * dist) / (2 * dist), k = Math.sqrt(Math.max(0, L1 * L1 - a * a));
-    e.copy(hint).addScaledVector(d, -hint.dot(d)).normalize();
-    e.multiplyScalar(k).addScaledVector(d, a).add(A.sh);
-    aim(A.up, A.sh, e, 0.086); aim(A.fo, e, h, 0.076);
-    A.el.position.copy(e); A.hand.position.copy(h);
-  }
-  return { group: g, setArm };
+  return { group: fig.group, setArm: fig.setArm };
 }
 // habitat: two inflatable domes joined by a tunnel, lit window bands, a row of solar arrays, a mast
 export function buildHabitat(M) {
@@ -897,18 +860,19 @@ void main(){
         float c = fbm(p * 2.2 + vec3(3.1, 0.0, 1.7), 7) + 0.1 * snoise(p * 14.0);
         float land = smoothstep(0.02, 0.05, c);
         float arid = smoothstep(0.0, 0.5, snoise(p * 3.0 + 5.0));
-        vec3 ocean = mix(vec3(0.004, 0.022, 0.06), vec3(0.01, 0.06, 0.1), smoothstep(-0.08, 0.02, c));
-        vec3 ground = mix(vec3(0.05, 0.07, 0.035), vec3(0.21, 0.16, 0.09), arid) * (0.8 + 0.4 * snoise(p * 40.0));
+        vec3 ocean = mix(vec3(0.006, 0.03, 0.11), vec3(0.018, 0.09, 0.16), smoothstep(-0.08, 0.02, c));
+        vec3 ground = mix(vec3(0.045, 0.085, 0.03), vec3(0.34, 0.24, 0.12), arid) * (0.8 + 0.4 * snoise(p * 40.0));
         vec3 surf = mix(ocean, ground, land);
         vec3 cp = p * vec3(5.0, 9.0, 5.0) + vec3(uTime * 0.01, 0.0, 0.0);
         float cl = smoothstep(0.08, 0.7, fbm(cp, 7) * 0.8 + 0.35 * snoise(p * 30.0) * snoise(p * 6.0 + 7.0));
         float day = smoothstep(-0.06, 0.25, ndl);
-        s = surf * day * 1.9;
-        s = mix(s, vec3(0.86, 0.9, 0.95) * day * 1.15, cl * 0.9);
+        s = surf * day * 2.25;
+        s = mix(s, vec3(0.92, 0.94, 0.97) * day * 1.2, cl * 0.9);
         vec3 H = normalize(L - d);
-        s += vec3(1.0, 0.9, 0.75) * pow(max(dot(n, H), 0.0), 160.0) * (1.0 - land) * (1.0 - cl) * day * 0.9;
+        float nh = max(dot(n, H), 0.0);
+        s += vec3(1.0, 0.9, 0.75) * (pow(nh, 50.0) * 0.18 + pow(nh, 300.0) * 1.0) * (1.0 - land) * (1.0 - cl) * day;
         float rim = pow(1.0 - mu, 2.5);
-        s = mix(s, vec3(0.3, 0.55, 1.0) * day * 0.95, rim * 0.85);
+        s = mix(s, vec3(0.3, 0.6, 1.0) * day * 1.2, rim * 0.85);
       } else {
         // albedo carries the full Moon (maria, bright ray craters); relief comes from a sun-ward
         // finite difference of the crater height (no screen derivatives → no 2×2 blockiness)

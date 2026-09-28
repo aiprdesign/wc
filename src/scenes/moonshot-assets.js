@@ -3,6 +3,7 @@
 // seven-segment "DSKY" digit system shared by the HUD and the 3D guidance computer.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLSL_NOISE, fbm2, noise4 } from '../lib/noise.js';
 import { rng, TAU } from '../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
@@ -31,28 +32,29 @@ void main(){
   float lat = abs(p.y);
   float ice = smoothstep(0.8, 0.9, lat + 0.06 * snoise(p * 9.0));
   float arid = smoothstep(0.0, 0.5, snoise(p * 2.2 + 5.0)) * (1.0 - smoothstep(0.2, 0.55, lat));
-  vec3 ocean = mix(vec3(0.004, 0.02, 0.06), vec3(0.01, 0.055, 0.095), coast);
-  vec3 ground = mix(vec3(0.05, 0.075, 0.035), vec3(0.2, 0.15, 0.085), arid);
+  vec3 ocean = mix(vec3(0.006, 0.03, 0.11), vec3(0.018, 0.09, 0.16), coast);
+  vec3 ground = mix(vec3(0.045, 0.085, 0.03), vec3(0.34, 0.24, 0.12), arid);
   ground *= 0.8 + 0.4 * snoise(p * 18.0);
   vec3 surf = mix(ocean, ground, land);
   surf = mix(surf, vec3(0.75, 0.8, 0.85), ice);
-  vec3 cp = p * vec3(3.2, 7.0, 3.2) + vec3(uTime * 0.02, 0.0, 0.0);
+  vec3 cp = p * vec3(3.2, 7.0, 3.2) + vec3(uTime * 0.06, 0.0, uTime * 0.02);
   float cl = smoothstep(0.12, 0.75, fbm(cp) * 0.75 + 0.3 * snoise(p * 16.0) * snoise(p * 3.0 + 7.0)) * 0.85;
   float ndl = dot(N, L);
   float day = smoothstep(-0.08, 0.25, ndl);
-  vec3 col = surf * day * 1.8;
-  col = mix(col, vec3(0.82, 0.86, 0.92) * day * 1.1, cl * 0.8);
+  vec3 col = surf * day * 2.2;
+  col = mix(col, vec3(0.92, 0.94, 0.97) * day * 1.2, cl * 0.85);
   vec3 H = normalize(L + V);
-  col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 220.0) * (1.0 - land) * (1.0 - cl) * day * 0.8;
+  float nh = max(dot(N, H), 0.0);
+  col += vec3(1.0, 0.9, 0.75) * (pow(nh, 60.0) * 0.18 + pow(nh, 400.0) * 1.0) * (1.0 - land) * (1.0 - cl) * day;
   col += vec3(1.0, 0.42, 0.16) * exp(-pow(ndl / 0.08, 2.0)) * 0.05 * (1.0 - cl * 0.5);
   vec3 q = p * 150.0; vec3 cell = floor(q); vec3 f = fract(q) - 0.5;
   float h = hash3(cell);
   float cluster = smoothstep(0.0, 0.35, snoise(p * 5.0 + 2.0)) * land * (1.0 - ice);
   float dotm = smoothstep(0.3, 0.05, length(f)) * step(0.72 - cluster * 0.35, h) * cluster;
   float night = 1.0 - smoothstep(-0.2, 0.05, ndl);
-  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 2.5 * uCity;
+  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 2.5 * uCity * (0.6 + 0.4 * sin(uTime * 7.0 + h * 60.0));
   float rim = 1.0 - max(dot(N, V), 0.0);
-  col = mix(col, vec3(0.25, 0.5, 1.0) * day * 0.9, pow(rim, 3.0) * 0.8);
+  col = mix(col, vec3(0.3, 0.6, 1.0) * day * 1.25, pow(rim, 3.0) * 0.8);
   gl_FragColor = vec4(col * uGain, 1.0);
 }`;
 export const ATMO_FRAG = /* glsl */ `
@@ -764,5 +766,588 @@ export function buildDSKY(atlas) {
   const screwG = new THREE.CylinderGeometry(0.03, 0.03, 0.02, 12);
   for (const [x, y] of [[-0.98, 1.05], [0.98, 1.05], [-0.98, -1.05], [0.98, -1.05]]) { const s = new THREE.Mesh(screwG, bezel); s.rotation.x = Math.PI / 2; s.position.set(x, y, 0.01); g.add(s); }
   g.userData = { digits, compActy, lamps, lampAmber, disp };
+  return g;
+}
+
+// ================================================================== SPACESUITS
+// Procedural EVA suits built from swept tubes and lofts (no primitives-on-sticks):
+//  · Apollo A7L — white Beta-cloth ITMG with soft folds (normal map baked from a canvas height field),
+//    convolute bellows at shoulders / elbows / knees, lunar overshoes (blue-grey ribbed silicone sole whose
+//    16 transverse bars match the bootprint texture, side and ankle straps), Chromel-R gloves with blue
+//    silicone fingertips, LEVA helmet with a mirror-gold visor, PLSS + OPS backpack, chest RCU, oxygen
+//    hoses on red/blue connectors, US flag patch on the left shoulder, regolith staining up the legs.
+//  · a modern (Mars) suit in the same spirit: white with grey panels, hard upper torso, slim pack.
+// Everything is posed at build time or through setArm() (two-bone IK) without allocation.
+const _sa = new THREE.Vector3(), _sb = new THREE.Vector3(), _sc = new THREE.Vector3(), _sd = new THREE.Vector3(), _se = new THREE.Vector3();
+const _sm4 = new THREE.Matrix4(), _sq = new THREE.Quaternion(), _sOne = new THREE.Vector3(1, 1, 1);
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// convolute bellows: n ribs of the given pitch centred on x = 0 (Hann-windowed)
+const convolute = (x, n, pitch, amp) => {
+  const hw = n * pitch / 2;
+  if (x <= -hw || x >= hw) return 0;
+  const w = Math.cos(Math.PI * x / (2 * hw)); return amp * w * w * (0.5 + 0.5 * Math.cos(TAU * x / pitch));
+};
+
+// environment for suits: black sky, sunlit ground below a crisp horizon, a small hot sun — the gold visor
+// mirrors this panorama; rough Beta cloth picks up the ground bounce as a fill from below
+export function suitEnv(renderer, { sun, ground = [0.4, 0.38, 0.35], sky = [0, 0, 0], sunCol = [60, 56, 50], haze = [0.25, 0.22, 0.2] } = {}) {
+  const sc = new THREE.Scene();
+  const m = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: { uSun: { value: sun.clone().normalize() }, uG: { value: new THREE.Vector3(...ground) }, uS: { value: new THREE.Vector3(...sky) }, uSC: { value: new THREE.Vector3(...sunCol) }, uH: { value: new THREE.Vector3(...haze) } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec3 vD; uniform vec3 uSun, uG, uS, uSC, uH;
+      void main(){ vec3 d = normalize(vD); float s = max(dot(d, uSun), 0.0);
+        float gnd = smoothstep(0.004, -0.02, d.y);
+        vec2 az = normalize(uSun.xz + 1e-4), dz = normalize(d.xz + 1e-4);
+        vec3 c = mix(uS, uG * (0.75 + 0.35 * max(dot(az, -dz), 0.0)) * (0.7 + 0.3 * smoothstep(-1.0, -0.1, d.y)), gnd);
+        c += uSC * pow(s, 3000.0) + uH * pow(s, 40.0) * (1.0 - gnd);
+        gl_FragColor = vec4(c, 1.0); }`,
+  });
+  sc.add(new THREE.Mesh(new THREE.SphereGeometry(10, 96, 48), m));
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(sc, 0).texture;
+  pm.dispose();
+  return tex;
+}
+
+let _suitTex = null;
+// tileable fabric: soft fold creases (mostly running around the limb) + fine basket weave → normal + cavity maps
+export function suitTextures() {
+  if (_suitTex) return _suitTex;
+  const S = 512, r = rng(4242), c = mkCanvas(S), g = c.getContext('2d');
+  g.fillStyle = 'rgb(128,128,128)'; g.fillRect(0, 0, S, S);
+  const fold = (x0, y0, len, amp, k, ph, tilt, w, a) => {
+    for (const [ox, oy, col, dy] of [[0, 0, 255, 0], [0, 0, 0, w * 0.9]]) {
+      g.strokeStyle = `rgba(${col},${col},${col},${a})`; g.lineWidth = w;
+      for (const tx of [-S, 0, S]) for (const ty of [-S, 0, S]) {
+        g.beginPath();
+        for (let i = 0; i <= 24; i++) {
+          const u = i / 24, x = x0 + (u - 0.5) * len, y = y0 + dy + tilt * (x - x0) + Math.sin(u * k * TAU + ph) * amp;
+          if (i === 0) g.moveTo(x + tx + ox, y + ty + oy); else g.lineTo(x + tx + ox, y + ty + oy);
+        }
+        g.stroke();
+      }
+    }
+  };
+  g.filter = 'blur(5px)';
+  for (let i = 0; i < 26; i++) fold(r() * S, r() * S, S * (0.3 + r() * 0.5), 4 + r() * 12, 0.6 + r() * 1.4, r() * TAU, (r() - 0.5) * 0.5, 7 + r() * 8, 0.35 + r() * 0.3);
+  g.filter = 'blur(3px)';
+  for (let i = 0; i < 40; i++) fold(r() * S, r() * S, S * (0.12 + r() * 0.25), 2 + r() * 6, 0.5 + r(), r() * TAU, (r() - 0.5) * 0.6, 3 + r() * 3, 0.12 + r() * 0.18);
+  g.filter = 'none';
+  const src = g.getImageData(0, 0, S, S).data, H = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x;
+    const weave = 0.018 * (Math.sin(x * Math.PI / 2) * Math.sin(y * Math.PI / 2) + (((x >> 1) + (y >> 1)) & 1 ? 0.4 : -0.4));
+    H[i] = src[i * 4] / 255 + weave;
+  }
+  const nc = mkCanvas(S), ng = nc.getContext('2d'), nid = ng.createImageData(S, S), nd = nid.data;
+  const cc = mkCanvas(S), cg = cc.getContext('2d'), cid = cg.createImageData(S, S), cd = cid.data;
+  const k = 5.5;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, xl = y * S + ((x + S - 1) % S), xr = y * S + ((x + 1) % S), yu = ((y + S - 1) % S) * S + x, yd = ((y + 1) % S) * S + x;
+    const dx = (H[xr] - H[xl]) * k, dy = (H[yd] - H[yu]) * k;              // canvas y runs down = -v
+    const l = Math.hypot(dx, dy, 1);
+    nd[i * 4] = (-dx / l * 0.5 + 0.5) * 255; nd[i * 4 + 1] = (dy / l * 0.5 + 0.5) * 255; nd[i * 4 + 2] = (1 / l * 0.5 + 0.5) * 255; nd[i * 4 + 3] = 255;
+    const cav = Math.min(1, Math.max(0, 0.9 + (H[i] - 0.5) * 0.5));        // valleys hold a little shade
+    cd[i * 4] = cd[i * 4 + 1] = cd[i * 4 + 2] = cav * 255; cd[i * 4 + 3] = 255;
+  }
+  ng.putImageData(nid, 0, 0); cg.putImageData(cid, 0, 0);
+  // US flag shoulder patch (embroidered: a thin border)
+  const pc = mkCanvas(228, 128), pg = pc.getContext('2d');
+  pg.fillStyle = '#d8d6d0'; pg.fillRect(0, 0, 228, 128);
+  drawUSFlag(pg, 8, 8, 112, { red: '#a8182f', blue: '#2f3268' });
+  _suitTex = {
+    normal: toTexture(nc, { srgb: false, repeat: true }),
+    cavity: toTexture(cc, { srgb: false, repeat: true }),
+    patch: toTexture(pc),
+  };
+  return _suitTex;
+}
+
+export function suitMaterials({ envMap = null, modern = false } = {}) {
+  const T = suitTextures();
+  const phys = (o) => new THREE.MeshPhysicalMaterial({ envMap, ...o });
+  return {
+    fabric: phys({ color: modern ? '#c4c3bf' : '#bab7af', map: T.cavity, normalMap: T.normal, normalScale: new THREE.Vector2(modern ? 0.55 : 1, modern ? 0.55 : 1), roughness: 0.86, sheen: 0.5, sheenRoughness: 0.55, sheenColor: new THREE.Color('#9da1a8'), vertexColors: true, envMapIntensity: 0.55 }),
+    cover: phys({ color: modern ? '#c4c3bf' : '#b3b0a8', normalMap: T.normal, normalScale: new THREE.Vector2(0.12, 0.12), roughness: 0.82, sheen: 0.5, sheenRoughness: 0.55, sheenColor: new THREE.Color('#9da1a8'), vertexColors: true, envMapIntensity: 0.55 }),
+    shell: phys({ color: modern ? '#d8d8d6' : '#d6d4ce', roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.2, vertexColors: true, envMapIntensity: 0.7 }),
+    rubber: phys({ color: modern ? '#4a4e54' : '#7890a6', roughness: 0.55, sheen: 0.3, sheenColor: new THREE.Color('#6d86a0'), vertexColors: true, envMapIntensity: 0.4 }),
+    chromel: phys({ color: modern ? '#9aa0a6' : '#8f9aa6', metalness: 0.55, roughness: 0.5, normalMap: T.normal, normalScale: new THREE.Vector2(0.5, 0.5), vertexColors: true, envMapIntensity: 0.6 }),
+    strap: phys({ color: modern ? '#6c7076' : '#9da2a6', roughness: 0.75, sheen: 0.4, sheenColor: new THREE.Color('#9aa0a8'), vertexColors: true, envMapIntensity: 0.4 }),
+    metal: phys({ color: '#b9bcc0', metalness: 1, roughness: 0.3, envMapIntensity: 0.9 }),
+    red: phys({ color: '#b01e22', metalness: 0.6, roughness: 0.32, envMapIntensity: 0.8 }),
+    blue: phys({ color: '#1e4fb0', metalness: 0.6, roughness: 0.32, envMapIntensity: 0.8 }),
+    dark: phys({ color: '#141518', metalness: 0.3, roughness: 0.35, envMapIntensity: 0.6 }),
+    visor: phys({ color: '#e8b35a', metalness: 1, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.6 }),
+    patch: phys({ map: T.patch, roughness: 0.8, sheen: 0.5, sheenColor: new THREE.Color('#888888'), envMapIntensity: 0.4 }),
+    lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color('#dfe9ff').multiplyScalar(1.5), toneMapped: false }),
+  };
+}
+
+// finite-difference normals over a (rows × cols) vertex grid; cols wrap (last column duplicates the first)
+const gridP = (pos, cols, i, j, o) => { const k = (i * cols + j) * 3; return o.set(pos[k], pos[k + 1], pos[k + 2]); };
+function gridNormals(pos, nor, rows, cols, wrap = true) {
+  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+    const i0 = Math.max(0, i - 1), i1 = Math.min(rows - 1, i + 1);
+    let j0 = j - 1, j1 = j + 1;
+    if (wrap) { if (j0 < 0) j0 = cols - 2; if (j1 > cols - 1) j1 = 1; } else { j0 = Math.max(0, j0); j1 = Math.min(cols - 1, j1); }
+    gridP(pos, cols, i, j1, _sa).sub(gridP(pos, cols, i, j0, _sb));         // around
+    gridP(pos, cols, i1, j, _sc).sub(gridP(pos, cols, i0, j, _sd));         // along
+    _se.crossVectors(_sa, _sc).normalize();
+    const k = (i * cols + j) * 3; nor[k] = _se.x; nor[k + 1] = _se.y; nor[k + 2] = _se.z;
+  }
+}
+function gridIndex(rows, cols) {
+  const idx = [];
+  for (let i = 0; i < rows - 1; i++) for (let j = 0; j < cols - 1; j++) {
+    const a = i * cols + j, b = a + 1, c = a + cols, d = c + 1;
+    idx.push(a, b, c, b, d, c);
+  }
+  return idx;
+}
+
+// A limb tube swept along shoulder→elbow→wrist (or hip→knee→ankle) with a rounded bend. radius(s, L1, L2, R)
+// and color(out, s, L1, L2, R, θ) are functions of arc length s and the unit radial direction R (figure space).
+class SuitSweep {
+  constructor({ rings = 56, segs = 24, radius, color = null, fillet = 0.075, vTile = 0.55, uRep = 1 }) {
+    Object.assign(this, { rings, segs, radius, colorFn: color, fillet, vTile, uRep });
+    const cols = segs + 1, n = rings * cols;
+    this.pos = new Float32Array(n * 3); this.nor = new Float32Array(n * 3);
+    const uv = new Float32Array(n * 2), col = new Float32Array(n * 3).fill(1);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.nor, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setIndex(gridIndex(rings, cols));
+    this.geometry = g; this.uv = uv; this.col = col;
+    this.rad = new Float32Array(n); this.L = [-1, -1];
+    this.d1 = new THREE.Vector3(); this.d2 = new THREE.Vector3(); this.nB = new THREE.Vector3();
+    this.C = new THREE.Vector3(); this.T = new THREE.Vector3(); this.B = new THREE.Vector3(); this.R = new THREE.Vector3();
+    this.p0 = new THREE.Vector3(); this.p2 = new THREE.Vector3(); this.cc = new THREE.Color();
+  }
+  pose(a, b, c, hint) {
+    const { rings, segs, d1, d2, nB, C, T, B, R } = this, cols = segs + 1;
+    d1.subVectors(b, a); const L1 = d1.length(); d1.divideScalar(L1);
+    d2.subVectors(c, b); const L2 = d2.length(); d2.divideScalar(L2);
+    nB.crossVectors(d1, d2);
+    if (nB.lengthSq() < 1e-6) { nB.crossVectors(d1, hint); if (nB.lengthSq() < 1e-6) nB.set(1, 0, 0).cross(d1); }
+    nB.normalize();
+    const fresh = Math.abs(L1 - this.L[0]) > 1e-4 || Math.abs(L2 - this.L[1]) > 1e-4;
+    this.L[0] = L1; this.L[1] = L2;
+    const rf = Math.min(this.fillet, 0.45 * L1, 0.45 * L2), Lt = L1 + L2;
+    this.p0.copy(b).addScaledVector(d1, -rf); this.p2.copy(b).addScaledVector(d2, rf);
+    for (let i = 0; i < rings; i++) {
+      const s = i / (rings - 1) * Lt;
+      if (s <= L1 - rf) { C.copy(a).addScaledVector(d1, s); T.copy(d1); }
+      else if (s >= L1 + rf) { C.copy(b).addScaledVector(d2, s - L1); T.copy(d2); }
+      else {
+        const u = (s - (L1 - rf)) / (2 * rf), w0 = (1 - u) * (1 - u), w1 = 2 * u * (1 - u), w2 = u * u;
+        C.copy(this.p0).multiplyScalar(w0).addScaledVector(b, w1).addScaledVector(this.p2, w2);
+        T.copy(d1).multiplyScalar(1 - u).addScaledVector(d2, u).normalize();
+      }
+      B.crossVectors(T, nB).normalize();
+      const nn = _sa.crossVectors(B, T);                                     // re-orthogonalised bend normal
+      for (let j = 0; j < cols; j++) {
+        const th = j / segs * TAU, k = i * cols + j;
+        R.copy(nn).multiplyScalar(Math.cos(th)).addScaledVector(B, Math.sin(th));
+        if (fresh) {
+          this.rad[k] = this.radius(s, L1, L2, R);
+          this.uv[k * 2] = j / segs * this.uRep; this.uv[k * 2 + 1] = s / this.vTile;
+          if (this.colorFn) { this.cc.setRGB(1, 1, 1); this.colorFn(this.cc, s, L1, L2, R, th); this.col[k * 3] = this.cc.r; this.col[k * 3 + 1] = this.cc.g; this.col[k * 3 + 2] = this.cc.b; }
+        }
+        const rr = this.rad[k];
+        this.pos[k * 3] = C.x + R.x * rr; this.pos[k * 3 + 1] = C.y + R.y * rr; this.pos[k * 3 + 2] = C.z + R.z * rr;
+      }
+    }
+    gridNormals(this.pos, this.nor, rings, cols);
+    const g = this.geometry;
+    g.attributes.position.needsUpdate = true; g.attributes.normal.needsUpdate = true;
+    if (fresh) { g.attributes.uv.needsUpdate = true; g.attributes.color.needsUpdate = true; }
+    g.computeBoundingSphere();
+    return this;
+  }
+}
+
+// geometry helpers for the suit: white vertex colours (so vertex-coloured materials work on any part)
+const withColor = (geo, fn = null) => {
+  const p = geo.attributes.position, arr = new Float32Array(p.count * 3).fill(1), c = new THREE.Color();
+  if (fn) for (let i = 0; i < p.count; i++) { c.setRGB(1, 1, 1); fn(c, p.getX(i), p.getY(i), p.getZ(i)); arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+};
+const placeGeo = (geo, p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) => {
+  _sm4.compose(_sa.set(p[0], p[1], p[2]), _sq.setFromEuler(new THREE.Euler(r[0], r[1], r[2])), _sb.set(s[0], s[1], s[2]));
+  return geo.applyMatrix4(_sm4);
+};
+const mergeSuit = (geos) => {
+  const list = geos.map((g) => {
+    let n = g.index ? g.toNonIndexed() : g;
+    for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) n.deleteAttribute(k);
+    if (!n.attributes.uv) n.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n.attributes.position.count * 2), 2));
+    if (!n.attributes.color) withColor(n);
+    n.clearGroups();
+    return n;
+  });
+  return mergeGeometries(list, false);
+};
+const meshOf = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; return m; };
+// a tube along a smooth curve (hoses, harness straps)
+const tubeGeo = (pts, r, seg = 48, rad = 10) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), seg, r, rad, false);
+
+// dust / panel colourers
+const dustMix = (c, w, dust) => { c.r *= 1 - w * (1 - dust.r); c.g *= 1 - w * (1 - dust.g); c.b *= 1 - w * (1 - dust.b); };
+const mottle = (x, y) => 0.55 + 0.45 * fbm2(x, y, 3);
+
+// Lunar overshoe (A7L) / modern boot. Local frame: sole contact at y = 0, toe towards −Z (the bootprint's
+// convention), ankle collar centre at (0, ankleY, 0.05). Returns merged meshes in a group.
+export function buildSuitBoot(M, { modern = false, dust = null, dustK = 0.8, hi = false } = {}) {
+  const g = new THREE.Group();
+  const W = 0.155, Lh = 0.33;
+  const shape = new THREE.Shape();
+  shape.moveTo(-W * 0.5, 0.03);
+  shape.bezierCurveTo(-W * 0.55, Lh * 0.62, W * 0.55, Lh * 0.62, W * 0.5, 0.03);
+  shape.bezierCurveTo(W * 0.45, -Lh * 0.2, W * 0.38, -Lh * 0.3, W * 0.34, -Lh * 0.36);
+  shape.bezierCurveTo(W * 0.3, -Lh * 0.46, -W * 0.3, -Lh * 0.46, -W * 0.34, -Lh * 0.36);
+  shape.bezierCurveTo(-W * 0.38, -Lh * 0.3, -W * 0.45, -Lh * 0.2, -W * 0.5, 0.03);
+  const K = hi ? 72 : 40, NF = hi ? 30 : 18, outline = shape.getSpacedPoints(K).slice(0, K).map((p) => [p.x, -p.y]);   // (x, z), toe at −z
+  // sole: thick silicone slab + 16 transverse tread bars (pitch 22 mm — the print's ribs)
+  const SOLE_Y = 0.009, SOLE_T = 0.034;
+  const soleG = new THREE.ExtrudeGeometry(shape, { depth: SOLE_T, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: hi ? 3 : 2, curveSegments: hi ? 24 : 8 });
+  soleG.rotateX(-Math.PI / 2); soleG.translate(0, SOLE_Y, 0);
+  const widthAt = (z) => {                                               // outline half-width at z
+    let w = 0;
+    for (let k = 0; k < K; k++) { const [x0, z0] = outline[k], [x1, z1] = outline[(k + 1) % K]; if ((z0 - z) * (z1 - z) <= 0 && z0 !== z1) w = Math.max(w, Math.abs(x0 + (x1 - x0) * (z - z0) / (z1 - z0))); }
+    return w;
+  };
+  const soleParts = [soleG];
+  if (!modern) for (let i = 0; i < 16; i++) {
+    const z = -0.165 + i * 0.022, w = Math.max(0.03, widthAt(z) * 2 - 0.012);
+    soleParts.push(placeGeo(new RoundedBoxGeometry(w, 0.013, 0.0114, 1, 0.003), [0, 0.0055, z]));
+  } else for (let i = 0; i < 9; i++) {
+    const z = -0.16 + i * 0.04, w = Math.max(0.03, widthAt(z) * 2 - 0.014);
+    for (const sx of [-1, 1]) soleParts.push(placeGeo(new RoundedBoxGeometry(w * 0.44, 0.012, 0.022, 1, 0.004), [sx * w * 0.25, 0.006, z], [0, sx * 0.35, 0]));
+  }
+  // the upper: a loft from the sole outline up to an ankle collar (vertical walls curving into a domed toe)
+  const ANK = { x: 0, z: 0.05, rx: 0.083, rz: 0.09 }, Y0 = SOLE_Y + SOLE_T + 0.002, YF = modern ? 0.17 : 0.2, YT = modern ? 0.24 : 0.28;
+  const outlineAt = (u, o) => {                                          // u ∈ [0,1) around, linear between samples
+    const x = ((u % 1) + 1) % 1 * K, k0 = Math.floor(x) % K, k1 = (k0 + 1) % K, t = x - Math.floor(x);
+    o[0] = outline[k0][0] + (outline[k1][0] - outline[k0][0]) * t; o[1] = outline[k0][1] + (outline[k1][1] - outline[k0][1]) * t; return o;
+  };
+  const oo = [0, 0];
+  const P = (u, f, out) => {                                             // f ∈ [0,1] foot, (1, 1.6] collar
+    outlineAt(u, oo);
+    const phi = Math.atan2(oo[1] - ANK.z, oo[0] - ANK.x);
+    const ax = ANK.x + Math.cos(phi) * ANK.rx, az = ANK.z + Math.sin(phi) * ANK.rz;
+    if (f <= 1) {
+      const gk = Math.pow(f, 1.7), bul = 1 + 0.06 * Math.sin(Math.PI * Math.min(1, f * 1.3));
+      const ox = ANK.x + (oo[0] - ANK.x) * bul, oz = ANK.z + (oo[1] - ANK.z) * bul;
+      const inset = 0.004 * (1 - f);
+      out.set(ox + (ax - ox) * gk - Math.cos(phi) * inset, Y0 + f * (YF - Y0), oz + (az - oz) * gk - Math.sin(phi) * inset);
+    } else {
+      const c = (f - 1) / 0.6, pinch = 1 - 0.08 * sstep(0.6, 1, c);
+      out.set(ANK.x + Math.cos(phi) * ANK.rx * pinch, YF + c * (YT - YF), ANK.z + Math.sin(phi) * ANK.rz * pinch);
+    }
+    return out;
+  };
+  const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3(), pd = new THREE.Vector3(), nrm = new THREE.Vector3();
+  let orient = 1;
+  { P(0.5, 0.3, pa); P(0.5 + 0.001, 0.3, pb); P(0.5, 0.301, pc); pb.sub(pa); pc.sub(pa); nrm.crossVectors(pb, pc); pd.set(pa.x - ANK.x, 0, pa.z - ANK.z); orient = nrm.dot(pd) > 0 ? 1 : -1; }
+  // a surface patch over (u0..u1) × (f0..f1), pushed out along the normal by `off`
+  const surf = (u0, u1, nu, f0, f1, nf, off = 0, colFn = null) => {
+    const cols = nu + 1, rows = nf + 1, pos = new Float32Array(rows * cols * 3), nor = new Float32Array(rows * cols * 3), uv = new Float32Array(rows * cols * 2), col = new Float32Array(rows * cols * 3), c = new THREE.Color();
+    const e = 1e-3;
+    for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+      const f = f0 + (f1 - f0) * i / nf, u = u0 + (u1 - u0) * j / nu, k = i * cols + j;
+      P(u, f, pa); P(u + e, f, pb).sub(P(u - e, f, pc)); P(u, Math.min(1.6, f + e), pc).sub(P(u, Math.max(0, f - e), pd));
+      nrm.crossVectors(pb, pc).normalize().multiplyScalar(orient);
+      pa.addScaledVector(nrm, off);
+      pos.set([pa.x, pa.y, pa.z], k * 3); nor.set([nrm.x, nrm.y, nrm.z], k * 3);
+      uv[k * 2] = u * 1.4; uv[k * 2 + 1] = pa.y / 0.55;
+      c.setRGB(1, 1, 1); if (colFn) colFn(c, pa, u, f); col.set([c.r, c.g, c.b], k * 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const idx = gridIndex(rows, cols);
+    if (orient < 0) for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
+    geo.setIndex(idx);
+    return geo;
+  };
+  const dustC = dust ?? new THREE.Color(1, 1, 1);
+  const bootDust = (c, p) => { if (dust) dustMix(c, dustK * (0.35 + 0.65 * sstep(0.2, 0.03, p.y)) * mottle(p.x * 30 + p.z * 20, p.y * 40), dustC); };
+  const upper = surf(0, 1, K, 0, 1.6, NF, 0, bootDust);
+  const fabricParts = [upper];
+  const strapParts = [], rubberParts = [], metalParts = [];
+  // silicone rand: the sole wraps a few centimetres up the foot
+  rubberParts.push(surf(0, 1, K, 0, modern ? 0.1 : 0.16, 3, 0.0025, (c, p) => { if (dust) dustMix(c, 0.4 * mottle(p.x * 40, p.z * 40), dustC); }));
+  // landmarks on the outline: heel (max z) and the two sides at mid-foot
+  let kH = 0, kL = 0, kR = 0, kT = 0;
+  outline.forEach(([x, z], k) => { if (z > outline[kH][1]) kH = k; if (z < outline[kT][1]) kT = k; if (Math.abs(z + 0.01) < 0.05) { if (x < outline[kL][0] || Math.abs(outline[kL][1] + 0.01) >= 0.05) kL = k; if (x > outline[kR][0] || Math.abs(outline[kR][1] + 0.01) >= 0.05) kR = k; } });
+  const uH = kH / K, uL = kL / K, uR = kR / K, uT = kT / K;
+  if (!modern) {
+    // front closure flap over the instep, and the welt seam where the upper meets the silicone rand
+    fabricParts.push(surf(uT - 0.05, uT + 0.05, hi ? 10 : 5, 0.3, 1.45, hi ? 18 : 9, 0.0035, bootDust));
+    strapParts.push(surf(0, 1, K, 0.2, 0.235, 1, 0.0022, bootDust));
+    // ankle strap (with a buckle on the outboard side), heel tab, and a strap down each side of the foot
+    strapParts.push(surf(0, 1, K, 1.12, 1.26, 2, 0.004, bootDust));
+    strapParts.push(surf(0, 1, K, 1.5, 1.6, 2, 0.003, bootDust));      // cuff
+    for (const uc of [uL, uR]) strapParts.push(surf(uc - 0.016, uc + 0.016, hi ? 4 : 2, 0.12, 1.14, hi ? 12 : 6, 0.0035, bootDust));
+    strapParts.push(surf(uH - 0.012, uH + 0.012, hi ? 3 : 2, 0.12, 1.2, hi ? 12 : 6, 0.0045, bootDust));
+    for (const uc of [uL]) { P(uc, 1.19, pa); pb.set(pa.x - ANK.x, 0, pa.z - ANK.z).normalize(); metalParts.push(placeGeo(new RoundedBoxGeometry(0.022, 0.03, 0.008, 1, 0.003), [pa.x + pb.x * 0.007, pa.y, pa.z + pb.z * 0.007], [0, Math.atan2(pb.x, pb.z), 0])); }
+  } else {
+    strapParts.push(surf(0, 1, K, 1.3, 1.6, 4, 0.004));                  // grey cuff
+    strapParts.push(surf(uH - 0.06, uH + 0.06, 6, 0.1, 0.55, 6, 0.0025));          // heel counter
+  }
+  soleParts.forEach((s) => withColor(s, (c, x, y, z) => { if (dust) dustMix(c, 0.5 * mottle(x * 40, z * 40), dustC); }));
+  g.add(meshOf(mergeSuit(soleParts.concat(rubberParts)), M.rubber));
+  g.add(meshOf(mergeSuit(fabricParts), M.fabric));
+  g.add(meshOf(mergeSuit(strapParts), M.strap));
+  if (metalParts.length) g.add(meshOf(mergeSuit(metalParts), M.metal));
+  g.userData.ankle = new THREE.Vector3(ANK.x, YF + 0.03, ANK.z);
+  return g;
+}
+
+// Glove. Local frame: wrist at the origin, fingers along +Y, palm facing −Z, thumb towards +X·side.
+function buildGlove(M, { side = 1, curl = 0.25, modern = false, ring = null } = {}) {
+  const g = new THREE.Group();
+  const body = [], tips = [], rings = [];
+  // gauntlet cuff (the forearm tube ends inside it) and palm
+  body.push(new THREE.LatheGeometry([[0.056, -0.11], [0.066, -0.1], [0.063, -0.06], [0.052, -0.01], [0.046, 0.012]].map(([r, y]) => new THREE.Vector2(r, y)), 20));
+  body.push(placeGeo(new RoundedBoxGeometry(0.09, 0.1, 0.042, 2, 0.018), [0, 0.055, 0.002]));
+  rings.push(placeGeo(new THREE.TorusGeometry(0.058, 0.009, 8, 24), [0, -0.105, 0], [Math.PI / 2, 0, 0]));
+  // fingers: two phalanges each, the distal one a silicone tip; curled toward the palm (−Z)
+  const fx = [-0.031, -0.0105, 0.0105, 0.031], fl = [0.034, 0.04, 0.038, 0.03];
+  fx.forEach((x, i) => {
+    const r = 0.0118 - (i === 0 || i === 3 ? 0.0012 : 0), base = new THREE.Vector3(x * side, 0.1, 0);
+    const a1 = curl * (0.9 + 0.1 * i), a2 = curl * 1.3;
+    const d1 = new THREE.Vector3(0, Math.cos(a1), -Math.sin(a1)), mid = base.clone().addScaledVector(d1, fl[i]);
+    const d2 = new THREE.Vector3(0, Math.cos(a1 + a2), -Math.sin(a1 + a2)), end = mid.clone().addScaledVector(d2, fl[i] * 0.72);
+    const seg = (a, b, rr, list) => { const cg = new THREE.CapsuleGeometry(rr, a.distanceTo(b), 4, 10); _sq.setFromUnitVectors(_sa.set(0, 1, 0), _sb.subVectors(b, a).normalize()); _sm4.compose(_sc.copy(a).lerp(b, 0.5), _sq, _sOne); list.push(cg.applyMatrix4(_sm4)); };
+    seg(base, mid, r, body); seg(mid, end, r * 0.97, tips);
+  });
+  // thumb: from the palm's side, angled across the palm
+  const tb = new THREE.Vector3(0.042 * side, 0.03, -0.012), td = new THREE.Vector3(0.45 * side, 0.8, -0.4 - curl * 0.5).normalize();
+  const tm = tb.clone().addScaledVector(td, 0.04), te = tm.clone().addScaledVector(td.clone().add(new THREE.Vector3(-0.3 * side, 0, -0.3 * curl)).normalize(), 0.03);
+  { const cg = new THREE.CapsuleGeometry(0.0135, tb.distanceTo(tm), 4, 10); _sq.setFromUnitVectors(_sa.set(0, 1, 0), _sb.subVectors(tm, tb).normalize()); _sm4.compose(_sc.copy(tb).lerp(tm, 0.5), _sq, _sOne); body.push(cg.applyMatrix4(_sm4)); }
+  { const cg = new THREE.CapsuleGeometry(0.0125, tm.distanceTo(te), 4, 10); _sq.setFromUnitVectors(_sa.set(0, 1, 0), _sb.subVectors(te, tm).normalize()); _sm4.compose(_sc.copy(tm).lerp(te, 0.5), _sq, _sOne); tips.push(cg.applyMatrix4(_sm4)); }
+  g.add(meshOf(mergeSuit(body), modern ? M.fabric : M.chromel), meshOf(mergeSuit(tips), M.rubber), meshOf(mergeSuit(rings), ring ?? M.metal));
+  return g;
+}
+
+// Helmet (LEVA over the pressure bubble). Local frame: head centre at the origin, face towards +Z.
+function buildHelmet(M, { modern = false } = {}) {
+  const g = new THREE.Group(), R = 0.208;
+  const FRONT = Math.PI / 2;                                             // three.js sphere: phi = π/2 → +Z
+  g.add(meshOf(new THREE.SphereGeometry(R * 0.93, 20, 12), M.dark));
+  const shellParts = [
+    new THREE.SphereGeometry(R, 44, 10, 0, TAU, 0, 0.62),                          // crown (over the visor)
+    new THREE.SphereGeometry(R, 40, 22, FRONT + 1.08, TAU - 2.16, 0.6, 1.72),        // back and sides
+  ];
+  if (!modern) shellParts.push(new THREE.SphereGeometry(R * 1.035, 36, 3, FRONT - 1.12, 2.24, 0.52, 0.12));  // visor brow frame
+  else shellParts.push(new THREE.SphereGeometry(R * 1.03, 36, 3, FRONT - 1.1, 2.2, 0.5, 0.1));
+  const shell = mergeSuit(shellParts.map((s) => withColor(s, modern ? (c, x, y, z) => { if (Math.abs(x) > 0.16 && y > -0.05) c.setRGB(0.58, 0.6, 0.63); } : null)));
+  g.add(meshOf(shell, M.shell));
+  // gold sun visor, a hair proud of the shell
+  const visor = meshOf(new THREE.SphereGeometry(R * 1.02, 48, 26, FRONT - 1.1, 2.2, 0.6, modern ? 1.45 : 1.55), M.visor);
+  g.add(visor);
+  // pivots, neck ring
+  const bits = [], metal = [];
+  for (const sx of [-1, 1]) metal.push(placeGeo(new THREE.CylinderGeometry(0.022, 0.022, 0.018, 16), [sx * R * 1.04, 0.0, 0.0], [0, 0, Math.PI / 2]));
+  metal.push(placeGeo(new THREE.TorusGeometry(0.135, 0.017, 10, 36), [0, -0.175, -0.01], [Math.PI / 2, 0, 0]));
+  bits.push(placeGeo(new THREE.CylinderGeometry(0.135, 0.15, 0.06, 36, 1, true), [0, -0.2, -0.01]));
+  if (modern) {
+    // side lamp / camera pods
+    for (const sx of [-1, 1]) bits.push(placeGeo(new RoundedBoxGeometry(0.05, 0.05, 0.1, 2, 0.012), [sx * R * 1.08, 0.07, 0.02]));
+  }
+  g.add(meshOf(mergeSuit(metal), M.metal), meshOf(mergeSuit(bits), M.shell));
+  if (modern) for (const sx of [-1, 1]) { const l = new THREE.Mesh(new THREE.CircleGeometry(0.014, 16), M.lamp); l.position.set(sx * R * 1.08, 0.07, 0.071); g.add(l); }
+  g.userData.visor = visor;
+  return g;
+}
+
+// Full suited figure (≈1.85 m). Faces +Z, feet on y = 0. legs: [{hip, knee, ankle, yaw, pitch}] ×2 (figure's
+// left = +X first). Returns { group, setArm(i, palmTarget, elbowHint) } — i = 0 left (+X), 1 right.
+export function buildSuitFigure(M, { modern = false, legs, dust = null, curl = [0.3, 0.3] } = {}) {
+  const g = new THREE.Group();
+  const dustC = dust ?? new THREE.Color(1, 1, 1);
+  const panel = new THREE.Color(0.6, 0.62, 0.66);
+  // ---- torso: a swept D-section from the crotch to the neck ring (wide, flat-backed)
+  const torso = new SuitSweep({
+    rings: 40, segs: 36, fillet: 0.01, vTile: 0.6, uRep: 2,
+    radius: (s, L1, L2, R) => {
+      const y = 0.84 + s;
+      const prof = [[0.84, 0.1], [0.9, 0.175], [0.98, 0.205], [1.1, 0.198], [1.25, 0.222], [1.4, 0.228], [1.49, 0.21], [1.56, 0.16], [1.61, 0.13]];
+      let r = prof[0][1];
+      for (let i = 0; i < prof.length - 1; i++) if (y >= prof[i][0]) { const [y0, r0] = prof[i], [y1, r1] = prof[i + 1]; r = r0 + (r1 - r0) * sstep(0, 1, (y - y0) / (y1 - y0)); }
+      const ax = 1.2, az = R.z > 0 ? (modern ? 0.86 : 0.8) : 0.74;
+      const e = 1 / Math.hypot(R.x / ax, R.z / az, R.y);
+      const bag = modern ? 1 : 1 + 0.025 * noise4(R.x * 2, R.z * 2, y * 7, 1.3);
+      return r * e * bag;
+    },
+    color: (c, s, L1, L2, R) => {
+      const y = 0.84 + s;
+      if (modern) { if (Math.abs(R.x) > 0.8 && y < 1.45 || (y > 1.03 && y < 1.1)) c.copy(panel); }
+      else if (dust) dustMix(c, 0.25 * sstep(1.05, 0.86, y) * mottle(R.x * 3 + R.z * 5, y * 9), dustC);
+    },
+  }).pose(new THREE.Vector3(0, 0.84, 0), new THREE.Vector3(0, 1.225, 0), new THREE.Vector3(0, 1.61, 0), new THREE.Vector3(0, 0, 1));
+  g.add(meshOf(torso.geometry, M.fabric));
+  const fabricBits = [placeGeo(withColor(new THREE.SphereGeometry(0.12, 20, 10, 0, TAU, Math.PI / 2, Math.PI / 2)), [0, 0.85, 0], [0, 0, 0], [1.25, 0.7, 0.85])];
+  // ---- legs (convolute knees; regolith staining climbing from the boots)
+  const legR = (s, L1, L2, R) => {
+    const x = s - L1;
+    let r = s < L1 ? 0.128 - 0.02 * sstep(0, L1, s) : 0.108 - 0.022 * sstep(0, L2, x);
+    r += convolute(x + 0.01, modern ? 3 : 6, 0.03, modern ? 0.006 : 0.011);
+    r += 0.006 * Math.exp(-((((L2 - x) - 0.03) / 0.025) ** 2));            // fabric bunched over the boot cuff
+    if (!modern) r *= 1 + 0.035 * noise4(R.x * 1.6, R.y * 1.6, R.z * 1.6, s * 5);
+    return r;
+  };
+  legs.forEach((L, li) => {
+    const sx = li === 0 ? 1 : -1;
+    const sweep = new SuitSweep({
+      rings: 50, segs: 22, fillet: 0.09, radius: legR,
+      color: (c, s, L1, L2, R) => {
+        const x = s - L1;
+        if (modern) { if (Math.abs(x) < 0.07 || R.x * sx > 0.75) c.copy(panel); if (dust) dustMix(c, 0.5 * sstep(L2 - 0.3, L2, x) * mottle(R.x * 4 + s * 9, R.z * 4), dustC); return; }
+        if (dust) dustMix(c, Math.min(1, 0.95 * sstep(L2 - 0.55, L2 - 0.05, x) + 0.35 * Math.exp(-(((x + 0.02) / 0.06) ** 2)) * sstep(-0.2, 0.6, R.z)) * mottle(R.x * 3.5 + s * 7, R.z * 3.5 + s * 3), dustC);
+      },
+    }).pose(L.hip, L.knee, L.ankle, new THREE.Vector3(sx, 0, 0));
+    g.add(meshOf(sweep.geometry, M.fabric));
+    const boot = buildSuitBoot(M, { modern, dust });
+    boot.rotation.set(L.pitch ?? 0, Math.PI + (L.yaw ?? 0), 0, 'YXZ');
+    boot.updateMatrix();
+    const ak = boot.userData.ankle.clone().applyEuler(boot.rotation);
+    boot.position.copy(L.ankle).sub(ak);
+    if (L.ground != null) boot.position.y = Math.max(boot.position.y, L.ground);
+    g.add(boot);
+  });
+  // ---- shoulders + arms (IK)
+  const armR = (s, L1, L2, R) => {
+    const x = s - L1;
+    let r = s < L1 ? 0.098 - 0.018 * sstep(0.05, L1, s) : 0.08 - 0.022 * sstep(0, L2, x);
+    r += convolute(x + 0.005, modern ? 3 : 5, 0.026, modern ? 0.005 : 0.0085);
+    r += convolute(s - 0.085, modern ? 2 : 4, 0.03, modern ? 0.005 : 0.009);
+    if (!modern) r *= 1 + 0.03 * noise4(R.x * 1.6, R.y * 1.6, R.z * 1.6, s * 5 + 7);
+    return r;
+  };
+  const L1 = 0.3, L2 = 0.27, HAND = 0.075;
+  const patchR = 0.1;
+  const arms = [1, -1].map((sx, i) => {
+    const sh = new THREE.Vector3(sx * 0.265, 1.465, 0.0);
+    fabricBits.push(placeGeo(withColor(new THREE.SphereGeometry(0.112, 24, 14)), [sh.x, sh.y, sh.z], [0, 0, 0], [1, 1.05, 1]));
+    const sweep = new SuitSweep({
+      rings: 44, segs: 20, fillet: 0.06, radius: armR,
+      color: (c, s, a, b, R) => { const x = s - a; if (modern && (Math.abs(x) < 0.05 || s < 0.12)) c.copy(panel); else if (dust) dustMix(c, 0.15 * mottle(s * 9, R.x * 3), dustC); },
+    });
+    const mesh = meshOf(sweep.geometry, M.fabric); mesh.frustumCulled = false; g.add(mesh);
+    const glove = buildGlove(M, { side: sx, curl: curl[i], modern, ring: modern ? M.metal : (sx > 0 ? M.red : M.blue) }); g.add(glove);
+    let patch = null;
+    if (sx > 0) {
+      const pg = new THREE.CylinderGeometry(patchR, patchR, 0.06, 12, 1, true, -0.55, 1.1);
+      const uv = pg.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setX(k, 1 - uv.getX(k));
+      patch = new THREE.Mesh(pg, M.patch); patch.castShadow = false; patch.receiveShadow = true; g.add(patch);
+    }
+    return { sx, sh, sweep, glove, patch, e: new THREE.Vector3(), w: new THREE.Vector3(), h: new THREE.Vector3() };
+  });
+  g.add(meshOf(mergeSuit(fabricBits), M.fabric));
+  // ---- helmet
+  const helmet = buildHelmet(M, { modern }); helmet.position.set(0, 1.775, 0.03); g.add(helmet);
+  // ---- life support: PLSS + OPS (A7L) or a slim integrated pack (modern); chest RCU; hoses; connectors
+  const pack = [], packShell = [], metal = [], dark = [], hose = [];
+  if (!modern) {
+    pack.push(placeGeo(new RoundedBoxGeometry(0.47, 0.62, 0.25, 3, 0.05), [0, 1.3, -0.3]));
+    pack.push(placeGeo(new RoundedBoxGeometry(0.44, 0.19, 0.23, 3, 0.045), [0, 1.715, -0.295]));
+    dark.push(placeGeo(new THREE.BoxGeometry(0.47, 0.012, 0.252), [0, 1.61, -0.3]));             // PLSS / OPS parting line
+    metal.push(placeGeo(new THREE.CylinderGeometry(0.004, 0.004, 0.34, 6), [0.17, 1.98, -0.36], [0.12, 0, 0.08]));
+    metal.push(placeGeo(new THREE.SphereGeometry(0.009, 8, 6), [0.184, 2.15, -0.34]));
+    // harness straps over the shoulders
+    for (const sx of [-1, 1]) hose.push(tubeGeo([[sx * 0.16, 1.58, -0.2], [sx * 0.17, 1.62, -0.05], [sx * 0.16, 1.55, 0.13], [sx * 0.13, 1.42, 0.18]], 0.017, 20, 8));
+    // RCU on the chest
+    pack.push(placeGeo(new RoundedBoxGeometry(0.2, 0.12, 0.085, 2, 0.015), [0, 1.33, 0.225]));
+    metal.push(placeGeo(new RoundedBoxGeometry(0.17, 0.085, 0.01, 1, 0.004), [0, 1.33, 0.268]));
+    dark.push(placeGeo(new RoundedBoxGeometry(0.05, 0.025, 0.006, 1, 0.002), [-0.04, 1.35, 0.274]), placeGeo(new RoundedBoxGeometry(0.05, 0.025, 0.006, 1, 0.002), [0.04, 1.35, 0.274]));
+    for (const [x, rr] of [[-0.07, 0.013], [-0.02, 0.011], [0.045, 0.016]]) metal.push(placeGeo(new THREE.CylinderGeometry(rr, rr, 0.02, 14), [x, 1.395, 0.23]));
+    // oxygen hoses: from the PLSS round the right hip to the blue (inlet) and red (outlet) connectors
+    hose.push(tubeGeo([[-0.2, 1.05, -0.24], [-0.29, 1.06, -0.08], [-0.25, 1.12, 0.1], [-0.13, 1.17, 0.19]], 0.02, 28, 10));
+    hose.push(tubeGeo([[-0.17, 1.03, -0.24], [-0.27, 1.0, -0.06], [-0.22, 1.05, 0.12], [-0.08, 1.1, 0.2]], 0.02, 28, 10));
+    // RCU cable up over the shoulder
+    hose.push(tubeGeo([[0.21, 1.6, -0.2], [0.2, 1.6, 0.0], [0.13, 1.5, 0.17], [0.07, 1.38, 0.23]], 0.008, 24, 6));
+  } else {
+    pack.push(placeGeo(new RoundedBoxGeometry(0.46, 0.66, 0.2, 4, 0.07), [0, 1.36, -0.28]));
+    packShell.push(placeGeo(withColor(new RoundedBoxGeometry(0.42, 0.2, 0.05, 2, 0.02), (c) => c.copy(panel)), [0, 1.5, -0.39]));
+    packShell.push(placeGeo(withColor(new RoundedBoxGeometry(0.4, 0.12, 0.2, 3, 0.03), (c) => c.copy(panel)), [0, 1.07, -0.25]));
+    // hard upper torso front + DCM chest box
+    packShell.push(placeGeo(withColor(new THREE.SphereGeometry(0.235, 32, 12, 0, TAU, 0.5, 1.0), (c, x, y, z) => { if (y < 0.05 && y > 0.02) c.copy(panel); }), [0, 1.3, 0.0], [0, 0, 0], [1.14, 1, 0.8]));
+    packShell.push(placeGeo(withColor(new RoundedBoxGeometry(0.22, 0.1, 0.08, 2, 0.02), (c) => c.copy(panel)), [0, 1.26, 0.2]));
+    dark.push(placeGeo(new RoundedBoxGeometry(0.15, 0.05, 0.01, 1, 0.004), [0, 1.27, 0.242]));
+    hose.push(tubeGeo([[-0.2, 1.08, -0.2], [-0.27, 1.12, -0.02], [-0.18, 1.2, 0.16], [-0.09, 1.22, 0.2]], 0.014, 30, 10));
+  }
+  // gas connectors on the torso front: blue (inlet) / red (outlet); the unused pair capped on the left
+  const conn = (x, y, z, m) => { const c = placeGeo(new THREE.CylinderGeometry(0.026, 0.028, 0.03, 18), [x, y, z], [Math.PI / 2 - 0.25, 0, 0]); (m === 'red' ? red : blue).push(c); };
+  const red = [], blue = [];
+  if (!modern) { conn(-0.13, 1.17, 0.185, 'blue'); conn(-0.08, 1.1, 0.19, 'red'); conn(0.08, 1.17, 0.188, 'blue'); conn(0.13, 1.1, 0.183, 'red'); }
+  else { conn(-0.09, 1.22, 0.2, 'blue'); }
+  g.add(meshOf(mergeSuit(pack), M.cover));
+  if (packShell.length) g.add(meshOf(mergeSuit(packShell), M.shell));
+  if (metal.length) g.add(meshOf(mergeSuit(metal), M.metal));
+  g.add(meshOf(mergeSuit(dark), M.dark), meshOf(mergeSuit(hose), M.strap));
+  if (red.length) g.add(meshOf(mergeSuit(red), M.red));
+  g.add(meshOf(mergeSuit(blue), M.blue));
+
+  // ---- two-bone IK: shoulder → elbow → palm centre; the glove extends the forearm
+  const d = new THREE.Vector3(), q = new THREE.Vector3(), X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const LT = L2 + HAND;
+  function setArm(i, target, hint, palm = null) {
+    const A = arms[i];
+    d.subVectors(target, A.sh); let dist = d.length(); d.normalize();
+    dist = Math.min(dist, L1 + LT - 0.005);
+    A.h.copy(A.sh).addScaledVector(d, dist);
+    const a = (L1 * L1 - LT * LT + dist * dist) / (2 * dist), k = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+    q.copy(hint).addScaledVector(d, -hint.dot(d)).normalize();
+    A.e.copy(A.sh).addScaledVector(d, a).addScaledVector(q, k);
+    Y.subVectors(A.h, A.e).normalize();
+    A.w.copy(A.e).addScaledVector(Y, L2);
+    A.sweep.pose(A.sh, A.e, A.w, q);
+    // glove frame: +Y along the forearm, palm (−Z) toward `palm` (default: toward the body's midline)
+    Z.copy(palm ?? _sd.set(-A.sx, 0, 0)).negate(); Z.addScaledVector(Y, -Z.dot(Y));
+    if (Z.lengthSq() < 1e-6) Z.set(0, 0, 1).addScaledVector(Y, -Y.z);
+    Z.normalize(); X.crossVectors(Y, Z);
+    _sm4.makeBasis(X, Y, Z); A.glove.quaternion.setFromRotationMatrix(_sm4); A.glove.position.copy(A.w);
+    if (A.patch) {
+      // shoulder patch: on the outboard face of the upper arm, stars up
+      const ua = _sa.subVectors(A.e, A.sh).normalize();
+      const out = _sb.set(A.sx, 0.15, 0).addScaledVector(ua, -_sb.set(A.sx, 0.15, 0).dot(ua)).normalize();
+      const yax = _sc.copy(ua).negate(), xax = _sd.crossVectors(yax, out);
+      _sm4.makeBasis(xax, yax, out); A.patch.quaternion.setFromRotationMatrix(_sm4);
+      const rr = armR(0.13, L1, L2, out) + 0.003;
+      A.patch.position.copy(A.sh).addScaledVector(ua, 0.13).addScaledVector(out, rr - patchR);
+      A.patch.scale.setScalar(1);
+    }
+  }
+  // neutral pose
+  setArm(0, new THREE.Vector3(0.36, 0.98, 0.05), new THREE.Vector3(0.3, 0, -1).normalize());
+  setArm(1, new THREE.Vector3(-0.36, 0.98, 0.05), new THREE.Vector3(-0.3, 0, -1).normalize());
+  return { group: g, setArm, helmet, visor: helmet.userData.visor };
+}
+
+// the macro-shot boot: a lunar overshoe and the leg above it (knee convolute, regolith-stained shin)
+export function buildBootLeg(M, { dust = null } = {}) {
+  const g = new THREE.Group();
+  const boot = buildSuitBoot(M, { dust, dustK: 0.55, hi: true }); g.add(boot);
+  const ak = boot.userData.ankle;
+  const dustC = dust ?? new THREE.Color(1, 1, 1);
+  const sweep = new SuitSweep({
+    rings: 70, segs: 32, fillet: 0.12,
+    radius: (s, L1, L2, R) => {
+      const x = s - L1;
+      let r = s < L1 ? 0.118 - 0.02 * sstep(0, L1, s) : 0.1 - 0.024 * sstep(0.05, L2, x);
+      r += convolute(x + 0.01, 6, 0.03, 0.011);
+      r += 0.006 * Math.exp(-((((L2 - x) - 0.025) / 0.02) ** 2));            // fabric bunched over the overshoe cuff
+      return r * (1 + 0.04 * noise4(R.x * 1.6, R.y * 1.6, R.z * 1.6, s * 5));
+    },
+    color: (c, s, L1, L2, R) => { const x = s - L1; if (dust) dustMix(c, Math.min(1, 0.9 * sstep(L2 - 0.5, L2 - 0.05, x)) * mottle(R.x * 3.5 + s * 7, R.z * 3.5 + s * 3), dustC); },
+  }).pose(new THREE.Vector3(0, 1.3, 0.12), new THREE.Vector3(0, 0.66, -0.05), new THREE.Vector3(ak.x, ak.y + 0.01, ak.z), new THREE.Vector3(1, 0, 0));
+  g.add(meshOf(sweep.geometry, M.fabric));
   return g;
 }

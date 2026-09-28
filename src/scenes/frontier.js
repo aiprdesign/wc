@@ -30,7 +30,7 @@ import { glowSprite } from '../lib/materials.js';
 import { Callout } from '../lib/hud.js';
 import { MorphParticles, Dust } from '../lib/particles.js';
 import { GLSL_NOISE } from '../lib/noise.js';
-import { buildFlag, bootprintTexture, regolithTextures, terrainGeometry, makeEnv } from './moonshot-assets.js';
+import { buildFlag, bootprintTexture, regolithTextures, terrainGeometry, makeEnv, suitEnv } from './moonshot-assets.js';
 import {
   V3, buildShuttle, buildHubble, buildWebb, buildRover, buildIngenuity, buildHeavyLift,
   visionMaterials, buildLander, buildMarsShip, buildAstronaut, buildHabitat, buildDomeFrame, buildGreenhouse, buildCrewRover, buildTracks, makeBlast,
@@ -243,7 +243,8 @@ export function create(ctx, segment) {
   const blast = makeBlast(3400, { t0: tEDL - 1.6, t1: tStep, seed: 31 }); blast.position.copy(LANDER); visionSet.add(blast);
   const BU = blast.userData.u;
   // first footsteps: an astronaut plants the flag at the end of a trail of boot prints from the lander
-  const astro = buildAstronaut(); astro.group.position.copy(AST); astro.group.rotation.y = Math.PI / 2 - 0.12; visionSet.add(astro.group);
+  const SUIT_ENV = suitEnv(ctx.renderer, { sun: SUN_C, ground: [0.62, 0.36, 0.24], sky: [0.16, 0.12, 0.11], sunCol: [36, 31, 26], haze: [0.6, 0.42, 0.3] });   // the gold visor mirrors the dawn
+  const astro = buildAstronaut({ envMap: SUIT_ENV }); astro.group.position.copy(AST); astro.group.rotation.y = Math.PI / 2 - 0.12; visionSet.add(astro.group);
   const flag = buildFlag({ envMap: MARS_ENV });
   const FLAG_L = V3(0.02, 0, 0.44);             // astronaut-local: the pole stands just in front of him, the cloth flies ahead
   flag.position.copy(FLAG_L); flag.rotation.y = -Math.PI / 2 + 0.12; flag.scale.setScalar(0.86); astro.group.add(flag);

@@ -18,7 +18,7 @@
 //   65.0  finalImpact — ACHIEVEMENTS / OF WESTERN CIVILIZATION lands above the sunlit limb:
 //                       heat cooling to gold, light sweep, hairline rule, a shockwave through
 //                       the motes
-//   66.8  closingLine — A MOTION DESIGN STUDY
+//   66.8  closingLine — THE JOURNEY CONTINUES
 //   67–70 calm hold: slow drift, the sun settles higher, the flare relaxes
 //   70.0  fadeOut     — everything eases down to black by 72.0 (engine adds its last 0.6 s)
 // Composed for the 1:1 delivery first (typography in the dark sky above Earth); the 2.39
@@ -190,15 +190,20 @@ export function create(ctx, segment) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.05, 400);
   scene.add(camera);
-  const G = (n) => CUES[n];                           // global cue seconds (update works in global T)
+  // The rig, sun and every hand-tuned key below are authored on the original 54–72 s clock;
+  // the timeline later moved the coda +6 s. SHIFT maps story time onto that authoring clock
+  // (cues shift with it, so every beat still lands exactly on the score).
+  const SHIFT = CUES.pullBack - 54.5;
+  const G = (n) => CUES[n] - SHIFT;                   // cue seconds on the authoring clock (update works in it)
   const C_PULL = G('pullBack'), C_REVEAL = G('earthReveal'), C_S1 = G('storyOne'), C_S2 = G('storyTwo');
   const C_IDEAS = G('ideasLine'), C_OUT = G('ideasOut'), C_SUN = G('sunrise'), C_IMPACT = G('finalImpact');
   const C_CLOSE = G('closingLine'), C_FADE = G('fadeOut');
-  const END = segment.end;
+  const END = segment.end - SHIFT;
   const r = rng(7272);
   const rig = makeRig(THREE, { outAspect: OUTPUT_ASPECT, filmAspect: FILM_ASPECT });
   const W = rig.wide;                                 // 0 = square layout, 1 = 2.39 layout
-  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, update };
+  // harmony < 1 keeps Earth's true blues and greens out of the 60-30-10 grade
+  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, harmony: 0.3, update };
 
   // ---- Earth -----------------------------------------------------------------------
   const maps = bakeEarth(ctx.renderer, { width: 4096 });
@@ -370,7 +375,7 @@ export function create(ctx, segment) {
   const rule = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.84, 0.58).multiplyScalar(1.2), transparent: true, depthWrite: false, depthTest: false }));
   rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002, 0);
   rule.renderOrder = 11;
-  const closing = new TextPlane('A MOTION DESIGN STUDY', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
+  const closing = new TextPlane('THE JOURNEY CONTINUES', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
   const cS = L(2.45, 1.6) / inkW(closing, 0.2);
   closing.scale.setScalar(cS);
   closing.position.set(0, subY - subH * 0.5 - L(0.34, 0.2) * M * 0.5 - 0.2 * cS * 0.5, 0);
@@ -384,13 +389,17 @@ export function create(ctx, segment) {
   const travelKeys = [[53.9, -0.5], [54.0, 0], [54.5, 2.3], [55.1, 3.05], [55.8, 3.25], [57, 3.3]];
 
   function update(t, info) {
-    const T = segment.start + t;
+    const T = segment.start + t - SHIFT;
 
     // camera
     const d = rig.pose(T, pos, quat);
     camera.position.copy(pos);
     camera.quaternion.copy(quat);
-    camera.fov = 35;
+    // tension → release: the lens slowly tightens on the darkening night side, holds its breath,
+    // then opens up as the sun breaks over the limb
+    const tighten = ease.inOutSine(sat((T - (C_S2 + 1.5)) / (C_OUT - C_S2 - 1.5)));
+    const open = ease.inOutCubic(sat((T - C_SUN) / 2.2));
+    camera.fov = 35 - 3.5 * tighten * (1 - open) + 1.2 * open;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
 
@@ -400,7 +409,7 @@ export function create(ctx, segment) {
     earth.updateMatrixWorld();
     inv.copy(earth.getWorldQuaternion(qa)).invert();
     // at sunrise the shading light leans towards the camera so a golden crescent washes over the clouds
-    const lean = smoothstep(62.6, 64.8, T) * 0.44;
+    const lean = smoothstep(C_SUN - 0.2, C_SUN + 1.4, T) * 0.44;
     shadeDir.copy(sunDir).lerp(cdir.copy(pos).normalize(), lean).normalize();
     sunObj.copy(shadeDir).applyQuaternion(inv);
     const eu = earthMat.uniforms;
@@ -408,12 +417,14 @@ export function create(ctx, segment) {
     const fade = 1 - fadeK;
     const reveal = smoothstep(54.3, 55.9, T);
     const swell = smoothstep(C_SUN, C_SUN + 1.4, T);                // the sunrise
-    eu.uCloudOff.value = (T - 54) * 0.0009;
+    eu.uCloudOff.value = (T - 54) * 0.0022;
+    eu.uTime.value = T - 54;
     eu.uBright.value = lerp(0.55, 1, reveal) * lerp(1, 0.55, fadeK);
-    eu.uCity.value = lerp(0.5, 1, reveal) * fade;
-    eu.uWarm.value = swell * 0.5;
+    const tension = smoothstep(C_S2 + 1.5, C_OUT, T) * (1 - smoothstep(C_SUN - 0.05, C_SUN + 0.5, T));
+    eu.uCity.value = lerp(0.5, 1, reveal) * fade * (1 + 0.9 * tension);   // the cities creep up out of the dark
+    eu.uWarm.value = swell * 0.35;
     const au = atmoMat.uniforms;
-    au.uAtmo.value = lerp(2.6, 1, reveal) * lerp(1, 0.5, fadeK);
+    au.uAtmo.value = lerp(2.6, 1, reveal) * lerp(1, 0.5, fadeK) * (1 + 0.35 * tension);
     const elev = rig.sunElev(T);
     au.uMie.value = lerp(0.03, 0, smoothstep(55.6, 56.4, T)) + smoothstep(C_SUN - 0.5, C_SUN + 0.6, T) * (1.0 + 0.5 * envelope(T, C_SUN, C_IMPACT + 1.5, 0.8, 1.5)) * lerp(1, 0.6, fadeK) * L(1, 0.65);
     au.uWarm.value = swell * 0.8;
@@ -428,6 +439,8 @@ export function create(ctx, segment) {
 
     // lens flare in screen space
     rig.projectDir(sunDir, quat, ndc);
+    const fk = Math.tan(THREE.MathUtils.degToRad(17.5)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));   // rig assumes fov 35
+    ndc.x *= fk; ndc.y *= fk;
     const onScreen = ndc.z < 0 ? 1 : 0;
     const fl = onScreen * sunVis * smoothstep(C_SUN, C_SUN + 0.8, T) * (0.75 + 0.45 * envelope(T, C_SUN + 0.4, C_IMPACT + 2.2, 0.8, 1.8)) * lerp(1, 0.35, fadeK);
     const sx = ndc.x * HX, sy = ndc.y * M;
@@ -538,8 +551,11 @@ export function create(ctx, segment) {
     closing.reveal = ease.outCubic(sat((T - C_CLOSE) / 1.3));
 
     // grade
-    self.bloom.strength = 0.55 + swell * 0.25 * (1 - smoothstep(C_IMPACT + 2, C_FADE, T) * 0.5);
-    self.exposure = lerp(1, 0.25, ease.inQuad(fadeK));
+    // held breath just before the sunrise, then the light floods in
+    const hold = envelope(T, C_OUT - 0.5, C_SUN + 0.05, 0.4, 0.05);
+    const release = envelope(T, C_SUN + 0.15, C_IMPACT + 1.6, 0.7, 1.8);
+    self.bloom.strength = 0.55 + swell * 0.25 * (1 - smoothstep(C_IMPACT + 2, C_FADE, T) * 0.5) - 0.08 * tension + 0.22 * release;
+    self.exposure = (1 - 0.2 * tension - 0.07 * hold + 0.2 * release) * lerp(1, 0.25, ease.inQuad(fadeK));
   }
 
   return self;

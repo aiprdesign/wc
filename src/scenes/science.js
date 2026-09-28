@@ -300,9 +300,9 @@ export function create(ctx, segment) {
     vertexShader: `varying vec3 vN; varying vec3 vV; varying vec3 vP; void main(){ vP = position; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
     fragmentShader: `uniform float uI; varying vec3 vN; varying vec3 vV; varying vec3 vP;
       void main(){ float mu = abs(dot(normalize(vN), normalize(vV)));
-        float g = 0.85 + 0.15*sin(vP.x*60.0+sin(vP.y*50.0)*2.0)*sin(vP.z*55.0);
-        vec3 c = mix(vec3(1.0,0.45,0.12), vec3(1.0,0.9,0.7), pow(mu,0.7));
-        gl_FragColor = vec4(c*uI*(0.45+0.55*mu)*g, 1.0); }`,
+        float g = 0.8 + 0.12*sin(vP.x*60.0+sin(vP.y*50.0)*2.0)*sin(vP.z*55.0) + 0.08*sin(vP.y*140.0+sin(vP.x*90.0)*3.0);
+        vec3 c = mix(vec3(1.0,0.4,0.1), vec3(1.0,0.86,0.62), pow(mu,0.8));
+        gl_FragColor = vec4(c*uI*(0.3+0.7*mu*mu)*g, 1.0); }`,
   });
   const sun = new THREE.Mesh(new THREE.SphereGeometry(0.3, 64, 48), sunMat); sun.position.copy(S); scene.add(sun);
   const sunGlow = glowSprite({ color: '#ffc98a', intensity: 0.55, scale: 1.7 }); sunGlow.position.copy(S); scene.add(sunGlow);
@@ -796,8 +796,8 @@ export function create(ctx, segment) {
     orbitTicks.forEach((l, i) => { l.progress = sat(op * 1.4 - 0.25 - i * 0.05); l.opacity = 1 - smoothstep(4.3, 4.8, t) * 0.7; });
     zodiacLabels.forEach((l, i) => { l.opacity = sat(op * 2 - 0.5 - i * 0.04); });
     const sunI = 1 + 0.08 * Math.sin(T * 9.0);
-    sunMat.uniforms.uI.value = 2.6 * sunI * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.6);
-    sunLight.intensity = 26 * ramp(t, 1.9, 2.5);
+    sunMat.uniforms.uI.value = 1.7 * sunI * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.9);   // bright but still a textured sphere, not a clipped white disc
+    sunLight.intensity = 18 * ramp(t, 1.9, 2.5);   // brass under a close point light was blooming into a gold wash
     sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3;
 
     // light: beam → prism → spectrum (the light itself is slow-motion: the fan unfurls over ~0.45 s)

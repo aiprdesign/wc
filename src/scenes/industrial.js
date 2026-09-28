@@ -149,14 +149,13 @@ export function create(ctx, segment) {
   // ---- materials --------------------------------------------------------------
   const steel = steelMat({ roughness: 0.24, color: '#a9b2bc' });
   const steelPol = steelMat({ roughness: 0.12, color: '#cfd6dd', lathe: false });
-  const brass = brassMat({ roughness: 0.26, lathe: true });
+  const brass = brassMat({ roughness: 0.34, lathe: true });   // broader highlights: the macro DOF turned tight ones into blown orange bokeh
   const iron = ironMat();
   const ironDark = ironMat({ color: '#34373b', roughness: 0.7 });
   const paint = new THREE.MeshStandardMaterial({ color: '#2a1d17', metalness: 0.5, roughness: 0.55, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.4 });
   const pistonM = steelMat({ roughness: 0.3, color: '#8d959d', lathe: false });
   const forged = new THREE.MeshStandardMaterial({ color: '#6d737a', metalness: 1, roughness: 0.38, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.3 });
   const copperM = new THREE.MeshStandardMaterial({ color: '#c77a4a', metalness: 1, roughness: 0.3 });
-  const woodM = new THREE.MeshStandardMaterial({ color: '#3b2a1e', metalness: 0, roughness: 0.85, map: surfaceTexture('walnut', 512, 9) });
 
   // =====================================================================================
   // SET 1 — gear wall with hero gear train
@@ -257,8 +256,11 @@ export function create(ctx, segment) {
   const wallByOrder = wallGears; // parents always precede children
   // back plate with rivet texture
   const backTex = surfaceTexture('cast', 512, 12); backTex.repeat.set(8, 5);
-  const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(46, 26), new THREE.MeshStandardMaterial({ color: '#2b2c2e', metalness: 0.8, roughness: 0.6, roughnessMap: backTex, bumpMap: backTex, bumpScale: 1 }));
-  backPlate.position.set((WALL.x0 + WALL.x1) / 2, 9.5, layerZ(2) - 0.5); scene.add(backPlate);
+  // (the plate stops just past the gear wall: the railway beside the hall runs out under open sky —
+  // a full-width plate would stand across the track as a flat grey wall that clips the trackside steam)
+  const BP_X0 = WALL.x0 - 4.75, BP_X1 = WALL.x1 + 0.9;
+  const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(BP_X1 - BP_X0, 26), new THREE.MeshStandardMaterial({ color: '#2b2c2e', metalness: 0.8, roughness: 0.6, roughnessMap: backTex, bumpMap: backTex, bumpScale: 1 }));
+  backPlate.position.set((BP_X0 + BP_X1) / 2, 9.5, layerZ(2) - 0.5); scene.add(backPlate);
 
   const calloutA = new Callout('INVOLUTE PROFILE · α 20°', { dx: 0.55, dy: 0.32, size: 0.05, color: '#ffd2a8', sub: 'Z 36 · MODULE 9 mm' });
   const calloutB = new Callout('PINION · Z 14 · i 2.57 : 1', { dx: 0.5, dy: -0.28, size: 0.05, color: '#ffd2a8' });
@@ -511,8 +513,24 @@ export function create(ctx, segment) {
   }
   const EXH = V(-5.0, 11.0, ZC - 3.4);
   // floor + light shafts
-  const floorTex = surfaceTexture('cast', 512, 3); floorTex.repeat.set(40, 40);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#1c1b1a', metalness: 0.4, roughness: 0.72, roughnessMap: floorTex, bumpMap: floorTex, bumpScale: 1 }));
+  // cast-iron floor plates (2 m) with raised diamond tread, worn seams and grime: the open-matte frame shows a lot
+  // of floor, and a uniform grey plane read as empty
+  const fc = document.createElement('canvas'); fc.width = fc.height = 512;
+  {
+    const x = fc.getContext('2d'), r = rng(303);
+    x.drawImage(surfaceTexture('cast', 512, 3).image, 0, 0);
+    x.globalAlpha = 0.55;
+    for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+      const cx = i * 32 + (j % 2) * 16 + 8, cy = j * 32 + 16, l = 150 + r() * 40;
+      x.fillStyle = `rgb(${l},${l},${l})`; x.save(); x.translate(cx, cy); x.rotate((i + j) % 2 ? 0.6 : -0.6); x.fillRect(-10, -2.5, 20, 5); x.restore();
+    }
+    x.globalAlpha = 1;
+    x.strokeStyle = 'rgba(8,8,8,0.95)'; x.lineWidth = 5; x.strokeRect(2, 2, 508, 508);
+    x.strokeStyle = 'rgba(150,150,150,0.35)'; x.lineWidth = 1.5; x.strokeRect(6, 6, 500, 500);
+    for (let k = 0; k < 4; k++) { const cx = [14, 498][k % 2], cy = [14, 498][k >> 1]; x.fillStyle = 'rgba(190,190,190,0.7)'; x.beginPath(); x.arc(cx, cy, 5, 0, TAU); x.fill(); }
+  }
+  const floorTex = new THREE.CanvasTexture(fc); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.anisotropy = 8; floorTex.repeat.set(80, 80);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#1c1b1a', metalness: 0.55, roughness: 0.62, roughnessMap: floorTex, bumpMap: floorTex, bumpScale: 1.4 }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
   const shafts = [];
   for (let i = 0; i < 3; i++) {
@@ -521,36 +539,113 @@ export function create(ctx, segment) {
   }
   const lamps = [];
 
-  // railway along z at x = RX
+  // railway along z at x = RX: a raised ballast bed of crushed stone, weathered timber sleepers on it,
+  // cast-iron base plates, and rails with rust-brown webs under a polished running band; a telegraph line
+  // of timber poles with glass insulators and lit copper wires beside it, all receding to a dawn haze.
   const RX = 9.6, GAUGE = 0.72;
+  const BED = { top: 0.16, wTop: 1.45, wBot: 2.1 };           // half-widths of the ballast shoulder
+  const SL = { h: 0.14, y: BED.top + 0.04 };                   // sleepers sit ~4 cm proud of the stone
+  const RAIL_Y = SL.y + SL.h / 2 + 0.014;                       // rail foot on the base plates
   const rail = new THREE.Group(); scene.add(rail);
   {
+    // crushed-stone texture (albedo + bump share one canvas; stones ~1–2 cm)
+    const gc = document.createElement('canvas'); gc.width = gc.height = 512;
+    {
+      const x = gc.getContext('2d'), r = rng(91);
+      x.fillStyle = '#2c2926'; x.fillRect(0, 0, 512, 512);
+      for (let i = 0; i < 2600; i++) {
+        const px = r() * 512, py = r() * 512, rr = 3 + r() * 7, l = 60 + r() * 90, w = r() < 0.3 ? 12 : 0;
+        x.fillStyle = `rgb(${l + w},${l + w * 0.6},${l - w * 0.2})`;
+        x.beginPath();
+        const n = 5 + Math.floor(r() * 3), a0 = r() * TAU;
+        for (let k = 0; k < n; k++) { const a = a0 + (k / n) * TAU, q = rr * (0.7 + r() * 0.5); const X = px + Math.cos(a) * q, Y = py + Math.sin(a) * q * 0.8; k ? x.lineTo(X, Y) : x.moveTo(X, Y); }
+        x.closePath(); x.fill();
+        x.fillStyle = 'rgba(255,255,255,0.10)'; x.beginPath(); x.arc(px - rr * 0.25, py - rr * 0.25, rr * 0.35, 0, TAU); x.fill();
+      }
+    }
+    const gravel = new THREE.CanvasTexture(gc); gravel.wrapS = gravel.wrapT = THREE.RepeatWrapping; gravel.anisotropy = 8; gravel.colorSpace = THREE.SRGBColorSpace;
+    const gravelBump = new THREE.CanvasTexture(gc); gravelBump.wrapS = gravelBump.wrapT = THREE.RepeatWrapping; gravelBump.anisotropy = 8;
+    const ballastM = new THREE.MeshStandardMaterial({ color: '#b3aca3', roughness: 0.92, metalness: 0, map: gravel, bumpMap: gravelBump, bumpScale: 1.6 });
+    // bed cross-section (trapezoid) swept along z with world-scaled UVs (u across, v along the track)
+    const Z0 = 40, Z1 = -100, TILE = 0.9;
+    const prof = [[-BED.wBot, 0.0], [-BED.wTop, BED.top], [BED.wTop, BED.top], [BED.wBot, 0.0]];
+    const pos = [], uv = [], idx = [];
+    let across = 0;
+    for (let k = 0; k < prof.length - 1; k++) {
+      const [x0, y0] = prof[k], [x1, y1] = prof[k + 1], len = Math.hypot(x1 - x0, y1 - y0), b = pos.length / 3;
+      for (const [x, y, u] of [[x0, y0, across], [x1, y1, across + len]]) for (const z of [Z0, Z1]) { pos.push(RX + x, y, z); uv.push(u / TILE, (Z0 - z) / TILE); }
+      idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
+      across += len;
+    }
+    const bedGeo = new THREE.BufferGeometry();
+    bedGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); bedGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    bedGeo.setIndex(idx); bedGeo.computeVertexNormals();
+    rail.add(new THREE.Mesh(bedGeo, ballastM));
+    // sleepers: weathered timber (walnut grain multiplied up to a grey-brown), per-sleeper tone and a slight skew
+    // weathered, creosoted timber: grey-brown with long grain streaks and a few checks (cracks) along the length
+    const wc = document.createElement('canvas'); wc.width = 512; wc.height = 128;
+    {
+      const x = wc.getContext('2d'), r = rng(64);
+      x.fillStyle = '#6b5d50'; x.fillRect(0, 0, 512, 128);
+      for (let i = 0; i < 220; i++) {
+        const y = r() * 128, l = r(), a = 0.06 + r() * 0.16;
+        x.strokeStyle = l > 0.5 ? `rgba(38,30,24,${a})` : `rgba(150,136,118,${a})`;
+        x.lineWidth = 0.5 + r() * 2.2;
+        x.beginPath(); x.moveTo(0, y);
+        for (let X = 0; X <= 512; X += 32) x.lineTo(X, y + Math.sin(X * 0.01 + i) * (1 + r() * 2));
+        x.stroke();
+      }
+      for (let i = 0; i < 9; i++) { const y = 10 + r() * 108, x0 = r() * 380; x.strokeStyle = 'rgba(20,15,12,0.7)'; x.lineWidth = 1 + r() * 1.5; x.beginPath(); x.moveTo(x0, y); x.lineTo(x0 + 40 + r() * 110, y + (r() - 0.5) * 4); x.stroke(); }
+    }
+    const woodTex = new THREE.CanvasTexture(wc); woodTex.colorSpace = THREE.SRGBColorSpace; woodTex.anisotropy = 8;
+    const woodBump = new THREE.CanvasTexture(wc); woodBump.anisotropy = 8;
+    const sleeperM = new THREE.MeshStandardMaterial({ color: '#d8d0c6', roughness: 0.9, metalness: 0, map: woodTex, bumpMap: woodBump, bumpScale: 1.4 });
+    const NS = 210, sl = new THREE.InstancedMesh(new THREE.BoxGeometry(2.4, SL.h, 0.25), sleeperM, NS);
+    const plates = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.018, 0.2), ironMat({ color: '#3d3a38', roughness: 0.7 }), NS * 2);
+    const m4 = new THREE.Matrix4(), rr = rng(77), sc = new THREE.Color(), qq = new THREE.Quaternion(), yAx = V(0, 1, 0), one = V(1, 1, 1), pp = V(0, 0, 0);
+    for (let i = 0; i < NS; i++) {
+      const z = 40 - i * 0.66;
+      qq.setFromAxisAngle(yAx, (rr() - 0.5) * 0.025);
+      m4.compose(pp.set(RX + (rr() - 0.5) * 0.04, SL.y, z), qq, one); sl.setMatrixAt(i, m4);
+      const v = 0.8 + rr() * 0.35; sl.setColorAt(i, sc.setRGB(v, v * (0.96 + rr() * 0.05), v * (0.9 + rr() * 0.08)));
+      for (const s of [-1, 1]) { m4.makeTranslation(RX + s * GAUGE, SL.y + SL.h / 2 + 0.005, z); plates.setMatrixAt(i * 2 + (s > 0 ? 1 : 0), m4); }
+    }
+    rail.add(sl, plates);
+    // rails: flat-bottom profile in weathered iron + a polished running band on the head
     const ish = new THREE.Shape([[-0.07, 0], [0.07, 0], [0.07, 0.02], [0.015, 0.035], [0.015, 0.12], [0.04, 0.13], [0.04, 0.17], [-0.04, 0.17], [-0.04, 0.13], [-0.015, 0.12], [-0.015, 0.035], [-0.07, 0.02]].map(([x, y]) => new THREE.Vector2(x, y)));
-    const rg = new THREE.ExtrudeGeometry(ish, { depth: 140, bevelEnabled: false, curveSegments: 1 }); rg.translate(0, 0.12, -100);
-    [-1, 1].forEach((s) => { const m = new THREE.Mesh(rg, steelMat({ roughness: 0.18, color: '#c5ccd4', lathe: false })); m.position.x = RX + s * GAUGE; rail.add(m); });
-    const NS = 210, sl = new THREE.InstancedMesh(new THREE.BoxGeometry(2.3, 0.12, 0.24), woodM, NS);
-    const m4 = new THREE.Matrix4();
-    for (let i = 0; i < NS; i++) { m4.makeTranslation(RX, 0.07, 40 - i * 0.66); sl.setMatrixAt(i, m4); }
-    rail.add(sl);
-    const ballastTex = surfaceTexture('cast', 512, 17); ballastTex.repeat.set(3, 120);
-    const ballast = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 140), new THREE.MeshStandardMaterial({ color: '#3a3632', roughness: 0.95, metalness: 0.1, map: ballastTex, bumpMap: ballastTex, bumpScale: 2 }));
-    ballast.rotation.x = -Math.PI / 2; ballast.position.set(RX, 0.012, -30); rail.add(ballast);
-    // telegraph poles + wires
-    const poleM = woodM;
+    const rg = new THREE.ExtrudeGeometry(ish, { depth: 140, bevelEnabled: false, curveSegments: 1 }); rg.translate(0, RAIL_Y, -100);
+    const railIron = new THREE.MeshStandardMaterial({ color: '#6a5446', metalness: 0.75, roughness: 0.55, roughnessMap: surfaceTexture('cast', 512, 23), bumpMap: surfaceTexture('cast', 512, 23), bumpScale: 0.3 });
+    const band = new THREE.BoxGeometry(0.056, 0.004, 140); band.translate(0, RAIL_Y + 0.172, -30);
+    const bandM = steelMat({ roughness: 0.2, color: '#d6dce2', lathe: false }); bandM.envMapIntensity = 4;   // the worn running band mirrors the sky
+    [-1, 1].forEach((s) => {
+      const m = new THREE.Mesh(rg, railIron); m.position.x = RX + s * GAUGE; rail.add(m);
+      const h = new THREE.Mesh(band, bandM); h.position.x = RX + s * GAUGE; rail.add(h);
+    });
+    // telegraph poles (weathered timber) with cross-arms, glass insulators and copper wires
+    const poleM = new THREE.MeshStandardMaterial({ color: '#5a4c40', roughness: 0.85, metalness: 0, bumpMap: surfaceTexture('walnut', 512, 31), bumpScale: 1 });
+    const insM = new THREE.MeshPhysicalMaterial({ color: '#8fb8a8', roughness: 0.1, clearcoat: 1, emissive: '#1c3a30', emissiveIntensity: 0.6 });
+    const poleG = new THREE.CylinderGeometry(0.09, 0.12, 5.2, 12), armG = new THREE.BoxGeometry(1.4, 0.1, 0.1), insG = new THREE.CylinderGeometry(0.05, 0.07, 0.16, 12);
     const wireTop = [];
     for (let i = 0; i < 16; i++) {
       const z = 30 - i * 7;
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 5.2, 12), poleM); pole.position.set(RX + 2.2, 2.6, z); rail.add(pole);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.1), poleM); arm.position.set(RX + 2.2, 4.9, z); rail.add(arm);
-      [-0.55, 0.55].forEach((dx) => { const ins = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 12), new THREE.MeshPhysicalMaterial({ color: '#8fb8a8', roughness: 0.1, clearcoat: 1 })); ins.position.set(RX + 2.2 + dx, 5.03, z); rail.add(ins); });
+      const pole = new THREE.Mesh(poleG, poleM); pole.position.set(RX + 2.2, 2.6, z); rail.add(pole);
+      const arm = new THREE.Mesh(armG, poleM); arm.position.set(RX + 2.2, 4.9, z); rail.add(arm);
+      [-0.55, 0.55].forEach((dx) => { const ins = new THREE.Mesh(insG, insM); ins.position.set(RX + 2.2 + dx, 5.03, z); rail.add(ins); });
       wireTop.push(z);
     }
+    // the wires hang from the insulator tops (y 5.11) and are lit copper: a dark metal tube this thin reads as
+    // a floating black line against the haze, so they carry a faint warm emissive of their own
+    const wireM = new THREE.MeshStandardMaterial({ color: '#d08a58', metalness: 0.85, roughness: 0.32, emissive: '#6a3818', emissiveIntensity: 0.9 });
     [-0.55, 0.55].forEach((dx) => {
       const pts = [];
-      for (let i = 0; i < wireTop.length - 1; i++) for (let k = 0; k < 8; k++) { const u = k / 8, z = lerp(wireTop[i], wireTop[i + 1], u); pts.push(V(RX + 2.2 + dx, 5.1 - Math.sin(u * Math.PI) * 0.35, z)); }
-      rail.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 600, 0.012, 5), copperM));
+      for (let i = 0; i < wireTop.length - 1; i++) for (let k = 0; k < 8; k++) { const u = k / 8, z = lerp(wireTop[i], wireTop[i + 1], u); pts.push(V(RX + 2.2 + dx, 5.11 - Math.sin(u * Math.PI) * 0.3, z)); }
+      pts.push(V(RX + 2.2 + dx, 5.11, wireTop[wireTop.length - 1]));
+      rail.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'centripetal'), 1200, 0.01, 5), wireM));
     });
   }
+  // dawn haze far down the line: silhouettes the poles and gives the rails a horizon to converge on
+  const dawn = glowSprite({ color: '#ffb877', intensity: 0.7, scale: 60 }); dawn.material.fog = false; dawn.position.set(RX + 1, 3, -95); scene.add(dawn);
+  const dawnCore = glowSprite({ color: '#ffe2bf', intensity: 0.7, scale: 14 }); dawnCore.material.fog = false; dawnCore.position.set(RX + 0.5, 1.4, -94); scene.add(dawnCore);
   // the hand-over arc: on the near wire, ahead of the dolly
   const ARC = V(RX + 2.2 - 0.55, 5.03, -5);
   const arcGlow = glowSprite({ color: '#e8f2ff', intensity: 3, scale: 2 }); arcGlow.position.copy(ARC); scene.add(arcGlow);
@@ -584,7 +679,7 @@ export function create(ctx, segment) {
     { pos: EXH.clone(), dir: V(0.1, 1, 0.15), spread: 0.5, speed: 5, jitter: 0.2, life: 2.0, weight: 0.9, size: 1.3, birth: beats(tSteam - 0.3, 4, 0.16) },
     { pos: V(BO.x, BO.y + BO.r + 0.55, -1.2), dir: V(0.12, 1, 0.1), spread: 0.35, speed: 7, jitter: 0.1, life: 2.1, weight: 1.3, size: 1.1, birth: (u) => tSteam + 0.05 + u * 1.65 },
     { pos: V(BO.x, BO.y + BO.r + 8.6, BO.z0 + 0.6), dir: V(0.25, 1, 0.1), spread: 0.45, speed: 2.4, jitter: 0.3, life: 2.6, weight: 0.8, size: 1.7, birth: (u) => 1.6 + u * 2.9 },
-    { pos: V(RX - 1.0, 0.3, -3), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 2, jitter: 1.2, life: 1.6, weight: 0.45, size: 1.2, birth: (u) => 3.6 + u * 0.9 },
+    { pos: V(RX + 0.3, 1.7, -16), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 1.2, jitter: 1.4, life: 1.6, weight: 0.45, size: 0.9, birth: (u) => 3.6 + u * 0.9 },
   ];
   const steam = makeSteam(5200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
   scene.add(steam);
@@ -701,13 +796,15 @@ export function create(ctx, segment) {
     machine.visible = boiler.visible = set2 || t > tPist - 0.6;
 
     const lock = pulse(T, { decay: 4 }) * (Math.abs(T - 28.0) < 0.3 ? 1 : 0) * (T >= 28.0 ? 1 : 0);
-    rim.intensity = shotA ? 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * 0.7 : 2.0 + 2.0 * lock;
+    rim.intensity = shotA ? 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * 0.45 : 2.0 + 2.0 * lock;
     rim.color.setHex(shotA ? 0xff9448 : 0xffc890);
     // set 2: the back light comes from high up (roof lights) — a low back light mirrors off the floor and
     // the engine beds straight into the lens as a glare
     if (shotA) rim.position.set(6, 5, -9); else rim.position.set(3, 16, -7);
     side.intensity = 1.6 * ramp(t, 3.2, 3.6);
     shafts.forEach((sh) => { sh.visible = t > 2.75; });
+    dawn.visible = dawnCore.visible = t > 3.7;
+    dawn.material.opacity = dawnCore.material.opacity = ramp(t, 3.7, 4.05);
 
     // ---------- steam, sparks, dust ------------------------------------------------
     steam.tick(t, info);

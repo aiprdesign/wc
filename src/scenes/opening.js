@@ -126,7 +126,7 @@ export function create(ctx, segment) {
     grid.add(l);
     labels.push({ l, t0 });
   };
-  addLabel('A', 1.1, 0.14, g0 + 0.6); addLabel('B', -1.12, 0.14, g0 + 0.65); addLabel('C', 0.14, 1.12, g0 + 0.7);
+  addLabel('A', 1.1, -0.3, g0 + 0.6); addLabel('B', -1.12, -0.3, g0 + 0.65);   // below the axis: the centred caption sits on it addLabel('C', 0.14, 1.12, g0 + 0.7);
   addLabel('φ', 2.1 + gw * 0.5, 2.2, g0 + 1.1, { h: 0.26 }); addLabel('φ', -2.1 - gw * 0.5, 2.2, g0 + 1.15, { h: 0.26 });
   addLabel('1 : 1.618', 3.25, -2.3, g0 + 1.2, { mono: true, h: 0.11 });
   addLabel('MODVLVS · I', -3.2, -2.3, g0 + 1.25, { mono: true, h: 0.11 });
@@ -342,16 +342,19 @@ export function create(ctx, segment) {
       const pOp = ramp(t, 3.1, 3.7) * lerp(1, 0.05, ramp(t, tL - 0.2, tL + 0.35)) * (1 - ramp(t, cue('letters3D') + 0.05, cue('letters3D') + 0.55));
       titleParticles.u.opacity = pOp;
       titleParticles.visible = pOp > 0.002;
-      titleParticles.u.intensity = lerp(0.9, 1.5, mix) + 1.0 * ramp(t, tL - 0.3, tL) * (1 - ramp(t, tL, tL + 0.4));
+      titleParticles.u.intensity = lerp(0.9, 1.4, mix) + 0.55 * ramp(t, tL - 0.3, tL) * (1 - ramp(t, tL, tL + 0.4));
       titleParticles.u.size = lerp(0.032, 0.026, mix);
 
       // ---------------------------------------------------------------- title glyphs
       const l3 = cue('letters3D'), lf = cue('lettersFly');
       const flatOn = ramp(t, tL - 0.3, tL + 0.25, ease.inOutSine);
       const glowK = flatOn * (1 - 0.96 * ramp(t, l3 - 0.1, l3 + 0.7));
-      marbleMat.emissiveIntensity = 0.55 * glowK;
-      goldMat.emissiveIntensity = 0.7 * glowK;
-      bronzeMat.emissiveIntensity = 0.7 * glowK;
+      // once extruded and tumbling, glyphs turned away from the key went pure black and vanished from the words
+      // (A, V, E of ACHIEVEMENTS): a faint self-glow keeps every letter legible against the dark
+      const floorK = 0.12 * ramp(t, l3, l3 + 0.5);
+      marbleMat.emissiveIntensity = 0.55 * glowK + floorK;
+      goldMat.emissiveIntensity = 0.7 * glowK + floorK * 0.6;
+      bronzeMat.emissiveIntensity = 0.7 * glowK + floorK * 0.6;
       const flyK = ramp(t, lf, 8.0, ease.inQuad);
       for (const g of glyphs) {
         const vis = flatOn > 0.001;
@@ -359,17 +362,17 @@ export function create(ctx, segment) {
         if (!vis) continue;
         const delay = (g.line === 0 ? 0.1 : 0) + Math.abs(g.u - 0.5) * 0.35;
         const ex = ramp(t, l3 + delay, l3 + delay + 0.55, ease.inOutCubic);
-        g.mesh.scale.set(g.s, g.s, lerp(0.02, g.s, ex));
+        g.mesh.scale.set(g.s, g.s, lerp(0.02, g.s * 0.72, ex));   // a shallower extrusion: tightly tracked glyphs no longer interpenetrate when seen from the orbit
         // subtle scale-in while locking so the swap from particles feels organic
         const lockS = lerp(0.985, 1, flatOn);
         g.mesh.scale.x *= lockS; g.mesh.scale.y *= lockS;
-        const rot = ex * (g.rnd[0] - 0.5) * 0.45 + flyK * (g.rnd[1] - 0.5) * 1.6;
+        const rot = ex * (g.rnd[0] - 0.5) * 0.24 + flyK * (g.rnd[1] - 0.5) * 1.6;
         g.mesh.rotation.set(flyK * (g.rnd[2] - 0.5) * 0.8, rot, flyK * (g.rnd[3] - 0.5) * 0.4);
         const side = g.line === 0 ? 1 : -1;
         g.mesh.position.set(
           g.base.x * (1 + flyK * 0.25),
           g.base.y + side * flyK * (0.45 + g.rnd[0] * 0.9),
-          g.base.z + ex * (g.rnd[1] - 0.5) * 0.5 + flyK * lerp(-15, 3.5, g.rnd[2]),
+          g.base.z + ex * (g.rnd[1] - 0.5) * 0.3 + flyK * lerp(-15, 3.5, g.rnd[2]),
         );
       }
 

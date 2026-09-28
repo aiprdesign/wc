@@ -52,7 +52,7 @@ export function makeRig(THREE, { outAspect, filmAspect = 2.39, fov = 35 }) {
   //                      its elevation above the limb follows riseKeys (breaks the limb ≈64.1)
   const sp = new THREE.Vector3(), sq = new THREE.Quaternion();
   pose(58, sp, sq);
-  const SIDE = new THREE.Vector3(0.86, 0.36, 0.06).normalize().applyQuaternion(sq);
+  const SIDE = new THREE.Vector3(0.8, 0.36, 0.42).normalize().applyQuaternion(sq);   // gibbous: ~70 % of the disc sunlit
   const riseKeys = [[54, -9], [62.0, -7], [63.3, -3.2], [63.6, -1.8], [64.1, 0.0], [64.6, 0.32], [65.0, 0.45], [67.0, 0.75], [72.0, 1.25]];
   const cd = new THREE.Vector3(), cu = new THREE.Vector3(), cr = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
   const sunPhi = lerp(15, 13, wide) * D2R;
@@ -74,7 +74,7 @@ export function makeRig(THREE, { outAspect, filmAspect = 2.39, fov = 35 }) {
   }
   const sunElev = (T) => timeWarp(clamp(T, 54, 72), riseKeys);
   function sun(T, pos, quat, out) {
-    const kIn = smoothstep(54.6, 56.3, T), kOut = smoothstep(61.2, 63.4, T);
+    const kIn = smoothstep(54.6, 56.3, T), kOut = smoothstep(60.0, 63.3, T);   // the terminator sweeps over us: tension before sunrise
     if (kOut > 0) {
       limbDir(pos, quat, sunElev(T) * D2R, sunPhi, tmp2);
       return slerpDir(SIDE, tmp2, kOut, out);

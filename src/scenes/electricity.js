@@ -108,13 +108,14 @@ export function create(ctx, segment) {
   // pulse overlay: additive tube keyed by arc-length distance to the head
   const pulseMat = new THREE.ShaderMaterial({
     uniforms: { uHead: { value: 0 }, uLen: { value: WIRE_LEN }, uI: { value: 1 } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform float uHead, uLen, uI; varying vec2 vUv;
+    vertexShader: `varying vec2 vUv; varying float vD; void main(){ vUv = uv; vec4 mv = modelViewMatrix*vec4(position,1.0); vD = -mv.z; gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `uniform float uHead, uLen, uI; varying vec2 vUv; varying float vD;
       void main(){ float d = (vUv.x - uHead) * uLen;
         float head = d > 0.0 ? exp(-d*d/0.0016) : exp(d/0.12);
         float trail = d < 0.0 ? exp(d/1.2) * 0.12 : 0.0;
         vec3 c = mix(vec3(1.0,0.55,0.25), vec3(0.85,0.93,1.0), exp(-abs(d)*6.0));
-        vec3 col = c * (head * 7.0 + trail) * uI;
+        // the glowing trail right beside the chase camera would defocus into a frame-filling white blob
+        vec3 col = c * (head * 7.0 + trail) * uI * smoothstep(0.18, 0.6, vD);
         if (dot(col, vec3(1.0)) < 0.01) discard;
         gl_FragColor = vec4(col, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -134,7 +135,9 @@ export function create(ctx, segment) {
   {
     const r = rng(55);
     for (let i = 0; i < 700; i++) {
-      const u = r(), p = wireCurve.getPointAt(u), tn = wireCurve.getTangentAt(u);
+      // direction from the smooth guide (coil replaced by its axis): the helix tangent would scatter the
+      // streaks around the coil into a tangle of random sticks instead of a clean warp-speed flow
+      const u = r(), p = wireCurve.getPointAt(u), tn = guide.getTangentAt(guideU(u));
       const off = V(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(0.3 + r() * 0.9);
       const a = p.clone().add(off), L = 0.15 + r() * 0.7;
       streakSegs.push([a, a.clone().addScaledVector(tn, L)]);
@@ -207,13 +210,13 @@ export function create(ctx, segment) {
       x.fillStyle = '#1a1a1a'; x.font = '600 44px "Inter"'; x.textAlign = 'center'; x.textBaseline = 'middle';
       for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const d = String((i + 1) % 10); x.fillText(d, 256 + Math.cos(a) * 190, 256 - Math.sin(a) * 190); x.font = '400 18px "Inter"'; x.fillText(['', 'ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PRS', 'TUV', 'WXY', 'OPER'][i + 1 > 9 ? 9 : i + 1] ?? '', 256 + Math.cos(a) * 150, 256 - Math.sin(a) * 150); x.font = '600 44px "Inter"'; }
     });
-    const plateN = new THREE.Mesh(new THREE.CircleGeometry(0.088, 64), new THREE.MeshStandardMaterial({ map: numTex, color: '#7a766e', roughness: 0.8 })); dial.add(plateN);
+    const plateN = new THREE.Mesh(new THREE.CircleGeometry(0.088, 64), new THREE.MeshStandardMaterial({ map: numTex, color: '#a39d91', roughness: 0.8 })); dial.add(plateN);
     const ws = new THREE.Shape(); ws.absarc(0, 0, 0.088, 0, TAU, false);
     const wheelHoles = [];
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const h = new THREE.Path(); h.absarc(Math.cos(a) * 0.066, Math.sin(a) * 0.066, 0.0125, 0, TAU, true); ws.holes.push(h); wheelHoles.push(a); }
     const inner = new THREE.Path(); inner.absarc(0, 0, 0.034, 0, TAU, true); ws.holes.push(inner);
     const wheelG = new THREE.ExtrudeGeometry(ws, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2, curveSegments: 32 });
-    const wheel = new THREE.Mesh(wheelG, new THREE.MeshStandardMaterial({ color: '#aab0b8', metalness: 1, roughness: 0.2, envMapIntensity: 0.6 })); wheel.position.z = 0.004; dial.add(wheel); dial.userData.wheel = wheel;
+    const wheel = new THREE.Mesh(wheelG, new THREE.MeshStandardMaterial({ color: '#959ba3', metalness: 1, roughness: 0.36, envMapIntensity: 0.6 })); wheel.position.z = 0.004; dial.add(wheel); dial.userData.wheel = wheel;
     const card = new THREE.Mesh(new THREE.CircleGeometry(0.032, 48), new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (x) => { x.fillStyle = '#efe7d4'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#6a1b12'; x.font = '600 34px "IBM Plex Mono"'; x.textAlign = 'center'; x.fillText('MAIN', 128, 110); x.fillText('1876', 128, 160); }), color: '#8f8a80', roughness: 0.6 })); card.position.z = 0.003; dial.add(card);
     const stop = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.01), chrome); stop.position.set(Math.cos(-0.95) * 0.086, Math.sin(-0.95) * 0.086, 0.012); stop.rotation.z = -0.95; dial.add(stop);
     // cradle
@@ -578,6 +581,13 @@ export function create(ctx, segment) {
     else if (shot === 4) { camRd(t, cp); tgtRd(t, ct); }
     else { camPc(t, cp); tgtPc(t, ct); }
     camera.position.copy(cp);
+    // the chase camera rides ~0.35 m from the spark: unclamped, its halo sprites fill half the frame as a white
+    // blob after the flash hand-over — keep their on-screen size bounded by the viewing distance
+    if (headGlow.visible) {
+      const dh = cp.distanceTo(headGlow.position);
+      headGlow.scale.setScalar(Math.min(headGlow.scale.x, 0.12 + 0.5 * dh + ignite * 0.2));
+      headGlow2.scale.setScalar(Math.min(headGlow2.scale.x, 0.25 + 1.0 * dh + ignite * 0.4));
+    }
     if (shot === 5 && t < tElec + 0.3) camera.up.set(0, 0, -1).lerp(up, smoothstep(tElec + 0.05, tElec + 0.3, t)).normalize();
     else if (shot === 4 && t > tRadio + 0.4) camera.up.set(0, 0, -1).lerp(up, 1 - smoothstep(tRadio + 0.4, tElec, t)).normalize();
     else camera.up.copy(up);

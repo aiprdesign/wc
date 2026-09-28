@@ -284,19 +284,20 @@ void main(){
   float lat = abs(p.y);
   float ice = smoothstep(0.8, 0.9, lat + 0.06 * snoise(p * 9.0));
   float arid = smoothstep(0.0, 0.5, snoise(p * 2.2 + 5.0)) * (1.0 - smoothstep(0.2, 0.55, lat));
-  vec3 ocean = mix(vec3(0.004, 0.018, 0.05), vec3(0.01, 0.05, 0.085), coast);
-  vec3 ground = mix(vec3(0.05, 0.075, 0.035), vec3(0.2, 0.15, 0.085), arid);
+  vec3 ocean = mix(vec3(0.006, 0.03, 0.11), vec3(0.018, 0.09, 0.16), coast);
+  vec3 ground = mix(vec3(0.045, 0.085, 0.03), vec3(0.34, 0.24, 0.12), arid);
   ground *= 0.8 + 0.4 * snoise(p * 18.0);
   vec3 surf = mix(ocean, ground, land);
   surf = mix(surf, vec3(0.75, 0.8, 0.85), ice);
-  vec3 cp = p * vec3(3.2, 7.0, 3.2) + vec3(uTime * 0.02, 0.0, 0.0);
+  vec3 cp = p * vec3(3.2, 7.0, 3.2) + vec3(uTime * 0.06, 0.0, uTime * 0.02);
   float cl = smoothstep(0.12, 0.75, fbm(cp) * 0.75 + 0.3 * snoise(p * 16.0) * snoise(p * 3.0 + 7.0)) * 0.85;
   float ndl = dot(N, L);
   float day = smoothstep(-0.12, 0.3, ndl);
-  vec3 col = surf * day * 1.7;
-  col = mix(col, vec3(0.8, 0.84, 0.9) * day * 1.05, cl * 0.8);
+  vec3 col = surf * day * 2.15;
+  col = mix(col, vec3(0.92, 0.94, 0.97) * day * 1.2, cl * 0.85);
   vec3 H = normalize(L + V);
-  col += vec3(1.0, 0.9, 0.75) * pow(max(dot(N, H), 0.0), 220.0) * (1.0 - land) * (1.0 - cl) * day * 0.6;
+  float nh = max(dot(N, H), 0.0);
+  col += vec3(1.0, 0.9, 0.75) * (pow(nh, 60.0) * 0.18 + pow(nh, 400.0) * 0.9) * (1.0 - land) * (1.0 - cl) * day;
   col += vec3(1.0, 0.42, 0.16) * exp(-pow(ndl / 0.1, 2.0)) * 0.12 * (1.0 - cl * 0.5);
   // night side: city lights clustered on land
   vec3 q = p * 150.0; vec3 cell = floor(q); vec3 f = fract(q) - 0.5;
@@ -304,11 +305,11 @@ void main(){
   float cluster = smoothstep(0.0, 0.35, snoise(p * 5.0 + 2.0)) * land * (1.0 - ice);
   float dotm = smoothstep(0.3, 0.05, length(f)) * step(0.72 - cluster * 0.35, h) * cluster;
   float night = 1.0 - smoothstep(-0.2, 0.05, ndl);
-  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 3.5;
+  col += vec3(1.0, 0.62, 0.3) * dotm * night * (1.0 - cl * 0.8) * 3.5 * (0.6 + 0.4 * sin(uTime * 7.0 + h * 60.0));
   col += vec3(1.0, 0.6, 0.3) * cluster * night * 0.02;
   // limb darkening + atmospheric haze toward the rim
   float rim = 1.0 - max(dot(N, V), 0.0);
-  col = mix(col, vec3(0.25, 0.5, 1.0) * day * 0.9, pow(rim, 3.0) * 0.8);
+  col = mix(col, vec3(0.3, 0.6, 1.0) * day * 1.25, pow(rim, 3.0) * 0.8);
   gl_FragColor = vec4(col, 1.0);
 }`;
 const ATMO_FRAG = /* glsl */ `
@@ -317,8 +318,8 @@ varying vec3 vN; varying vec3 vW; varying vec3 vL;
 void main(){
   vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
   float f = pow(1.0 - abs(dot(N, V)), uPower);
-  float day = smoothstep(-0.35, 0.4, dot(N, normalize(uSun)));
-  gl_FragColor = vec4(uColor * uIntensity * (0.15 + day), f * (0.1 + day));
+  float day = smoothstep(-0.3, 0.4, dot(N, normalize(uSun)));
+  gl_FragColor = vec4(uColor * uIntensity * (0.08 + day), f * (0.05 + day));   // no grey veil over the night side
 }`;
 
 export function create(ctx, segment) {
@@ -362,7 +363,7 @@ export function create(ctx, segment) {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 48, 24), skyMat);
   sky.renderOrder = -10;
   worldA.add(sky);
-  const sunGlow = glowSprite({ color: '#fff0d8', intensity: 2.5, scale: 35 });
+  const sunGlow = glowSprite({ color: '#fff0d8', intensity: 1.5, scale: 30 });
   worldA.add(sunGlow);
 
   // --- blueprint sheet
@@ -498,15 +499,15 @@ export function create(ctx, segment) {
   // ================================================================ WORLD B — orbit
   const E = V3(0, -3000, 0);
   const worldB = new THREE.Group(); worldB.position.copy(E); scene.add(worldB);
-  const SUN_B = V3(-1, 0.22, 0.42).normalize();
+  const SUN_B = V3(-1, 0.25, 0.3).normalize();          // = moonshot's SUN_S: the dissolve matches Earth to Earth
   const sunB = new THREE.DirectionalLight('#ffffff', 3.4); sunB.position.copy(E).addScaledVector(SUN_B, 100); sunB.target.position.copy(E); scene.add(sunB, sunB.target);
   const earthR = 10;
   const earthMat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: SUN_B }, uTime: { value: 0 }, uRadius: { value: earthR } }, vertexShader: EARTH_VERT, fragmentShader: EARTH_FRAG });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(earthR, 160, 100), earthMat);
   const earthTilt = new THREE.Group(); earthTilt.rotation.z = 0.41; earthTilt.add(earth); worldB.add(earthTilt);
   const atmoMat = (power, inten, col, side) => new THREE.ShaderMaterial({ uniforms: { uSun: { value: SUN_B }, uPower: { value: power }, uIntensity: { value: inten }, uColor: { value: new THREE.Color(col) } }, vertexShader: EARTH_VERT, fragmentShader: ATMO_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side });
-  const atmo = new THREE.Mesh(new THREE.SphereGeometry(earthR * 1.012, 96, 64), atmoMat(2.6, 1.6, '#5f9cff', THREE.FrontSide));
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(earthR * 1.05, 96, 64), atmoMat(4.5, 1.3, '#4a8cff', THREE.BackSide));
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(earthR * 1.012, 96, 64), atmoMat(2.6, 1.5, '#5f9cff', THREE.FrontSide));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(earthR * 1.05, 96, 64), atmoMat(4.5, 1.2, '#4a8cff', THREE.BackSide));
   worldB.add(atmo, halo);
   // stars
   const starN = 2200, starPos = new Float32Array(starN * 3), starCol = new Float32Array(starN * 3);
@@ -558,6 +559,14 @@ export function create(ctx, segment) {
   });
   const dockFlashes = parts.map(() => { const g = glowSprite({ color: '#dff0ff', intensity: 3, scale: 0.35 }); station.add(g); return g; });
 
+  // Moonshot's opening camera (mirrors moonshot.js sCamCurve / sLookCurve / sCamK, Earth-centred);
+  // only the first two segments are ever sampled here, which depend on the first four points.
+  const MS_MOON = V3(22, 3, -52), MS_NM = V3(0.15, 0.2, 0.97).normalize();
+  const MS_CAM0 = V3(1.2, 3.6, 40), MS_LOOK0 = V3(-0.9, 0.4, 0);
+  const msCam = new THREE.CatmullRomCurve3([MS_CAM0, V3(5.0, 4.0, 33.5), V3(12.5, 4.4, 18), V3(19.5, 4.2, -18), MS_MOON.clone().addScaledVector(MS_NM, 3.2 * 2.2), MS_MOON.clone().addScaledVector(MS_NM, 3.2 * 1.16)], false, 'centripetal');
+  const msLook = new THREE.CatmullRomCurve3([MS_LOOK0, V3(2.5, 0.8, -6), V3(15, 2.5, -34), MS_MOON.clone(), MS_MOON.clone().addScaledVector(MS_NM, 3.2 * 0.6), MS_MOON.clone().addScaledVector(V3(0.02, 0.07, 1).normalize(), 3.2)], false, 'centripetal');
+  const MS_K = [[0, 0], [0.45, 0.2], [0.72, 0.4]];
+
   // ================================================================ animation
   const camPos = new THREE.Vector3(), look = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
   const planePos = new THREE.Vector3(), q = new THREE.Quaternion(), e = new THREE.Euler();
@@ -581,6 +590,7 @@ export function create(ctx, segment) {
     dof: { focus: 8, range: 4, amount: 0 },
     bloom: { strength: 0.7 },
     exposure: 1.0,
+    harmony: 1,
     background: 0x000000,
     update(t, info) {
       const inA = t < tSwitch;
@@ -746,17 +756,22 @@ export function create(ctx, segment) {
       api.dof.focus = camPos.distanceTo(planePos); api.dof.range = 2.2;
       api.exposure = 1.0 + fl * 1.8;
       api.bloom.strength = 0.7 + fl * 0.8 + ramp(t, tRocket, tSwitch) * 0.15;
+      api.harmony = 1;
     },
     _worldB(t, info) {
-      const u = ramp(t, tSwitch, DUR, ease.outCubic);
-      // camera pulls back — the planet recedes into darkness
-      camPos.set(lerp(-1.5, -9.5, u), lerp(2.6, 7.5, u), lerp(27, 58, u)).add(E);
-      look.set(lerp(-2.6, -4.2, u), lerp(0.9, 0.3, u), 0).add(E);
+      // camera eases back from the planet and settles EXACTLY onto the Moonshot's opening camera
+      // (same Earth radius, tilt, spin, sun and cloud clock), so the dissolve is Earth-to-Earth
+      const tm = t - (DUR - 0.5);                        // moonshot's local clock during the hand-over
+      const u = ramp(t, tSwitch, DUR - 0.5, ease.inOutSine);
+      camPos.set(lerp(-1.5, MS_CAM0.x, u), lerp(2.6, MS_CAM0.y, u), lerp(27, MS_CAM0.z, u));
+      look.set(lerp(-2.6, MS_LOOK0.x, u), lerp(0.9, MS_LOOK0.y, u), 0);
+      if (tm > 0) { const k = clamp(timeWarp(tm, MS_K), 0, 1); msCam.getPoint(k, camPos); msLook.getPoint(k, look); }
+      camPos.add(E); look.add(E);
       camera.position.copy(camPos); camera.up.set(0, 1, 0); camera.lookAt(look);
       camera.fov = 35; camera.near = 0.1; camera.far = 1200; camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
-      earth.rotation.y = 0.6 + t * 0.08;
-      earthMat.uniforms.uTime.value = t;
+      earth.rotation.y = 1.2 + tm * 0.06;
+      earthMat.uniforms.uTime.value = tm;
       orbits.forEach((o) => {
         const p = ramp(t, o.t0, o.t0 + 0.55, ease.inOutCubic);
         o.line.progress = p; o.line.opacity = 0.75;
@@ -786,6 +801,7 @@ export function create(ctx, segment) {
       api.dof.amount = 0;
       api.exposure = 1.0 + flash * 1.6;
       api.bloom.strength = 0.75 + flash * 0.6;
+      api.harmony = 0.35;   // true ocean blues and land greens for the orbital reveal
     },
   };
   return api;

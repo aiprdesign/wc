@@ -121,6 +121,7 @@ export function create(ctx, segment) {
   // ---- S0: ring of fluted Doric columns on a stepped stylobate ------------
   const RING = 2.2, NCOL = 12;
   const marbleMat = marble({ seed: 3, repeat: 1, color: '#f0e9de', roughness: 0.32 });
+  const MARBLE_BASE = marbleMat.color.clone();
   const shaftGeo = flutedShaft(0.22, 2.6);
   const echinusGeo = new THREE.CylinderGeometry(0.31, 0.2, 0.16, 48); echinusGeo.translate(0, 2.68, 0);
   const abacusGeo = new THREE.BoxGeometry(0.6, 0.12, 0.6); abacusGeo.translate(0, 2.82, 0);
@@ -369,7 +370,7 @@ export function create(ctx, segment) {
   // and lifted clear of the showreel HUD line (identity in the 2.39 frame)
   const SQ = OUTPUT_ASPECT < 1.5, HH = FILM_ASPECT / OUTPUT_ASPECT, UI = SQ ? Math.sqrt(HH) * 1.25 : 1;
   const HX = (dx) => -FILM_ASPECT + dx * UI, HY = (y) => (SQ ? -HH + (1 + y) * UI + 0.3 : y);
-  const dim = new THREE.Mesh(new THREE.PlaneGeometry(A * 2 + 0.1, 2.1), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+  const dim = new THREE.Mesh(new THREE.PlaneGeometry(A * 2 + 0.1, 2.1 * HH), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
   dim.position.z = -2; dim.renderOrder = -1;
   hud.scene.add(dim);
   const accents = [];
@@ -580,6 +581,10 @@ export function create(ctx, segment) {
     // ---- S0 columns → sink as the gear rises (same silhouette from above)
     const sink = ease.inCubic(sat((t - (C1 - 0.3)) / 0.45));
     colGroup.scale.set(1, Math.max(0.001, 1 - sink), 1);
+    // the flattened capitals face the top-down key: dim the marble as it sinks so the abaci don't flare white
+    const sinkK = smoothstep(0.0, 0.6, sink);
+    marbleMat.color.copy(MARBLE_BASE).multiplyScalar(1 - 0.5 * sinkK);
+    marbleMat.clearcoat = 0.35 * (1 - 0.85 * sinkK);   // stays > 0: no shader variant switch
     colGroup.visible = sink < 0.999;
     floorMat.opacity = 1 - sat((t - (C2 - 0.25)) / 0.35);
     floor.visible = floorMat.opacity > 0.001;

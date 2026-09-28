@@ -477,7 +477,7 @@ export function create(ctx, segment) {
       uT: { value: 0 }, uR: { value: SPHERE_R }, uAsmDur: { value: 0.5 }, uBook: { value: 0 }, uPix: { value: 0 }, uGone: { value: 0 },
       uCell: { value: CELL }, uCore: { value: CORE }, uSpinQ: { value: new THREE.Vector4(0, 0, 0, 1) },
       uAtlas: { value: buildPageAtlas() }, uLeather: { value: leather },
-      uKeyDir: { value: new THREE.Vector3(-0.85, 0.55, 0.3) }, uKeyCol: { value: new THREE.Color(1.0, 0.82, 0.62).multiplyScalar(1.5) },
+      uKeyDir: { value: new THREE.Vector3(-0.85, 0.55, 0.3) }, uKeyCol: { value: new THREE.Color(1.0, 0.82, 0.62).multiplyScalar(1.3) },
       uRimDir: { value: new THREE.Vector3(0.9, 0.2, -0.45) }, uRimCol: { value: new THREE.Color(0.55, 0.7, 1.0).multiplyScalar(1.1) },
       uCoreCol: { value: new THREE.Color(1.0, 0.72, 0.4).multiplyScalar(1.6) }, uCoreK: { value: 1 },
       uPixCol: { value: new THREE.Color(0.8, 0.9, 1.0).multiplyScalar(1.0) }, uFog: { value: 0.07 },

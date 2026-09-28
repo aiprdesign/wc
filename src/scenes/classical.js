@@ -94,9 +94,12 @@ function withBuild(material, edgeColor = '#ffb766') {
         float bd = uBuild + bn - vBuildW.y;
         if (bd < 0.0 || vBuildW.y < uFloor + bn) discard;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uEdge * uEdgeGain * (1.0 - smoothstep(0.0, 0.07, bd));`);
+        // horizontal faces (steps, stylobate, abacus tops) lie IN the build front: the whole face would sit
+        // inside the hot band and blow out to white — keep the rim to faces that actually cross the front
+        float bSlope = smoothstep(0.0004, 0.006, fwidth(vBuildW.y));
+        totalEmissiveRadiance += uEdge * uEdgeGain * mix(0.1, 1.0, bSlope) * (1.0 - smoothstep(0.0, 0.07, bd));`);
   };
-  material.customProgramCacheKey = () => 'build-v1';
+  material.customProgramCacheKey = () => 'build-v2';
   return material;
 }
 
@@ -225,7 +228,7 @@ export function create(ctx, segment) {
   temple.add(cellaDoor);
 
   // ground: dark polished stone that catches the sun
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(120, 64), new THREE.MeshStandardMaterial({ color: '#1a1512', roughness: 0.55, metalness: 0 }));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(120, 64), new THREE.MeshStandardMaterial({ color: '#130f0c', roughness: 0.5, metalness: 0 }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -1.05;
   ground.receiveShadow = true;
@@ -336,13 +339,13 @@ export function create(ctx, segment) {
     g.setAttribute('aS', new THREE.Float32BufferAttribute(s.map((v) => -v), 1));
     overlay.add(new THREE.LineSegments(g, flowMat));
   }
-  const loadLabel = new Callout('LOAD PATH · COMPRESSION', { dx: -1.6, dy: 1.2, size: 0.3, color: '#ffe3b3', sub: 'DEAD LOAD → STYLOBATE' });
+  const loadLabel = new Callout('LOAD PATH · COMPRESSION', { dx: -1.6, dy: 1.2, size: 0.42, color: '#ffe3b3', sub: 'DEAD LOAD → STYLOBATE' });
   loadLabel.position.set(-7, 2.4, 0.05);
-  const pedLabel = new Callout('PEDIMENT · 13.7°', { dx: 2.2, dy: 1.1, size: 0.3, color: '#cfe0ff', sub: 'RAKING CORNICE' });
+  const pedLabel = new Callout('PEDIMENT · 13.7°', { dx: 2.2, dy: 1.1, size: 0.42, color: '#cfe0ff', sub: 'RAKING CORNICE' });
   pedLabel.position.set(4, 8.4, 0.05);
   const pedArc = progressLine(circlePoints(2.6, 24, { start: Math.PI, end: Math.PI - 0.239, center: V(7.95, 7.48) }), { color: BLUE_LINE, intensity: 1.4 });
-  const colDim = new Dimension(V(8.4, 0), V(8.4, 6), 'H = 7 D', { size: 0.26, tick: 0.25, color: '#cfe0ff' });
-  const bayDim = new Dimension(V(-1, -0.6), V(1, -0.6), '2.0 m · INTERCOLUMNIATION', { size: 0.2, tick: 0.18, color: '#cfe0ff' });
+  const colDim = new Dimension(V(8.4, 0), V(8.4, 6), 'H = 7 D', { size: 0.34, tick: 0.25, color: '#cfe0ff' });
+  const bayDim = new Dimension(V(-1, -0.6), V(1, -0.6), '2.0 m · INTERCOLUMNIATION', { size: 0.26, tick: 0.18, color: '#cfe0ff' });
   overlay.add(loadLabel, pedLabel, pedArc, colDim, bayDim);
 
   // Roman arch diagram beside the temple: voussoirs, keystone, thrust line
@@ -365,7 +368,7 @@ export function create(ctx, segment) {
   for (let i = 0; i <= 40; i++) { const u = i / 40 * 2 - 1; thrustPts.push(V(u * (ar + at * 0.5), 3 + (ar + at * 0.45) * Math.cos(u * Math.PI / 2) ** 0.8 - (1 - Math.abs(u)) * 0.05)); }
   thrustPts.unshift(V(-(ar + at * 0.8), 0)); thrustPts.push(V(ar + at * 0.8, 0));
   const thrust = progressLine(thrustPts, { color: '#ffb766', intensity: 2.4, head: 0.05 });
-  const keystone = new Callout('KEYSTONE', { dx: 1.2, dy: 0.9, size: 0.2, color: '#cfe0ff', sub: 'ARCH · THRUST LINE' });
+  const keystone = new Callout('KEYSTONE', { dx: 1.2, dy: 0.9, size: 0.3, color: '#cfe0ff', sub: 'ARCH · THRUST LINE' });
   keystone.position.set(0, 3 + ar + at, 0);
   arch.add(archJoints, archIn, archOut, piers, thrust, keystone);
 
