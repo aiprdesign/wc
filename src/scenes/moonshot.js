@@ -565,7 +565,7 @@ export function create(ctx, segment) {
     },
     get exploreLimits() {
       if (tNow > tFoot - 0.4 && tNow < tFoot + 0.3) return { zoomOut: 9, fly: 5, pitchDown: 0.3 };   // macro: pull back to see him
-      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.04, pitchUp: 0.4, zoomOut: 2 };    // low lens over the flat site (the curved horizon shows from high up)
+      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.04, pitchUp: 0.22, zoomOut: 2 };    // low lens over the flat site (the curved horizon shows from high up)
       if (tNow >= tS2) return { yaw: 0.95, zoomOut: 2.5 };
       return undefined;
     },
@@ -598,7 +598,7 @@ export function create(ctx, segment) {
       stack.visible = pass < 0.995;
       rcs[0].material.opacity = envelope(t, 0.52, 0.6, 0.01, 0.06); rcs[1].material.opacity = envelope(t, 0.54, 0.62, 0.01, 0.06);
       // lens (DOF off: the focus distance only centres an explore orbit on the stack)
-      api.dof.amount = 0; api.dof.focus = dist;
+      api.dof.amount = 0; api.dof.focus = pass < 0.4 ? dist : 5;
       api.exposure = 1 + envelope(t, tS1 - 0.12, tS1 + 0.2, 0.12, 0.2, ease.inQuad) * 0.9;
       api.bloom.strength = 0.72;
 

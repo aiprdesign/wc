@@ -112,17 +112,17 @@ void main(){
     float coast = 1.0 - smoothstep(0.0, 0.14, elev);
     float moist = fbm(p * 2.1 + vec3(11.0, 2.0, 5.0), 6) * 0.9 + 0.5 + coast * 0.22;
     float belt = exp(-pow((alat - 0.27) / 0.1, 2.0));
-    float dry = clamp(belt * 1.2 - moist * 0.85 + 0.2 + 0.2 * snoise(p * 5.0), 0.0, 1.0);
+    float dry = clamp(belt * 1.1 - moist * 0.9 + 0.1 + 0.2 * snoise(p * 5.0), 0.0, 1.0);
     float mtn = ridge(q * 3.2 + 2.0, 5);
     if (uMode == 2) {
-      vec3 forest = vec3(0.045, 0.095, 0.035), grass = vec3(0.13, 0.17, 0.065), sav = vec3(0.30, 0.24, 0.11);
+      vec3 forest = vec3(0.035, 0.1, 0.03), grass = vec3(0.1, 0.17, 0.05), sav = vec3(0.26, 0.23, 0.1);
       vec3 desert = vec3(0.60, 0.43, 0.23), rock = vec3(0.24, 0.20, 0.155), tundra = vec3(0.22, 0.21, 0.17);
       vec3 L = mix(forest, grass, smoothstep(0.35, 0.8, 1.0 - moist + alat * 0.4));
       L = mix(L, sav, smoothstep(0.35, 0.62, dry));
       L = mix(L, desert, smoothstep(0.58, 0.86, dry));
       L = mix(L, tundra, smoothstep(0.56, 0.7, alat));
-      float hi = smoothstep(0.12, 0.3, elev) * smoothstep(0.55, 0.85, mtn);
-      L = mix(L, rock, hi * 0.8);
+      float hi = smoothstep(0.14, 0.34, elev) * smoothstep(0.62, 0.9, mtn);
+      L = mix(L, rock, hi * 0.6);
       L *= 0.8 + 0.4 * (snoise(p * 48.0) * 0.5 + 0.5) * (0.7 + 0.3 * snoise(p * 150.0));
       float ice = smoothstep(0.8, 0.86, alat + 0.05 * snoise(p * 7.0) + 0.02 * snoise(p * 40.0));
       ice = max(ice, land * smoothstep(0.35, 0.5, elev + 0.25 * mtn - 0.1 + 0.4 * alat - 0.2) * 0.9);
@@ -160,7 +160,7 @@ void main(){
     vec3 dust = mix(vec3(0.52, 0.24, 0.11), vec3(0.72, 0.40, 0.2), m * 0.5 + 0.5);
     float dk = fbm(p * 1.7 + vec3(3.0, 1.0, 8.0), 6) + 0.25 * fbm(p * 7.0, 4);
     float band = smoothstep(-55.0, -25.0, lat) * (1.0 - smoothstep(20.0, 45.0, lat));
-    float dark = smoothstep(0.02, 0.2, dk * 0.9 + band * 0.22 - 0.12);
+    float dark = smoothstep(-0.02, 0.26, dk * 0.9 + band * 0.22 - 0.12);
     dark = max(dark, blob(p, dirLL(10.0, 70.0), 0.22, 0.12) * 0.95);           // Syrtis Major
     dark = max(dark, blob(p, dirLL(47.0, -25.0), 0.28, 0.15) * 0.8);           // Acidalia Planitia
     dark = max(dark, blob(p, dirLL(-3.0, 0.0), 0.12, 0.08) * 0.85);            // Sinus Meridiani
@@ -284,7 +284,7 @@ void main(){
     // NEPTUNE: deep azure, darker southern band, the Great Dark Spot with its white companion clouds
     float wob = fbm(vec3(p.x * 2.5, p.y * 9.0, p.z * 2.5) + 7.0, 5);
     float L = lat + 3.0 * wob;
-    alb = mix(vec3(0.07, 0.2, 0.72), vec3(0.13, 0.32, 0.86), smoothstep(-0.5, 0.5, sin(L * 0.2) + 0.4 * wob));
+    alb = mix(vec3(0.04, 0.22, 0.7), vec3(0.09, 0.34, 0.84), smoothstep(-0.5, 0.5, sin(L * 0.2) + 0.4 * wob));
     alb = mix(alb, vec3(0.04, 0.12, 0.5), exp(-pow((L + 55.0) / 7.0, 2.0)) * 0.8);
     float lon = atan(p.z, -p.x);
     float dl = atan(sin(lon - 2.2), cos(lon - 2.2)) * cos(radians(lat));
@@ -299,18 +299,21 @@ void main(){
   } else {
     // MOON: bright cratered highlands, dark maria on the near side (−x, facing Earth), rayed Tycho
     float m = fbm(p * 2.5 + 8.0, 6);
-    alb = mix(vec3(0.40, 0.39, 0.37), vec3(0.54, 0.53, 0.5), m * 0.5 + 0.5);
-    float n = fbm(p * 3.0 + 1.0, 5) * 0.08;
+    alb = mix(vec3(0.33, 0.325, 0.31), vec3(0.47, 0.46, 0.44), m * 0.5 + 0.5);
+    float n = fbm(p * 3.0 + 1.0, 6) * 0.1 + fbm(p * 9.0 + 4.0, 4) * 0.03;
     float mare = 0.0;
-    mare = max(mare, blob(p, dirLL(33.0, -16.0), 0.3 + n, 0.04));        // Imbrium
-    mare = max(mare, blob(p, dirLL(28.0, 17.0), 0.17 + n, 0.03));        // Serenitatis
-    mare = max(mare, blob(p, dirLL(8.0, 31.0), 0.2 + n, 0.04));          // Tranquillitatis
-    mare = max(mare, blob(p, dirLL(17.0, 59.0), 0.1 + n, 0.02));         // Crisium
-    mare = max(mare, blob(p, dirLL(15.0, -55.0), 0.42 + n, 0.08) * 0.9); // Procellarum
-    mare = max(mare, blob(p, dirLL(-21.0, -17.0), 0.14 + n, 0.04));      // Nubium
-    mare = max(mare, blob(p, dirLL(-8.0, 51.0), 0.14 + n, 0.04));        // Fecunditatis
-    mare = max(mare, blob(p, dirLL(-24.0, -39.0), 0.12 + n, 0.03));      // Humorum
-    alb = mix(alb, vec3(0.15, 0.15, 0.16) * (0.9 + 0.2 * m), mare * 0.9);
+    mare = max(mare, blob(p, dirLL(33.0, -16.0), 0.3 + n, 0.035));        // Imbrium
+    mare = max(mare, blob(p, dirLL(28.0, 17.0), 0.16 + n, 0.03));         // Serenitatis
+    mare = max(mare, blob(p, dirLL(8.0, 31.0), 0.19 + n, 0.035));         // Tranquillitatis
+    mare = max(mare, blob(p, dirLL(17.0, 59.0), 0.09 + n * 0.5, 0.02));   // Crisium
+    mare = max(mare, blob(p, dirLL(15.0, -55.0), 0.4 + n * 1.5, 0.1) * 0.85);   // Procellarum
+    mare = max(mare, blob(p, dirLL(-21.0, -17.0), 0.13 + n, 0.04) * 0.9); // Nubium
+    mare = max(mare, blob(p, dirLL(-8.0, 51.0), 0.13 + n, 0.04) * 0.9);   // Fecunditatis
+    mare = max(mare, blob(p, dirLL(-24.0, -39.0), 0.1 + n, 0.03));        // Humorum
+    mare = max(mare, blob(p, dirLL(-2.0, 15.0), 0.08 + n, 0.04) * 0.7);   // Sinus Medii / Vaporum
+    mare *= 0.8 + 0.2 * smoothstep(-0.3, 0.3, fbm(p * 6.0 + 2.0, 4));
+    vec3 basalt = mix(vec3(0.13, 0.13, 0.135), vec3(0.2, 0.195, 0.19), smoothstep(-0.4, 0.4, fbm(p * 5.0 + 7.0, 5)));
+    alb = mix(alb, basalt, mare * 0.9);
     vec2 c = craters(p, 4.0, 0.5, 21.0) * (1.0 - mare * 0.8) + craters(p, 9.0, 0.6, 22.0) * 0.55 * (1.0 - mare * 0.6) + craters(p, 20.0, 0.65, 23.0) * 0.3 + craters(p, 44.0, 0.7, 24.0) * 0.14;
     float ry = rays(p, dirLL(-43.0, -11.0), 0.04, 5.0) + rays(p, dirLL(10.0, -20.0), 0.03, 6.0) * 0.6 + rays(p, dirLL(8.0, -38.0), 0.025, 7.0) * 0.5;
     alb *= 1.0 + 0.3 * c.y;
@@ -519,7 +522,7 @@ const LOOK = {
   mars: { bump: 2.6, rocky: 0.35, atm: [0.9, 0.55, 0.4], atmK: 0.18, gloss: 0.02 },
   jupiter: { flow: 1, limb: 0.45, atm: [0.9, 0.82, 0.7], atmK: 0.2, gloss: 0.03, bright: 0.85 },
   saturn: { flow: 0.6, limb: 0.45, atm: [0.95, 0.85, 0.62], atmK: 0.2, gloss: 0.03, bright: 0.82 },
-  uranus: { flow: 0.2, limb: 0.35, atm: [0.5, 0.9, 1.0], atmK: 0.35, gloss: 0.03, bright: 0.9 },
+  uranus: { flow: 0.2, limb: 0.35, atm: [0.5, 0.9, 1.0], atmK: 0.3, gloss: 0.03, bright: 0.72 },
   neptune: { flow: 0.4, limb: 0.35, atm: [0.35, 0.55, 1.0], atmK: 0.4, gloss: 0.03 },
   moon: { bump: 3.2, rocky: 1, gloss: 0.015 },
 };
@@ -661,12 +664,14 @@ export function sunMaterial() {
         vec3 n = normalize(vO);
         float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
         vec3 wp = n + 0.04 * vec3(snoise(n * 9.0 + uT * 0.05), snoise(n * 9.0 + 5.0), snoise(n * 9.0 - uT * 0.05));
-        vec2 F = worley(wp * 30.0, uT * 0.7);
-        float lane = smoothstep(0.0, 0.22, F.y - F.x);               // dark intergranular lanes
-        float gran = mix(0.55, 1.08, lane) * (1.06 - 0.3 * F.x);
-        vec2 F2 = worley(wp * 64.0 + 3.0, uT * 0.9);
-        gran *= mix(0.88, 1.03, smoothstep(0.0, 0.2, F2.y - F2.x));
-        float mott = 0.5 * snoise(n * 5.0 + vec3(0.0, uT * 0.04, 0.0)) + 0.3 * snoise(n * 12.0 - uT * 0.06);
+        // granulation, faded toward its mean where the cells shrink below a few pixels (no sparkle)
+        vec3 gq = wp * 24.0;
+        float cpp = length(fwidth(gq));
+        vec2 F = worley(gq, uT * 0.7);
+        float lane = smoothstep(0.0, 0.24 + cpp, F.y - F.x);             // dark intergranular lanes
+        float gran = mix(0.6, 1.07, lane) * (1.05 - 0.26 * F.x);
+        gran = mix(0.93, gran, 1.0 - smoothstep(0.25, 0.7, cpp));
+        float mott = 0.5 * snoise(n * 5.0 + vec3(0.0, uT * 0.04, 0.0)) + 0.3 * snoise(n * 12.0 - uT * 0.06) + 0.2 * snoise(n * 26.0 + uT * 0.1);
         // sunspot groups in the two activity belts, with penumbrae and bright faculae around them
         float spot = 1.0, fac = 0.0;
         for (int i = 0; i < 6; i++){
@@ -683,9 +688,9 @@ export function sunMaterial() {
         }
         float x = 1.0 - mu;
         float ld = 1.0 - 0.52 * x - 0.26 * x * x;                    // photospheric limb darkening
-        vec3 c = mix(vec3(1.0, 0.36, 0.1), vec3(1.0, 0.8, 0.56), pow(mu, 0.55));
-        float I = ld * gran * (1.0 + 0.1 * mott) * spot * (1.0 + fac * 0.35 * x);
-        gl_FragColor = vec4(c * uI * I * 0.66, 1.0);
+        vec3 c = mix(vec3(1.0, 0.34, 0.08), vec3(1.0, 0.74, 0.45), pow(mu, 0.5));
+        float I = ld * gran * (1.0 + 0.16 * mott) * spot * (1.0 + fac * 0.35 * x);
+        gl_FragColor = vec4(c * uI * I * 0.9, 1.0);
       }`,
   });
 }

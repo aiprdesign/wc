@@ -925,7 +925,7 @@ export function create(ctx, segment) {
     sunMat.uniforms.uI.value = 1.7 * sunI * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.9);   // bright but still a textured sphere, not a clipped white disc
     sunLight.intensity = 18 * ramp(t, 1.9, 2.5);   // brass under a close point light was blooming into a gold wash
     sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3; sunMat.uniforms.uT.value = t;
-    PU.uSunI.value = 1.6 * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.25);
+    PU.uSunI.value = 1.35 * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.1);
 
     // light: beam → prism → spectrum (the light itself is slow-motion: the fan unfurls over ~0.45 s)
     const bp = ramp(t, tBeam - 0.28, tBeam, ease.inQuad);
@@ -962,7 +962,7 @@ export function create(ctx, segment) {
     // the grade's colour harmony steps aside so the spectrum shows every true hue
     // (the harmony only pulls off-palette hues; while the orrery is on show it eases so the planets keep
     // their true colours — Earth's oceans, the ice giants' blues — and the brass is untouched)
-    out.harmony = Math.min(1 - 0.45 * envelope(t, 2.2, 4.05, 0.35, 0.2), 1 - 0.97 * ramp(t, tBeam - 0.05, tBeam + 0.2));
+    out.harmony = Math.min(1 - 0.85 * envelope(t, 2.2, 4.05, 0.35, 0.2), 1 - 0.97 * ramp(t, tBeam - 0.05, tBeam + 0.2));
 
     // labels face the camera (flat zodiac numerals excepted)
     for (const l of labels3D) l.quaternion.copy(camera.quaternion);
@@ -989,7 +989,7 @@ export function create(ctx, segment) {
     bloom.strength = 0.55 + 0.2 * smoothstep(tBeam, tSpec, t);
   }
 
-  function explore(t) { if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.55); } }
+  function explore(t) { if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.15); } }
   const out = { scene, camera, update, explore, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
   return out;
 }
