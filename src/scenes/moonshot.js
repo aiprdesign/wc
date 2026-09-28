@@ -549,7 +549,7 @@ export function create(ctx, segment) {
           boot.position.set(PRINT.x + STRIDE.x * fw, PRINT.y + (1 - down) * 0.45 - pressU.value * 0.02, PRINT.z + STRIDE.z * fw);
           boot.rotation.set(0.3 * (1 - down), PRINT_ANG, 0, 'YXZ');
           stepper.group.visible = true;
-          poseStepLeg();
+          poseStepLeg(); patch.material = terrainMat;
         }
         // the crash zoom's extreme telephoto makes no sense off-axis: hand the explorer a normal lens
         if (camera.fov < 30) { camera.fov = 30; camera.updateProjectionMatrix(); }
