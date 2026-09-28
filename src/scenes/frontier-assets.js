@@ -194,7 +194,7 @@ export function buildHubble() {
   const g = new THREE.Group();
   const mli = mliTexture(); mli.repeat.set(3, 1);
   const crinkle = crinkleTexture(11, 256);
-  const silver = new THREE.MeshStandardMaterial({ map: mli, color: '#e2e4e7', metalness: 0.88, roughness: 0.3, bumpMap: crinkle, bumpScale: 0.8 });
+  const silver = new THREE.MeshStandardMaterial({ map: mli, color: '#c9ccd1', metalness: 0.88, roughness: 0.36, bumpMap: crinkle, bumpScale: 0.8 });
   const silverFwd = silver.clone(); silverFwd.map = mli.clone(); silverFwd.map.repeat.set(3, 2); silverFwd.map.needsUpdate = true;
   const black = new THREE.MeshStandardMaterial({ color: '#050506', roughness: 0.95, metalness: 0 });
   const add = (geo, mat, p = [0, 0, 0], r = [0, 0, 0]) => { const m = new THREE.Mesh(geo, mat); m.position.set(...p); m.rotation.set(...r); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
@@ -244,7 +244,7 @@ export function buildHubble() {
 // ------------------------------------------------------------------ James Webb Space Telescope (generic; 1 unit = 1 m)
 // 18 flat-top hexagonal segments (5 columns: 3-4-4-4-3; the outer columns are the folding wings),
 // secondary mirror on a tripod, five-layer sunshield opening like a fan, spacecraft bus beneath.
-export function buildWebb(env) {
+export function buildWebb(env, goldEnv = env) {
   const g = new THREE.Group();
   const s = 0.762, F = 7.3;                       // segment circumradius, primary focal length
   const hexPts = (r) => Array.from({ length: 6 }, (_, k) => [r * Math.cos(k * Math.PI / 3), r * Math.sin(k * Math.PI / 3)]);
@@ -253,7 +253,7 @@ export function buildWebb(env) {
   const backGeo = new THREE.ExtrudeGeometry(shape(hexPts(s - 0.03)), { depth: 0.24, bevelEnabled: false });
   backGeo.translate(0, 0, -0.32);
   const sweep = { uSweep: { value: -99 }, uSweepDir: { value: new THREE.Vector3(1, 0.35, 0).normalize() }, uSweepK: { value: 0 } };
-  const goldM = new THREE.MeshStandardMaterial({ color: '#f0c060', metalness: 1, roughness: 0.16, envMap: env, envMapIntensity: 1.0 });
+  const goldM = new THREE.MeshStandardMaterial({ color: '#f0c060', metalness: 1, roughness: 0.2, envMap: goldEnv, envMapIntensity: 0.4 });
   goldM.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, sweep);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -324,7 +324,7 @@ export function buildWebb(env) {
   };
   const layers = [];
   for (let i = 0; i < 5; i++) {
-    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#d6c8dc' : '#c7b2c8', metalness: 0.92, roughness: 0.22 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 0.9 });
+    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#cfc2d6' : '#bba6bd', metalness: 0.72, roughness: 0.36 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 0.8 });
     const L = new THREE.Mesh(layerGeo(i), m); L.receiveShadow = true; L.castShadow = i === 0;
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.map(([x, z]) => V3(x, -(0.12 + i * 0.1), z))), new THREE.LineBasicMaterial({ color: new THREE.Color('#f1e6f4').multiplyScalar(0.8), transparent: true, opacity: 0.8 }));
     L.add(edge);
@@ -592,15 +592,19 @@ void main(){
         float rim = pow(1.0 - mu, 2.5);
         s = mix(s, vec3(0.3, 0.55, 1.0) * day * 0.95, rim * 0.85);
       } else {
-        vec2 c1 = craters(p * 3.0), c2 = craters(p * 8.0 + 3.1), c3 = craters(p * 21.0 + 7.7);
-        float hh = c1.x * 0.6 + c2.x * 0.28 + c3.x * 0.12 + snoise(p * 40.0) * 0.006;
-        float maria = smoothstep(0.05, 0.3, snoise(p * 1.3 + 2.0) * 0.7 + snoise(p * 3.1) * 0.3);
-        float alb = mix(0.62, 0.34, maria) * (0.9 + 0.2 * snoise(p * 12.0)) + (c1.y + c2.y * 0.6 + c3.y * 0.3) * 0.18;
-        vec3 dx = dFdx(n), dy = dFdy(n); float hx = dFdx(hh), hy = dFdy(hh);
-        vec3 r1 = cross(dy, n), r2 = cross(n, dx); float det = dot(dx, r1);
-        vec3 Nb = normalize(abs(det) * n - sign(det) * (hx * r1 + hy * r2) * 0.9);
-        float ndl2 = max(dot(Nb, L), 0.0);
-        s = vec3(0.97, 0.96, 0.93) * alb * pow(ndl2, 0.8) * smoothstep(-0.02, 0.06, ndl) * 1.6;
+        // albedo carries the full Moon (maria, bright ray craters); relief comes from a sun-ward
+        // finite difference of the crater height (no screen derivatives → no 2×2 blockiness)
+        vec2 c1 = craters(p * 3.0), c2 = craters(p * 7.0 + 3.1);
+        float hA = c1.x * 0.6 + c2.x * 0.3;
+        vec3 Lt = normalize(L - n * dot(L, n) + 1e-5);
+        vec3 p2 = p + (uPRot * Lt) * 0.012;
+        float hB = craters(p2 * 3.0).x * 0.6 + craters(p2 * 7.0 + 3.1).x * 0.3;
+        float slope = (hB - hA) / 0.012;
+        float maria = smoothstep(0.0, 0.35, snoise(p * 1.4 + 2.0) * 0.7 + snoise(p * 3.3) * 0.3);
+        float alb = mix(0.66, 0.3, maria) * (0.88 + 0.24 * (snoise(p * 11.0) * 0.5 + 0.5)) + (c1.y + c2.y * 0.6) * 0.14;
+        float term = smoothstep(-0.03, 0.12, ndl);
+        float relief = clamp(1.0 + slope * 0.11 * (1.0 - 0.7 * smoothstep(0.2, 0.9, ndl)), 0.25, 1.8);
+        s = vec3(0.97, 0.96, 0.93) * alb * pow(max(ndl, 0.0), 0.55) * term * relief * 1.45;
         s += vec3(0.9, 0.93, 1.0) * pow(1.0 - mu, 6.0) * 0.08;
       }
       col = mix(col, s, cov);
@@ -627,7 +631,7 @@ void main(){
     col += vec3(1.0, 0.97, 0.92) * pow(sd, 3500.0) * 60.0;
     col += vec3(0.8, 0.45, 0.25) * exp(-max(e, 0.0) * 30.0) * 0.18 * smoothstep(-0.5, 1.0, az);
     float ed = max(dot(d, normalize(uEarthDir)), 0.0);
-    col += vec3(0.62, 0.8, 1.0) * (pow(ed, 90000.0) * 30.0 + pow(ed, 6000.0) * 1.2) * uEarthK;
+    col += vec3(0.62, 0.8, 1.0) * (pow(ed, 60000.0) * 9.0 + pow(ed, 5000.0) * 0.35) * uEarthK;
   }
   gl_FragColor = vec4(col * uGain, 1.0);
 }`;
@@ -730,8 +734,8 @@ export function makeDownwash(n = 1600, seed = 9) {
         vec3 p = vec3(cos(aA.x) * r, 0.02 + age * (0.08 + aA.w * 0.25), sin(aA.x) * r);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = (0.04 + age * 0.14) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
-        vA = uK * sin(3.14159 * age) * 0.4; vL = 0.7 + 0.3 * aA.w;
+        gl_PointSize = (0.03 + age * 0.09) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
+        vA = uK * sin(3.14159 * age) * 0.28; vL = 0.7 + 0.3 * aA.w;
       }`,
     fragmentShader: /* glsl */ `varying float vA; varying float vL; void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a * vA; if (a < 0.003) discard; gl_FragColor = vec4(vec3(0.75, 0.46, 0.3) * vL, a); }`,
   });
@@ -981,9 +985,9 @@ export function buildGlyphs(pairs) {
 // ------------------------------------------------------------------ Mars terrain field: a gentle plain with dunes and a far crater rim
 export function marsField() {
   return (x, z) => {
-    const n1 = Math.sin(x * 0.05 + 1.3) * Math.cos(z * 0.043 - 0.4) * 0.6;
+    const n1 = Math.sin(x * 0.05 + 1.3) * Math.cos(z * 0.043 - 0.4) * 0.22;
     const dune = Math.sin((x * 0.6 + z * 0.35) * 0.9 + Math.sin(z * 0.2) * 1.5) * 0.08;
-    const d = Math.hypot(x + 20, z + 160);
+    const d = Math.hypot(x + 20, z + 330);
     const rim = Math.exp(-Math.pow((d - 150) / 18, 2)) * 9 + Math.exp(-Math.pow((d - 150) / 60, 2)) * 5;
     const far = Math.max(0, Math.hypot(x, z) - 60);
     return n1 + dune + rim + far * far * 0.0012 * (0.6 + 0.4 * Math.sin(x * 0.03 + z * 0.02));

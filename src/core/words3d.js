@@ -19,7 +19,7 @@ const WORDS = {
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
   moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: 'INTELLIGENCE', knowledge: 'KNOWLEDGE',
-  frontier: 'FRONTIER',
+  frontier: { text: 'FRONTIER', t0: 49.8, t1: 51.1 },   // clears before the genome shot
 };
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
