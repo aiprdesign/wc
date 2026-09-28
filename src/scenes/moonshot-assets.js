@@ -202,23 +202,78 @@ export function smTexture(size = 512) {
   return toTexture(c, { repeat: true });
 }
 
-// Stars and stripes (50 stars, 13 stripes), cloth-like shading baked in lightly.
-export function flagTexture(w = 1024, h = 540) {
-  const c = mkCanvas(w, h), g = c.getContext('2d');
-  const sh = h / 13;
-  for (let i = 0; i < 13; i++) { g.fillStyle = i % 2 ? '#f2eee6' : '#b3223a'; g.fillRect(0, i * sh, w, Math.ceil(sh)); }
-  const cw = w * 0.4, ch = sh * 7;
-  g.fillStyle = '#243668'; g.fillRect(0, 0, cw, ch);
-  g.fillStyle = '#f4f1ea';
-  const star = (x, y, R) => { g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? R * 0.382 : R; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); };
+// The flag of the United States, drawn to the official proportions (Executive Order 10834):
+// hoist A = 1, fly B = 1.9, canton C = 7/13 × D = 0.76, star field E = F = 0.054, G = H = 0.063,
+// star diameter K = 0.0616, stripe L = 1/13. 50 stars in 9 staggered rows of 6 and 5.
+// Colours: Old Glory Red #B22234, white, Old Glory Blue #3C3B6E.
+export function drawUSFlag(g, x0, y0, A, { red = '#b22234', white = '#f7f5ef', blue = '#3c3b6e', starCol = white } = {}) {
+  const B = A * 1.9, L = A / 13, C = A * 7 / 13, D = A * 0.76;
+  const E = A * 0.054, F = A * 0.054, G = A * 0.063, H = A * 0.063, K = A * 0.0616;
+  g.fillStyle = white; g.fillRect(x0, y0, B, A);
+  g.fillStyle = red;
+  for (let i = 0; i < 13; i += 2) { const ya = y0 + Math.round(i * L), yb = y0 + Math.round((i + 1) * L); g.fillRect(x0, ya, B, yb - ya); }
+  g.fillStyle = blue; g.fillRect(x0, y0, D, Math.round(C));
+  g.fillStyle = starCol;
+  const R = K / 2, r = R * 0.381966;                     // regular five-pointed star
+  const star = (cx, cy) => {
+    g.beginPath();
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r : R; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+    g.closePath(); g.fill();
+  };
   for (let row = 0; row < 9; row++) {
-    const n = row % 2 ? 5 : 6;
-    for (let k = 0; k < n; k++) {
-      const x = cw * ((row % 2 ? 2 : 1) + k * 2) / 12, y = ch * (row + 1) / 10;
-      star(x, y, ch * 0.042);
-    }
+    const cy = y0 + E + row * F;
+    for (let col = row % 2; col < 11; col += 2) star(x0 + G + col * H, cy);
   }
-  return toTexture(c);
+}
+
+export function flagTexture(A = 1072) {
+  const w = Math.round(A * 1.9), c = mkCanvas(w, A), g = c.getContext('2d');
+  drawUSFlag(g, 0, 0, A);
+  // a faint dye/print irregularity so the nylon doesn't read as a flat vector fill
+  const r = rng(76), id = g.getImageData(0, 0, w, A), d = id.data;
+  for (let i = 0; i < w * A; i++) { const k = 1 + (r() - 0.5) * 0.035; d[i * 4] *= k; d[i * 4 + 1] *= k; d[i * 4 + 2] *= k; }
+  g.putImageData(id, 0, 0);
+  const t = toTexture(c, { anisotropy: 16 });
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+}
+
+// Nylon plain weave (tileable): warp/weft threads with slub noise. Used as bump + roughness variation.
+export function weaveTexture(size = 256, threads = 32) {
+  const r = rng(12), c = mkCanvas(size), g = c.getContext('2d');
+  const id = g.createImageData(size, size), d = id.data, p = size / threads;
+  const slubX = Array.from({ length: threads }, () => 0.85 + r() * 0.3), slubY = Array.from({ length: threads }, () => 0.85 + r() * 0.3);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const tx = Math.floor(x / p), ty = Math.floor(y / p), fx = (x % p) / p, fy = (y % p) / p;
+    const over = (tx + ty) % 2 === 0;                     // which thread is on top in this cell
+    const warp = Math.sin(fx * Math.PI) * slubX[tx], weft = Math.sin(fy * Math.PI) * slubY[ty];
+    const h = over ? 0.55 + 0.45 * warp * (0.6 + 0.4 * Math.sin(fy * Math.PI)) : 0.55 + 0.45 * weft * (0.6 + 0.4 * Math.sin(fx * Math.PI));
+    const v = Math.max(0, Math.min(255, h * 230 + (r() - 0.5) * 16));
+    const i = (y * size + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+  return toTexture(c, { srgb: false, repeat: true });
+}
+
+// Descent-stage placard: US flag decal over "UNITED / STATES" on a light thermal-paint panel
+// (drawn into the front-left of the panel so the landing-leg strut doesn't cross it).
+export function lmDecalTexture(w = 1024, h = 1024) {
+  const c = mkCanvas(w, h), g = c.getContext('2d'), r = rng(8);
+  g.fillStyle = '#9a9994'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 18; i++) { const l = 170 + Math.floor(r() * 30); g.fillStyle = `rgba(${l},${l},${l - 4},0.35)`; g.fillRect(r() * w, r() * h, w * (0.1 + r() * 0.3), h * (0.05 + r() * 0.2)); }
+  g.strokeStyle = 'rgba(70,70,74,0.6)'; g.lineWidth = 3;
+  for (const y of [0.04, 0.96]) { g.beginPath(); g.moveTo(0, y * h); g.lineTo(w, y * h); g.stroke(); }
+  g.fillStyle = 'rgba(40,40,40,0.45)';
+  for (let i = 0; i < 26; i++) { g.beginPath(); g.arc(w * (0.03 + i * 0.0375), h * 0.04, 3, 0, TAU); g.fill(); g.beginPath(); g.arc(w * (0.03 + i * 0.0375), h * 0.96, 3, 0, TAU); g.fill(); }
+  const A = h * 0.2, x0 = w * 0.06, y0 = h * 0.2;
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x0 - 3, y0 - 3, A * 1.9 + 6, A + 6);
+  drawUSFlag(g, x0, y0, A, { white: '#f1efe8' });
+  g.fillStyle = '#111214'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  g.font = `600 ${Math.round(h * 0.105)}px "${FONTS.sans}"`;
+  const track = (txt, x, y, sp) => { for (const ch of txt) { g.fillText(ch, x, y); x += g.measureText(ch).width + sp; } };
+  track('UNITED', x0, y0 + A + h * 0.17, h * 0.012);
+  track('STATES', x0, y0 + A + h * 0.3, h * 0.012);
+  return toTexture(c, { anisotropy: 16 });
 }
 
 // Tileable regolith: albedo (sRGB) + height (bump), built from 4D-torus noise + craterlets + pebbles.
@@ -280,15 +335,15 @@ export function bootprintTexture(w = 256, h = 512) {
   sole.closePath();
   g.globalCompositeOperation = 'lighter';
   // rim: soft ring just outside the outline
-  g.filter = 'blur(9px)'; g.strokeStyle = 'rgb(0,200,0)'; g.lineWidth = 26; g.stroke(sole); g.filter = 'none';
-  // depth
+  g.filter = 'blur(7px)'; g.strokeStyle = 'rgb(0,220,0)'; g.lineWidth = 20; g.stroke(sole); g.filter = 'none';
+  // depth: the sole pressed ~1.5 cm, its transverse ribs a further ~1 cm (crisp, as in AS11-40-5878)
   const d = mkCanvas(w, h), dg = d.getContext('2d');
   dg.save(); dg.clip(sole);
-  dg.fillStyle = 'rgb(120,0,0)'; dg.fillRect(0, 0, w, h);
+  dg.fillStyle = 'rgb(150,0,0)'; dg.fillRect(0, 0, w, h);
   dg.fillStyle = 'rgb(255,0,0)';
-  for (let i = 0; i < 17; i++) { const y = h * 0.1 + i * h * 0.048; dg.fillRect(0, y, w, h * 0.024); }
+  for (let i = 0; i < 16; i++) { const y = h * 0.115 + i * h * 0.05; dg.fillRect(0, y, w, h * 0.026); }
   dg.restore();
-  g.filter = 'blur(1.2px)'; g.drawImage(d, 0, 0); g.filter = 'none';
+  g.filter = 'blur(0.8px)'; g.drawImage(d, 0, 0); g.filter = 'none';
   // cut the rim where the sole is
   const out = mkCanvas(w, h), og = out.getContext('2d');
   og.drawImage(c, 0, 0);
@@ -393,6 +448,7 @@ export function apolloMaterials(envMap = null) {
     white: new THREE.MeshStandardMaterial({ color: '#9d9d98', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
     sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 0.55, roughness: 0.3, envMapIntensity: 0.9 }),
     cm: new THREE.MeshStandardMaterial({ color: '#d9dcdf', metalness: 0.7, roughness: 0.3, envMapIntensity: 1.0 }),
+    decal: new THREE.MeshStandardMaterial({ map: lmDecalTexture(), metalness: 0.25, roughness: 0.55, envMapIntensity: 0.4 }),
     window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#ffffff'), emissiveMap: cabinGlowTexture(), emissiveIntensity: 0.5, envMapIntensity: 1.2 }),
   };
   if (envMap) for (const m of Object.values(M)) m.envMap = envMap;
@@ -410,6 +466,12 @@ export function buildLM(M, { folded = false } = {}) {
   for (let k = 0; k < 4; k++) {
     const a = k * Math.PI / 2, pnl = add(new THREE.Mesh(new THREE.BoxGeometry(1.5, DS_H * 0.82, 0.05), k % 2 ? M.blackFoil : M.silverFoil));
     const rr = DS_R * Math.cos(Math.PI / 8) + 0.01;
+    pnl.position.set(Math.sin(a) * rr, DS_Y + DS_H / 2, Math.cos(a) * rr); pnl.rotation.y = a;
+  }
+  // "UNITED STATES" placard with the flag decal on the front-right bay (sunlit side)
+  if (M.decal) {
+    const a = Math.PI / 4, rr = DS_R * Math.cos(Math.PI / 8) + 0.012;
+    const pnl = add(new THREE.Mesh(new THREE.PlaneGeometry(1.45, DS_H * 0.84), M.decal));
     pnl.position.set(Math.sin(a) * rr, DS_Y + DS_H / 2, Math.cos(a) * rr); pnl.rotation.y = a;
   }
   // descent engine
@@ -509,24 +571,65 @@ export function buildCSM(M) {
   return g;
 }
 
-export function buildFlag(M, flagTex) {
+// Apollo Lunar Flag Assembly: two-piece anodised-aluminium pole with a hinged horizontal crossbar
+// through the top hem, 3 × 5 ft nylon flag. On Apollo 11 the telescoping crossbar did not fully
+// extend, so the cloth bunched into permanent ripples; the storage folds left creases. There is no
+// wind: the cloth is a static, vertex-displaced sheet (pure geometry, built once).
+// Origin: pole foot at the regolith surface (the pole continues 0.4 m into the ground).
+export function buildFlag({ envMap = null } = {}) {
   const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2.4, 10), M.white); pole.position.y = 1.2; g.add(pole);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.3, 8), M.white); rod.rotation.z = Math.PI / 2; rod.position.set(0.64, 2.3, 0); g.add(rod);
-  const cloth = new THREE.PlaneGeometry(1.25, 0.76, 48, 24);
-  const p = cloth.attributes.position;
+  const A = 0.8, B = A * 1.9, BUNCH = 0.9, TOP = 2.2, X0 = 0.03;
+  const alu = new THREE.MeshStandardMaterial({ color: '#a4a7ab', metalness: 0.85, roughness: 0.38, envMap, envMapIntensity: 0.5 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#7b7e82', metalness: 0.85, roughness: 0.42, envMap, envMapIntensity: 0.5 });
+  const add = (m) => { g.add(m); return m; };
+  const pole = add(new THREE.Mesh(new THREE.CylinderGeometry(0.0155, 0.0165, TOP + 0.47, 18), alu)); pole.position.y = (TOP + 0.47) / 2 - 0.4;
+  const joint = add(new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.021, 0.08, 18), dark)); joint.position.y = 1.05;
+  const hinge = add(new THREE.Mesh(new RoundedBoxGeometry(0.05, 0.075, 0.045, 2, 0.008), dark)); hinge.position.y = TOP + 0.005;
+  const cap = add(new THREE.Mesh(new THREE.SphereGeometry(0.017, 14, 8), alu)); cap.position.y = TOP + 0.06;
+  const barL = B * BUNCH + 0.03;
+  const bar = add(new THREE.Mesh(new THREE.CylinderGeometry(0.0105, 0.0105, barL, 12), alu)); bar.rotation.z = Math.PI / 2; bar.position.set(barL / 2 + 0.015, TOP, 0);
+  const tip = add(new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), dark)); tip.position.set(barL + 0.02, TOP, 0);
+  // cloth
+  const SX = 170, SY = 90;
+  const geo = new THREE.PlaneGeometry(B, A, SX, SY);
+  const p = geo.attributes.position;
+  const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const crease = (d, w) => Math.exp(-((d / w) ** 2));
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i) + 0.625, y = p.getY(i);
-    // Apollo flag: rigid top rod, loose lower edge with permanent wrinkles (no wind)
-    const hang = (0.38 - y) / 0.76;
-    const z = Math.sin(x * 9.0 + 0.6) * 0.035 * (0.3 + hang) + Math.sin(x * 23 + y * 4) * 0.012 * hang + Math.sin(x * 4.2) * 0.05 * hang;
-    p.setZ(i, z);
+    const u = Math.min(1, Math.max(0, (p.getX(i) + B / 2) / B)), v = Math.min(1, Math.max(0, (p.getY(i) + A / 2) / A)), hang = 1 - v;
+    const pin = sm(0, 0.06, u);                                   // hoist hem held along the pole
+    let z = Math.sin(TAU * (u * 4.6 + 0.16 * hang + 0.1)) * (0.012 + 0.05 * hang) * pin      // bunching ripples off the crossbar
+      + Math.sin(TAU * (u * 9.3 - 0.3 * hang) + 1.7) * 0.006 * (0.35 + hang) * pin
+      + Math.sin(TAU * (u * 1.7 + 0.35)) * 0.028 * hang * hang * pin                          // broad lower billow
+      + 0.045 * u * u * u * Math.pow(hang, 2.2);                                              // free fly corner curls out
+    z += 0.0045 * (crease(v - 0.335, 0.011) - crease(v - 0.667, 0.011)) * pin;               // storage folds
+    z += 0.004 * (crease(u - 0.25, 0.008) - crease(u - 0.5, 0.008) + crease(u - 0.75, 0.008)) * (0.3 + hang);
+    const x = X0 + u * B * BUNCH;
+    const y = TOP - 0.018 - hang * A - 0.03 * u * u * hang * hang;
+    p.setXYZ(i, x, y, z);
   }
-  cloth.computeVertexNormals();
-  const fm = new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.3 });
-  const flag = new THREE.Mesh(cloth, fm); flag.position.set(0.645, 2.3 - 0.38 - 0.01, 0); g.add(flag);
+  geo.computeVertexNormals();
+  const weave = weaveTexture();
+  weave.repeat.set(52, 28);
+  const flagTex = flagTexture();
+  const cm = new THREE.MeshPhysicalMaterial({
+    map: flagTex, side: THREE.DoubleSide, metalness: 0, roughness: 0.74, roughnessMap: weave, bumpMap: weave, bumpScale: 0.35,
+    color: new THREE.Color(0.6, 0.6, 0.6), sheen: 1, sheenRoughness: 0.45, sheenColor: new THREE.Color(0.2, 0.2, 0.21), envMap, envMapIntensity: 0.25,
+  });
+  // thin nylon: sunlight shining through from behind lights the dyed cloth (simple diffuse transmission)
+  const u = { uSunV: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uTrans: { value: 0.35 } };
+  cm.userData.u = u;
+  cm.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uSunV, uSunCol; uniform float uTrans;')
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        { float bt = max(0.0, -dot(normal, uSunV)); reflectedLight.directDiffuse += diffuseColor.rgb * diffuseColor.rgb * uSunCol * bt * uTrans; }`);
+  };
+  cm.customProgramCacheKey = () => 'moonshot-flag-cloth';
+  const cloth = add(new THREE.Mesh(geo, cm));
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  g.userData.cloth = flag;
+  g.userData = { cloth, clothMat: cm, top: TOP, width: B * BUNCH, height: A };
   return g;
 }
 
