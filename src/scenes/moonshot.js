@@ -92,7 +92,7 @@ export function create(ctx, segment) {
   const L0 = V3(0, -6000, 0);
   const worldL = new THREE.Group(); worldL.position.copy(L0); scene.add(worldL);
   const SUN_L = V3(1, 0.235, -0.16).normalize();       // ~13° above the eastern horizon, a touch behind the LM
-  const sunL = new THREE.DirectionalLight('#fff4e6', 9);
+  const sunL = new THREE.DirectionalLight('#fff4e6', 7);
   sunL.position.copy(L0).addScaledVector(SUN_L, 160); sunL.target.position.copy(L0);
   sunL.castShadow = true;
   sunL.shadow.mapSize.set(4096, 4096);
@@ -107,17 +107,19 @@ export function create(ctx, segment) {
   const FLAG_P = V3(-3.4, 0, 9.4); FLAG_P.y = field(FLAG_P.x, FLAG_P.z);
   const FLAG_YAW = 0.55;                                   // cloth faces the camera side and the low sun
   const FLAG_F = V3(Math.cos(FLAG_YAW), 0, -Math.sin(FLAG_YAW)), FLAG_N = V3(Math.sin(FLAG_YAW), 0, Math.cos(FLAG_YAW));
-  const PATCH = 0.9;
-  const inPatch = (x, z) => Math.abs(x - PRINT.x) < PATCH / 2 - 0.02 && Math.abs(z - PRINT.z) < PATCH / 2 - 0.02;
+  // the dense footprint patch replaces the coarse terrain around the print: terrain vertices whose triangles lie
+  // wholly under the patch are sunk out of the way (terrain vertex spacing here is ~0.53 m in x, ~0.8 m in z)
+  const PATCH_X = 2.4, PATCH_Z = 3.4;
+  const inPatch = (x, z) => Math.abs(x - PRINT.x) < 0.62 && Math.abs(z - PRINT.z) < 0.86 ? 0.25 : 0;
   const reg = regolithTextures();
-  const terrainMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#e2ddd4', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
+  const terrainMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#fffaf0', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
   const terrain = new THREE.Mesh(terrainGeometry(field, { size: 190, segs: 300, k: 1.6, uvScale: 1 / 5, skip: inPatch }), terrainMat);
   terrain.receiveShadow = true; terrain.castShadow = true;
   worldL.add(terrain);
   // footprint patch: dense grid, same material, bootprint displaced in the vertex shader
   const printTex = bootprintTexture();
   const pressU = { value: 0 };
-  const patchGeo = new THREE.PlaneGeometry(PATCH, PATCH, 260, 260); patchGeo.rotateX(-Math.PI / 2);
+  const patchGeo = new THREE.PlaneGeometry(PATCH_X, PATCH_Z, 300, 420); patchGeo.rotateX(-Math.PI / 2);
   {
     const p = patchGeo.attributes.position, uv = patchGeo.attributes.uv;
     for (let i = 0; i < p.count; i++) {
@@ -128,7 +130,7 @@ export function create(ctx, segment) {
     patchGeo.computeVertexNormals();
   }
   const patchMat = terrainMat.clone();
-  const PRINT_ANG = -0.93;                  // stride points toward the flag and the sun: the tread ribs catch the raking light
+  const PRINT_ANG = -1.2;                  // stride points toward the flag and the sun: the tread ribs catch the raking light
   patchMat.onBeforeCompile = (sh) => {
     sh.uniforms.uPrint = { value: printTex }; sh.uniforms.uPress = pressU;
     const PRINT_FN = `uniform sampler2D uPrint; uniform float uPress; varying vec2 vPP;
@@ -141,7 +143,7 @@ export function create(ctx, segment) {
           return (-t.r * 0.026 + t.g * 0.011) * uPress;
         }`;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\n' + PRINT_FN.replace('PRINT_TEX(uPrint, q)', 'textureLod(uPrint, q, 1.5)'))
+      .replace('#include <common>', '#include <common>\n' + PRINT_FN.replace('PRINT_TEX(uPrint, q)', 'textureLod(uPrint, q, 3.0)'))
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vPP = position.xz; transformed.y += printH(position.xz);`);
     // tread detail: per-pixel normals from the full-res print (the mesh carries a smoothed displacement)
@@ -164,14 +166,14 @@ export function create(ctx, segment) {
       v.multiplyScalar(k); v.y *= 0.62; p.setXYZ(i, v.x, v.y, v.z);
     }
     rockGeo.computeVertexNormals();
-    const rockMat = new THREE.MeshStandardMaterial({ color: '#b2ada5', roughness: 0.9, metalness: 0, bumpMap: reg.bump, bumpScale: 1.5, envMapIntensity: 0.02, flatShading: true });
+    const rockMat = new THREE.MeshStandardMaterial({ color: '#c8c3bb', roughness: 0.9, metalness: 0, bumpMap: reg.bump, bumpScale: 1.5, envMapIntensity: 0.02, flatShading: true });
     const N = 140, rocks = new THREE.InstancedMesh(rockGeo, rockMat, N);
     const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), pos = new THREE.Vector3();
     let n = 0, tries = 0;
     while (n < N && tries++ < 4000) {
       const x = (rr() - 0.5) * 120, z = (rr() - 0.5) * 120 + 10, size = 0.06 + Math.pow(rr(), 4) * 0.9;
       if (Math.hypot(x, z) < 5.5) continue;
-      if (Math.abs(x - PRINT.x) < 1.4 && Math.abs(z - PRINT.z) < 1.4) continue;
+      if (Math.abs(x - PRINT.x) < 2.4 && Math.abs(z - PRINT.z) < 2.4) continue;
       if (Math.hypot(x - FLAG_P.x - 0.6, z - FLAG_P.z) < 2.4) continue;
       if (Math.abs(x) < 2.5 && z > 6 && z < 58 && size > 0.2) continue;
       pos.set(x, field(x, z) - size * 0.15, z); e.set(rr() * 0.4, rr() * TAU, rr() * 0.4); q.setFromEuler(e); s.set(size * (0.8 + rr() * 0.5), size, size * (0.8 + rr() * 0.5));
@@ -184,10 +186,10 @@ export function create(ctx, segment) {
   // surface hardware: the same materials toned for the unfiltered low sun (keeps the sunlit bays out of clipping)
   const MATL = Object.fromEntries(Object.entries(MAT).map(([k, m]) => [k, m.clone()]));
   for (const m of Object.values(MATL)) m.envMap = LUNAR_ENV;
-  MATL.skin.color.setScalar(0.6); MATL.skin.roughness = 0.56;
+  MATL.skin.color.setScalar(0.45); MATL.skin.roughness = 0.56;
   MATL.silverFoil.color.multiplyScalar(0.6); MATL.silverFoil.roughness = 0.44;
-  MATL.white.color.multiplyScalar(0.72); MATL.gold.color.multiplyScalar(0.74); MATL.gold.roughness = 0.52; MATL.goldDark.color.multiplyScalar(0.8);
-  MATL.decal.color.setScalar(0.78);
+  MATL.white.color.multiplyScalar(0.72); MATL.gold.color.multiplyScalar(0.74); MATL.gold.roughness = 0.6; MATL.gold.bumpScale = 2; MATL.goldDark.color.multiplyScalar(0.8);
+  MATL.decal.color.setScalar(0.5);
   const lm = buildLM(MATL); worldL.add(lm);
   const lmd = lm.userData;
   const plume = (() => {
@@ -208,7 +210,7 @@ export function create(ctx, segment) {
   // flag
   const flag = buildFlag({ envMap: LUNAR_ENV }); flag.position.copy(FLAG_P); flag.rotation.y = FLAG_YAW; worldL.add(flag);
   const flagU = flag.userData.clothMat.userData.u;
-  flagU.uSunCol.value.set('#fff4e6').multiplyScalar(9 / Math.PI);
+  flagU.uSunCol.value.set('#fff4e6').multiplyScalar(sunL.intensity / Math.PI);
   const FC = FLAG_P.clone().addScaledVector(FLAG_F, 0.03 + flag.userData.width / 2);        // centre of the cloth
   FC.y += flag.userData.top - flag.userData.height / 2 - 0.02;
   // boot
@@ -229,14 +231,20 @@ export function create(ctx, segment) {
     for (let i = 0; i < 12; i++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.012, 0.012), soleM); bar.position.set(0, 0.0, 0.14 - i * 0.026); bar.scale.x = 1 - Math.abs(i - 4) * 0.05; boot.add(bar); }
     const foot = new THREE.Mesh(new RoundedBoxGeometry(0.165, 0.12, 0.345, 4, 0.05), fabric); foot.position.set(0, 0.105, -0.005); boot.add(foot);
     const toe = new THREE.Mesh(new THREE.SphereGeometry(0.085, 24, 12, 0, TAU, 0, Math.PI / 2), fabric); toe.scale.set(0.98, 0.9, 0.9); toe.position.set(0, 0.1, -0.11); boot.add(toe);
-    const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.095, 0.26, 24), fabric); ankle.position.set(0, 0.27, 0.06); ankle.rotation.x = -0.15; boot.add(ankle);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.7, 24), fabric); leg.position.set(0, 0.72, 0.1); leg.rotation.x = -0.1; boot.add(leg);
-    for (const y of [0.2, 0.36]) { const strap = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.01, 8, 28), MAT.dark); strap.rotation.x = Math.PI / 2 - 0.15; strap.position.set(0, y, 0.06 + (y - 0.2) * 0.1); boot.add(strap); }
+    // one continuous lathe from ankle to shin, with the suit's convolute rings
+    const legPts = [];
+    for (let i = 0; i <= 48; i++) {
+      const y = 0.12 + i / 48 * 1.1, k = Math.min(1, Math.max(0, (y - 0.3) / 0.35));
+      const conv = y > 0.62 && y < 1.02 ? 0.006 * Math.pow(Math.abs(Math.sin((y - 0.62) / 0.4 * Math.PI * 4)), 0.6) : 0;
+      legPts.push(new THREE.Vector2(0.097 + (0.14 - 0.097) * k * k * (3 - 2 * k) + conv, y));
+    }
+    const leg = new THREE.Mesh(new THREE.LatheGeometry(legPts, 40), fabric); leg.position.set(0, 0, 0.06); leg.rotation.x = -0.08; boot.add(leg);
+    for (const [y, r] of [[0.2, 0.1], [0.36, 0.104]]) { const strap = new THREE.Mesh(new THREE.TorusGeometry(r, 0.009, 8, 32), MAT.dark); strap.rotation.x = Math.PI / 2; strap.position.y = y; leg.add(strap); }
     boot.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   }
   // the Earth in the lunar sky
   const earthL = earthMesh(48, SUN_L, { segs: 128, city: 0.04 }); earthL.rotation.z = 0.41; worldL.add(earthL);
-  const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.9;
+  const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.35;   // low: flag and LM stand against the sky
   const LOOK_E = V3(-0.25, CAM_E.y + Math.tan(THREE.MathUtils.degToRad(5.5)) * CAM_E.z, 0);
   const EARTH_D = 820;
   const earthDir = new THREE.Vector3(), eDirA = new THREE.Vector3(), eDirB = new THREE.Vector3();
@@ -250,7 +258,7 @@ export function create(ctx, segment) {
     earthL.position.copy(camL).addScaledVector(earthDir, EARTH_D);
   };
   const tmpE = new THREE.Vector3();
-  const E_HERO_AZ = THREE.MathUtils.degToRad(6.5), E_HERO_DEL = THREE.MathUtils.degToRad(13);
+  const E_HERO_AZ = THREE.MathUtils.degToRad(11), E_HERO_DEL = THREE.MathUtils.degToRad(22);
   // dust: flat radial sheets blown out by the descent engine + a touchdown bloom (pure function of t)
   const lmAlt = (t) => { const u = sat((t - (tDesc - 0.15)) / (tLand - tDesc + 0.15)); return 23 * Math.pow(1 - u, 1.85); };
   const lmXZ = (t, out) => { const u = sat((t - (tDesc - 0.15)) / (tLand - tDesc + 0.15)); const k = Math.pow(1 - u, 1.6); return out.set(6.5 * k, 0, -4 * k); };
@@ -458,9 +466,9 @@ export function create(ctx, segment) {
   const sCamK = [[0, 0], [0.45, 0.2], [0.72, 0.4], [0.92, 0.6], [1.03, 0.8], [tS1, 1]];
   const sLookCurve = new THREE.CatmullRomCurve3([V3(-0.9, 0.4, 0), V3(2.5, 0.8, -6), V3(15, 2.5, -34), MOON_P.clone(), MOON_P.clone().addScaledVector(nM, MOON_R * 0.6), S_LOOK_END], false, 'centripetal');
   // L camera (descent → landing), Catmull-Rom through keys; then shot-specific moves
-  const lCamCurve = new THREE.CatmullRomCurve3([V3(-4, 36, 28), V3(-8.5, 13, 22), V3(-8.6, 4.0, 15.5), V3(-7.4, 2.7, 15.2)], false, 'centripetal');
+  const lCamCurve = new THREE.CatmullRomCurve3([V3(-4, 36, 28), V3(-8.5, 13, 22), V3(-8.4, 3.8, 15.2), V3(-6.6, 2.3, 13.4)], false, 'centripetal');
   const lCamK = [[tS1, 0], [tS1 + 0.45, 0.33], [tLand, 0.67], [tLand + 0.33, 1]];
-  const MACRO_A = PRINT.clone().add(V3(-0.2, 0.3, 0.52)), MACRO_B = PRINT.clone().add(V3(-0.15, 0.26, 0.43));
+  const MACRO_A = PRINT.clone().add(V3(-0.24, 0.42, 0.68)), MACRO_B = PRINT.clone().add(V3(-0.19, 0.37, 0.57));
   const PRINT_LOOK = PRINT.clone().add(V3(0.01, 0.0, -0.03));
   // hero: in front of the cloth, a little off its hoist side, at flag height — the Earth hangs beyond the fly
   const HERO = FC.clone().addScaledVector(FLAG_N, 2.5).addScaledVector(FLAG_F, -0.55).add(V3(0, -0.2, 0));
@@ -545,13 +553,14 @@ export function create(ctx, segment) {
       const down = ramp(t, tFoot - 0.2, tFoot, ease.outCubic), lift = ramp(t, tFoot + 0.09, tFoot + 0.24, ease.inCubic);
       pressU.value = ramp(t, tFoot - 0.02, tFoot + 0.1, ease.outCubic);
       boot.visible = t > tFoot - 0.17 && lift < 1;
-      boot.position.set(PRINT.x - (1 - down) * 0.03 + lift * 0.12, PRINT.y + (1 - down) * 0.45 - pressU.value * 0.02 + lift * 1.1, PRINT.z + (1 - down) * 0.1 - lift * 0.4);
+      const tx = -Math.sin(PRINT_ANG), tz = -Math.cos(PRINT_ANG), fw = lift * 0.45 - (1 - down) * 0.1;   // along the stride
+      boot.position.set(PRINT.x + tx * fw, PRINT.y + (1 - down) * 0.45 - pressU.value * 0.02 + lift * 1.1, PRINT.z + tz * fw);
       grains.material.uniforms.uTime.value = t; grains.material.uniforms.uViewport.value = info.height; grains.visible = t > tFoot - 0.02 && t < tFoot + 1.2;
       boot.rotation.set(0.3 * (1 - down) - lift * 0.8, PRINT_ANG, 0, 'YXZ');
       earthL.visible = t > tFoot;
       // the flag is raised on its pole at Tranquility Base (a hinge up from the regolith), then the
       // twisted pole lets it swing a few degrees and ring down slowly — there is no air to damp it
-      const tPl = tLand + 0.06, rise = ramp(t, tPl, tPl + 0.2, ease.outCubic), tw = t - tPl - 0.2;
+      const tPl = tLand + 0.02, rise = ramp(t, tPl, tPl + 0.18, ease.outCubic), tw = t - tPl - 0.18;
       flag.visible = t > tPl;
       flag.position.set(FLAG_P.x, FLAG_P.y + 0.02 * (1 - rise), FLAG_P.z);
       flag.rotation.set(-Math.PI / 2 * (1 - rise), FLAG_YAW + (tw > 0 ? 0.07 * Math.exp(-tw * 2.2) * Math.sin(tw * TAU * 1.6) : 0), 0, 'YXZ');
@@ -570,11 +579,12 @@ export function create(ctx, segment) {
         fov = 35 + (1 - ramp(t, tS1, tS1 + 0.3, ease.outCubic)) * 10;
         // swoop down to the regolith for the footprint
         if (t > tLand) {
-          const r = ease.inOutSine(ramp(t, tLand + 0.1, tLand + 0.24));
+          look.lerp(FC, 0.3 * ease.inOutSine(ramp(t, tLand, tLand + 0.25)));      // bring the raised flag into the frame
+          const r = ease.inOutSine(ramp(t, tLand + 0.08, tLand + 0.22));
           dofAmt = 0.45 * envelope(t, tLand, tLand + 0.45, 0.08, 0.2);
           dofFocus = lerp(camPos.distanceTo(lmP) , camPos.distanceTo(FC), r); dofRange = 2.5;
         }
-        const sw = ramp(t, tLand + 0.2, tFoot - 0.18, ease.inOutCubic);
+        const sw = ramp(t, tLand + 0.24, tFoot - 0.18, ease.inOutCubic);
         if (sw > 0) { camPos.lerp(MACRO_A, sw); look.lerp(PRINT_LOOK, sw); fov = lerp(fov, 38, sw); }
       } else if (t < tFoot + 0.1) {
         const k = ramp(t, tFoot - 0.18, tFoot + 0.1, ease.linear);
@@ -614,7 +624,7 @@ export function create(ctx, segment) {
       api.dof.amount = dofAmt; api.dof.focus = dofFocus; api.dof.range = dofRange;
       const inFlash = envelope(t, tS1 - 0.02, tS1 + 0.22, 0.02, 0.2, ease.outQuad);
       api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.1, tS2) * 0.15;
-      api.bloom.strength = 0.45 + ramp(t, tS2 - 0.15, tS2) * 0.25;
+      api.bloom.strength = 0.34 + ramp(t, tS2 - 0.15, tS2) * 0.3;
     },
 
     _dsky(t, info) {

@@ -228,7 +228,8 @@ export function drawUSFlag(g, x0, y0, A, { red = '#b22234', white = '#f7f5ef', b
 
 export function flagTexture(A = 1072) {
   const w = Math.round(A * 1.9), c = mkCanvas(w, A), g = c.getContext('2d');
-  drawUSFlag(g, 0, 0, A);
+  // dyed nylon, a touch richer than the print spec so Old Glory Red/Blue survive the film's cool grade
+  drawUSFlag(g, 0, 0, A, { red: '#b3152f', blue: '#34366f' });
   // a faint dye/print irregularity so the nylon doesn't read as a flat vector fill
   const r = rng(76), id = g.getImageData(0, 0, w, A), d = id.data;
   for (let i = 0; i < w * A; i++) { const k = 1 + (r() - 0.5) * 0.035; d[i * 4] *= k; d[i * 4 + 1] *= k; d[i * 4 + 2] *= k; }
@@ -265,14 +266,14 @@ export function lmDecalTexture(w = 1024, h = 1024) {
   for (const y of [0.04, 0.96]) { g.beginPath(); g.moveTo(0, y * h); g.lineTo(w, y * h); g.stroke(); }
   g.fillStyle = 'rgba(40,40,40,0.45)';
   for (let i = 0; i < 26; i++) { g.beginPath(); g.arc(w * (0.03 + i * 0.0375), h * 0.04, 3, 0, TAU); g.fill(); g.beginPath(); g.arc(w * (0.03 + i * 0.0375), h * 0.96, 3, 0, TAU); g.fill(); }
-  const A = h * 0.2, x0 = w * 0.06, y0 = h * 0.2;
+  const A = h * 0.2, x0 = w * 0.06, y0 = h * 0.12;
   g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x0 - 3, y0 - 3, A * 1.9 + 6, A + 6);
   drawUSFlag(g, x0, y0, A, { white: '#f1efe8' });
-  g.fillStyle = '#111214'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
-  g.font = `600 ${Math.round(h * 0.105)}px "${FONTS.sans}"`;
+  g.fillStyle = '#101113'; g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  g.font = `600 ${Math.round(h * 0.16)}px "${FONTS.sans}"`;
   const track = (txt, x, y, sp) => { for (const ch of txt) { g.fillText(ch, x, y); x += g.measureText(ch).width + sp; } };
-  track('UNITED', x0, y0 + A + h * 0.17, h * 0.012);
-  track('STATES', x0, y0 + A + h * 0.3, h * 0.012);
+  track('UNITED', x0 - h * 0.008, y0 + A + h * 0.215, h * 0.01);
+  track('STATES', x0 - h * 0.008, y0 + A + h * 0.4, h * 0.01);
   return toTexture(c, { anisotropy: 16 });
 }
 
@@ -403,12 +404,13 @@ export function makeTerrainField(seed = 21, { RM = 900 } = {}) {
 // Plane with a denser grid near the origin (u → sign(u)|u|^k), displaced by `field`.
 export function terrainGeometry(field, { size = 180, segs = 300, k = 1.55, uvScale = 1 / 6, skip = null } = {}) {
   const n = segs + 1, pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2);
-  const idx = [];
+  const idx = [], sunk = [];
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const u = (i / segs) * 2 - 1, v = (j / segs) * 2 - 1;
     const x = Math.sign(u) * Math.pow(Math.abs(u), k) * size, z = Math.sign(v) * Math.pow(Math.abs(v), k) * size;
-    let y = field(x, z);
-    if (skip && skip(x, z)) y -= 0.02;
+    const y = field(x, z);
+    const sk = skip ? skip(x, z) : 0;
+    if (sk) sunk.push([j * n + i, sk === true ? 0.02 : sk]);
     const o = j * n + i;
     pos.set([x, y, z], o * 3); uv.set([x * uvScale, z * uvScale], o * 2);
   }
@@ -421,6 +423,8 @@ export function terrainGeometry(field, { size = 180, segs = 300, k = 1.55, uvSca
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
+  // sink skipped vertices only after the normals are taken, so their neighbours keep the true surface shading
+  for (const [o, d] of sunk) pos[o * 3 + 1] -= d;
   return g;
 }
 
@@ -598,7 +602,7 @@ export function buildFlag({ envMap = null } = {}) {
   for (let i = 0; i < p.count; i++) {
     const u = Math.min(1, Math.max(0, (p.getX(i) + B / 2) / B)), v = Math.min(1, Math.max(0, (p.getY(i) + A / 2) / A)), hang = 1 - v;
     const pin = sm(0, 0.06, u);                                   // hoist hem held along the pole
-    let z = Math.sin(TAU * (u * 4.6 + 0.16 * hang + 0.1)) * (0.012 + 0.05 * hang) * pin      // bunching ripples off the crossbar
+    let z = Math.sin(TAU * (u * 4.6 + 0.16 * hang + 0.1 + 0.11 * Math.sin(u * 9.1 + 0.7))) * (0.012 + 0.05 * hang) * (0.8 + 0.3 * Math.sin(u * 6.3 + 2.1)) * pin   // irregular bunching ripples off the crossbar
       + Math.sin(TAU * (u * 9.3 - 0.3 * hang) + 1.7) * 0.006 * (0.35 + hang) * pin
       + Math.sin(TAU * (u * 1.7 + 0.35)) * 0.028 * hang * hang * pin                          // broad lower billow
       + 0.045 * u * u * u * Math.pow(hang, 2.2);                                              // free fly corner curls out
@@ -614,10 +618,10 @@ export function buildFlag({ envMap = null } = {}) {
   const flagTex = flagTexture();
   const cm = new THREE.MeshPhysicalMaterial({
     map: flagTex, side: THREE.DoubleSide, metalness: 0, roughness: 0.74, roughnessMap: weave, bumpMap: weave, bumpScale: 0.35,
-    color: new THREE.Color(0.6, 0.6, 0.6), sheen: 1, sheenRoughness: 0.45, sheenColor: new THREE.Color(0.2, 0.2, 0.21), envMap, envMapIntensity: 0.25,
+    color: new THREE.Color(0.52, 0.52, 0.52), sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color(0.07, 0.07, 0.075), envMap, envMapIntensity: 0.2,
   });
   // thin nylon: sunlight shining through from behind lights the dyed cloth (simple diffuse transmission)
-  const u = { uSunV: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uTrans: { value: 0.35 } };
+  const u = { uSunV: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uTrans: { value: 0.5 } };
   cm.userData.u = u;
   cm.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
