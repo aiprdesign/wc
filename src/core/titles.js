@@ -323,7 +323,18 @@ export class TitleLayer {
     const g = new THREE.Group();
     g.position.y = d.low ? -0.42 : d.cite ? this.y - 0.02 : 0;
     g.scale.setScalar(this.scale);
-    const text = new KineticText(d.text, { font: FONTS.serif, italic: true, weight: 500, height: d.low ? 0.058 : d.cite ? 0.066 : 0.08, letterSpacing: 0.02, color: '#fff1d8', intensity: 1.2 });
+    const h = d.low ? 0.058 : d.cite ? 0.066 : 0.08;
+    // dark glow: a heavily blurred black copy of the line + a soft elliptical shade behind it
+    const shade = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.5), new THREE.ShaderMaterial({
+      uniforms: { uO: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false,
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform float uO; varying vec2 vUv; void main(){ vec2 d = (vUv - 0.5) * vec2(1.0, 2.6); gl_FragColor = vec4(0.0, 0.0, 0.0, uO * 0.985 * smoothstep(0.5, 0.2, length(d))); }',
+    }));
+    const glow = new TextPlane(d.text, { font: FONTS.serif, italic: true, weight: 600, height: h, size: 160, letterSpacing: 0.02, color: '#000000', intensity: 1, shadow: 60, padding: 0.8, blending: THREE.NormalBlending });
+    glow.material.depthTest = false;
+    shade.renderOrder = -3; glow.renderOrder = -2;
+    g.add(shade, glow);
+    const text = new KineticText(d.text, { font: FONTS.serif, italic: true, weight: 500, height: h, letterSpacing: 0.02, color: '#fff1d8', intensity: 1.2 });
     g.add(text);
     let cite = null;
     if (d.cite) {
@@ -334,7 +345,7 @@ export class TitleLayer {
     }
     text.letters.forEach((l) => { l.mesh.material.depthTest = false; });
     this.scene.add(g);
-    return { g, text, cite, t0: d.start, t1: d.end };
+    return { g, text, cite, shade, glow, t0: d.start, t1: d.end };
   }
 
   update(T) {
@@ -379,6 +390,9 @@ export class TitleLayer {
         l.mesh.opacity = k * (1 - ko);
         l.mesh.intensity = 1.2 + (1 - k) * 2.0 * (k > 0 ? 1 : 0);
       });
+      const shadeO = ramp(T, d.t0, d.t0 + 0.4) * (1 - ramp(T, d.t1 - 0.45, d.t1 - 0.05));
+      d.shade.material.uniforms.uO.value = shadeO;
+      d.glow.opacity = shadeO;
       if (d.cite) {
         d.cite.reveal = ramp(T, d.t0 + 0.8, d.t0 + 1.4, ease.outCubic);
         d.cite.opacity = ramp(T, d.t0 + 0.8, d.t0 + 1.0) * (1 - ramp(T, d.t1 - 0.4, d.t1 - 0.1));
