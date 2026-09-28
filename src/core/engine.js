@@ -137,6 +137,14 @@ export class Engine {
     return SEGMENTS.filter((s) => T >= s.start && T < s.end);
   }
 
+  // The sequence that owns the frame at story time T (the incoming one past a transition's midpoint).
+  mainInstance(T) {
+    const segs = this.activeSegments(T);
+    let s = segs[0];
+    if (segs[1] && (T - segs[1].start) / (segs[0].end - segs[1].start) > 0.5) s = segs[1];
+    return this.instances.get(s.id);
+  }
+
   // Run fn with the camera's open-matte lens applied (as renderInstance renders it).
   withMatte(cam, fn) {
     const matte = cam.isPerspectiveCamera && OUTPUT_ASPECT !== FILM_ASPECT;
@@ -161,7 +169,9 @@ export class Engine {
       // A faulty sequence must never stop the film: log once, keep rendering its last pose.
       if (!inst._warned) { console.error(`[${inst.segment.id}] update failed at T=${T.toFixed(2)}`, e); inst._warned = true; }
     }
-    this.words3d?.apply(inst, T);
+    // explore mode: the viewer's rig drives this sequence's camera; headings step aside
+    const ex = this.explore?.active && this.explore.inst === inst ? this.explore : null;
+    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.apply(inst.camera); } else this.words3d?.apply(inst, T);
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);
@@ -180,12 +190,12 @@ export class Engine {
     r.render(inst.scene, cam);
     const dof = inst.dof;
     // The HUD is composited after depth of field so screen-space typography stays razor sharp.
-    const drawHUD = (target) => { if (inst.hud) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
+    const drawHUD = (target) => { if (inst.hud && !ex) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
     // chapter headings: a 3D overlay drawn over the finished (depth-of-field) plate with the same
     // lens, so they never intersect scene geometry and are never blurred by the scene's focus
-    const drawWords = (target) => { r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
+    const drawWords = (target) => { if (ex) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
     let out = rt;
-    if (dof && dof.amount > 0.01) {
+    if (dof && dof.amount > 0.01 && !ex) {
       const u = this.dofQuad.material.uniforms;
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
       u.uNear.value = inst.camera.near; u.uFar.value = inst.camera.far;
@@ -207,6 +217,8 @@ export class Engine {
     const segs = this.activeSegments(T);
     const tu = this.transQuad.material.uniforms;
     let a = segs[0], b = segs[1];
+    const ex = this.explore?.active ? this.explore : null;
+    if (ex) { a = ex.inst.segment; b = null; }   // exploring: one sequence, no transition
     const instA = this.instances.get(a.id);
     tu.tA.value = this.renderInstance(instA, T, dt, this.rtA, this.dofA);
     // harmony: 0..1 scale on the grade's 60-30-10 colour harmony (scenes lower it to show true spectral colour)
@@ -231,9 +243,9 @@ export class Engine {
     r.setRenderTarget(this.comp);
     this.transQuad.render(r);
     // a heading the camera zooms THROUGH sits over the composite (its counter frames the next shot)
-    this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
+    if (!ex) this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
     // chapter headings and story cards sit above every sequence (before bloom, so they glow softly)
-    if (this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
+    if (!ex && this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
 
     this.bloom.strength = bloomStrength;
     this.bloom.render(r, null, this.comp, dt, false);

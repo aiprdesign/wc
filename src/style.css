@@ -58,3 +58,11 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 .hide-cursor, .hide-cursor * { cursor: none !important; }
 @media (max-width: 560px) { #btn-wav, #btn-rec { display: none; } .controls { gap: 6px; } }
 .controls button.fmt { width: auto; padding: 0 8px; font: inherit; font-size: 10px; letter-spacing: 0.08em; border: 1px solid rgba(255, 255, 255, 0.18); }
+
+/* explore mode */
+#film.exploring { cursor: grab; touch-action: none; }
+#film.exploring:active { cursor: grabbing; }
+.explore-hint { position: fixed; top: 16px; left: 50%; transform: translate(-50%, -8px); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; max-width: min(760px, calc(100vw - 32px)); padding: 8px 14px; font-size: 11px; letter-spacing: 0.06em; color: var(--ink); background: rgba(10, 10, 10, 0.55); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; z-index: 21; }
+.explore-hint strong { color: var(--gold); font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; }
+.exploring-on .explore-hint { opacity: 1; transform: translate(-50%, 0); }
+.controls button.fmt[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }

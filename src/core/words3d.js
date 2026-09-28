@@ -143,6 +143,9 @@ export class Words3D {
     others.forEach((it) => (it.group.visible = true));
   }
 
+  // Explore mode: this sequence's headings are hidden.
+  hideAll(inst) { for (const it of this.items) if (it.inst === inst) { it.group.visible = false; it.light.intensity = 0; } }
+
   // Engine hook during a 'letter' transition: the counter triangle in uv (lens already set).
   letterWindow(inst, uniforms) {
     const it = this.items.find((x) => x.inst === inst && x.zoom && x.group.visible);

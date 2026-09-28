@@ -1,6 +1,7 @@
 // Entry point: load fonts, sequences and the procedural score, then hand over to the transport UI.
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
+import { Explorer } from './core/explore.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
 import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE } from './timeline.js';
@@ -43,6 +44,7 @@ async function boot() {
   addEventListener('resize', () => { engine.resize(); if (!player.playing) engine.render(player.time, 0); });
 
   const player = new Player(engine, score?.buffer ?? null);
+  const explorer = new Explorer(engine, $('film'));
   // If the GPU driver resets (context lost), reload at the same moment at a lighter quality.
   $('film').addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
@@ -66,7 +68,7 @@ async function boot() {
 
   if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
 
-  setupUI(player, score);
+  setupUI(player, score, explorer);
   intro.classList.add('ready');
   $('play').disabled = false;
   $('play').focus();
@@ -84,7 +86,7 @@ function fmt(t) {
   return `${m}:${s.toFixed(1).padStart(4, '0')}`;
 }
 
-function setupUI(player, score) {
+function setupUI(player, score, explorer) {
   const body = document.body;
   const scrub = $('scrub'), fill = $('scrub-fill'), tip = $('scrub-tip'), time = $('time');
   $('chapters').innerHTML = SEGMENTS.slice(1).map((s) => `<i style="left:${(s.start * TIME_SCALE / DURATION) * 100}%"></i>`).join('');
@@ -158,8 +160,24 @@ function setupUI(player, score) {
     else if (k === 'h') controls.classList.toggle('show');
     else if (/^[0-9]$/.test(k)) { player.seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start * TIME_SCALE + 0.01); showControls(); }
   });
+  // EXPLORE: pause and fly through the frozen 3D scene
+  const setExplore = (on) => {
+    if (on) { if (player.playing) { player.pause(); syncPlaying(); } intro.classList.add('hidden'); explorer.enter(player.time); }
+    else explorer.exit();
+    body.classList.toggle('exploring-on', on);
+    $('btn-explore').setAttribute('aria-pressed', String(on));
+    showControls(on);
+  };
+  $('btn-explore').addEventListener('click', () => setExplore(!explorer.active));
+  addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'e' && !e.target.closest?.('input, textarea')) { e.preventDefault(); setExplore(!explorer.active); }
+    else if (k === 'escape' && explorer.active) setExplore(false);
+  });
   const origPlay = player.play.bind(player);
-  player.play = async (...a) => { await origPlay(...a); syncPlaying(); showControls(); };
+  player.play = async (...a) => { if (explorer.active) setExplore(false); await origPlay(...a); syncPlaying(); showControls(); };
+  const origSeek = player.seek.bind(player);
+  player.seek = (t) => { origSeek(t); if (explorer.active) explorer.enter(player.time); };   // scrubbing re-poses the world
 }
 
 function download(blob, name) {
