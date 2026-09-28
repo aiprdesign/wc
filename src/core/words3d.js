@@ -8,7 +8,11 @@
 // across the metal while a real light spills onto the surroundings, then the letters
 // fall back like dominoes and clear.
 import * as THREE from 'three';
-import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
+import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
+import { pulse } from '../lib/rhythm.js';
+// beat-grid helpers (story time; the score plays the same grid)
+const onBeat = (x, div = 1) => Math.round(x / (BEAT / div)) * (BEAT / div);
+const nextBeat = (x, div = 1) => Math.ceil(x / (BEAT / div) - 1e-6) * (BEAT / div);
 import { letters3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
@@ -22,7 +26,7 @@ const WORDS = {
   renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
-  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: 'INTELLIGENCE', knowledge: 'KNOWLEDGE',
+  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: ['INTELLIGENCE', { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
   frontier: { text: 'FRONTIER', t0: 49.8, t1: 51.1 },   // clears before the genome shot
 };
 
@@ -60,15 +64,15 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
-        totalEmissiveRadiance += uTint * (band * 0.28 + uFlash * 0.4);`)
+        totalEmissiveRadiance += uTint * (band * 0.08 + uFlash * 0.25);`)
       // soft highlight knee: letters stay crisp under the bloom threshold instead of hazing out
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
           if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
-        gl_FragColor.rgb += uTint * band * uShine * 0.45;`);
+        gl_FragColor.rgb += uTint * band * uShine * 0.12;`);
   };
-  m.customProgramCacheKey = () => 'word3d-v5';
+  m.customProgramCacheKey = () => 'word3d-v6';
   return m;
 }
 
@@ -78,24 +82,49 @@ export class Words3D {
     this.items = [];
     const inst = (id) => engine.instances.get(id);
     for (const seg of SEGMENTS) {
-      const w = WORDS[seg.id];
-      if (!w) continue;
       const dur = seg.end - seg.start;
       const lay = LAYOUT[seg.id] ?? {};
-      if (typeof w === 'string') { this.items.push(this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(2.75, dur - 0.65), false, lay)); continue; }
-      const item = this.build(w.text, inst(seg.id), w.t0, w.t1, false, lay);
-      Object.assign(item, { pace: w.pace ?? 1, yOff: w.y ?? 0, noFocus: w.focus === false });
-      this.items.push(item);
+      // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
+      for (const w of [WORDS[seg.id] ?? []].flat()) {
+        if (typeof w === 'string') { this.items.push(this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(2.75, dur - 0.65), false, lay)); continue; }
+        const item = this.build(w.text, inst(seg.id), w.t0, w.t1, false, lay);
+        Object.assign(item, { pace: w.pace ?? 1, yOff: w.y ?? 0, noFocus: w.focus === false });
+        this.items.push(item);
+      }
     }
     SWAPS.forEach(([cue, w], i) => {
       const t0 = CUES[cue], t1 = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
       this.items.push(this.build(w, inst('montage'), t0 - 0.05, t1 - 0.08, true, LAYOUT.montage));
     });
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    this._k = new THREE.Vector3();
     this._q = [new THREE.Quaternion(), new THREE.Quaternion()];
   }
 
+  // Headings live in an overlay layer per sequence: drawn over the scene (never intersecting or
+  // hidden by its geometry), with their own camera-relative key light and the studio environment.
+  overlayFor(inst) {
+    if (inst._wordsOverlay) return inst._wordsOverlay;
+    const scene = new THREE.Scene();
+    scene.environment = this.engine.env;
+    scene.environmentIntensity = 1;
+    const key = new THREE.DirectionalLight('#fff0d8', 2.4);
+    const fill = new THREE.HemisphereLight('#dfe6f0', '#2a2018', 0.5);
+    scene.add(key, key.target, fill);
+    inst._wordsOverlay = { scene, key };
+    return inst._wordsOverlay;
+  }
+
+  // Engine hook: draw this sequence's headings over what was just rendered (same camera/lens).
+  renderOverlay(inst, renderer, camera) {
+    const o = inst._wordsOverlay;
+    if (!o || !this.items.some((it) => it.inst === inst && it.group.visible)) return;
+    renderer.render(o.scene, camera);
+  }
+
   build(text, inst, t0, t1, swap = false, lay = {}) {
+    // every heading starts and leaves on the beat
+    t0 = onBeat(t0, swap ? 2 : 1); t1 = onBeat(t1, swap ? 2 : 1);
     const invert = !!lay.invert, align = lay.align ?? 'center';
     const seg = inst.segment;
     const era = eraOf(t0);
@@ -175,7 +204,11 @@ export class Words3D {
     light.position.set(0, 0, 0.9);
     if (!swap) group.add(light);
     group.visible = false;
-    inst.scene.add(group);
+    const ov = this.overlayFor(inst);
+    ov.scene.add(group);
+    // drawn over the finished plate: the overlay's depth is cleared first, so letters depth-test only
+    // against each other (clean extrusions) and nothing else writes depth
+    group.traverse((o) => { if (o.material && !letters.some((l) => l.mesh === o)) { o.material.depthTest = false; o.material.depthWrite = false; } });
 
     // Lock pose: the camera once the word is standing (scenes are pure functions of t).
     const tLock = Math.min(t1, t0 + (swap ? 0.25 : 0.8));
@@ -194,6 +227,7 @@ export class Words3D {
   // Called by the engine after a sequence's update and before it is rendered.
   apply(inst, T) {
     const [pos, camPos, fwd] = this._v, [quat, camQuat] = this._q;
+    inst._wordsDuck = 0;   // 0..1: how much the scene's bloom yields while a heading is up (engine reads it)
     for (const it of this.items) {
       if (it.inst !== inst) continue;
       const on = T > it.t0 && T < it.t1 + (it.swap ? 0.12 : 0.5);
@@ -224,14 +258,21 @@ export class Words3D {
       const turn = it.align === 'left' ? -0.12 : it.align === 'right' ? 0.12 : 0;   // side words angle toward the centre
       it.group.rotateY(turn + lerp(0.07, -0.07, ease.inOutSine(drift)));   // gentle turn reveals the extrusion
       it.group.rotateX(-0.08);
-      it.group.scale.setScalar(k);
-      it.group.updateMatrixWorld();
-      it.shared.uWordInv.value.copy(it.group.matrixWorld).invert();
-
       const n = it.letters.length;
       const pace = it.pace ?? 1;
       const inDur = (it.swap ? 0.32 : 0.75) * pace, st = (it.swap ? 0.022 : 0.07) * pace;
-      const outStart = it.t1 - (it.swap ? 0.06 : 0.2);
+      const held = sat((t - inDur) / 0.2) * (1 - sat((T - it.t1 + 0.3) / 0.2));
+      const beat = pulse(T, { decay: 9 }) * held;
+      it.group.scale.setScalar(k * (1 + 0.018 * beat));   // a gentle breath on every beat
+      it.group.updateMatrixWorld();
+      it.shared.uWordInv.value.copy(it.group.matrixWorld).invert();
+      const ov = inst._wordsOverlay;
+      this._k.set(-1.6, 2.2, 1.8).multiplyScalar(it.d).applyQuaternion(quat);
+      ov.key.position.copy(it.group.position).add(this._k);
+      ov.key.target.position.copy(it.group.position);
+      ov.key.target.updateMatrixWorld();
+
+      const outStart = onBeat(it.t1 - (it.swap ? 0.06 : 0.2), 4);
       const outDur = it.swap ? 0.16 : 0.45;
       const fade = sat(t / 0.1);
       // stagger by distance from the centre: the middle letters lead, the ends follow
@@ -240,7 +281,7 @@ export class Words3D {
       const anchorX = it.align === 'left' ? -it.width / 2 : it.align === 'right' ? it.width / 2 : 0;
       it.letters.forEach((l) => {
         const c = it.align === 'left' ? l.i / Math.max(1, n - 1) : it.align === 'right' ? (n - 1 - l.i) / Math.max(1, n - 1) : Math.abs(l.i - mid) / maxD;
-        const d0 = c * st * n * 0.55;
+        const d0 = onBeat(c * st * n * 0.55, 4);          // each letter lands on a 16th note
         const u = sat((t - d0) / inDur);
         const kin = ease.outBack(u), kc = ease.outCubic(u);
         const kout = ease.inCubic(sat((T - outStart - (1 - c) * st * n * 0.3) / outDur));
@@ -263,27 +304,29 @@ export class Words3D {
       it.dust.tick(t, { height: this.engine.height });
       it.dust.u.mix = ease.outCubic(sat(t / formEnd));
       it.dust.u.swirl = (1 - ease.outCubic(sat(t / formEnd))) * 1.2;
-      it.dust.u.size = 0.028;
+      it.dust.u.size = 0.03 * k;   // world-space diameter: scale with the word, or close-up words drown in giant motes
       it.dust.u.opacity = sat(t / 0.12) * (1 - ramp(t, formEnd * 0.8, formEnd + 0.35)) + 0.25 * ramp(T, outStart - 0.05, outStart + 0.1) * (1 - ramp(T, outStart + 0.1, outStart + outDur + 0.2));
       it.dust.visible = it.dust.u.opacity > 0.01;
       // light sweep crosses the word once, after the letters stand
-      const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
+      const sweepStart = nextBeat(it.t0 + inDur + n * st * 0.55, it.swap ? 2 : 1) - it.t0;   // the shine lands on a beat
+      const sweepP = ramp(t, sweepStart, sweepStart + (it.swap ? 0.25 : 0.5), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
       // first show: the sweep is a real shine — bright band plus a star glint on its leading edge
       const shine = Math.sin(Math.PI * sweepP) * fade;
       it.shared.uShine.value = shine;
       it.glint.visible = shine > 0.02;
       it.glint.position.x = it.shared.uSweep.value;
-      it.glint.scale.setScalar((0.14 + 0.2 * shine) * (1 + 0.15 * Math.sin(t * 40)));
-      it.glint.material.opacity = shine * 0.6;
+      it.glint.scale.setScalar((0.1 + 0.12 * shine) * (1 + 0.15 * Math.sin(t * 40)));
+      it.glint.material.opacity = shine * 0.3;
       it.glint.material.rotation = t * 1.5;
       it.light.position.x = it.shared.uSweep.value;
-      it.light.intensity = Math.sin(Math.PI * sweepP) * 1.1 * k * k * fade;
+      it.light.intensity = Math.sin(Math.PI * sweepP) * 0.5 * k * k * fade;
       // plinth shoots out from the centre with the letters, retracts into it as they leave
       const pp = Math.max(0.0001, ramp(t, 0.05, inDur + n * st * 0.8, ease.outExpo) * (1 - ramp(T, outStart - 0.05, outStart + outDur * 0.8, ease.inOutCubic)));
-      it.plinth.forEach((p) => { p.progress = pp; p.opacity = 0.8 * fade; });
+      it.plinth.forEach((p) => { p.progress = pp; p.opacity = (0.65 + 0.35 * beat) * fade; });
       // contrast backing breathes in with the letters and out with them
       it.back.material.uniforms.uO.value = ramp(t, 0, 0.35) * (1 - ramp(T, outStart, outStart + outDur + 0.1));
+      inst._wordsDuck = Math.max(inst._wordsDuck, it.back.material.uniforms.uO.value);
       // rack focus onto the lettering while it is up
       if (inst.dof && !it.noFocus) {
         const w = sat(t / 0.3) * (1 - sat((T - outStart) / 0.35));

@@ -1,4 +1,4 @@
-# Achievements of Western Civilization — *A Motion Design Study*
+# Achievements of Western Civilization
 
 A 60-second cinematic motion-graphics showcase that is **rendered live in the browser**.
 Every frame (3D, particles, typography, compositing, grading) and every sound (score and

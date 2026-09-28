@@ -163,10 +163,13 @@ export class Engine {
       cam.updateProjectionMatrix();
     }
     r.render(inst.scene, cam);
-    if (matte) { cam.fov = fov0; cam.aspect = FILM_ASPECT; cam.updateProjectionMatrix(); }
     const dof = inst.dof;
     // The HUD is composited after depth of field so screen-space typography stays razor sharp.
     const drawHUD = (target) => { if (inst.hud) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
+    // chapter headings: a 3D overlay drawn over the finished (depth-of-field) plate with the same
+    // lens, so they never intersect scene geometry and are never blurred by the scene's focus
+    const drawWords = (target) => { r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
+    let out = rt;
     if (dof && dof.amount > 0.01) {
       const u = this.dofQuad.material.uniforms;
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
@@ -174,11 +177,12 @@ export class Engine {
       u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.width / FILM_ASPECT / 800) * 14;
       r.setRenderTarget(dofRT);
       this.dofQuad.render(r);
-      drawHUD(dofRT);
-      return dofRT.texture;
+      out = dofRT;
     }
-    drawHUD(rt);
-    return rt.texture;
+    drawWords(out);
+    if (matte) { cam.fov = fov0; cam.aspect = FILM_ASPECT; cam.updateProjectionMatrix(); }
+    drawHUD(out);
+    return out.texture;
   }
 
   // T is film time (seconds of the delivered film); everything inside runs on story time.
@@ -191,7 +195,7 @@ export class Engine {
     const instA = this.instances.get(a.id);
     tu.tA.value = this.renderInstance(instA, T, dt, this.rtA, this.dofA);
     // harmony: 0..1 scale on the grade's 60-30-10 colour harmony (scenes lower it to show true spectral colour)
-    let bloomStrength = instA.bloom?.strength ?? 0.7, exposure = instA.exposure ?? 1, harmony = instA.harmony ?? 1;
+    let bloomStrength = (instA.bloom?.strength ?? 0.7) * (1 - 0.45 * (instA._wordsDuck ?? 0)), exposure = instA.exposure ?? 1, harmony = instA.harmony ?? 1;
     if (b) {
       const instB = this.instances.get(b.id);
       tu.tB.value = this.renderInstance(instB, T, dt, this.rtB, this.dofB);
@@ -200,7 +204,7 @@ export class Engine {
       tu.uMode.value = TRANSITION_MODES[a.transition] ?? 0;
       tu.uSingle.value = 0;
       const s = p * p * (3 - 2 * p);
-      bloomStrength = THREE.MathUtils.lerp(bloomStrength, instB.bloom?.strength ?? 0.7, s);
+      bloomStrength = THREE.MathUtils.lerp(bloomStrength, (instB.bloom?.strength ?? 0.7) * (1 - 0.45 * (instB._wordsDuck ?? 0)), s);
       exposure = THREE.MathUtils.lerp(exposure, instB.exposure ?? 1, s);
       harmony = THREE.MathUtils.lerp(harmony, instB.harmony ?? 1, s);
     } else {

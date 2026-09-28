@@ -42,7 +42,7 @@ export const SEGMENTS = [
   { id: 'computing',   title: 'Computing & Digital',          start: 42.5, end: 47.0, transition: 'zoom' },
   { id: 'knowledge',   title: 'Knowledge',                    start: 46.5, end: 50.0, transition: 'flash' },
   { id: 'frontier',    title: 'The New Frontier',             start: 49.5, end: 56.0, transition: 'zoom' },
-  { id: 'montage',     title: 'Montage',                      start: 55.5, end: 60.5, transition: 'dissolve' },
+  { id: 'montage',     title: 'Legacy',                       start: 55.5, end: 60.5, transition: 'dissolve' },
   { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 60.0, end: 78.0, transition: null },
 ];
 
@@ -155,7 +155,7 @@ export const CUES = {
   ideasOut: 69.4,
   sunrise: 69.6,        // the sun breaks over Earth's limb — the swell
   finalImpact: 71.0,    // the title lands on the final button hit
-  closingLine: 72.8,    // A MOTION DESIGN STUDY
+  closingLine: 72.8,    // THE JOURNEY CONTINUES
   fadeOut: 76.0,
 };
 

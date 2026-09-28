@@ -624,6 +624,19 @@ function coda(S) {
     I.celesta(S, t, m + 12, { level: 0.018, pan: 0.3 });
   }));
 
+  // TENSION (v9): from storyTwo a low spiccato pulse on D / A drives under the reprise, pushing
+  // from 8ths to 16ths through the hush; a high Bb harmonic rubs a semitone against the A sus4
+  // and is left hanging — it becomes the root of the Bb chord at the sunrise (the release)
+  const HOLD = C.sunrise - 0.25;    // the held breath: the pulse stops a quarter-second before the light breaks
+  for (let t = C.storyTwo, k = 0; t < HOLD - 1e-6; k++) {
+    const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
+    const m = k % 4 === 3 ? 45 : 38;
+    S.at(t, () => O.spiccato(S, t, m, { level: 0.05 + 0.1 * u * u, decay: 0.11 }));
+    S.at(t, () => O.spiccato(S, t, m - 12, { level: 0.03 + 0.06 * u * u, decay: 0.14 }));
+    t += t < 68.5 ? STEP * 2 : STEP;
+  }
+  S.at(C.ideasLine + 0.4, () => O.chord(S, 'strings', C.ideasLine + 0.4, C.sunrise + 0.05, [82, 94], { level: 0.035, attack: 1.6, release: 0.1, cutoff: 5200, swell: 0.7 }));
+
   // sunrise: the swell, Bb → C, everything crescendo into the suck-back
   const s0 = C.sunrise, s1 = 70.3;
   S.at(s0 - 0.05, () => {
@@ -650,6 +663,23 @@ function codaFinale(S) {
     O.chord(S, 'strings', p + 0.05, p + 0.8, [50, 57, 62, 66, 69, 74, 78, 81], { level: 0.2, attack: 0.3, release: 1.7, cutoff: 4200, dark: 0.5, bus: 'end' });
     O.chord(S, 'choirA', p + 0.1, p + 0.9, [57, 62, 66, 69, 74], { level: 0.13, attack: 0.35, release: 1.5, cutoff: 4500, dark: 0.5, bus: 'end' });
   });
+
+  // TENSION (v9): a heartbeat (lub-dub on every beat) from storyTwo, a ticking clock on 8ths
+  // from the D/F♯ bar, a slow low riser through the hush — all cut together a quarter-second
+  // before the sunrise, a held breath before the release
+  const HOLD = C.sunrise - 0.25;
+  for (let t = C.storyTwo; t < HOLD - 1e-6; t += BEAT) {
+    const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
+    S.at(t, () => {
+      I.tom(S, t, 0.05 + 0.16 * u, { f: 52, bus: 'endDry' });
+      I.tom(S, t + 0.16, 0.03 + 0.1 * u, { f: 47, bus: 'endDry' });
+    });
+  }
+  for (let t = 65.0, k = 0; t < HOLD - 1e-6; t += t < 68.5 ? STEP * 2 : STEP, k++) {
+    const u = (t - 65.0) / (HOLD - 65.0);
+    S.at(t, () => X.click(S, t, { level: 0.012 + 0.03 * u, freq: k % 2 ? 2600 : 3400, body: 1100, decay: 0.012, pan: k % 2 ? 0.35 : -0.35, bus: 'endDry' }));
+  }
+  S.at(C.ideasLine, () => I.riser(S, C.ideasLine, HOLD, { level: 0.03, from: 120, to: 2400, bus: 'end' }));
 
   // sunrise: a rising timpani roll on D and a cymbal swell into the suck-back
   const s0 = C.sunrise;

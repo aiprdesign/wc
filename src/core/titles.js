@@ -33,23 +33,6 @@ const CONCEPT = {
 // Montage: rapid word swaps locked to the shape morphs.
 const SWAPS = [['mColumns', 'Order.'], ['mGears', 'Motion.'], ['mOrbits', 'Orbits.'], ['mAtoms', 'Atoms.'], ['mCircuit', 'Circuits.'], ['mStars', 'Stars.']];
 
-// Showreel breakdown: the craft each chapter demonstrates.
-const TECHNIQUE = {
-  opening: 'PROCEDURAL LINEWORK · 2.5D LAYERING · PARTICLE TYPOGRAPHY',
-  classical: 'PROCEDURAL MODELLING · LOOK-DEV · ARCHVIZ · TECHNICAL HUD',
-  civic: 'KINETIC TYPOGRAPHY · PROCEDURAL FOLDING · MORPHING',
-  renaissance: 'PROCEDURAL DRAWING · 2D → 3D · PARTICLE SIMULATION',
-  science: 'SPEED RAMPING · SCIENTIFIC VISUALISATION · REFRACTION',
-  industrial: 'HARD-SURFACE · MECHANICAL RIGGING · SMOKE · SOUND SYNC',
-  electricity: 'MATCH CUTS · ENERGY FX · PROCEDURAL CIRCUIT GROWTH',
-  medicine: 'MICRO CINEMATOGRAPHY · HOLOGRAPHIC UI · DATA VIZ',
-  flight: 'BLUEPRINT FOLD · ATMOSPHERICS · PLANETARY SHADING',
-  moonshot: 'LUNAR SHADING · HARD LIGHT · DUST FX · INTERFACE ANIMATION',
-  computing: 'HARD-SURFACE MORPHS · DATA FLOW · UI ANIMATION',
-  frontier: 'MATCH CUTS · SPEED RAMPS · PLANETARY SHADING · HARD-SURFACE',
-  knowledge: 'INSTANCED CHOREOGRAPHY · MULTI-STAGE MORPHS · NETWORKS',
-  montage: 'SHAPE-DRIVEN MATCH CUTS · RHYTHM EDITING',
-};
 
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
@@ -165,7 +148,7 @@ export class TitleLayer {
     // the square frame is ~2.4x narrower: HUD type grows so it stays legible at delivery size
     const hs = a < 1.9 ? 1.3 : 1;
     this.tcText = new LiveText({ height: 0.03 * hs, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035 * hs, 0);
-    this.idxText = new LiveText({ height: 0.03 * hs, chars: 26, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035 * hs, 0);
+    this.idxText = new LiveText({ height: 0.03 * hs, chars: 48, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035 * hs, 0);
     this.techText = new LiveText({ height: 0.026 * hs, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035 * hs, 0);
     // square: the long technique line needs the whole bottom edge, so the tag moves to the top centre
     this.rtText = new LiveText({ height: 0.026 * hs, chars: 20, align: hs > 1 ? 'center' : 'right', spacing: 0.2 });
@@ -206,13 +189,11 @@ export class TitleLayer {
       this.corners.material.uniforms.uColor.value.copy(col);
       const segs = SEGMENTS.filter((sg, i) => i === 0 || T >= sg.start + 0.25);   // flips mid-transition, with the rail tick and sweep
       const cur = segs.at(-1), idx = SEGMENTS.indexOf(cur);
-      this.tcText.set(tc(T * TIME_SCALE), col, 0.75 * o);
-      this.idxText.set(`${String(idx + 1).padStart(2, '0')} / ${String(SEGMENTS.length).padStart(2, '0')}  ${cur.id.toUpperCase()}`, col, 0.75 * o);
-      // technique tag types on at each chapter start
-      const tech = TECHNIQUE[cur.id] ?? '';
-      const typed = Math.floor(tech.length * ramp(T, cur.start + 0.5, cur.start + 1.3, ease.linear));
-      this.techText.set(tech.slice(0, typed), col, 0.7 * o);
-      this.rtText.set('WEBGL · REAL-TIME', col, 0.5 * o);
+      // only the chapter index remains: no production / technique labels in the delivered film
+      this.tcText.set('', col, 0);
+      this.idxText.set(`${String(idx + 1).padStart(2, '0')} / ${String(SEGMENTS.length).padStart(2, '0')}  ${cur.title.toUpperCase()}`, col, 0.75 * o);
+      this.techText.set('', col, 0);
+      this.rtText.set('', col, 0);
       this.rail.progress = 1; this.rail.opacity = 0.5 * o;
       this.railFill.progress = Math.max(0.0001, T / end); this.railFill.opacity = 0.9 * o;
       this.ticks.progress = 1; this.ticks.opacity = 0.6 * o;
@@ -392,7 +373,9 @@ export class TitleLayer {
       c.era.set(countUp(c.eraText, ramp(t, 0.1, 0.95, ease.outCubic)), c.color, 0.85 * eIn * (1 - eOut), 1.1);
       // story: words rise in one after another, leave in the same order
       c.story.words.forEach((w) => {
-        const kin = ramp(t, 0.35 + w.i * 0.055, 0.85 + w.i * 0.055, ease.outCubic);
+        // words rise on 8th notes of the story beat grid (0.25 s)
+        const wb = Math.round((c.t0 + 0.35 + w.i * 0.125) / 0.25) * 0.25 - c.t0;
+        const kin = ramp(t, wb, wb + 0.4, ease.outCubic);
         const kout = ramp(to, w.i * 0.025, 0.3 + w.i * 0.025, ease.inCubic);
         w.plane.position.y = (1 - kin) * -0.028 + kout * 0.022;
         w.plane.opacity = kin * (1 - kout) * 0.94;
