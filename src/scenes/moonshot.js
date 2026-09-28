@@ -558,7 +558,7 @@ export function create(ctx, segment) {
     },
     get exploreLimits() {
       if (tNow > tFoot - 0.4 && tNow < tFoot + 0.3) return { zoomOut: 9, fly: 5, pitchDown: 0.3 };   // macro: pull back to see him
-      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.9, pitchDown: 0.12 };                  // low lens over the site
+      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.12, pitchUp: 0.4 };    // low lens over the flat site (the curved horizon shows from high up)
       if (tNow >= tS2) return { yaw: 0.95, zoomOut: 2.5 };
       return undefined;
     },
@@ -690,7 +690,7 @@ export function create(ctx, segment) {
       camera.fov = fov; camera.near = t < tFoot + 0.4 && t > tFoot - 0.35 ? 0.02 : 0.1; camera.far = 4000; camera.updateProjectionMatrix();
       // with DOF off the focus distance is free: it sets where an explore orbit is centred (near, so the rig
       // stays over the flat site instead of swinging out into the crater field)
-      api.dof.amount = dofAmt; api.dof.focus = dofAmt > 0.01 ? dofFocus : Math.min(dofFocus, 14); api.dof.range = dofRange;
+      api.dof.amount = dofAmt; api.dof.focus = dofAmt > 0.01 ? dofFocus : Math.min(dofFocus, 22); api.dof.range = dofRange;
       const inFlash = envelope(t, tS1 - 0.02, tS1 + 0.22, 0.02, 0.2, ease.outQuad);
       api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.1, tS2) * 0.15;
       api.bloom.strength = 0.34 + ramp(t, tS2 - 0.15, tS2) * 0.3;

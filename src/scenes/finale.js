@@ -209,7 +209,20 @@ export function create(ctx, segment) {
   // dof carries no blur here (amount 0, and no chapter heading racks it): its focus only tells Explore what the
   // shot looks at — the point of the view ray nearest Earth's centre — so the viewer orbits the planet
   // rather than an empty point in the sky
-  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, harmony: 0.3, update, dof: { focus: 5, range: 3, amount: 0 }, exploreLimits: { zoomOut: 3, fly: 2 } };
+  // Explore limits follow the shot: the late camera rides ~0.7 above the surface, so the pull-in and the
+  // pitch-down are held to what keeps the lens outside the atmosphere over the whole yaw window (checked
+  // offline against the rig for both the 1:1 and 2.39 layouts; the table is the unsafe zoom + a margin)
+  const ZOOM_IN = [[54, 0.3], [55.5, 0.54], [56, 0.6], [62, 0.65], [63, 0.65], [64, 0.74], [65, 0.81], [66, 0.86], [68, 0.89], [72, 0.93]];
+  let exT = 58;
+  const zoomInAt = (T) => {
+    if (T <= ZOOM_IN[0][0]) return ZOOM_IN[0][1];
+    for (let i = 1; i < ZOOM_IN.length; i++) if (T <= ZOOM_IN[i][0]) { const [a, va] = ZOOM_IN[i - 1], [b, vb] = ZOOM_IN[i]; return lerp(va, vb, (T - a) / (b - a)); }
+    return ZOOM_IN[ZOOM_IN.length - 1][1];
+  };
+  const self = {
+    scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, harmony: 0.3, update, dof: { focus: 5, range: 3, amount: 0 },
+    get exploreLimits() { return { zoomIn: zoomInAt(exT), zoomOut: 3, fly: 1.5, pitchDown: exT < 62 ? 0.35 : 0.05 }; },
+  };
 
   // ---- Earth -----------------------------------------------------------------------
   const maps = bakeEarth(ctx.renderer, { width: 4096 });
@@ -414,8 +427,14 @@ export function create(ctx, segment) {
     camera.fov = 35 - 3.5 * tighten * (1 - open) + 1.2 * open;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
+    // explore pivot: where the view ray passes nearest Earth's centre; when it only grazes the planet (the
+    // sunrise shots look up past the limb), slide out along the ray to 2.6 so the pivot sits in open sky
     cdir.set(0, 0, -1).applyQuaternion(quat);
-    self.dof.focus = Math.min(8, Math.max(1.5, -pos.dot(cdir)));
+    let fo = -pos.dot(cdir);
+    const h2 = pos.lengthSq() - fo * fo;
+    if (h2 > (R * 0.9) ** 2 && h2 < 2.6 * 2.6) fo += Math.sqrt(2.6 * 2.6 - h2);
+    self.dof.focus = Math.min(8, Math.max(1.5, fo));
+    exT = T;
 
     // sun + Earth
     rig.sun(T, pos, quat, sunDir);
