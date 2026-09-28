@@ -1,14 +1,16 @@
 // ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v7: the v6 three-act
 // trailer score with its 18 s coda — humanised, round-robin, modelled timbres, a stage with
-// early reflections, designed sound effects, an analogue-style master — now played at the
-// film's pace: the picture runs the 72 s story slowed by TIME_SCALE (100/72) into 100 s, so
-// the score is rendered on the same clock — 120 → 86.4 BPM, every event at story time ×
-// TIME_SCALE, every musical duration stretched, at the same pitch. The music is still
-// written in story time; the Studio converts it once (see core.js "Time map"). At the
-// slower tempo the hybrid section drives on denser hats, and the button is answered by
-// drums under the horns' D — A — D'.)
+// early reflections, designed sound effects, an analogue-style master — played at the
+// film's pace: the picture runs the story slowed by TIME_SCALE (100/72), so the score is
+// rendered on the same clock — 120 → 86.4 BPM, every event at story time × TIME_SCALE,
+// every musical duration stretched, at the same pitch. The music is still written in story
+// time; the Studio converts it once (see core.js "Time map"). At the slower tempo the hybrid
+// section drives on denser hats, and the button is answered by drums under the horns'
+// D — A — D'. v8: THE NEW FRONTIER — three bars (story 49.5 – 55.5) inserted between
+// knowledge and the montage, everything after moved +6 s on the unchanged grid; the story
+// is 78 s, the film 108.3 s.)
 //
-// renderScore() synthesises the whole 100 s score (+ tail) offline (Web Audio only: no
+// renderScore() synthesises the whole 108 s score (+ tail) offline (Web Audio only: no
 // samples) and returns an AudioBuffer (FILM time) that the player starts at any offset.
 //
 //   music.js       harmony, the heroic theme, orchestra, rhythm section, trailer hits
@@ -42,7 +44,7 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 7;
+export const SCORE_VERSION = 8;
 
 const TAIL = 1.5;              // film seconds rendered past FILM_DURATION
 const CEILING = 0.891;         // -1 dBFS
@@ -79,7 +81,7 @@ function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.fi
   finale.gain.setValueAtTime(0, C.finalImpact - 0.003);
   finale.gain.linearRampToValueAtTime(1, C.finalImpact);
   finale.gain.setValueAtTime(1, C.fadeOut + 0.4);
-  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by story ~72.3 s (film ~100.4 s)
+  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by story ~78.3 s (film ~108.75 s)
 
   // Reverbs are only wired into the graph while they can be heard (a connected
   // ConvolverNode costs CPU even when silent). Sends are high-passed so the low

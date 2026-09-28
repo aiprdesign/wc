@@ -259,7 +259,7 @@ function computing(S) {
   S.at(C.processorDive, () => I.whoosh(S, C.processorDive, 0.8, { level: 0.1, f0: 5000, f1: 1200, pan0: 0, pan1: 0, peak: 0.15, kind: 'white' }));
   // binary: arpeggiated digital blips on 16ths, 1 = high square, 0 = low sine
   const tones = [74, 77, 81, 86, 89];
-  for (let k = 0; C.binary + 0.075 + k * 0.125 < C.mColumns + 0.4; k++) {
+  for (let k = 0; C.binary + 0.075 + k * 0.125 < BINARY_END; k++) {
     const t = Math.round((C.binary + 0.075 + k * 0.125) / 0.125) * 0.125; // snap to the 16th grid (45.875 …)
     const bit = S.random() < 0.55;
     if (S.random() < 0.18) continue;
@@ -268,6 +268,9 @@ function computing(S) {
     S.at(t, () => I.blip(S, t, f, { level: bit ? 0.022 : 0.03, type: bit ? 'square' : 'sine', decay: bit ? 0.05 : 0.08, pan: k % 2 ? 0.55 : -0.55 }));
   }
 }
+
+// (v8: the blips run on to 50.0, knowledge's handover — no longer the montage's first morph)
+const BINARY_END = 50.0;
 
 function knowledge(S) {
   // pages fly: a flutter of short paper flicks
@@ -291,6 +294,33 @@ function knowledge(S) {
   }
   // network: a glassy chord shimmer as the web connects
   S.at(C.network, () => [74, 81, 86, 88, 93].forEach((m, i) => I.bell(S, C.network + i * 0.04, m, { level: 0.022, pan: -0.6 + i * 0.3, decay: 2 })));
+}
+
+// The new frontier (1981–2026 and the vision of Mars): everything tucked under the brass;
+// mechanical one-shots (servo, latch, blips) are physical, textures follow the film clock.
+function frontier(S) {
+  // shuttle: the launch — a low rumble and crackle from the pad, fading under the telescope
+  S.at(C.shuttle - 0.1, () => X.rocket(S, C.shuttle - 0.1, 1.5, { level: 0.1 }));
+  // hubble: the servo slews, the aperture door swings open and seats
+  S.at(C.hubble - 0.15, () => X.servo(S, C.hubble - 0.15, 0.5, { level: 0.03, pan: 0.35, f: 170 }));
+  S.at(C.hubble + 0.25, () => X.servo(S, C.hubble + 0.25, 0.3, { level: 0.018, pan: -0.3, f: 230 }));
+  // genome: gentle data pulses — base pairs read out on the 16th grid (G C A T)
+  const bases = [784, 1047, 880, 1175];
+  for (let k = 0; k < 6; k++) {
+    const t = Math.ceil(C.genome / 0.125) * 0.125 + 0.0625 + k * 0.125;
+    S.at(t, () => I.blip(S, t, bases[(k * 3) % 4] * 2, { level: 0.011, decay: 0.05, pan: k % 2 ? 0.5 : -0.5, bus: 'sfx' }));
+  }
+  // webb: deep-space telemetry — soft carrier pulses through a faint band of static
+  S.at(C.webb + 0.05, () => X.radioBurst(S, C.webb + 0.05, 0.4, { level: 0.008, pan: -0.35, voice: 0 }));
+  [0.1, 0.35, 0.6].forEach((d, i) => S.at(C.webb + d, () => I.blip(S, C.webb + d, 2217, { level: 0.009 - 0.002 * i, decay: 0.09, pan: -0.35, bus: 'sfx' })));
+  S.at(C.webb, () => X.servo(S, C.webb, 0.35, { level: 0.014, pan: 0.4, f: 210 }));
+  // rover: Mars wind, and Ingenuity's tiny rotor buzz lifting off in the distance
+  S.at(C.rover - 0.1, () => X.marsWind(S, C.rover - 0.1, C.artemis + 0.1, { level: 0.035, attack: 0.3, release: 0.4 }));
+  S.at(C.rover + 0.2, () => X.rotor(S, C.rover + 0.2, C.artemis - 0.05, { level: 0.012 }));
+  // artemis: a distant rocket roar rolling in from the pad
+  S.at(C.artemis - 0.05, () => X.distantRoar(S, C.artemis - 0.05, C.marsVision + 0.3, { level: 0.07, attack: 0.35, release: 0.6 }));
+  // marsVision: the Martian wind again, wider and gustier, under the swell
+  S.at(C.marsVision - 0.2, () => X.marsWind(S, C.marsVision - 0.2, 55.6, { level: 0.04, attack: 0.4, release: 0.5, gust: 0.8 }));
 }
 
 function montage(S) {
@@ -340,7 +370,7 @@ function transitionAir(S) {
 
 export function arrangeCues(S) {
   transitionAir(S);
-  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, montage, finale]) {
+  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, frontier, montage, finale]) {
     section(S);
   }
 }

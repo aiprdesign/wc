@@ -8,7 +8,7 @@
 // so the live audio graph stays small however many events the score contains.
 //
 // Time map (v7): the score is authored on the STORY clock of timeline.js (cues, beats and
-// bars at 120 BPM over 72 s) and played on the FILM clock, slowed by `timeScale`. Every
+// bars at 120 BPM over 78 s) and played on the FILM clock, slowed by `timeScale`. Every
 // time the score hands to a Studio — event times, source start/stop, AudioParam
 // automation (event times, ramp ends, curve spans, setTarget time constants) — is story
 // time and is converted exactly once, here, so the whole score plays slower at the same

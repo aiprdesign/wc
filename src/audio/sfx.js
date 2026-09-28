@@ -1,5 +1,6 @@
 // Sound design: the "materials" of each era — stone, graphite, paper, clockwork,
-// iron and steam, electricity, radio, jet and rocket, relays, valves.
+// iron and steam, electricity, radio, jet and rocket, relays, valves, and (v8) the new
+// frontier's telescope servos, Martian wind, a tiny rotor and a distant launch.
 //
 // Irregular textures (grinding, scratching, rustling) use ONE noise source each,
 // shaped by JS-generated automation curves, rather than hundreds of tiny nodes.
@@ -779,3 +780,123 @@ export function air(S, t0, t1, { level = 0.05, freq = 2600, q = 0.6, attack = 1.
   S.free(n, n, bp, g);
 }
 
+
+// ------------------------------------------------------------------ the new frontier
+// Shuttle, telescopes, Mars: all low in the mix, under the frontier's brass.
+
+/**
+ * Telescope servo slewing an axis / opening the aperture door: a small geared motor
+ * spinning up, running and settling (a whine with its gear-mesh buzz), then a soft latch
+ * as the door seats. Physical (keeps its real length).
+ */
+export const servo = physical(function servo(S, t, dur, { level = 0.03, pan = 0, bus = 'sfx', f = 190 } = {}) {
+  const t1 = t + dur;
+  const o = S.osc('sawtooth', f * 0.45, t, t1 + 0.06);
+  o.frequency.exponentialRampToValueAtTime(f, t + 0.12);
+  o.frequency.setValueAtTime(f, t1 - 0.12);
+  o.frequency.exponentialRampToValueAtTime(f * 0.55, t1);
+  const bp = S.filter('bandpass', f * 7, 2.2);
+  // gear mesh: the whine chopped at the tooth rate (a quarter of the motor speed)
+  const mesh = S.gain(0.7);
+  const lfo = S.osc('square', f * 0.25, t, t1 + 0.06);
+  const depth = S.gain(0.3);
+  lfo.connect(depth).connect(mesh.gain);
+  const g = S.gain(0);
+  ahr(g.gain, t, t1, level, 0.06, 0.05);
+  const lp = S.filter('lowpass', 3800, 0.7);
+  o.connect(bp).connect(mesh).connect(g).connect(lp);
+  const p = S.out(lp, bus, pan);
+  S.free(o, o, bp, mesh, lfo, depth, g, lp, p);
+  // the latch as the door seats
+  click(S, t1, { level: level * 0.9, freq: 2600, body: 520, q: 3, decay: 0.02, pan, bus });
+  thud(S, t1 + 0.004, { level: level * 1.1, f: 90, tone: 900, decay: 0.18, pan, bus });
+});
+
+/**
+ * Martian wind: the thin CO₂ atmosphere carries only low, soft rumbling gusts (as the
+ * Perseverance microphones heard it) — lowpassed stereo noise with slow gusts and a faint,
+ * hollow whistle. A texture: follows the time map.
+ */
+export function marsWind(S, t0, t1, { level = 0.04, bus = 'sfx', attack = 0.5, release = 0.6, gust = 0.7 } = {}) {
+  const dur = t1 - t0;
+  const n = S.noise('pink', t0, t1 + release * 1.5, { stereo: true });
+  const bp = S.filter('bandpass', 380, 0.7);
+  const lp = S.filter('lowpass', 900, 0.7);
+  const walk = wander(S, dur, 30, 0.35, 0.93);
+  bp.frequency.setValueCurveAtTime(S.curve(dur, 30, (_, i) => 260 + 360 * walk[i]), t0, dur);
+  const gs = S.gain(1);
+  gs.gain.setValueCurveAtTime(S.curve(dur, 30, (_, i) => 1 - gust + gust * 1.6 * walk[i]), t0, dur);
+  const g = S.gain(0);
+  ahr(g.gain, t0, t1, level, attack, release);
+  n.connect(bp).connect(lp).connect(gs).connect(g);
+  S.out(g, bus);
+  // the hollow whistle over the rocks: a narrow band that drifts with the gusts
+  const w = S.noise('white', t0, t1 + release * 1.5);
+  const wb = S.filter('bandpass', 700, 9);
+  wb.frequency.setValueCurveAtTime(S.curve(dur, 30, (_, i) => 560 + 320 * walk[i]), t0, dur);
+  const wg = S.gain(0);
+  ahr(wg.gain, t0, t1, level * 0.35, attack * 1.5, release);
+  w.connect(wb).connect(wg);
+  const p = S.out(wg, bus, 0.3);
+  S.free(n, n, bp, lp, gs, g, w, wb, wg, p);
+}
+
+/**
+ * A tiny coaxial helicopter far off in thin air (Ingenuity): two counter-rotating rotors'
+ * blade-pass buzz (~84 Hz and a slightly faster second rotor, so they beat), lowpassed,
+ * swelling as it lifts off and drifting across. A texture: follows the time map.
+ */
+export function rotor(S, t0, t1, { level = 0.02, bus = 'sfx', f = 84, pan0 = -0.3, pan1 = 0.4 } = {}) {
+  const pan = S.panner(pan0);
+  pan.pan.setValueAtTime(pan0, t0);
+  pan.pan.linearRampToValueAtTime(pan1, t1);
+  pan.connect(S.bus(bus));
+  const lp = S.filter('lowpass', 1400, 0.8);
+  const g = S.gain(0);
+  ahr(g.gain, t0, t1, level, (t1 - t0) * 0.35, 0.25);
+  lp.connect(g).connect(pan);
+  const nodes = [pan, lp, g];
+  for (const [ff, type, lv] of [[f, 'sawtooth', 1], [f * 1.035, 'square', 0.5]]) {
+    const o = S.osc(type, ff * 0.8, t0, t1 + 0.3);
+    o.frequency.exponentialRampToValueAtTime(ff, t0 + (t1 - t0) * 0.3);   // spinning up
+    const og = S.gain(lv);
+    o.connect(og).connect(lp);
+    nodes.push(o, og);
+  }
+  // blade chop: the air torn by each pass (noise gated at the blade rate)
+  const n = S.noise('white', t0, t1 + 0.3);
+  const nb = S.filter('bandpass', 1100, 1.2);
+  const ng = S.gain(0);
+  const chop = S.osc('sine', f, t0, t1 + 0.3);
+  const cd = S.gain(0.5);
+  chop.connect(cd).connect(ng.gain);
+  n.connect(nb).connect(ng).connect(lp);
+  nodes.push(n, nb, ng, chop, cd);
+  S.free(...nodes);
+}
+
+/**
+ * A rocket heard from miles away (Artemis on the pad): the roar reaches the listener as a
+ * deep, rolling rumble with a dulled crackle — no top end. A texture: follows the time map.
+ */
+export function distantRoar(S, t0, t1, { level = 0.06, bus = 'sfx', attack = 0.4, release = 0.8 } = {}) {
+  const dur = t1 - t0;
+  const n = S.noise('brown', t0, t1 + release * 1.5, { stereo: true });
+  const lp = S.filter('lowpass', 160, 0.8);
+  lp.frequency.setValueAtTime(90, t0);
+  lp.frequency.exponentialRampToValueAtTime(240, t0 + attack);
+  const g = S.gain(0);
+  ahr(g.gain, t0, t1, level, attack, release);
+  const fl = S.gain(1);                                              // the roll of the sound
+  fl.gain.setValueCurveAtTime(S.curve(dur, 25, () => S.rand(0.7, 1.15)), t0, dur);
+  n.connect(lp).connect(g).connect(fl);
+  S.out(fl, bus);
+  // crackle, dulled by distance
+  const cr = S.noise('crackle', t0, t1 + release, { rate: 0.5 });
+  const cb = S.filter('bandpass', 520, 0.8);
+  const cg = S.gain(0);
+  ahr(cg.gain, t0 + attack * 0.5, t1, level * 0.9, attack, release);
+  cr.connect(cb).connect(cg);
+  const p = S.out(cg, bus, -0.15);
+  S.free(n, n, lp, g, fl, cr, cb, cg, p);
+}
