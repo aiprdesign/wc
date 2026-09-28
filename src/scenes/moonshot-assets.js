@@ -344,7 +344,7 @@ export function bootprintTexture(w = 256, h = 512) {
   dg.save(); dg.clip(sole);
   dg.fillStyle = 'rgb(150,0,0)'; dg.fillRect(0, 0, w, h);
   dg.fillStyle = 'rgb(255,0,0)';
-  for (let i = 0; i < 16; i++) { const y = h * 0.115 + i * h * 0.05; dg.fillRect(0, y, w, h * 0.026); }
+  for (let i = 0; i < 16; i++) { const y = h * 0.095 + i * h * 0.0613; dg.fillRect(0, y, w, h * 0.032); }   // 22 mm pitch at the 0.359 m print scale (the boot's tread bars)
   dg.restore();
   g.filter = 'blur(0.8px)'; g.drawImage(d, 0, 0); g.filter = 'none';
   // cut the rim where the sole is

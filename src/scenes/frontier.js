@@ -15,8 +15,8 @@
 //   54.42 NEXT · THE VISION — a compact 'next steps' story in four fast match cuts:
 //         54.42 a crewed interplanetary ship over Earth and Moon; its engines light on the 54.6 cue
 //         54.80 fire → fire: the lander's retro-burn tears a sheet of red dust off the Martian plain at dawn
-//         55.02 first footsteps: an astronaut plants the flag, backlit by the small Sun, Earth a blue star
-//         55.32 an outpost grows: habitat domes, a greenhouse glowing green, solar fields, rover tracks,
+//         (no first-footsteps beat: no human has walked on Mars yet — the landing hands to the outpost)
+//         55.10 an outpost grows: habitat domes, a greenhouse glowing green, solar fields, rover tracks,
 //               a crane push to the greenhouse at frame centre that hands over ('zoom').
 // Worlds share one scene and one set of lights (constant light count → no shader recompiles at the cuts);
 // the sky, Earth and Moon are an analytic ray-cast backdrop (pixel-exact limbs, one draw call).
@@ -68,7 +68,9 @@ export function create(ctx, segment) {
   const tSep = tShut + 0.58;            // booster separation
   const tLift = tRov + 0.3;             // helicopter lift-off
   // the vision: four fast shots; the ship's engines light on the marsVision cue
-  const tVis = tMars - 0.18, tIgn = tMars, tEDL = tMars + 0.2, tStep = tMars + 0.42, tBase = tMars + 0.72;
+  // no human has walked on Mars yet: the first-footsteps beat (astronaut + flag) is retired and its
+  // window collapses to zero length — the landing hands straight to the (uncrewed) outpost
+  const tVis = tMars - 0.18, tIgn = tMars, tEDL = tMars + 0.2, tBase = tMars + 0.5, tStep = tBase;
   const SQ = OUTPUT_ASPECT < 1.5;
   const R = rng(2026);
 
@@ -387,10 +389,10 @@ export function create(ctx, segment) {
   ];
   // captions: one per milestone; the vision (07) carries three short beats under one index
   const CAPS = [...SHOTS.slice(0, 6),
-    { t: tVis + 0.02, end: tStep - 0.04, fast: true, main: 'NEXT · CREWED MISSIONS TO MARS', sub: 'THE VISION · HUMANS TO THE RED PLANET' },
-    { t: tStep + 0.01, end: tBase - 0.03, fast: true, main: 'NEXT · FIRST FOOTSTEPS ON MARS', sub: 'EARTH · A BLUE STAR IN THE MARTIAN DAWN' },
-    { t: tBase + 0.01, end: DUR - 0.3, fast: true, main: 'A NEW HOME AMONG THE STARS', sub: 'TOMORROW · HABITATS · GREENHOUSES · POWER' },
-  ];
+    { t: tVis + 0.02, end: tStep - 0.04, fast: true, main: 'THE VISION · CREWED MISSIONS TO MARS', sub: 'NOT YET FLOWN · THE GOAL FOR THE 2030s AND BEYOND' },
+    { t: tStep + 0.01, end: tBase - 0.03, fast: true, main: 'THE VISION · FIRST FOOTSTEPS ON MARS', sub: 'EARTH · A BLUE STAR IN THE MARTIAN DAWN' },
+    { t: tBase + 0.01, end: DUR - 0.3, fast: true, main: 'THE VISION · A NEW HOME AMONG THE STARS', sub: 'TOMORROW · HABITATS · GREENHOUSES · POWER' },
+  ].filter((c) => c.end > c.t);   // drops the retired first-footsteps caption
   const tpLeft = (txt, o, x, y) => { const tp = new TextPlane(txt, o); tp.position.set(x + tp.worldWidth / 2, y, 0); tp.opacity = 0; hud.scene.add(tp); return tp; };
   const capMain = CAPS.map((s) => tpLeft(s.main, { font: FONTS.mono, weight: 500, height: 0.04 * UI, letterSpacing: 0.3, color: '#f3f6fb', intensity: 1.15 }, HX(0.16), HY(-0.78)));
   const capSub = CAPS.map((s) => tpLeft(s.sub, { font: FONTS.mono, weight: 300, height: 0.024 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.85 }, HX(0.165), HY(-0.838)));
@@ -432,8 +434,8 @@ export function create(ctx, segment) {
     if (roll) camera.rotateZ(roll);
     return u;
   };
-  const cuts = [tHub, tDive, tWebb, tRov, tArt, tVis, tEDL, tStep, tBase];
-  const cutW = [0.55, 0.55, 0.55, 0.55, 0.55, 0.2, 0.3, 0.25, 0.25];      // the vision cuts come fast: lighter accents
+  const cuts = [tHub, tDive, tWebb, tRov, tArt, tVis, tEDL, tBase];
+  const cutW = [0.55, 0.55, 0.55, 0.55, 0.55, 0.2, 0.3, 0.25];      // the vision cuts come fast: lighter accents
   const WORLD_OF = [worlds.ascent, worlds.orbit, worlds.cosmos, worlds.webb, worlds.mars, worlds.artemis, worlds.voyage, worlds.mars, worlds.mars, worlds.mars];
   const WORLD_LIST = Object.values(worlds);
   const shotOf = (t) => (t < tHub ? 0 : t < tDive ? 1 : t < tWebb ? 2 : t < tRov ? 3 : t < tArt ? 4 : t < tVis ? 5 : t < tEDL ? 6 : t < tStep ? 7 : t < tBase ? 8 : 9);

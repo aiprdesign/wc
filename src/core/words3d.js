@@ -22,12 +22,12 @@ import { ease, sat, lerp, ramp } from '../lib/math.js';
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
 const WORDS = {
-  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 14.1 },   // LAW clears before REPRESENTATION
+  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
   renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
-  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.95 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
-  frontier: { text: 'FRONTIER', t0: 49.8, t1: 51.1 },   // clears before the genome shot
+  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.3, pace: 0.8 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
+  frontier: { text: 'FRONTIER', t0: 49.8, t1: 50.95, pace: 0.8 },   // clears before the genome shot
 };
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
@@ -86,7 +86,8 @@ export class Words3D {
       const lay = LAYOUT[seg.id] ?? {};
       // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
       for (const w of [WORDS[seg.id] ?? []].flat()) {
-        if (typeof w === 'string') { this.items.push(this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(2.75, dur - 0.65), false, lay)); continue; }
+        // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
+        if (typeof w === 'string') { const it = this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; this.items.push(it); continue; }
         const item = this.build(w.text, inst(seg.id), w.t0, w.t1, false, lay);
         Object.assign(item, { pace: w.pace ?? 1, yOff: w.y ?? 0, noFocus: w.focus === false });
         this.items.push(item);

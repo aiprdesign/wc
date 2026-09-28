@@ -20,7 +20,7 @@ const CHAPTERS = {
   flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.' },
   moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
   computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.' },
-  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb and Mars: America keeps reaching further.' },
+  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.' },
   knowledge:   { n: 'XI',   era: '1450 — TODAY',                heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
 };
 

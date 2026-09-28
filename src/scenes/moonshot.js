@@ -137,7 +137,7 @@ export function create(ctx, segment) {
         float printH(vec2 p){
           float c = cos(${PRINT_ANG.toFixed(3)}), s = sin(${PRINT_ANG.toFixed(3)});
           vec2 r = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
-          vec2 q = vec2(r.x / 0.22 + 0.5, -r.y / 0.44 + 0.5);
+          vec2 q = vec2(r.x / 0.222 + 0.5, -r.y / 0.359 + 0.5);   // sized to the overshoe's sole: 0.168 × 0.316 m
           if (q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0) return 0.0;
           vec4 t = PRINT_TEX(uPrint, q);
           return (-t.r * 0.026 + t.g * 0.011) * uPress;
