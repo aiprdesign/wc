@@ -77,7 +77,7 @@ function makeSteam(count, emitters, { seed = 5, lightPos = new THREE.Vector3(0, 
         p += snoise3(p * 0.42 + aSeed.xyz * 9.0 + vec3(0.0, -uTime * 0.45, 0.0)) * (0.03 + age * 0.55);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        float s = aSize * mix(0.3, 2.3 + aSeed.w * 0.9, pow(u, 0.55));
+        float s = aSize * mix(0.14, 2.5 + aSeed.w * 0.9, pow(u, 0.5));
         gl_PointSize = min(1000.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.2, -mv.z));
         // expanding puffs thin out; fade in fast, dissipate slowly; never pop against the lens
         vA = smoothstep(0.0, 0.07, u) * pow(1.0 - u, 1.3) * smoothstep(0.35, 1.4, -mv.z) / (0.6 + 0.8 * u);
@@ -104,11 +104,11 @@ function makeSteam(count, emitters, { seed = 5, lightPos = new THREE.Vector3(0, 
         float n1 = snoise(q);
         float n2 = snoise(q * 2.3 + vec3(n1 * 0.6, -n1 * 0.4, vAge));
         float n3 = snoise(q * 5.1 + vec3(n2 * 0.5, 0.0, vAge * 2.0));
-        float f = clamp(0.5 + 0.5 * (n1 * 0.55 + n2 * 0.3 + n3 * 0.15), 0.0, 1.0);
+        float f = clamp(0.5 + 0.5 * (n1 * 0.62 + n2 * 0.28 + n3 * 0.1), 0.0, 1.0);
         // billows: gaussian body eroded by the noise; erosion grows with age so edges fray into wisps
         float body = exp(-r2 * 2.4);
-        float dens = smoothstep(0.0, 0.75, body * (0.35 + 1.25 * f) - (0.12 + 0.55 * vAge) * (1.0 - f) - 0.05);
-        float alpha = dens * vA * uOpacity * 0.55;
+        float dens = smoothstep(0.0, 1.1, body * (0.3 + 1.2 * f) - (0.1 + 0.5 * vAge) * (1.0 - f) - 0.04);
+        float alpha = dens * vA * uOpacity * 0.42;
         if (alpha < 0.003) discard;
         vec3 N = normalize(vec3(c, sqrt(max(0.0, 1.0 - r2))));
         float limb = max(0.0, dot(normalize(c + 1e-4), vL2)) * sqrt(r2);
@@ -356,10 +356,10 @@ export function create(ctx, segment) {
     const discZ = e.z > ZC ? -0.3 : 0.3;
     const discShape = new THREE.Shape(); discShape.absarc(0, 0, 0.82, 0, TAU, false);
     const discGeo = new THREE.ExtrudeGeometry(discShape, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, curveSegments: 64 }); discGeo.translate(0, 0, -0.08);
-    add(crank, discGeo, steel, 0, 0, discZ);
+    add(crank, discGeo, forged, 0, 0, discZ);
     add(crank, new THREE.CylinderGeometry(0.8, 0.8, 0.2, 48, 1, false, Math.PI, Math.PI).rotateX(Math.PI / 2), iron, 0, 0, discZ);   // counterweight, opposite the pin
     add(crank, alongZ(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 24)), steelPol2, CR, 0, discZ / 2);
-    add(crank, alongZ(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 24)), brassPol, 0, 0, discZ * 1.6);
+    add(crank, alongZ(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 24)), forged, 0, 0, discZ * 1.6);
     u.parts = { piston, cross, rod, crank, g };
     engines.push(u);
   }
@@ -586,7 +586,7 @@ export function create(ctx, segment) {
     { pos: V(BO.x, BO.y + BO.r + 8.6, BO.z0 + 0.6), dir: V(0.25, 1, 0.1), spread: 0.45, speed: 2.4, jitter: 0.3, life: 2.6, weight: 0.8, size: 1.7, birth: (u) => 1.6 + u * 2.9 },
     { pos: V(RX - 1.0, 0.3, -3), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 2, jitter: 1.2, life: 1.6, weight: 0.45, size: 1.2, birth: (u) => 3.6 + u * 0.9 },
   ];
-  const steam = makeSteam(4200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
+  const steam = makeSteam(5200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
   scene.add(steam);
   steam.material.uniforms.uFirePos.value.set(BO.x, 1.6, BO.z1 + 0.9);
 
@@ -660,7 +660,7 @@ export function create(ctx, segment) {
     // highlights. In the engine hall the wall recedes into a soft, matte backdrop.
     const pull = smoothstep(1.35, 1.85, t);
     key.intensity = shotA ? lerp(2.0, 0.55, pull) : 1.5;
-    wallMat.color.setScalar(shotA ? lerp(1, 0.55, pull) : 0.13);
+    wallMat.color.setScalar(shotA ? lerp(1, 0.42, pull) : 0.13);
     wallMat.roughness = shotA ? lerp(0.34, 0.6, pull) : 0.8;
     heroSpin.visible = pinSpin.visible = wheelSpin.visible = shotA;
     calloutA.position.copy(H).add(V(Math.cos(0.35) * hero.r, Math.sin(0.35) * hero.r, 0.26));
@@ -684,7 +684,7 @@ export function create(ctx, segment) {
       P.rod.position.set(xh, YC, 0); P.rod.rotation.z = Math.atan2(dy, px - xh);
       P.piston.position.set(xh - ROD - 0.2, YC, 0);
       u.wrist.rotation.z = 0.32 * Math.sin(th + Math.PI / 2);
-      if (u.inner) u.inner.intensity = (1.2 + 5 * hit) * ramp(t, tPist - 0.3, tPist);
+      if (u.inner) u.inner.intensity = (0.8 + 2.4 * hit) * ramp(t, tPist - 0.3, tPist);
     }
     fly.rotation.z = theta;
     govSpin.rotation.y = theta * 2.0;
@@ -701,10 +701,11 @@ export function create(ctx, segment) {
     machine.visible = boiler.visible = set2 || t > tPist - 0.6;
 
     const lock = pulse(T, { decay: 4 }) * (Math.abs(T - 28.0) < 0.3 ? 1 : 0) * (T >= 28.0 ? 1 : 0);
-    // (in the engine hall the back light is softer and whiter: an orange 3.2 rim facing the lens turned the
-    // floor and the bed plates into one big glare behind the chapter word)
-    rim.intensity = shotA ? 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * 0.7 : 1.1 + 1.8 * lock;
+    rim.intensity = shotA ? 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * 0.7 : 2.0 + 2.0 * lock;
     rim.color.setHex(shotA ? 0xff9448 : 0xffc890);
+    // set 2: the back light comes from high up (roof lights) — a low back light mirrors off the floor and
+    // the engine beds straight into the lens as a glare
+    if (shotA) rim.position.set(6, 5, -9); else rim.position.set(3, 16, -7);
     side.intensity = 1.6 * ramp(t, 3.2, 3.6);
     shafts.forEach((sh) => { sh.visible = t > 2.75; });
 
@@ -744,11 +745,6 @@ export function create(ctx, segment) {
     // the prism's spectrum wipe (science → here) keeps its true colours until it has crossed the frame
     out.harmony = smoothstep(0.3, 0.52, t);
 
-    const sq = globalThis.location?.search ?? '';
-    if (sq.includes('dbgR')) rim.intensity = 0;
-    if (sq.includes('dbgK')) { key.intensity = 0; fill.intensity = 0; }
-    if (sq.includes('dbgL')) floor.visible = false;
-    if (sq.includes('dbgS')) { steam.visible = false; hallDust.visible = false; }
     // HUD
     const he = envelope(t, 3.35, 4.6, 0.25, 0.3);
     hudT.opacity = he; hudT.reveal = ramp(t, 3.35, 3.8, ease.outCubic);
