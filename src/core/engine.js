@@ -137,6 +137,21 @@ export class Engine {
     return SEGMENTS.filter((s) => T >= s.start && T < s.end);
   }
 
+  // Run fn with the camera's open-matte lens applied (as renderInstance renders it).
+  withMatte(cam, fn) {
+    const matte = cam.isPerspectiveCamera && OUTPUT_ASPECT !== FILM_ASPECT;
+    let fov0;
+    if (matte) {
+      fov0 = cam.fov;
+      cam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov0) / 2) * Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.85)));
+      cam.aspect = OUTPUT_ASPECT;
+      cam.updateProjectionMatrix();
+    }
+    try { return fn(); } finally {
+      if (matte) { cam.fov = fov0; cam.aspect = FILM_ASPECT; cam.updateProjectionMatrix(); }
+    }
+  }
+
   renderInstance(inst, T, dt, rt, dofRT) {
     const r = this.renderer;
     const info = this.info(T, inst.segment, dt);
@@ -203,6 +218,8 @@ export class Engine {
       tu.uProgress.value = p;
       tu.uMode.value = TRANSITION_MODES[a.transition] ?? 0;
       tu.uSingle.value = 0;
+      tu.uTriOn.value = 0;
+      if (a.transition === 'letter') this.withMatte(instA.camera, () => this.words3d?.letterWindow(instA, tu));
       const s = p * p * (3 - 2 * p);
       bloomStrength = THREE.MathUtils.lerp(bloomStrength, (instB.bloom?.strength ?? 0.7) * (1 - 0.45 * (instB._wordsDuck ?? 0)), s);
       exposure = THREE.MathUtils.lerp(exposure, instB.exposure ?? 1, s);
@@ -213,6 +230,8 @@ export class Engine {
     tu.uTime.value = T;
     r.setRenderTarget(this.comp);
     this.transQuad.render(r);
+    // a heading the camera zooms THROUGH sits over the composite (its counter frames the next shot)
+    this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
     // chapter headings and story cards sit above every sequence (before bloom, so they glow softly)
     if (this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
 

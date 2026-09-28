@@ -1,6 +1,7 @@
 // Post-processing shaders: depth of field, scene transitions, and the final
 // "film" grade (ACES, era colour temperature, chromatic aberration, vignette, grain).
 
+import * as THREE from 'three';
 const fsVert = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 // ---------------------------------------------------------------------------
@@ -41,17 +42,33 @@ export const DofShader = {
 };
 
 // ---------------------------------------------------------------------------
-// Transition compositor. Modes: 0 dissolve, 1 luma, 2 zoom-through, 3 flash, 4 spectrum wipe, 5 iris.
-export const TRANSITION_MODES = { dissolve: 0, luma: 1, zoom: 2, flash: 3, spectrum: 4, iris: 5 };
+// Transition compositor. Modes: 0 dissolve, 1 luma, 2 zoom-through, 3 flash, 4 spectrum wipe, 5 iris,
+// 6 letter window (the next shot shows through a triangular letter counter supplied per frame).
+export const TRANSITION_MODES = { dissolve: 0, luma: 1, zoom: 2, flash: 3, spectrum: 4, iris: 5, letter: 6 };
 export const TransitionShader = {
   uniforms: {
     tA: { value: null }, tB: { value: null }, uProgress: { value: 0 }, uMode: { value: 0 },
     uTime: { value: 0 }, uAspect: { value: 2.39 }, uSingle: { value: 1 },
+    uTri: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] }, uTriOn: { value: 0 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
     uniform sampler2D tA, tB; uniform float uProgress, uTime, uAspect, uSingle; uniform int uMode;
+    uniform vec2 uTri[3]; uniform float uTriOn;
     varying vec2 vUv;
+    // signed distance (aspect-corrected, >0 inside) to a triangle given in uv
+    float triIn(vec2 p){
+      vec2 k = vec2(uAspect, 1.0); float d = 1e9; float sgn = 0.0;
+      for (int i = 0; i < 3; i++) {
+        vec2 a = uTri[i] * k, b = uTri[i == 2 ? 0 : i + 1] * k, q = p * k;
+        vec2 e = b - a, w = q - a;
+        float c = e.x * w.y - e.y * w.x;
+        sgn += sign(c);
+        vec2 h = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        d = min(d, length(h));
+      }
+      return abs(sgn) > 2.5 ? d : -d;
+    }
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
       return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
@@ -107,6 +124,11 @@ export const TransitionShader = {
         float R = ps * 1.4;
         float m = smoothstep(R, R - 0.08, r);
         col = mix(A, B, m) + vec3(1.0, 0.95, 0.85) * smoothstep(0.03, 0.0, abs(r - R + 0.04)) * 1.5 * (1.0 - p);
+      } else if (uMode == 6) {
+        // letter window: B inside the counter (its edges hide under the letter, drawn afterwards)
+        float m = uTriOn > 0.5 ? smoothstep(-0.002, 0.004, triIn(uv)) : ps;
+        m = max(m, smoothstep(0.9, 1.0, p));
+        col = mix(A, B, m);
       } else {
         col = mix(A, B, ps);
       }

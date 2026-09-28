@@ -13,7 +13,7 @@ import { pulse } from '../lib/rhythm.js';
 // beat-grid helpers (story time; the score plays the same grid)
 const onBeat = (x, div = 1) => Math.round(x / (BEAT / div)) * (BEAT / div);
 const nextBeat = (x, div = 1) => Math.ceil(x / (BEAT / div) - 1e-6) * (BEAT / div);
-import { letters3D } from '../lib/text.js';
+import { letters3D, getFont3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
 import { MorphParticles, sampleGeometry } from '../lib/particles.js';
@@ -95,7 +95,11 @@ export class Words3D {
     }
     SWAPS.forEach(([cue, w], i) => {
       const t0 = CUES[cue], t1 = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
-      this.items.push(this.build(w, inst('montage'), t0 - 0.05, t1 - 0.08, true, LAYOUT.montage));
+      const it = this.build(w, inst('montage'), t0 - 0.05, t1 - 0.08, true, LAYOUT.montage);
+      // the last word (STARS) never leaves: the camera zooms into its A, whose counter is the
+      // window onto the Earth shot (transition 'letter' at the montage → finale hand-over)
+      if (!SWAPS[i + 1]) this.makeZoom(it, 'A');
+      this.items.push(it);
     });
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this._k = new THREE.Vector3();
@@ -119,8 +123,63 @@ export class Words3D {
   // Engine hook: draw this sequence's headings over what was just rendered (same camera/lens).
   renderOverlay(inst, renderer, camera) {
     const o = inst._wordsOverlay;
-    if (!o || !this.items.some((it) => it.inst === inst && it.group.visible)) return;
+    if (!o || !this.items.some((it) => it.inst === inst && it.group.visible && !it.zoom)) return;
+    const post = this.items.filter((it) => it.inst === inst && it.zoom && it.group.visible);
+    post.forEach((it) => (it.group.visible = false));
     renderer.render(o.scene, camera);
+    post.forEach((it) => (it.group.visible = true));
+  }
+
+  // The zoom-through word is drawn over the COMPOSITE (after the transition), so its letter
+  // strokes frame the next shot showing through the counter. Engine calls this with the lens set.
+  renderPost(inst, renderer, camera) {
+    const o = inst._wordsOverlay;
+    const post = this.items.filter((it) => it.inst === inst && it.zoom && it.group.visible);
+    if (!o || !post.length) return;
+    const others = this.items.filter((it) => it.inst === inst && !it.zoom && it.group.visible);
+    others.forEach((it) => (it.group.visible = false));
+    renderer.clearDepth();
+    renderer.render(o.scene, camera);
+    others.forEach((it) => (it.group.visible = true));
+  }
+
+  // Engine hook during a 'letter' transition: the counter triangle in uv (lens already set).
+  letterWindow(inst, uniforms) {
+    const it = this.items.find((x) => x.inst === inst && x.zoom && x.group.visible);
+    if (!it) return false;
+    const cam = inst.camera;
+    cam.updateMatrixWorld();
+    it.group.updateMatrixWorld(true);
+    const v = this._k;
+    for (let i = 0; i < 3; i++) {
+      v.copy(it.zoom.tri[i]).applyMatrix4(it.group.matrixWorld).project(cam);
+      uniforms.uTri.value[i].set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5);
+    }
+    uniforms.uTriOn.value = 1;
+    return true;
+  }
+
+  // Zoom-through set-up: the letter's counter (the hole in its outline) as a triangle in the
+  // word's local space, slightly enlarged so its edges tuck under the strokes.
+  makeZoom(it, ch) {
+    const L = it.letters.find((l) => l.mesh.userData.char === ch) ?? it.letters[it.text.indexOf(ch)];
+    const shapes = getFont3D().generateShapes(ch, 1);
+    const outer = shapes[0].getPoints(24), hole = shapes[0].holes[0]?.getPoints(24) ?? [];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of outer) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;      // textGeometry3D centres each glyph on its bounds
+    let apex = hole[0], lo = Infinity;
+    for (const p of hole) { if (p.y > apex.y) apex = p; lo = Math.min(lo, p.y); }
+    const base = hole.filter((p) => p.y < lo + 0.02);
+    const bl = base.reduce((a, p) => (p.x < a.x ? p : a)), br = base.reduce((a, p) => (p.x > a.x ? p : a));
+    const zF = 0.32 / 2 + 0.035;                      // front face (extrusion is centred on z)
+    const P = (p) => new THREE.Vector3(L.x + p.x - cx, p.y - cy, zF);   // mesh origin = glyph centre, on the baseline row
+    const tri = [P(apex), P(bl), P(br)];
+    const c = tri[0].clone().add(tri[1]).add(tri[2]).multiplyScalar(1 / 3);
+    tri.forEach((q) => q.sub(c).multiplyScalar(1.06).add(c));
+    const seg = SEGMENTS.find((sg) => sg.id === 'finale'), mon = SEGMENTS.find((sg) => sg.id === 'montage');
+    it.zoom = { tri, c, z0: seg.start, z1: mon.end };
+    it.t1 = mon.end + 0.1;                              // stays up through the hand-over (no exit animation)
   }
 
   build(text, inst, t0, t1, swap = false, lay = {}) {
@@ -265,6 +324,22 @@ export class Words3D {
       const held = sat((t - inDur) / 0.2) * (1 - sat((T - it.t1 + 0.3) / 0.2));
       const beat = pulse(T, { decay: 9 }) * held;
       it.group.scale.setScalar(k * (1 + 0.018 * beat));   // a gentle breath on every beat
+      let zw = 0;
+      if (it.zoom) {
+        // ZOOM THROUGH THE LETTER: scale exponentially about the counter while sliding it to frame
+        // centre and levelling the word, until the counter swallows the frame (Earth behind it)
+        const u = sat((T - it.zoom.z0) / (it.zoom.z1 - it.zoom.z0));
+        zw = ease.inOutSine(sat(u * 2.2));
+        const Z = Math.exp(Math.log(180) * Math.pow(u, 2.4));
+        const tw = 1 - zw, kz = k * Z;
+        it.group.quaternion.copy(quat);
+        it.group.rotateY((turn + lerp(0.07, -0.07, ease.inOutSine(drift))) * tw);
+        it.group.rotateX(-0.08 * tw);
+        const c = it.zoom.c;
+        this._k.set(c.x * (k * tw - kz), c.y * (k * tw - kz), 0).applyQuaternion(it.group.quaternion);
+        it.group.position.add(this._k);
+        it.group.scale.set(kz, kz, k);
+      }
       it.group.updateMatrixWorld();
       it.shared.uWordInv.value.copy(it.group.matrixWorld).invert();
       const ov = inst._wordsOverlay;
@@ -327,6 +402,11 @@ export class Words3D {
       it.plinth.forEach((p) => { p.progress = pp; p.opacity = (0.65 + 0.35 * beat) * fade; });
       // contrast backing breathes in with the letters and out with them
       it.back.material.uniforms.uO.value = ramp(t, 0, 0.35) * (1 - ramp(T, outStart, outStart + outDur + 0.1));
+      if (it.zoom) {   // the backing, plinth and glint clear as the camera dives into the letter
+        it.back.material.uniforms.uO.value *= 1 - zw;
+        it.plinth.forEach((p) => (p.opacity *= 1 - zw));
+        it.glint.visible = it.glint.visible && zw < 0.05;
+      }
       inst._wordsDuck = Math.max(inst._wordsDuck, it.back.material.uniforms.uO.value);
       // rack focus onto the lettering while it is up
       if (inst.dof && !it.noFocus) {
