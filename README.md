@@ -68,7 +68,7 @@ assets/fonts/         Cinzel, Cormorant Garamond, IBM Plex Mono, Inter (SIL OFL)
 * **Deterministic.** Every sequence is a pure function of time and the score is rendered
   once into an `AudioBuffer`. That makes scrubbing, seeking, offline rendering and
   picture/sound sync exact. The same `CUES` table drives the visuals and the sound hits.
-* **Sound-reactive by construction.** The music runs at 120 BPM from frame 0. Visual rhythm
+* **Sound-reactive by construction.** The music is authored at 120 BPM on the story clock and plays at 86.4 BPM in the 1:40 film (TIME_SCALE). Visual rhythm
   (pistons, pulses, heartbeats, montage cuts) comes from `lib/rhythm.js` on the same grid,
   so it lands on the beat even in an offline render.
 * **One continuous journey.** Sequences overlap by half a second and are composited with

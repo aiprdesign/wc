@@ -1,12 +1,15 @@
-// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v6: the v5 realistic
-// three-act trailer score — humanised, round-robin, modelled timbres, a stage with early
-// reflections, designed sound effects, an analogue-style master and the Moonshot chapter in
-// act II — with a new 18 s coda: the climax blooms into a tender piano reprise of the theme
-// that gathers, breathes, swells on the sunrise into the final button at 65 s and resolves
-// in D major, silent by ~72.3 s. Everything before the pullBack (54.5) is unchanged.)
+// ACHIEVEMENTS OF WESTERN CIVILIZATION — procedural soundtrack (v7: the v6 three-act
+// trailer score with its 18 s coda — humanised, round-robin, modelled timbres, a stage with
+// early reflections, designed sound effects, an analogue-style master — now played at the
+// film's pace: the picture runs the 72 s story slowed by TIME_SCALE (100/72) into 100 s, so
+// the score is rendered on the same clock — 120 → 86.4 BPM, every event at story time ×
+// TIME_SCALE, every musical duration stretched, at the same pitch. The music is still
+// written in story time; the Studio converts it once (see core.js "Time map"). At the
+// slower tempo the hybrid section drives on denser hats, and the button is answered by
+// drums under the horns' D — A — D'.)
 //
-// renderScore() synthesises the whole 72 s score (+ tail) offline (Web Audio only: no
-// samples) and returns an AudioBuffer that the player starts at any offset.
+// renderScore() synthesises the whole 100 s score (+ tail) offline (Web Audio only: no
+// samples) and returns an AudioBuffer (FILM time) that the player starts at any offset.
 //
 //   music.js       harmony, the heroic theme, orchestra, rhythm section, trailer hits
 //   cues.js        sound design pinned to the timeline CUES
@@ -17,6 +20,9 @@
 //   reverb.js      procedural convolution halls;  mastering.js  gain, compressor, limiter
 //   wav.js         WAV export
 //
+// All cue times below are story time; the Studio maps them (and the mastering converts its
+// measurement windows with TIME_SCALE).
+//
 // Mix topology (rendered as two parallel studios — see renderScore — then summed):
 //   instrument buses ── seating (pan, air absorption) ─┬─ stage early reflections ─┐
 //   instrument buses ─┬─ film bus ── (ends at the suck-back before finalImpact) ─┐
@@ -25,7 +31,7 @@
 //   then, on the rendered buffer: loudness trim → tape/console saturation →
 //   two-band glue compressor → room tone → limiter at -1 dBFS
 
-import { DURATION, CUES as C } from '../timeline.js';
+import { DURATION, FILM_DURATION, TIME_SCALE, CUES as C } from '../timeline.js';
 import { Studio, mulberry32 } from './core.js';
 import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
 import { applyGain, limit, rmsBetween, saturate, glue2, roomTone } from './mastering.js';
@@ -36,9 +42,9 @@ import { arrangeCues } from './cues.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 6;
+export const SCORE_VERSION = 7;
 
-const TAIL = 1.5;              // seconds rendered past DURATION
+const TAIL = 1.5;              // film seconds rendered past FILM_DURATION
 const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
@@ -73,7 +79,7 @@ function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.fi
   finale.gain.setValueAtTime(0, C.finalImpact - 0.003);
   finale.gain.linearRampToValueAtTime(1, C.finalImpact);
   finale.gain.setValueAtTime(1, C.fadeOut + 0.4);
-  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by ~72.3 s
+  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by story ~72.3 s (film ~100.4 s)
 
   // Reverbs are only wired into the graph while they can be heard (a connected
   // ConvolverNode costs CPU even when silent). Sends are high-passed so the low
@@ -165,8 +171,8 @@ export async function renderScore(sampleRate = 48000) {
   //   B — rhythm section, hits, transitions, finale and the sound design.
   // (B's film bus has nothing after the pullBack's hall tail: the coda it plays is all on
   // the finale buses, so its hall is switched off early.)
-  const A = new Studio(sampleRate, DURATION + TAIL, 1492);
-  const B = new Studio(sampleRate, DURATION + TAIL, 1815, A);
+  const A = new Studio(sampleRate, FILM_DURATION + TAIL, 1492, null, { timeScale: TIME_SCALE });
+  const B = new Studio(sampleRate, FILM_DURATION + TAIL, 1815, A);
   buildMixer(A, { space: false });
   buildMixer(B, { stage: false, hallUntil: C.earthReveal + 3.5 });
   const { kicks } = arrangeMusic(A, 'orchestra');
@@ -181,15 +187,18 @@ export async function renderScore(sampleRate = 48000) {
 
   // Master: set the loud body of the film to a consistent level, glue it with a
   // gentle compressor, then brickwall-limit to -1 dBFS.
-  const loud = rmsBetween(buffer, C.gear, C.pullBack);
+  // (the buffer is in film time)
+  const film = (t) => t * TIME_SCALE;
+  const loud = rmsBetween(buffer, film(C.gear), film(C.pullBack));
   const gain = loud > 0 ? Math.min(8, TARGET_LOUD_RMS / loud) : 1;
   applyGain(buffer, gain);
   // console / tape colour, then a gentle two-band glue compressor
   saturate(buffer, { drive: 0.9 });
   glue2(buffer);
   // the hall never goes digitally silent (fades in with the opening, out at the end)
-  roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (DURATION + 0.3 - t) / 1.5)) });
-  const glued = rmsBetween(buffer, C.gear, C.pullBack);
+  const end = film(DURATION + 0.3);
+  roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (end - t) / 1.5)) });
+  const glued = rmsBetween(buffer, film(C.gear), film(C.pullBack));
   limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
   return buffer;
 }

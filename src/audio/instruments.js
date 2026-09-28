@@ -6,7 +6,7 @@
 //
 // Every function takes the Studio `S` first and schedules with absolute times.
 
-import { hz, perc, riseTo, ahr, clamp } from './core.js';
+import { hz, perc, riseTo, ahr, clamp, physical } from './core.js';
 
 // ============================================================ modal voices
 // Plucked / struck sounds are rendered in JS as sums of exponentially decaying
@@ -140,9 +140,9 @@ export function stoneTap(S, t, { level = 0.25, pan = 0, bus = 'sfx', f0 = 640 } 
 }
 
 /** Harp roll: chord tones strummed upward. */
-export function harpRoll(S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead' } = {}) {
+export const harpRoll = physical((S, t, notes, { level = 0.2, spread = 0.035, bus = 'lead' } = {}) => {
   notes.forEach((m, i) => pluck(S, t + i * spread, m, { level, bus, pan: -0.5 + i / Math.max(1, notes.length - 1) }));
-}
+});
 
 /**
  * Felt grand piano: three slightly mistuned inharmonic strings per note (beating),
@@ -245,8 +245,9 @@ export function subPulse(S, t0, t1, roots, hits, { level = 0.35, bus = 'bass' } 
   lp.connect(amp);
   const g = amp.gain;
   g.setValueAtTime(0, t0);
+  const bite = S.phys(0.004);
   for (const { t, v, len = 0.2 } of hits) { // v in 0..1
-    g.setTargetAtTime(level * v, t, 0.004);
+    g.setTargetAtTime(level * v, t, bite);
     g.setTargetAtTime(level * v * 0.22, t + 0.03, len / 3);
   }
   g.setTargetAtTime(0, t1, 0.08);
@@ -272,7 +273,7 @@ export function synthPluck(S, t, midi, { level = 0.08, pan = 0, bus = 'synth', d
 }
 
 /** Digital blip (sine or soft square). */
-export function blip(S, t, freq, { level = 0.05, type = 'sine', decay = 0.07, pan = 0, bus = 'synth' } = {}) {
+export const blip = physical((S, t, freq, { level = 0.05, type = 'sine', decay = 0.07, pan = 0, bus = 'synth' } = {}) => {
   const o = S.osc(type, freq, t, t + decay + 0.03);
   const g = S.gain(0);
   perc(g.gain, t, level, decay, 0.001);
@@ -286,7 +287,7 @@ export function blip(S, t, freq, { level = 0.05, type = 'sine', decay = 0.07, pa
   tail.connect(g);
   const p = S.out(g, bus, pan);
   S.free(o, o, g, p, ...(lp ? [lp] : []));
-}
+});
 
 // ================================================================= effects
 
@@ -351,7 +352,7 @@ export function revCymbal(S, tHit, dur, { level = 0.1, bus = 'fx' } = {}) {
 }
 
 /** Downer: a falling sub/saw sweep with a darkening noise tail after a hit. */
-export function downer(S, t, { level = 0.2, dur = 1.6, from = 320, to = 38, bus = 'fx' } = {}) {
+export const downer = physical((S, t, { level = 0.2, dur = 1.6, from = 320, to = 38, bus = 'fx' } = {}) => {
   const end = t + dur + 0.1;
   const o = S.osc('sawtooth', from, t, end);
   o.frequency.exponentialRampToValueAtTime(to, t + dur);
@@ -380,7 +381,7 @@ export function downer(S, t, { level = 0.2, dur = 1.6, from = 320, to = 38, bus 
   n.connect(nl).connect(ng);
   S.out(ng, bus);
   S.free(o, s, lp, g, sg, n, nl, ng);
-}
+});
 
 /**
  * Designed air whoosh: three noise layers moving together past the listener —
@@ -441,7 +442,7 @@ export function whoosh(S, t0, dur, o = {}) {
 }
 
 /** Sub boom: pitch-dropping sine for cinematic impacts. */
-export function boom(S, t, { level = 0.7, f0 = 90, f1 = 36, decay = 2.5, bus = 'bass' } = {}) {
+export const boom = physical((S, t, { level = 0.7, f0 = 90, f1 = 36, decay = 2.5, bus = 'bass' } = {}) => {
   const o = S.osc('sine', f0, t, t + decay + 0.2);
   o.frequency.exponentialRampToValueAtTime(f1, t + 0.35);
   const g = S.gain(0);
@@ -449,4 +450,4 @@ export function boom(S, t, { level = 0.7, f0 = 90, f1 = 36, decay = 2.5, bus = '
   o.connect(g);
   S.out(g, bus);
   S.free(o, o, g);
-}
+});

@@ -10,8 +10,13 @@
 // valve chuff, sputtering hiss and pressure rumble; electricity is crackle plus a
 // modulated arc buzz; paper is rendered grain by grain; jet and rocket get
 // doppler, turbine wobble and distorted crackle. All sit under the music.
+//
+// Time (v7): textures that span picture events (grinding, pencil, hum, jet, rocket, air…)
+// follow the score's time map and stretch with the film; short mechanical one-shots
+// (ratchet, steam puff, arc, thud, relay, thruster, Quindar, crunch, morse…) are
+// `physical`: anchored at their onset, they keep their real length.
 
-import { perc, ahr } from './core.js';
+import { perc, ahr, physical } from './core.js';
 import { modalBuffer, playBuffer } from './instruments.js';
 
 // Smoothed random walk in [0, 1] sampled at `rate` Hz.
@@ -179,7 +184,7 @@ export function clockwork(S, t0, t1, step, { level = 0.08, bus = 'sfx' } = {}) {
  * slightly uneven spacing, an accent once per revolution, and the gear's own body
  * ringing underneath.
  */
-export function ratchet(S, t0, dur, { level = 0.06, rate = 28, pan = 0, bus = 'sfx', freq = 4200 } = {}) {
+export const ratchet = physical(function ratchet(S, t0, dur, { level = 0.06, rate = 28, pan = 0, bus = 'sfx', freq = 4200 } = {}) {
   const count = Math.floor(dur * rate);
   const teeth = 8 + Math.floor(S.random() * 5);
   let t = t0;
@@ -198,13 +203,13 @@ export function ratchet(S, t0, dur, { level = 0.06, rate = 28, pan = 0, bus = 's
     [1, 1, 0.5], [1.51, 0.6, 0.35], [2.47, 0.4, 0.25], [3.3, 0.25, 0.15],
   ], { seconds: 0.6, noise: 0.3, attack: 0.002 });
   playBuffer(S, t0, body, { level: level * 0.5, pan, bus });
-}
+});
 
 /**
  * Steam pressure release: a valve "chuff", a hiss that sputters (turbulent, never
  * a steady filter), its falling pitch as pressure drops, and a pressure rumble.
  */
-export function steam(S, t, dur, { level = 0.2, pan = 0, bus = 'sfx' } = {}) {
+export const steam = physical(function steam(S, t, dur, { level = 0.2, pan = 0, bus = 'sfx' } = {}) {
   const end = t + dur + 0.1;
   const n = S.noise('white', t, end, { stereo: true });
   const hp = S.filter('highpass', 1800, 0.7);
@@ -233,7 +238,7 @@ export function steam(S, t, dur, { level = 0.2, pan = 0, bus = 'sfx' } = {}) {
   S.free(n, n, hp, bp, g, p, r, lp, rg, p2);
   // valve chuff: a short dull thump at the opening
   if (dur > 0.3) thud(S, t, { level: level * 0.5, f: 95, tone: 700, decay: 0.12, pan, bus });
-}
+});
 
 /** Electrical crackle through a highpass; `bursts` adds random surges. */
 export function sparks(S, t0, dur, { level = 0.15, pan = 0, bus = 'sfx', hp = 2200, bursts = 0.6 } = {}) {
@@ -257,7 +262,7 @@ export function sparks(S, t0, dur, { level = 0.15, pan = 0, bus = 'sfx', hp = 22
  * Electric arc: a burst of crackle, a modulated arc buzz (irregular AM on a
  * bandpassed square) and a quieter falling sweep for the discharge.
  */
-export function zap(S, t, { level = 0.08, pan = 0, bus = 'sfx', from = 5200, to = 180, dur = 0.16 } = {}) {
+export const zap = physical(function zap(S, t, { level = 0.08, pan = 0, bus = 'sfx', from = 5200, to = 180, dur = 0.16 } = {}) {
   const end = t + dur + 0.08;
   const o = S.osc('sawtooth', from, t, end);
   o.frequency.exponentialRampToValueAtTime(to, t + dur);
@@ -275,7 +280,7 @@ export function zap(S, t, { level = 0.08, pan = 0, bus = 'sfx', from = 5200, to 
   const p2 = S.out(bg, bus, pan);
   S.free(o, o, bp, g, p, bz, bb, bg, p2);
   sparks(S, t, Math.max(0.12, dur * 0.8), { level: level * 1.3, pan, bus, bursts: 2 });
-}
+});
 
 /** Mains buzz / valve hum: 50–60 Hz saw with harmonics, gently filtered. */
 export function hum(S, t0, t1, { level = 0.05, freq = 60, cutoff = 700, pan = 0, bus = 'sfx', attack = 0.3, release = 0.5 } = {}) {
@@ -295,7 +300,7 @@ export function hum(S, t0, t1, { level = 0.05, freq = 60, cutoff = 700, pan = 0,
 const MORSE = { W: '.--', C: '-.-.', A: '.-', E: '.', S: '...', T: '-', O: '---' };
 
 /** Telegraph sounder keying a message: click on key-down, clack on key-up, faint tone. */
-export function telegraph(S, t0, text, { unit = 0.05, level = 0.12, bus = 'sfx', pan = -0.2 } = {}) {
+export const telegraph = physical(function telegraph(S, t0, text, { unit = 0.05, level = 0.12, bus = 'sfx', pan = -0.2 } = {}) {
   let t = t0;
   for (const ch of text) {
     if (ch === ' ') { t += unit * 4; continue; }
@@ -314,10 +319,10 @@ export function telegraph(S, t0, text, { unit = 0.05, level = 0.12, bus = 'sfx',
     t += unit * 2;
   }
   return t;
-}
+});
 
 /** Old telephone bell: two tones with a fast clapper tremolo. */
-export function phoneRing(S, t0, dur, { level = 0.04, pan = 0.3, bus = 'sfx' } = {}) {
+export const phoneRing = physical(function phoneRing(S, t0, dur, { level = 0.04, pan = 0.3, bus = 'sfx' } = {}) {
   const a = S.osc('sine', 1180, t0, t0 + dur + 0.2);
   const b = S.osc('sine', 1510, t0, t0 + dur + 0.2);
   const trem = S.osc('square', 22, t0, t0 + dur + 0.2);
@@ -331,7 +336,7 @@ export function phoneRing(S, t0, dur, { level = 0.04, pan = 0.3, bus = 'sfx' } =
   am.connect(g);
   const p = S.out(g, bus, pan);
   S.free(a, a, b, trem, tg, g, am, p);
-}
+});
 
 /** Radio tuning: static through a wandering bandpass, a heterodyne whistle, and a station fading in. */
 export function radioTune(S, t0, dur, { level = 0.12, bus = 'sfx' } = {}) {
@@ -496,13 +501,13 @@ export function dive(S, t0, dur, { level = 0.15, bus = 'sfx' } = {}) {
 }
 
 /** Relay bank: armature click + contact bounce. */
-export function relay(S, t, { level = 0.1, pan = 0, bus = 'sfx' } = {}) {
+export const relay = physical(function relay(S, t, { level = 0.1, pan = 0, bus = 'sfx' } = {}) {
   click(S, t, { level, freq: 3300, body: 640, q: 3, decay: 0.012, pan, bus });
   click(S, t + 0.006, { level: level * 0.45, freq: 4600, body: 1400, q: 4, decay: 0.008, pan, bus });
-}
+});
 
 /** Heavy low thud (book, clay, canvas): lowpassed noise + short sine. */
-export function thud(S, t, { level = 0.3, f = 80, pan = 0, bus = 'sfx', decay = 0.35, tone = 1800 } = {}) {
+export const thud = physical(function thud(S, t, { level = 0.3, f = 80, pan = 0, bus = 'sfx', decay = 0.35, tone = 1800 } = {}) {
   const n = S.noise('pink', t, t + decay);
   const lp = S.filter('lowpass', tone, 0.8);
   const g = S.gain(0);
@@ -517,7 +522,7 @@ export function thud(S, t, { level = 0.3, f = 80, pan = 0, bus = 'sfx', decay = 
   const p = S.out(mix, bus, pan);
   S.free(o, n, lp, g, o, go, mix, p);
   if (level >= 0.12) debris(S, t + 0.01, { level: level * 0.35, pan, bus, size: tone < 1000 ? 1 : 0.6 });
-}
+});
 
 /**
  * Debris: small fragments (grit, stone chips, splinters) settling after an impact —
@@ -637,7 +642,7 @@ export function creak(S, t0, dur, { level = 0.05, pan = 0, bus = 'sfx', rate = 7
 }
 
 /** RCS thruster puff heard inside the capsule: a valve click, a dull thump and a short hiss. */
-export function thrusterPuff(S, t, { level = 0.06, pan = 0, bus = 'sfx', dur = 0.09 } = {}) {
+export const thrusterPuff = physical(function thrusterPuff(S, t, { level = 0.06, pan = 0, bus = 'sfx', dur = 0.09 } = {}) {
   click(S, t, { level: level * 0.5, freq: 2400, body: 700, q: 3, decay: 0.012, pan, bus });
   const n = S.noise('white', t, t + dur + 0.08);
   const bp = S.filter('bandpass', S.rand(1500, 2300), 0.8);
@@ -653,7 +658,7 @@ export function thrusterPuff(S, t, { level = 0.06, pan = 0, bus = 'sfx', dur = 0
   o.connect(go).connect(mix);
   const p = S.out(mix, bus, pan);
   S.free(n, n, bp, lp, g, o, go, mix, p);
-}
+});
 
 /** Descent engine felt through the structure: a low, breathing rumble with no top end. */
 export function descentRumble(S, t0, t1, { level = 0.08, bus = 'sfx', attack = 0.4, release = 0.3 } = {}) {
@@ -684,7 +689,7 @@ export function descentRumble(S, t0, t1, { level = 0.08, bus = 'sfx', attack = 0
  * Quindar tone: the Apollo air-to-ground keying beep — a pure tone (2525 Hz intro,
  * 2475 Hz outro) of 250 ms, heard through the radio's band-limit.
  */
-export function quindar(S, t, { level = 0.012, freq = 2525, dur = 0.25, pan = 0.3, bus = 'sfx' } = {}) {
+export const quindar = physical(function quindar(S, t, { level = 0.012, freq = 2525, dur = 0.25, pan = 0.3, bus = 'sfx' } = {}) {
   const o = S.osc('sine', freq, t, t + dur + 0.02);
   const g = S.gain(0);
   ahr(g.gain, t, t + dur, level, 0.004, 0.008);
@@ -692,13 +697,13 @@ export function quindar(S, t, { level = 0.012, freq = 2525, dur = 0.25, pan = 0.
   o.connect(g).connect(bp);
   const p = S.out(bp, bus, pan);
   S.free(o, o, g, bp, p);
-}
+});
 
 /**
  * Air-to-ground radio burst: band-limited static with a squelch edge and a clipped,
  * syllabic "voice" underneath (never intelligible — texture, not dialogue).
  */
-export function radioBurst(S, t0, dur, { level = 0.03, pan = 0.3, bus = 'sfx', voice = 1 } = {}) {
+export const radioBurst = physical(function radioBurst(S, t0, dur, { level = 0.03, pan = 0.3, bus = 'sfx', voice = 1 } = {}) {
   const t1 = t0 + dur;
   const n = S.noise('white', t0, t1 + 0.03);
   const hp = S.filter('highpass', 350, 0.7), bp = S.filter('bandpass', 1700, 0.6);
@@ -721,10 +726,10 @@ export function radioBurst(S, t0, dur, { level = 0.03, pan = 0.3, bus = 'sfx', v
   v.connect(f).connect(vg);
   const p2 = S.out(vg, bus, pan);
   S.free(n, n, hp, bp, g, p1, v, f, vg, p2);
-}
+});
 
 /** A boot pressing into fine regolith: a soft compacting crunch over a muted thud. */
-export function crunch(S, t, { level = 0.05, pan = 0, bus = 'sfx' } = {}) {
+export const crunch = physical(function crunch(S, t, { level = 0.05, pan = 0, bus = 'sfx' } = {}) {
   const sr = S.sr, dur = 0.26, n = Math.ceil(dur * sr);
   const buf = S.ctx.createBuffer(2, n, sr);
   const L = buf.getChannelData(0), R = buf.getChannelData(1);
@@ -752,7 +757,7 @@ export function crunch(S, t, { level = 0.05, pan = 0, bus = 'sfx' } = {}) {
   const pn = S.out(g, bus, pan);
   S.free(src, src, lp, g, pn);
   thud(S, t, { level: level * 1.2, f: 55, tone: 450, decay: 0.25, pan, bus });
-}
+});
 
 /** Queue the impact and debris one-shots for idle-time synthesis (see Studio.warm). */
 export function warmSfx(S) {

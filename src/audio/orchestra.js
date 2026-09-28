@@ -223,14 +223,9 @@ function sectionLoop(S0, kind, base) {
 /** A looping section source for one note (not yet connected); a few cents off every time. */
 function sectionSource(S, kind, midi, t0, end, cents = 4) {
   const base = BASE_STEP * Math.round(midi / BASE_STEP);
-  const src = S.ctx.createBufferSource();
-  src.buffer = sectionLoop(S, kind, base);
-  src.loop = true;
-  src.playbackRate.value = 2 ** ((midi - base) / 12 + S.rand(-cents, cents) / 1200);
-  src.start(t0, S.rand(0, LOOP - 0.05));
-  src.stop(end);
-  src._end = end;
-  return src;
+  const buf = sectionLoop(S, kind, base);
+  const rate = 2 ** ((midi - base) / 12 + S.rand(-cents, cents) / 1200);
+  return S.loop(buf, t0, end, { offset: S.rand(0, LOOP - 0.05), rate });
 }
 
 // ============================================================ transients
@@ -298,8 +293,11 @@ export function chord(S, kind, t0, t1, notes, o = {}) {
   const f = lp.frequency;
   f.setValueAtTime(cutoff * dark, t0);
   f.exponentialRampToValueAtTime(cutoff, t0 + att);
-  f.setValueAtTime(cutoff, t1);
-  f.exponentialRampToValueAtTime(cutoff * dark, end);
+  // the release is scheduled when it comes, so the filter is static through the hold
+  S.at(t1, () => {
+    f.setValueAtTime(cutoff, t1);
+    f.exponentialRampToValueAtTime(cutoff * dark, end);
+  });
   const amp = S.gain(0);
   const lv = level / Math.sqrt(notes.length);
   if (swell) {
@@ -339,7 +337,7 @@ export function brass(S, t0, dur, notes, o = {}) {
   const { level = 0.2, attack = 0.7, release = 1.2, bright = 1800, bus = 'brass', sfz = false, kind = 'brass' } = o;
   const t1 = t0 + dur;
   const end = t1 + release;
-  const tPeak = t0 + (sfz ? 0.04 : attack);
+  const tPeak = t0 + (sfz ? S.phys(0.04) : attack);
   const lp = S.filter('lowpass', 150, sfz ? 2.5 : 1.2);
   const f = lp.frequency;
   f.setValueAtTime(sfz ? 300 : 120, t0);
@@ -348,8 +346,11 @@ export function brass(S, t0, dur, notes, o = {}) {
   const settle = bright * (sfz ? 0.4 : 0.7);
   const tSettle = Math.max(tPeak + 0.01, Math.min(t1, tPeak + (sfz ? 0.6 : dur * 1.2)));
   f.exponentialRampToValueAtTime(settle, tSettle);
-  f.setValueAtTime(settle, Math.max(t1, tSettle));
-  f.exponentialRampToValueAtTime(150, Math.max(t1, tSettle) + release);
+  const tRel = Math.max(t1, tSettle);
+  S.at(tRel, () => { // (scheduled when it comes: a static filter through the hold)
+    f.setValueAtTime(settle, tRel);
+    f.exponentialRampToValueAtTime(150, tRel + release);
+  });
   const amp = S.gain(0);
   const g = amp.gain;
   const lv = level / Math.sqrt(notes.length);
@@ -381,7 +382,7 @@ export function brass(S, t0, dur, notes, o = {}) {
     // lip "scoop": every player lands on the pitch from a little below
     const scoop = S.rand(25, 60) * (sfz ? 1.3 : 1);
     src.detune.setValueAtTime(-scoop, tn);
-    src.detune.setTargetAtTime(0, tn, sfz ? 0.018 : 0.035);
+    src.detune.setTargetAtTime(0, tn, S.phys(sfz ? 0.018 : 0.035));
     const g = S.gain(S.rand(0.8, 1.1));
     src.connect(g).connect(into);
     nodes.push(src, g);
@@ -406,6 +407,8 @@ export function line(S, kind, notes, o = {}) {
   lfo.connect(depth);
   const lo = Math.min(...notes.map(([, m]) => m)), hi = Math.max(...notes.map(([, m]) => m));
   const nodes = [lp, amp, lfo, depth];
+  let bright = cutoff * 0.7;
+  lp.frequency.value = bright;
   notes.forEach(([t, m, d], i) => {
     const last = i === notes.length - 1;
     const rel = last ? release : overlap;
@@ -420,7 +423,7 @@ export function line(S, kind, notes, o = {}) {
       // legato: glide from the previous note (small intervals) or a scoop (leaps)
       const gl = prev != null && Math.abs(prev - m) <= 7 ? (prev - m) * 100 * 0.85 : -S.rand(20, 45);
       src.detune.setValueAtTime(gl, start);
-      src.detune.setTargetAtTime(0, start + 0.01, prev != null && Math.abs(prev - m) <= 7 ? 0.03 : 0.025);
+      src.detune.setTargetAtTime(0, start + S.phys(0.01), S.phys(prev != null && Math.abs(prev - m) <= 7 ? 0.03 : 0.025));
       depth.connect(src.detune);
       const g = S.gain(0);
       const pk = vel * S.rand(0.92, 1.05);
@@ -432,11 +435,14 @@ export function line(S, kind, notes, o = {}) {
       src.connect(g).connect(lp);
       S.free(src, g); // each note leaves the graph as soon as it has faded
     }
-    // brightness follows the dynamics
-    lp.frequency.linearRampToValueAtTime(cutoff * (0.7 + 0.4 * vel), t + 0.15);
+    // brightness follows the dynamics (scheduled note by note: static between notes)
+    const from = bright, to = (bright = cutoff * (0.7 + 0.4 * vel));
+    S.at(start, () => {
+      lp.frequency.setValueAtTime(from, start);
+      lp.frequency.linearRampToValueAtTime(to, Math.max(start + 0.02, t + 0.15));
+    });
   });
-  lp.frequency.setValueAtTime(cutoff * 0.7, t0);
-  lp._end = tEnd;
+  lp._end = S.T(tEnd);
   S.free(...nodes);
 }
 
@@ -457,6 +463,7 @@ export function spiccato(S, t, midi, { level = 0.1, decay = 0.13, bus = 'spic' }
 /** Tremolo strings: a chord whose amplitude is bowed in fast 32nd-note pulses. */
 export function tremolo(S, t0, t1, notes, { level = 0.12, rate = 16, cutoff = 4000, bus = 'strings' } = {}) {
   const dur = t1 - t0;
+  rate /= S.phys(1); // strokes per story second, so the bow keeps its real speed
   const lp = S.filter('lowpass', cutoff, 0.5);
   const amp = S.gain(0);
   const lv = level / Math.sqrt(notes.length);
@@ -508,13 +515,14 @@ export function braam(S, t, root, { level = 0.5, dur = 2.4, power = 1, bus = 'br
   shaper.curve = driveCurve(S);
   const lp = S.filter('lowpass', 90, 3.5);
   lp.frequency.setValueAtTime(90, t);
-  lp.frequency.exponentialRampToValueAtTime(900 + 1700 * power, t + 0.09);
-  lp.frequency.setTargetAtTime(420, t + 0.09, close);
+  const rip = S.phys(0.09);
+  lp.frequency.exponentialRampToValueAtTime(900 + 1700 * power, t + rip);
+  lp.frequency.setTargetAtTime(420, t + rip, close);
   lp.frequency.setTargetAtTime(90, t + dur, Math.max(0.2, release * 1.5));
   const amp = S.gain(0);
   amp.gain.setValueAtTime(0, t);
-  amp.gain.linearRampToValueAtTime(level, t + 0.02);
-  amp.gain.setTargetAtTime(level * 0.45, t + 0.05, 0.45);
+  amp.gain.linearRampToValueAtTime(level, t + S.phys(0.02));
+  amp.gain.setTargetAtTime(level * 0.45, t + S.phys(0.05), 0.45);
   amp.gain.setTargetAtTime(0, t + dur, release);
   pre.connect(shaper).connect(lp).connect(amp);
   S.out(amp, bus);

@@ -6,6 +6,17 @@
 // are only created a fraction of a second before they sound (OfflineAudioContext
 // suspend/resume) and disconnected once finished,
 // so the live audio graph stays small however many events the score contains.
+//
+// Time map (v7): the score is authored on the STORY clock of timeline.js (cues, beats and
+// bars at 120 BPM over 72 s) and played on the FILM clock, slowed by `timeScale`. Every
+// time the score hands to a Studio — event times, source start/stop, AudioParam
+// automation (event times, ramp ends, curve spans, setTarget time constants) — is story
+// time and is converted exactly once, here, so the whole score plays slower at the same
+// pitch: notes, swells, ramps, fades and grids stretch; oscillator frequencies, vibrato
+// rates, pre-rendered buffers (drums, piano, harp, impacts, section loops) and reverbs
+// are physical and do not. Physical one-shots built from nodes (booms, clicks, puffs…)
+// run inside `oneShot(t0, …)`: there, time is anchored at t0 and every offset from t0
+// keeps its real length. `phys(s)` is the story-time length that sounds for s real seconds.
 
 export const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 export const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -54,6 +65,27 @@ export function ahr(param, t0, t1, peak, attack, release) {
 
 // ------------------------------------------------------------------- studio
 
+/**
+ * An AudioParam prototype whose automation methods take story times (see "Time map"
+ * above). Params created by the Studio's factories are given it, so every instrument's
+ * envelopes, ramps and curves follow the time map without knowing it exists.
+ */
+function timedParamProto(S) {
+  const P = AudioParam.prototype;
+  return Object.create(P, {
+    setValueAtTime: { value(v, t) { return P.setValueAtTime.call(this, v, S.T(t)); } },
+    linearRampToValueAtTime: { value(v, t) { return P.linearRampToValueAtTime.call(this, v, S.T(t)); } },
+    exponentialRampToValueAtTime: { value(v, t) { return P.exponentialRampToValueAtTime.call(this, v, S.T(t)); } },
+    setTargetAtTime: { value(v, t, tau) { return P.setTargetAtTime.call(this, v, S.T(t), S.span(tau)); } },
+    setValueCurveAtTime: { value(c, t, d) { const a = S.T(t); return P.setValueCurveAtTime.call(this, c, a, S.T(t + d) - a); } },
+    cancelScheduledValues: { value(t) { return P.cancelScheduledValues.call(this, S.T(t)); } },
+    cancelAndHoldAtTime: { value(t) { return P.cancelAndHoldAtTime.call(this, S.T(t)); } },
+  });
+}
+
+/** Wrap an instrument `fn(S, t, …)` as a physical one-shot anchored at its onset t. */
+export const physical = (fn) => function (S, t, ...args) { return S.oneShot(t, () => fn(S, t, ...args)); };
+
 const NOISE_SECONDS = 4;
 
 export class Studio {
@@ -63,9 +95,10 @@ export class Studio {
    * the cache of pre-rendered one-shots / section loops (AudioBuffers are not
    * tied to a context).
    */
-  constructor(sampleRate, seconds, seed = 1492, shared = null) {
+  constructor(sampleRate, seconds, seed = 1492, shared = null, { timeScale = shared?.clock.k ?? 1 } = {}) {
     this.sr = sampleRate;
-    this.duration = seconds;
+    this.duration = seconds; // FILM seconds
+    this.clock = { k: timeScale, anchor: null }; // shared with seeded() views
     this.ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
     this.random = mulberry32(seed);
     this.events = [];
@@ -73,6 +106,35 @@ export class Studio {
     this.cache = shared ? shared.cache : new Map(); // rendered one-shots and loops
     this.voices = [];       // live voices awaiting disposal
     this.buffers = shared ? shared.buffers : this.#makeNoise();
+    this.paramProto = timeScale === 1 ? null : timedParamProto(this);
+  }
+
+  // --- time map (story → film) ----------------------------------------------
+
+  /** Film time of story time t (anchored inside a oneShot). */
+  T(t) {
+    const { k, anchor } = this.clock;
+    return anchor == null ? t * k : anchor * k + (t - anchor);
+  }
+
+  /** Film length of a story-time span (a duration or time constant). */
+  span(d) { return this.clock.anchor == null ? d * this.clock.k : d; }
+
+  /** Story-time length that sounds for `sec` real seconds (for physical details). */
+  phys(sec) { return this.clock.anchor == null ? sec / this.clock.k : sec; }
+
+  /** Run `fn` with time anchored at t0: offsets from t0 keep their physical length. */
+  oneShot(t0, fn) {
+    const c = this.clock;
+    if (c.anchor != null) return fn();
+    c.anchor = t0;
+    try { return fn(); } finally { c.anchor = null; }
+  }
+
+  /** Route a node's AudioParams through the time map. */
+  timed(node, ...params) {
+    if (this.paramProto) for (const p of params) Object.setPrototypeOf(node[p], this.paramProto);
+    return node;
   }
 
   /**
@@ -89,9 +151,9 @@ export class Studio {
   /** Queue buffer synthesis to run on the main thread while the renderer is busy. */
   warm(fn) { (this.warmups ??= []).push(fn); }
 
-  /** Humanised time: t plus a random offset in ±ms/2 … (one-sided when `late`). */
+  /** Humanised time: t plus a random offset in ±ms/2 real ms (one-sided when `late`). */
   human(t, ms = 10, late = false) {
-    const j = (late ? this.random() : this.random() - 0.5) * ms * 0.001;
+    const j = (late ? this.random() : this.random() - 0.5) * this.phys(ms * 0.001);
     return Math.max(0, t + j);
   }
 
@@ -108,8 +170,20 @@ export class Studio {
 
   // --- scheduling -----------------------------------------------------------
 
-  /** Register an event; `build()` creates its nodes (all times absolute, >= t). */
-  at(t, build) { this.events.push({ t: Math.max(0, t), build }); }
+  /**
+   * Register an event at story time t; `build()` creates its nodes (all times absolute, >= t).
+   * Builds may register further events (e.g. a note's release automation, so that its
+   * filter is not automated — sample-accurate, 3× the cost — through the hold).
+   */
+  at(t, build) {
+    const e = { t: Math.max(0, this.T(t)), build };
+    if (this.cursor == null) { this.events.push(e); return; }
+    // while rendering: insert into the pending (sorted) part of the queue
+    const ev = this.events;
+    let lo = this.cursor, hi = ev.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (ev[mid].t <= e.t) lo = mid + 1; else hi = mid; }
+    ev.splice(lo, 0, e);
+  }
 
   /**
    * Render the whole score. Events are built one window ahead of the playhead,
@@ -119,9 +193,9 @@ export class Studio {
   async render() {
     const { ctx, events } = this;
     events.sort((a, b) => a.t - b.t);
-    let next = 0;
+    this.cursor = 0;
     const buildUntil = (limit) => {
-      while (next < events.length && events[next].t < limit) events[next++].build();
+      while (this.cursor < events.length && events[this.cursor].t < limit) events[this.cursor++].build();
     };
     const dispose = (now) => {
       this.voices = this.voices.filter((v) => {
@@ -195,14 +269,16 @@ export class Studio {
 
   // --- node factories ---------------------------------------------------------
 
+  // (every factory takes story times; `_end` — used by free() — is in film time)
+
   gain(v = 0) {
-    const g = this.ctx.createGain();
+    const g = this.timed(this.ctx.createGain(), 'gain');
     g.gain.value = v;
     return g;
   }
 
   filter(type, freq, Q = 0.707) {
-    const f = this.ctx.createBiquadFilter();
+    const f = this.timed(this.ctx.createBiquadFilter(), 'frequency', 'Q', 'gain', 'detune');
     f.type = type;
     f.frequency.value = freq;
     f.Q.value = Q;
@@ -210,39 +286,44 @@ export class Studio {
   }
 
   panner(p = 0) {
-    const n = this.ctx.createStereoPanner();
+    const n = this.timed(this.ctx.createStereoPanner(), 'pan');
     n.pan.value = clamp(p, -1, 1);
     return n;
   }
 
   osc(type, freq, t0, t1) {
-    const o = this.ctx.createOscillator();
+    const o = this.timed(this.ctx.createOscillator(), 'frequency', 'detune');
     o.type = type;
     o.frequency.setValueAtTime(freq, t0);
-    o.start(t0);
-    o.stop(t1);
-    o._end = t1;
+    o.start(this.T(t0));
+    o.stop(o._end = this.T(t1));
     return o;
+  }
+
+  /** Looping buffer source from story time t0 to t1, entering the loop at `offset` (s). */
+  loop(buf, t0, t1, { offset = 0, rate = 1 } = {}) {
+    const src = this.timed(this.ctx.createBufferSource(), 'playbackRate', 'detune');
+    src.buffer = buf;
+    src.loop = true;
+    src.playbackRate.value = rate;
+    src.start(this.T(t0), offset);
+    src.stop(src._end = this.T(t1));
+    return src;
   }
 
   /** Looping noise source starting at a random point of a shared buffer. */
   noise(kind, t0, t1, { stereo = false, rate = 1 } = {}) {
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.buffers[stereo ? `${kind}2` : kind];
-    src.loop = true;
-    src.playbackRate.value = rate;
-    src.start(t0, this.rand(0, NOISE_SECONDS - 0.1));
-    src.stop(t1);
-    src._end = t1;
-    return src;
+    return this.loop(this.buffers[stereo ? `${kind}2` : kind], t0, t1, { offset: this.rand(0, NOISE_SECONDS - 0.1), rate });
   }
 
+  /** One-shot buffer from story time t0 (plays at its own, physical length). */
   buffer(buf, t0, rate = 1) {
-    const src = this.ctx.createBufferSource();
+    const src = this.timed(this.ctx.createBufferSource(), 'playbackRate', 'detune');
     src.buffer = buf;
     src.playbackRate.value = rate;
-    src.start(t0);
-    src._end = t0 + buf.duration / rate;
+    const t = this.T(t0);
+    src.start(t);
+    src._end = t + buf.duration / rate;
     return src;
   }
 

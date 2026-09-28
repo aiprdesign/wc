@@ -1,4 +1,6 @@
-// The music (v6): a three-act trailer score in D minor, 120 BPM, bar = 2 s from t = 0.
+// The music (v6/v7): a three-act trailer score in D minor, 120 BPM, bar = 2 s from t = 0 —
+// all in STORY time. The Studio plays it on the film clock (× TIME_SCALE: 86.4 BPM, bar =
+// 2.78 s), so every number below stays on the story grid and on the timeline's CUES.
 //
 // THEME (8 notes, heroic 5th + octave leaps):  D — A — D' — C' Bb — A — G — A
 //   developed  fragment (piano, 6 s) → gentle full statement (piano + celesta, 12 s)
@@ -296,6 +298,10 @@ function ostinato(S) {
       if (t >= 32 && k % 4 === 0) O.spiccato(S, t, r + iv + 12, { level: lv * 0.5 }); // violins join an octave up
     });
   });
+}
+
+// The electronic half of the ostinato (rendered with the rhythm section).
+function pulse(S) {
   // synth pulse: 8ths, filtered saw, doubled with the sub pulse
   pattern(20.0, OST_END, 'x.x.x.x.x.x.x.x.', (t, v, k) => {
     const m = chordAt(t).root + 24;
@@ -316,8 +322,11 @@ function ostinato(S) {
 
 // Layer entries, every 4 bars. [from, to, pattern, level(t)?] — the kit thins out over
 // the translunar coast, rests through the descent and landing, and is back on earthrise.
+// (v7: at the film's 86.4 BPM the grid is 39 % wider, so the groove carries more 16ths —
+// taiko pickups from 28, 16th hats from 28 / 32 — to keep the hybrid section driving.)
 const TAIKO = [
-  [24.0, 32.0, 'X.......x.....x.'],
+  [24.0, 28.0, 'X.......x.....x.'],
+  [28.0, 32.0, 'X.....o.x...o.x.'],
   [32.0, 36.0, 'X.....x.x.....x.'],
   [36.0, M0, 'X.x.x.x.X.x.x.x.'],    // 8ths with the horn theme
   [M0, 39.6, 'X.......x.......', COAST], // translunar: half time
@@ -327,7 +336,7 @@ const TAIKO = [
   [53.0, OST_END, 'XxxxXxxxXxxxXxxx'], // 16ths into the peak
 ];
 const KICK = [[28.0, M0, 'X...x...X...x...'], [M0, 39.6, 'X...x...X...x...', COAST], [41.8, 49.5, 'X...x...X...x...'], [49.5, OST_END, 'X...x...X...x.x.']];
-const HATS = [[28.0, M0, 'x.o.x.o.x.o.x.o.'], [M0, 39.6, 'x.o.x.o.x.o.x.o.', COAST], [41.8, 44.0, 'x.o.x.o.x.o.x.o.'], [44.0, OST_END, 'xoxoXoxoxoxoXoxo']];
+const HATS = [[28.0, 32.0, 'x.o.x.oox.o.x.oo'], [32.0, M0, 'xoxoxoxoxoxoxoxo'], [M0, 39.6, 'x.o.x.o.x.o.x.o.', COAST], [41.8, 44.0, 'xoxoxoxoxoxoxoxo'], [44.0, OST_END, 'xoxoXoxoxoxoXoxo']];
 const SNARE = [[32.0, M0, '....x.......x...'], [42.5, 48.0, '....x.......x...'], [48.0, 49.5, '....x...x.x.xxxx'], [49.5, 53.0, '....x.......x...']];
 const TOMS = [[32.0, M0, '............x.xx'], [42.5, 48.0, '............x.xx'], [48.0, 49.5, '..x.x.x.x.x.xxxx'], [49.5, 53.0, '..........x.x.x.']];
 const TICK = [[24.0, 49.5, 'x.x.x.x.x.x.x.x.']]; // the mission clock keeps ticking through the descent
@@ -610,6 +619,12 @@ function codaFinale(S) {
     O.line(S, 'brass', head, { level: 0.2, cutoff: 3400, bus: 'end', octaves: [12], release: 1.5 });
     O.line(S, 'strings', head, { level: 0.16, cutoff: 6000, bus: 'end', octaves: [12, 24], release: 2.0 });
   });
+  // … and the drums answer with them (v7): a lighter stroke on A, a broad one on the high D'
+  S.at(t + 0.5, () => I.taiko(S, t + 0.5, 0.36, { size: 0.6, bus: 'end' }));
+  S.at(t + 1.0, () => {
+    I.taiko(S, t + 1.0, 0.55, { size: 1, bus: 'end' });
+    I.boom(S, t + 1.0, { level: 0.3, f0: 70, f1: 34, decay: 3.2, bus: 'endDry' });
+  });
 
   // closingLine: piano + celesta echo the theme head, pp, over the decaying chord
   const e = C.closingLine;
@@ -739,10 +754,10 @@ export function kickTimes() {
 /**
  * Schedule the music into Studio S. The score renders in parallel studios, so
  * `part` selects which layers this studio plays:
- *   'orchestra' — strings, choir, theme, low brass, ostinato, act I colour, the coda's
- *                 reprise and swell
- *   'rhythm'    — percussion, arps, transitions, hits, the coda's bloom, final button and
- *                 resolution
+ *   'orchestra' — strings, choir, theme, low brass, spiccato ostinato, act I colour, the
+ *                 coda's reprise and swell
+ *   'rhythm'    — synth + sub pulse, percussion, arps, transitions, hits, the coda's bloom,
+ *                 final button and resolution
  */
 export function arrangeMusic(S, part = 'all') {
   const orch = part === 'all' || part === 'orchestra';
@@ -759,6 +774,7 @@ export function arrangeMusic(S, part = 'all') {
     coda(S);
   }
   if (rest) {
+    pulse(S);
     rhythm(S, []);
     moonshotRhythm(S);
     arps(S);
