@@ -631,7 +631,7 @@ function coda(S) {
   for (let t = C.storyTwo, k = 0; t < HOLD - 1e-6; k++) {
     const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
     const m = k % 4 === 3 ? 45 : 38;
-    S.at(t, () => O.spiccato(S, t, m, { level: 0.05 + 0.1 * u * u, decay: 0.11 }));
+    S.at(t, () => O.spiccato(S, t, m, { level: 0.06 + 0.14 * u * u, decay: 0.11 }));
     S.at(t, () => O.spiccato(S, t, m - 12, { level: 0.03 + 0.06 * u * u, decay: 0.14 }));
     t += t < 68.5 ? STEP * 2 : STEP;
   }
@@ -671,13 +671,13 @@ function codaFinale(S) {
   for (let t = C.storyTwo; t < HOLD - 1e-6; t += BEAT) {
     const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
     S.at(t, () => {
-      I.tom(S, t, 0.05 + 0.16 * u, { f: 52, bus: 'endDry' });
-      I.tom(S, t + 0.16, 0.03 + 0.1 * u, { f: 47, bus: 'endDry' });
+      I.tom(S, t, 0.08 + 0.24 * u, { f: 52, bus: 'endDry' });
+      I.tom(S, t + 0.16, 0.05 + 0.15 * u, { f: 47, bus: 'endDry' });
     });
   }
   for (let t = 65.0, k = 0; t < HOLD - 1e-6; t += t < 68.5 ? STEP * 2 : STEP, k++) {
     const u = (t - 65.0) / (HOLD - 65.0);
-    S.at(t, () => X.click(S, t, { level: 0.012 + 0.03 * u, freq: k % 2 ? 2600 : 3400, body: 1100, decay: 0.012, pan: k % 2 ? 0.35 : -0.35, bus: 'endDry' }));
+    S.at(t, () => X.click(S, t, { level: 0.02 + 0.045 * u, freq: k % 2 ? 2600 : 3400, body: 1100, decay: 0.012, pan: k % 2 ? 0.35 : -0.35, bus: 'endDry' }));
   }
   S.at(C.ideasLine, () => I.riser(S, C.ideasLine, HOLD, { level: 0.03, from: 120, to: 2400, bus: 'end' }));
 
