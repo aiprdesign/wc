@@ -22,17 +22,18 @@ const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'
 
 // Material per era: satin gold → bronze → brushed steel → satin chrome.
 const ERAS = [
-  [20, { color: '#d9b25e', roughness: 0.4, env: 0.7, light: '#ffcf8a' }],
-  [29, { color: '#a8764a', roughness: 0.42, env: 0.7, light: '#ffb070' }],
-  [39, { color: '#aab2bb', roughness: 0.38, env: 0.55, light: '#dfe9ff' }],
-  [99, { color: '#b9c3ce', roughness: 0.32, env: 0.45, light: '#cfe3ff' }],
+  // 60-30-10: the words are the film's 10% accent — one signature gold, finish evolving by era
+  [20, { color: '#c99a3e', roughness: 0.42, env: 0.55, light: '#ffcf8a' }],   // hand-worked gold
+  [29, { color: '#c99a3e', roughness: 0.36, env: 0.55, light: '#ffc978' }],
+  [39, { color: '#cfa244', roughness: 0.3, env: 0.5, light: '#ffd79a' }],
+  [99, { color: '#d4a84a', roughness: 0.26, env: 0.45, light: '#ffe0b0' }],  // polished gold
 ];
 const eraOf = (T) => ERAS.find(([t]) => T < t)[1];
 
 function letterMaterial(era, env, shared) {
   const m = new THREE.MeshStandardMaterial({
     color: era.color, metalness: 1, roughness: era.roughness, envMap: env, envMapIntensity: era.env,
-    emissive: new THREE.Color(era.color).multiplyScalar(0.02), transparent: true, fog: false,
+    emissive: new THREE.Color(era.color).multiplyScalar(0.0), transparent: true, fog: false,
   });
   const u = { ...shared, uFlash: { value: 0 } };
   m.userData.u = u;
@@ -46,7 +47,7 @@ function letterMaterial(era, env, shared) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
-        totalEmissiveRadiance += uTint * (band * 1.5 + uFlash);`);
+        totalEmissiveRadiance += uTint * (band * 0.55 + uFlash * 0.6);`);
   };
   m.customProgramCacheKey = () => 'word3d-v2';
   return m;
@@ -96,8 +97,8 @@ export class Words3D {
     });
     // glowing plinth line under the word
     const half = glyphs.width / 2 + 0.25;
-    const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 2.2, head: 0.08 });
-    const plinthR = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(half, 0, 0.2)], { color: era.light, intensity: 2.2, head: 0.08 });
+    const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
+    const plinthR = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
     plinthL.position.y = plinthR.position.y = -capH / 2 - 0.12;
     group.add(plinthL, plinthR);
     const plinth = [plinthL, plinthR];
@@ -184,7 +185,7 @@ export class Words3D {
       const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
       it.light.position.x = it.shared.uSweep.value;
-      it.light.intensity = Math.sin(Math.PI * sweepP) * 6 * k * k * fade;
+      it.light.intensity = Math.sin(Math.PI * sweepP) * 2.2 * k * k * fade;
       // plinth shoots out from the centre with the letters, retracts into it as they leave
       const pp = Math.max(0.0001, ramp(t, 0.05, inDur + n * st * 0.8, ease.outExpo) * (1 - ramp(T, outStart - 0.05, outStart + outDur * 0.8, ease.inOutCubic)));
       it.plinth.forEach((p) => { p.progress = pp; p.opacity = 0.8 * fade; });

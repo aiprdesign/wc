@@ -55,6 +55,9 @@ const INTERLUDES = [
 ];
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
+// 60-30-10: the signature accent (10%) for every graphic element; reading text stays neutral.
+const ACCENT = new THREE.Color('#f0b445');
+const INK = new THREE.Color('#efe8dc');
 
 // Small text that can change every frame (timecode, counters); redraws only when the string changes.
 class LiveText extends THREE.Mesh {
@@ -189,7 +192,7 @@ export class TitleLayer {
     const finale = SEGMENTS.at(-1).start + 0.5;
     const o = ramp(T, 5.6, 6.4) * (1 - ramp(T, finale - 0.4, finale + 0.3));
     this.reel.visible = o > 0.003;
-    const col = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(T)) / 2));
+    const col = INK.clone().multiplyScalar(0.9);
     if (this.reel.visible) {
       this.corners.progress = 1; this.corners.opacity = 0.55 * o;
       this.corners.material.uniforms.uColor.value.copy(col);
@@ -205,7 +208,8 @@ export class TitleLayer {
       this.rail.progress = 1; this.rail.opacity = 0.5 * o;
       this.railFill.progress = Math.max(0.0001, T / end); this.railFill.opacity = 0.9 * o;
       this.ticks.progress = 1; this.ticks.opacity = 0.6 * o;
-      [this.rail, this.railFill, this.ticks].forEach((l) => l.material.uniforms.uColor.value.copy(col));
+      [this.rail, this.ticks].forEach((l) => l.material.uniforms.uColor.value.copy(col));
+      this.railFill.material.uniforms.uColor.value.copy(ACCENT);
     }
     for (const s of this.sweeps) {
       const u = (T - s.t) / 0.6;
@@ -215,7 +219,7 @@ export class TitleLayer {
       const p = ease.inOutCubic(sat(u));
       s.l1.progress = s.l2.progress = Math.max(0.0001, p * 1.4);
       s.l1.opacity = s.l2.opacity = (1 - sat((u - 0.6) / 0.4)) * 0.8;
-      [s.l1, s.l2].forEach((l) => l.material.uniforms.uColor.value.copy(col));
+      [s.l1, s.l2].forEach((l) => l.material.uniforms.uColor.value.copy(ACCENT));
       s.band.position.x = lerp(-OUTPUT_ASPECT - 0.5, OUTPUT_ASPECT + 0.5, p);
       s.band.material.uniforms.uO.value = Math.sin(Math.PI * sat(u)) * 0.12;
       s.band.material.uniforms.uC.value.copy(col);
@@ -294,11 +298,11 @@ export class TitleLayer {
     era.position.y = 0.062;
     const eraText = `${c.n}   ·   ${c.era}`;
     // story: italic serif, word by word
-    const story = new WordLine(c.story, { height: 0.056, color, intensity: 1.05 });
+    const story = new WordLine(c.story, { height: 0.056, color: INK, intensity: 1.0 });
     story.position.y = -0.032;
     const half = Math.min(1.05, story.width / 2 + 0.06);
-    const ruleL = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
-    const ruleR = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
+    const ruleL = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-half, 0, 0)], { color: ACCENT, intensity: 1.3, head: 0.1 });
+    const ruleR = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(half, 0, 0)], { color: ACCENT, intensity: 1.3, head: 0.1 });
     ruleL.position.y = ruleR.position.y = 0.022;
     // soft scrim so type reads over bright plates
     const scrim = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), new THREE.ShaderMaterial({
@@ -312,7 +316,7 @@ export class TitleLayer {
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
     const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
-    return { g, era, eraText, color, ruleL, ruleR, story, scrim, t0, t1 };
+    return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, scrim, t0, t1 };
   }
 
   makeInterlude(d) {

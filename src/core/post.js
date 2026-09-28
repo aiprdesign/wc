@@ -118,10 +118,11 @@ export const FinalShader = {
   uniforms: {
     tInput: { value: null }, uExposure: { value: 1 }, uWarmth: { value: 1 }, uTime: { value: 0 },
     uGrain: { value: 0.05 }, uVignette: { value: 0.55 }, uCA: { value: 0.0025 }, uFade: { value: 1 },
-    uResolution: { value: null }, uAspect: { value: 2.39 },
+    uResolution: { value: null }, uAspect: { value: 2.39 }, uHarmony: { value: 0.85 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
+    uniform float uHarmony;
     uniform sampler2D tInput; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect; uniform vec2 uResolution;
     varying vec2 vUv;
     vec3 RRTAndODTFit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
@@ -131,6 +132,32 @@ export const FinalShader = {
       c = inM * c; c = RRTAndODTFit(c); c = outM * c; return clamp(c, 0.0, 1.0);
     }
     float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+    // 60-30-10 colour harmony: 60% neutral charcoal (dominant), 30% era tone (secondary:
+    // bronze early, steel blue late), 10% signature gold (accent). Hues outside the two
+    // families lose saturation and lean toward the nearest one; darks go neutral.
+    vec3 rgb2hsv(vec3 c){ vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0); vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+      vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); float d = q.x - min(q.w, q.y); float e = 1.0e-10;
+      return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); }
+    vec3 hsv2rgb(vec3 c){ vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0); vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }
+    float hueD(float a, float b){ float d = abs(a - b); return min(d, 1.0 - d); }
+    float hueToward(float h, float target, float k){ float d = target - h; d -= floor(d + 0.5); return fract(h + d * k); }
+    vec3 harmony(vec3 col, float w){
+      const float ACCENT = 0.118, BRONZE = 0.075, STEEL = 0.585;
+      vec3 hsv = rgb2hsv(col);
+      float warm = clamp(w * 0.5 + 0.5, 0.0, 1.0);
+      float kB = 1.0 - smoothstep(0.05, 0.14, hueD(hsv.x, BRONZE));
+      float kS = 1.0 - smoothstep(0.06, 0.16, hueD(hsv.x, STEEL));
+      float kSec = mix(kS, kB, warm);
+      float kAcc = 1.0 - smoothstep(0.035, 0.09, hueD(hsv.x, ACCENT));
+      float keep = max(kSec, kAcc);
+      float sec = warm > 0.5 ? BRONZE : STEEL;
+      float target = hueD(hsv.x, ACCENT) < hueD(hsv.x, sec) ? ACCENT : sec;
+      hsv.x = hueToward(hsv.x, target, 0.45 * (1.0 - keep));
+      hsv.y *= mix(0.32, 1.0, keep);                                // off-palette hues recede
+      hsv.y *= mix(0.45, 1.0, smoothstep(0.04, 0.3, hsv.z));        // dominant: neutral charcoal darks
+      hsv.y = min(1.0, hsv.y * (1.0 + 0.18 * kAcc));                // the accent carries the colour
+      return mix(col, hsv2rgb(hsv), uHarmony);
+    }
     vec3 toSRGB(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
     void main(){
       vec2 uv = vUv;
@@ -151,6 +178,7 @@ export const FinalShader = {
       // (gated so true black stays black — deep blacks are part of the look)
       vec3 shadowTint = w > 0.0 ? vec3(0.018, 0.010, 0.002) : vec3(0.002, 0.010, 0.018);
       col += shadowTint * smoothstep(0.0, 0.06, l) * pow(1.0 - l, 3.0) * abs(w);
+      col = harmony(col, w);
       // gentle S-curve for contrast, protect deep blacks
       col = mix(col, col * col * (3.0 - 2.0 * col), 0.22);
       // saturation trim for the "museum film" look
