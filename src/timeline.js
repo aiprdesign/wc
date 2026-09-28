@@ -2,7 +2,7 @@
 // All times are GLOBAL seconds. Segments overlap by ~0.5 s; the overlap is where
 // the compositor blends the outgoing and incoming sequences with `transition`.
 
-export const DURATION = 72;             // story time: every segment, cue and beat below is authored on this clock
+export const DURATION = 78;             // story time: every segment, cue and beat below is authored on this clock
 // The film plays the story slowed by TIME_SCALE (72 s of story → 100 s of film, 120 → 86.4 BPM),
 // giving every concept more room. The score is rendered at the same scale, so sync is exact.
 export const TIME_SCALE = 100 / 72;
@@ -41,8 +41,9 @@ export const SEGMENTS = [
   { id: 'moonshot',    title: 'The Moonshot · American Century', start: 38.5, end: 43.0, transition: 'dissolve' },
   { id: 'computing',   title: 'Computing & Digital',          start: 42.5, end: 47.0, transition: 'zoom' },
   { id: 'knowledge',   title: 'Knowledge',                    start: 46.5, end: 50.0, transition: 'flash' },
-  { id: 'montage',     title: 'Montage',                      start: 49.5, end: 54.5, transition: 'dissolve' },
-  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 54.0, end: 72.0, transition: null },
+  { id: 'frontier',    title: 'The New Frontier',             start: 49.5, end: 56.0, transition: 'zoom' },
+  { id: 'montage',     title: 'Montage',                      start: 55.5, end: 60.5, transition: 'dissolve' },
+  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 60.0, end: 78.0, transition: null },
 ];
 
 // Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`;
@@ -130,30 +131,38 @@ export const CUES = {
   books: 48.4,
   pixels: 48.9,
   network: 49.3,
+  // the new frontier — American achievements 1981–2026 and the vision of Mars
+  shuttle: 49.9,        // Space Shuttle, 1981
+  hubble: 50.7,         // Hubble Space Telescope, 1990
+  genome: 51.5,         // Human Genome Project, 2003
+  webb: 52.3,           // James Webb Space Telescope, 2021
+  rover: 53.1,          // Perseverance + Ingenuity on Mars, 2021
+  artemis: 53.9,        // Artemis — returning to the Moon
+  marsVision: 54.6,     // the next giant leap: humans on Mars
   // montage (one morph every 0.8 s)
-  mColumns: 49.6,
-  mGears: 50.4,
-  mOrbits: 51.2,
-  mAtoms: 52.0,
-  mCircuit: 52.8,
-  mStars: 53.6,
+  mColumns: 55.6,
+  mGears: 56.4,
+  mOrbits: 57.2,
+  mAtoms: 58.0,
+  mCircuit: 58.8,
+  mStars: 59.6,
   // finale — an 18 s coda
-  pullBack: 54.5,       // climax hit: the camera pulls back from the stars
-  earthReveal: 55.5,    // settle on a majestic Earth; music turns tender (theme reprise)
-  storyOne: 56.5,       // "From the agora to the Moon,"
-  storyTwo: 58.5,       // "twenty-five centuries of reason, courage and invention."
-  ideasLine: 61.0,      // IDEAS BUILD UPON IDEAS.
-  ideasOut: 63.4,
-  sunrise: 63.6,        // the sun breaks over Earth's limb — the swell
-  finalImpact: 65.0,    // the title lands on the final button hit
-  closingLine: 66.8,    // A MOTION DESIGN STUDY
-  fadeOut: 70.0,
+  pullBack: 60.5,       // climax hit: the camera pulls back from the stars
+  earthReveal: 61.5,    // settle on a majestic Earth; music turns tender (theme reprise)
+  storyOne: 62.5,       // "From the agora to the Moon,"
+  storyTwo: 64.5,       // "twenty-five centuries of reason, courage and invention."
+  ideasLine: 67.0,      // IDEAS BUILD UPON IDEAS.
+  ideasOut: 69.4,
+  sunrise: 69.6,        // the sun breaks over Earth's limb — the swell
+  finalImpact: 71.0,    // the title lands on the final button hit
+  closingLine: 72.8,    // A MOTION DESIGN STUDY
+  fadeOut: 76.0,
 };
 
 // Colour temperature of the grade over time: +1 = marble/bronze/gold, -1 = steel/electric/cool.
 export const WARMTH_KEYS = [
   [0, 0.9], [8, 1.0], [20, 0.8], [25, 0.35], [29, 0.0], [32, -0.35],
-  [39, -0.6], [43, -0.55], [50, -0.75], [54.5, -0.5], [60, -0.2], [64, 0.25], [72, 0.3],
+  [39, -0.6], [43, -0.55], [50, -0.75], [56, -0.7], [60.5, -0.5], [66, -0.2], [70, 0.25], [78, 0.3],
 ];
 
 export function segmentById(id) {
