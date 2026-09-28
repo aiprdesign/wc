@@ -12,7 +12,7 @@
 //                      rises, then pushes into the centre for the 'zoom' hand-over.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { CUES, BEAT } from '../timeline.js';
+import { CUES, BEAT, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { clamp, sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU, hash1 } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
 import { TextPlane, FONTS } from '../lib/text.js';
@@ -431,14 +431,18 @@ export function create(ctx, segment) {
   // =====================================================================================
   // HUD labels
   const hud = ctx.makeHUD();
+  // open-matte delivery (?aspect=1 …): keep these labels anchored bottom-left, scaled up to stay legible
+  // and lifted clear of the showreel HUD line (identity in the 2.39 frame)
+  const SQ = OUTPUT_ASPECT < 1.5, HH = FILM_ASPECT / OUTPUT_ASPECT, UI = SQ ? Math.sqrt(HH) * 1.25 : 1;
+  const HX = (dx) => -FILM_ASPECT + dx * UI, HY = (y) => (SQ ? -HH + (1 + y) * UI + 0.3 : y);
   const labels = [
     ['TELEGRAPH · 1837', tTel, tPhone],
     ['TELEPHONE · 1876', tPhone, tRadio],
     ['RADIO · 1895', tRadio, tElec],
     ['ELECTRONICS · 1947', tElec, DUR + 0.2],
   ].map(([txt, a, b]) => {
-    const tp = new TextPlane(txt, { font: FONTS.mono, height: 0.036, letterSpacing: 0.34, color: '#dcecff', intensity: 1.0 });
-    tp.position.set(-ctx.aspect + 0.16 + tp.worldWidth / 2, -0.82, 0); hud.scene.add(tp);
+    const tp = new TextPlane(txt, { font: FONTS.mono, height: 0.036 * UI, letterSpacing: 0.34, color: '#dcecff', intensity: 1.0 });
+    tp.position.set(HX(0.16) + tp.worldWidth / 2, HY(-0.82), 0); hud.scene.add(tp);
     return { tp, a, b };
   });
   const hudRule = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.0025), new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe8ff').multiplyScalar(0.8), transparent: true, toneMapped: false }));
@@ -592,8 +596,8 @@ export function create(ctx, segment) {
     labels.forEach(({ tp, a, b }) => { const e = envelope(t, a, b, 0.05, 0.05, ease.linear); tp.opacity = e; tp.reveal = ramp(t, a, a + 0.3, ease.outCubic); });
     const re = envelope(t, tTel, DUR + 0.2, 0.2, 0.1);
     hudRule.material.opacity = re * 0.6; hudRule.visible = re > 0;
-    hudRule.scale.x = 0.2 + 0.7 * ((t - tTel) / (DUR - tTel));
-    hudRule.position.set(-ctx.aspect + 0.16 + hudRule.scale.x / 2, -0.76, 0);
+    hudRule.scale.set((0.2 + 0.7 * ((t - tTel) / (DUR - tTel))) * UI, UI, 1);
+    hudRule.position.set(HX(0.16) + hudRule.scale.x / 2, HY(-0.76), 0);
   }
 
   return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG };

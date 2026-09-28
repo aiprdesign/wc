@@ -393,17 +393,19 @@ export function create(ctx, segment) {
   const tagSub = hudTP('THE AMERICAN CENTURY', { font: FONTS.mono, height: 0.026 * UI, letterSpacing: 0.5, color: ICE, intensity: 0.85 }, 0, HH * 0.8 - 0.085 * UI);
   const tagRule = segmentsLine([[V3(-0.35 * UI, 0, 0), V3(0.35 * UI, 0, 0)]], { color: '#9fc2f0', intensity: 0.7, orderFn: () => 0, stagger: 0 });
   tagRule.position.set(0, HH * 0.8 - 0.05 * UI, 0); hud.scene.add(tagRule);
-  const apLabel = hudTP('APOLLO 11 · UNITED STATES · JULY 1969', { font: FONTS.mono, weight: 500, height: 0.048 * UI, letterSpacing: 0.34, color: '#f2f6ff', intensity: 1.25 }, 0, -HH * 0.74);
-  const apSub = hudTP('TRANS-LUNAR COAST · FREE-RETURN TRAJECTORY · 384 400 KM', { font: FONTS.mono, weight: 300, height: 0.022 * UI, letterSpacing: 0.3, color: ICE, intensity: 0.8 }, 0, -HH * 0.74 - 0.075 * UI);
+  // square delivery: sit a little higher so the tag clears the showreel HUD line along the bottom edge
+  const AP_Y = -HH * (OUTPUT_ASPECT < 1.5 ? 0.7 : 0.74);
+  const apLabel = hudTP('APOLLO 11 · UNITED STATES · JULY 1969', { font: FONTS.mono, weight: 500, height: 0.048 * UI, letterSpacing: 0.34, color: '#f2f6ff', intensity: 1.25 }, 0, AP_Y);
+  const apSub = hudTP('TRANS-LUNAR COAST · FREE-RETURN TRAJECTORY · 384 400 KM', { font: FONTS.mono, weight: 300, height: 0.022 * UI, letterSpacing: 0.3, color: ICE, intensity: 0.8 }, 0, AP_Y - 0.075 * UI);
   const apFrame = new BracketFrame(apLabel.worldWidth + 0.12 * UI, 0.2 * UI, { len: 0.05 * UI, color: '#cfe3ff', intensity: 0.9 });
-  apFrame.position.set(0, -HH * 0.74 - 0.03 * UI, 0); hud.scene.add(apFrame);
+  apFrame.position.set(0, AP_Y - 0.03 * UI, 0); hud.scene.add(apFrame);
   // descent: DSKY cluster (bottom-left) + site tag (top)
   const siteTag = hudTP('LUNAR MODULE EAGLE · MARE TRANQUILLITATIS', { font: FONTS.mono, height: 0.026 * UI, letterSpacing: 0.4, color: ICE, intensity: 0.9 }, 0, HH * 0.8);
   const dskyHud = new THREE.Group(); hud.scene.add(dskyHud);
   const SQ = OUTPUT_ASPECT < 1.5;
   const DS = 1.1 * Math.pow(UI, 1.25);
   dskyHud.scale.setScalar(DS);
-  dskyHud.position.set(-HW + (SQ ? 0.26 : 0.16) * UI, -HH + (SQ ? 0.3 : 0.16) * UI, 0);
+  dskyHud.position.set(-HW + (SQ ? 0.26 : 0.16) * UI, -HH + (SQ ? 0.45 : 0.16) * UI, 0);   // square: clear of the reel's bottom HUD line
   const dLab = (txt, x, y, o = {}) => { const tp = new TextPlane(txt, { font: FONTS.mono, height: 0.022, letterSpacing: 0.16, color: GREEN, intensity: 1.0, ...o }); tp.position.set(x + tp.worldWidth / 2, y, 0.01); dskyHud.add(tp); return tp; };
   const dBox = (x, y, w, h, col, k, op = 1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k), transparent: true, opacity: op, toneMapped: false, depthWrite: false })); m.position.set(x + w / 2, y, 0); dskyHud.add(m); return m; };
   const backing = dBox(-0.05, 0.28, 0.86, 0.72, '#000000', 1, 0.5);

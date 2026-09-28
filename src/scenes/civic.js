@@ -6,7 +6,7 @@
 // domed parliament whose drum colonnade is formed by the letters of REPRESENTATION.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CUES } from '../timeline.js';
+import { CUES, OUTPUT_ASPECT } from '../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, rng, clamp } from '../lib/math.js';
 import { MorphParticles, Dust, sampleGeometry } from '../lib/particles.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
@@ -383,7 +383,8 @@ export function create(ctx, segment) {
   };
   const wC = cue('wordCivic'), wL = cue('wordLaw'), wR = cue('wordRepresentation'), lg = cue('lettersToGeometry');
   const civicWord = new KineticText('CIVIC PARTICIPATION', { font: FONTS.display, weight: 600, height: 0.2, letterSpacing: 0.2, color: '#fff0d6', intensity: 1.6 });
-  placeWord(civicWord, wC + 0.3, 3.4, 0, 0.62);
+  // open matte (square): the frame is taller, so sit higher to clear the centred 3D chapter word (LAW)
+  placeWord(civicWord, wC + 0.3, 3.4, 0, OUTPUT_ASPECT < 1.5 ? 0.86 : 0.62);
   const civicSub = new TextPlane('Ekklesia  ·  the assembly of citizens', { font: FONTS.serif, italic: true, weight: 500, height: 0.085, color: '#f0d7a8', intensity: 1.1 });
   civicSub.position.set(0, -0.2, 0);
   civicWord.add(civicSub);

@@ -564,7 +564,7 @@ export function create(ctx, segment) {
       page.visible = pageVis > 0.001 && t < DUR;
       const lift = ramp(t, tAnat + 0.02, tAnat + 0.55, ease.inOutCubic);
       const dim = 1 - ramp(t, tAnat + 0.15, tHud + 0.3) * 0.84;
-      pageMat.color.setScalar(0.62 * pageVis * dim);
+      pageMat.color.setScalar(0.5 * pageVis * dim);
       page.position.set(PAGE_POS.x - lift * 0.9, PAGE_POS.y, PAGE_POS.z - lift * 0.8);
       page.rotation.y = lift * 0.32;
       glowPage.position.copy(page.position).add(tmp.set(0, 0, 0.02 + lift * 0.25));
@@ -650,8 +650,8 @@ export function create(ctx, segment) {
       } else {
         api.dof.focus = camPos.distanceTo(heartFocus); api.dof.range = 3; api.dof.amount = 0;
       }
-      api.exposure = 1.0 + envelope(t, tAnat - 0.3, tAnat + 0.2, 0.15, 0.25) * 0.25;
-      api.bloom.strength = 0.8 + envelope(t, tAnat - 0.3, tAnat + 0.3, 0.2, 0.2) * 0.4;
+      api.exposure = 1.0 + envelope(t, tAnat - 0.3, tAnat + 0.2, 0.15, 0.25) * 0.08;   // gentle: the 3D chapter word is sweeping here too
+      api.bloom.strength = 0.8 + envelope(t, tAnat - 0.3, tAnat + 0.3, 0.2, 0.2) * 0.15;
     },
   };
   return api;

@@ -64,7 +64,8 @@ class LiveText extends THREE.Mesh {
   constructor({ height = 0.03, chars = 16, align = 'left', font = FONTS.mono, spacing = 0.18 } = {}) {
     const size = 64, c = document.createElement('canvas');
     c.width = Math.ceil(chars * size * (0.62 + spacing)); c.height = Math.ceil(size * 1.5);
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 4;   // small mono stays crisp when minified
     const w = height * c.width / size, h = height * c.height / size;
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate(align === 'left' ? w / 2 : align === 'right' ? -w / 2 : 0, 0, 0);
@@ -158,10 +159,14 @@ export class TitleLayer {
     ], { color: '#ffffff', intensity: 0.9, orderFn: () => 0, stagger: 0 });
     reel.add(this.corners);
     const top = my - 0.005, bot = -my + 0.035;
-    this.tcText = new LiveText({ height: 0.03, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035, 0);
-    this.idxText = new LiveText({ height: 0.03, chars: 26, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035, 0);
-    this.techText = new LiveText({ height: 0.026, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035, 0);
-    this.rtText = new LiveText({ height: 0.026, chars: 20, align: 'right', spacing: 0.2 }); this.rtText.position.set(mx - 0.005, bot + 0.035, 0);
+    // the square frame is ~2.4x narrower: HUD type grows so it stays legible at delivery size
+    const hs = a < 1.9 ? 1.3 : 1;
+    this.tcText = new LiveText({ height: 0.03 * hs, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035 * hs, 0);
+    this.idxText = new LiveText({ height: 0.03 * hs, chars: 26, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035 * hs, 0);
+    this.techText = new LiveText({ height: 0.026 * hs, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035 * hs, 0);
+    // square: the long technique line needs the whole bottom edge, so the tag moves to the top centre
+    this.rtText = new LiveText({ height: 0.026 * hs, chars: 20, align: hs > 1 ? 'center' : 'right', spacing: 0.2 });
+    if (hs > 1) this.rtText.position.set(0, top - 0.035 * hs, 0); else this.rtText.position.set(mx - 0.005, bot + 0.035, 0);
     reel.add(this.tcText, this.idxText, this.techText, this.rtText);
     // progress rail with chapter ticks
     const railW = mx * 2 - 0.01;
@@ -196,7 +201,7 @@ export class TitleLayer {
     if (this.reel.visible) {
       this.corners.progress = 1; this.corners.opacity = 0.55 * o;
       this.corners.material.uniforms.uColor.value.copy(col);
-      const segs = SEGMENTS.filter((sg) => T >= sg.start);
+      const segs = SEGMENTS.filter((sg, i) => i === 0 || T >= sg.start + 0.25);   // flips mid-transition, with the rail tick and sweep
       const cur = segs.at(-1), idx = SEGMENTS.indexOf(cur);
       this.tcText.set(tc(T * TIME_SCALE), col, 0.75 * o);
       this.idxText.set(`${String(idx + 1).padStart(2, '0')} / ${String(SEGMENTS.length).padStart(2, '0')}  ${cur.id.toUpperCase()}`, col, 0.75 * o);

@@ -15,7 +15,7 @@
 // One InstancedMesh (3000 thin boxes) carries pages → books → pixels entirely in the
 // vertex shader: every stage is a pure function of the `uT` uniform.
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, Dust } from '../lib/particles.js';
 import { glowSprite } from '../lib/materials.js';
@@ -619,16 +619,20 @@ export function create(ctx, segment) {
   // ---- HUD stage labels (only while DOF is off — the HUD pass clears depth) ----
   const hud = ctx.makeHUD();
   const A = ctx.aspect;
+  // open-matte delivery (?aspect=1 …): keep these labels anchored bottom-left, scaled up to stay legible
+  // and lifted clear of the showreel HUD line (identity in the 2.39 frame)
+  const SQ = OUTPUT_ASPECT < 1.5, HH = FILM_ASPECT / OUTPUT_ASPECT, UI = SQ ? Math.sqrt(HH) * 1.25 : 1;
+  const HX = (dx) => -FILM_ASPECT + dx * UI, HY = (y) => (SQ ? -HH + (1 + y) * UI + 0.3 : y);
   const labelText = ['01 — PRINTED PAGE', '02 — BOUND VOLUME', '03 — DIGITAL BIT', '04 — GLOBAL NETWORK'];
   const labelCue = [C_SPH, C_BOOK, C_PIX, C_NET];
   const labels = labelText.map((s) => {
-    const tp = new TextPlane(s, { font: FONTS.mono, weight: 400, height: 0.042, letterSpacing: 0.32, color: '#e8eef7', intensity: 1.1, align: 'left' });
-    tp.position.set(-A + 0.16 + tp.worldWidth / 2, -0.84, 0);
+    const tp = new TextPlane(s, { font: FONTS.mono, weight: 400, height: 0.042 * UI, letterSpacing: 0.32, color: '#e8eef7', intensity: 1.1, align: 'left' });
+    tp.position.set(HX(0.16) + tp.worldWidth / 2, HY(-0.84), 0);
     hud.scene.add(tp);
     return tp;
   });
-  const caption = new TextPlane('Bibliotheca universalis', { font: FONTS.serif, italic: true, weight: 500, height: 0.062, color: '#f3e3c4', intensity: 1.0, align: 'left' });
-  caption.position.set(-A + 0.16 + caption.worldWidth / 2, -0.76, 0);
+  const caption = new TextPlane('Bibliotheca universalis', { font: FONTS.serif, italic: true, weight: 500, height: 0.062 * UI, color: '#f3e3c4', intensity: 1.0, align: 'left' });
+  caption.position.set(HX(0.16) + caption.worldWidth / 2, HY(-0.76), 0);
   hud.scene.add(caption);
   const tick = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.0028), new THREE.MeshBasicMaterial({ color: new THREE.Color('#e8eef7').multiplyScalar(0.9), transparent: true, depthWrite: false }));
   hud.scene.add(tick);
@@ -727,8 +731,8 @@ export function create(ctx, segment) {
     caption.opacity = envelope(t, C_SPH, C_NET + 0.2, 0.3, 0.2);
     caption.reveal = sat((t - C_SPH) / 0.5);
     const tp = sat((t - C_SPH) / (DUR - C_SPH));
-    tick.scale.x = 0.5 * tp + 0.001;
-    tick.position.set(-A + 0.16 + tick.scale.x / 2, -0.885, 0);
+    tick.scale.set((0.5 * tp + 0.001) * UI, UI, 1);
+    tick.position.set(HX(0.16) + tick.scale.x / 2, HY(-0.885), 0);
     tick.material.opacity = anyVis * 0.8;
   }
 

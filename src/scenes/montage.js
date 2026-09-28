@@ -17,7 +17,7 @@
 // chip, aircraft, rocket, network), dimming the plate beneath them. Beat punches get
 // denser (1/4 → 1/8 → 1/16 notes) as the sequence accelerates.
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, sampleRing, Dust } from '../lib/particles.js';
 import { progressLine, segmentsLine, circlePoints, goldenSpiralPoints } from '../lib/lines.js';
@@ -365,6 +365,10 @@ export function create(ctx, segment) {
   // ---- HUD: accents + stage labels ----------------------------------------
   const hud = ctx.makeHUD();
   const A = ctx.aspect;
+  // open-matte delivery (?aspect=1 …): keep these labels anchored bottom-left, scaled up to stay legible
+  // and lifted clear of the showreel HUD line (identity in the 2.39 frame)
+  const SQ = OUTPUT_ASPECT < 1.5, HH = FILM_ASPECT / OUTPUT_ASPECT, UI = SQ ? Math.sqrt(HH) * 1.25 : 1;
+  const HX = (dx) => -FILM_ASPECT + dx * UI, HY = (y) => (SQ ? -HH + (1 + y) * UI + 0.3 : y);
   const dim = new THREE.Mesh(new THREE.PlaneGeometry(A * 2 + 0.1, 2.1), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
   dim.position.z = -2; dim.renderOrder = -1;
   hud.scene.add(dim);
@@ -412,13 +416,14 @@ export function create(ctx, segment) {
   }
   // 3 · Newton's law of gravitation
   {
-    const g = new THREE.Group(); g.position.set(-1.2, 0.1, 0);
+    // sits above the centred 3D swap word (ORBITS) instead of across it
+    const g = new THREE.Group(); g.position.set(SQ ? 0 : -1.2, SQ ? 1.15 : 0.5, 0); g.userData.k = SQ ? 1.4 : 1;
     const eq = new TextPlane('F = G · m₁m₂ / r²', { font: FONTS.serif, italic: true, weight: 500, height: 0.24, color: '#fff1d6', intensity: 1.35, soft: 0.1 });
-    const sub = new TextPlane('PHILOSOPHIÆ NATURALIS · LIBER III', { font: FONTS.mono, height: 0.038, letterSpacing: 0.3, color: '#e8dcc4', intensity: 1.0 });
+    const sub = new TextPlane('PRINCIPIA MATHEMATICA · LIBER III · 1687', { font: FONTS.mono, height: 0.038, letterSpacing: 0.3, color: '#e8dcc4', intensity: 1.0 });
     sub.position.set(0, -0.24, 0);
     const rule = segmentsLine([[HV(-eq.worldWidth / 2 + 0.1, -0.16), HV(eq.worldWidth / 2 - 0.1, -0.16)]], { color: '#e8dcc4', intensity: 0.9, orderFn: () => 0, stagger: 0 });
     g.add(eq, sub, rule);
-    addAccent(2.0, 2.36, g, (u) => { eq.reveal = sat(u * 3.5); sub.reveal = sat(u * 3 - 0.4); rule.progress = sat(u * 3); g.scale.setScalar(1 + (1 - u) * 0.04); });
+    addAccent(2.0, 2.36, g, (u) => { eq.reveal = sat(u * 3.5); sub.reveal = sat(u * 3 - 0.4); rule.progress = sat(u * 3); g.scale.setScalar(g.userData.k * (1 + (1 - u) * 0.04)); });
   }
   // 4 · electric spark
   {
@@ -530,8 +535,8 @@ export function create(ctx, segment) {
   const labelText = ['I · ORDO DORICVS', 'II · MACHINA', 'III · SYSTEMA MVNDI', 'IV · ATOMVS', 'V · CIRCVITVS', 'VI · STELLAE'];
   const labelCue = [C0, C1, C2, C3, C4, C5];
   const labels = labelText.map((s) => {
-    const tp = new TextPlane(s, { font: FONTS.mono, weight: 400, height: 0.042, letterSpacing: 0.32, color: '#eef2f8', intensity: 1.1 });
-    tp.position.set(-A + 0.16 + tp.worldWidth / 2, -0.84, 0);
+    const tp = new TextPlane(s, { font: FONTS.mono, weight: 400, height: 0.042 * UI, letterSpacing: 0.32, color: '#eef2f8', intensity: 1.1 });
+    tp.position.set(HX(0.16) + tp.worldWidth / 2, HY(-0.84), 0);
     hud.scene.add(tp);
     return tp;
   });

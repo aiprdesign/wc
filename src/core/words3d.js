@@ -49,7 +49,7 @@ function letterMaterial(era, env, shared) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
-        totalEmissiveRadiance += uTint * (band * 0.55 + uFlash * 0.6);`);
+        totalEmissiveRadiance += uTint * (band * 0.28 + uFlash * 0.4);`);
   };
   m.customProgramCacheKey = () => 'word3d-v2';
   return m;
@@ -192,7 +192,7 @@ export class Words3D {
       const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
       it.light.position.x = it.shared.uSweep.value;
-      it.light.intensity = Math.sin(Math.PI * sweepP) * 2.2 * k * k * fade;
+      it.light.intensity = Math.sin(Math.PI * sweepP) * 1.1 * k * k * fade;
       // plinth shoots out from the centre with the letters, retracts into it as they leave
       const pp = Math.max(0.0001, ramp(t, 0.05, inDur + n * st * 0.8, ease.outExpo) * (1 - ramp(T, outStart - 0.05, outStart + outDur * 0.8, ease.inOutCubic)));
       it.plinth.forEach((p) => { p.progress = pp; p.opacity = 0.8 * fade; });

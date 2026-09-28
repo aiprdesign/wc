@@ -445,7 +445,7 @@ export function create(ctx, segment) {
   const A = ctx.aspect;
   // open-matte delivery (?aspect=1 …): keep the captions anchored bottom-left and scale them up to stay legible
   const HH = FILM_ASPECT / OUTPUT_ASPECT, UI = Math.sqrt(HH) * (OUTPUT_ASPECT < 1.5 ? 1.25 : 1);
-  const HX = (dx) => -A + dx * UI, HY = (y) => -HH + (1 + y) * UI;
+  const HX = (dx) => -A + dx * UI, HY = (y) => -HH + (1 + y) * UI + (OUTPUT_ASPECT < 1.5 ? 0.24 : 0);   // square: lift clear of the reel's bottom HUD line
   const STAGES = [['1822', 'MECHANICAL CALCULATION · BABBAGE', tCalc - 0.3], ['1937', 'ELECTROMECHANICAL RELAY · BELL LABS', tRel], ['1946', 'VACUUM TUBE · ENIAC · PHILADELPHIA', tTube], ['1947', 'TRANSISTOR · BELL LABS', tTr], ['1971', 'MICROPROCESSOR · SILICON VALLEY', tProc]];
   const capYear = STAGES.map(([y]) => { const tp = new TextPlane(y, { font: FONTS.sans, weight: 200, height: 0.1 * UI, letterSpacing: 0.05, color: '#e6f0ff', intensity: 1.1 }); tp.position.set(HX(0.2) + tp.worldWidth / 2, HY(-0.7), 0); hud.scene.add(tp); return tp; });
   const capName = STAGES.map(([, n]) => { const tp = new TextPlane(n, { font: FONTS.mono, height: 0.034 * UI, letterSpacing: 0.22, color: '#bcd4f2', intensity: 0.9 }); tp.position.set(HX(0.22) + tp.worldWidth / 2, HY(-0.8), 0); hud.scene.add(tp); return tp; });
