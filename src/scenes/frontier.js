@@ -12,8 +12,12 @@
 //   53.1  MARS · PERSEVERANCE & INGENUITY · 2021 — the helicopter's rotors spool up and it lifts off;
 //         the camera tilts up with it …
 //   53.9  ARTEMIS — … and the vertical motion carries on into a heavy-lift rocket climbing across a vast Moon
-//   54.6  NEXT · MARS — the Moon's limb becomes a Martian dawn horizon: lander + habitat on the plain, boot
-//         prints in the red dust, a small flag, Earth a blue morning star; the camera pushes to centre ('zoom').
+//   54.42 NEXT · THE VISION — a compact 'next steps' story in four fast match cuts:
+//         54.42 a crewed interplanetary ship over Earth and Moon; its engines light on the 54.6 cue
+//         54.80 fire → fire: the lander's retro-burn tears a sheet of red dust off the Martian plain at dawn
+//         55.02 first footsteps: an astronaut plants the flag, backlit by the small Sun, Earth a blue star
+//         55.32 an outpost grows: habitat domes, a greenhouse glowing green, solar fields, rover tracks,
+//               a crane push to the greenhouse at frame centre that hands over ('zoom').
 // Worlds share one scene and one set of lights (constant light count → no shader recompiles at the cuts);
 // the sky, Earth and Moon are an analytic ray-cast backdrop (pixel-exact limbs, one draw call).
 import * as THREE from 'three';
@@ -28,7 +32,8 @@ import { MorphParticles, Dust } from '../lib/particles.js';
 import { GLSL_NOISE } from '../lib/noise.js';
 import { buildFlag, bootprintTexture, regolithTextures, terrainGeometry, makeEnv } from './moonshot-assets.js';
 import {
-  V3, buildShuttle, buildHubble, buildWebb, buildRover, buildIngenuity, buildHeavyLift, buildOutpost,
+  V3, buildShuttle, buildHubble, buildWebb, buildRover, buildIngenuity, buildHeavyLift,
+  visionMaterials, buildLander, buildMarsShip, buildAstronaut, buildHabitat, buildDomeFrame, buildGreenhouse, buildCrewRover, buildTracks, makeBlast,
   makeBackdrop, makeStars, makeSmoke, makeDownwash, makeDeepField, buildHelix, helixTargets, spiralGalaxy, buildGlyphs, marsField, HELIX,
 } from './frontier-assets.js';
 
@@ -62,6 +67,8 @@ export function create(ctx, segment) {
   const tDive = tHub + 0.44;            // through Hubble's aperture into the deep field
   const tSep = tShut + 0.58;            // booster separation
   const tLift = tRov + 0.3;             // helicopter lift-off
+  // the vision: four fast shots; the ship's engines light on the marsVision cue
+  const tVis = tMars - 0.18, tIgn = tMars, tEDL = tMars + 0.2, tStep = tMars + 0.42, tBase = tMars + 0.72;
   const SQ = OUTPUT_ASPECT < 1.5;
   const R = rng(2026);
 
@@ -165,7 +172,7 @@ export function create(ctx, segment) {
   const wK = [[tWebb - 0.02, 0], [tWebb + 0.16, 0.2], [tWebb + 0.42, 0.5], [tWebb + 0.68, 0.82], [tRov + 0.05, 1]];
   const SUN_W = V3(0.6, 0.55, 0.75).normalize();
 
-  // ================================================================ 5 & 7 · MARS (metres): shared plain; rover site and the dawn outpost
+  // ================================================================ 5 & 8–10 · MARS (metres): shared plain; rover site, landing, first steps, outpost
   const wM = mk('mars');
   const mf = marsField();
   const reg = regolithTextures(256, 42);
@@ -174,6 +181,14 @@ export function create(ctx, segment) {
   const terrain = new THREE.Mesh(terrainGeometry(mf, { size: 260, segs: 200, k: 1.7, uvScale: 1 / 3 }), marsMat);
   terrain.receiveShadow = true; wM.add(terrain);
   const MARS_ENV = makeEnv(ctx.renderer, { ground: [0.35, 0.17, 0.08], glowDir: V3(0, 1, 0), glow: [0.35, 0.25, 0.18] });
+  // the outpost is laid out for its closing crane shot: BF = view direction from BCAM, BR = screen right
+  const BF = V3(-0.76, 0, -0.65).normalize(), BR = V3(-BF.z, 0, BF.x), BCAM = V3(24, 0, -2);
+  const baseAt = (depth, lat) => { const p = V3(BCAM.x + BF.x * depth + BR.x * lat, 0, BCAM.z + BF.z * depth + BR.z * lat); p.y = mf(p.x, p.z); return p; };
+  const LANDER = baseAt(52, 12), CARGO = baseAt(74, 30), HAB = baseAt(46, -17), GH = baseAt(29, 0), CROVER = baseAt(21, 10);
+  const AST = V3(1.3, 0, -4.4); AST.y = mf(AST.x, AST.z);
+  const SOLAR0 = baseAt(40, -34);
+  const DOMEF = baseAt(38, 9.5);
+  const KEEP_OUT = [[DOMEF, 4.5], [LANDER, 7], [CARGO, 7], [HAB, 7], [V3(8.5, 0, 3.5).applyAxisAngle(V3(0, 1, 0), -0.6).add(HAB), 6], [GH, 7.5], [CROVER, 4], [AST, 2.5]];
   // rocks
   {
     const rockGeo = new THREE.IcosahedronGeometry(1, 2);
@@ -184,12 +199,14 @@ export function create(ctx, segment) {
     const rockMat = new THREE.MeshStandardMaterial({ color: '#8f5537', roughness: 0.9, metalness: 0, bumpMap: reg.bump, bumpScale: 2, flatShading: true });
     const N = 260, rocks = new THREE.InstancedMesh(rockGeo, rockMat, N);
     const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = V3(), pos = V3();
+    const segD = (x, z, a, b) => { const dx = b.x - a.x, dz = b.z - a.z, u = sat(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)); return Math.hypot(x - a.x - dx * u, z - a.z - dz * u); };
     let n = 0, tries = 0;
-    while (n < N && tries++ < 6000) {
+    while (n < N && tries++ < 8000) {
       const x = (rr() - 0.5) * 140, z = (rr() - 0.5) * 140 - 20, size = 0.05 + Math.pow(rr(), 4) * 0.9;
       if (Math.hypot(x, z) < 3.5) continue;                          // helicopter pad
-      if (Math.abs(x - 1) < 3 + size * 3 && z < 6 && z > -44) continue;  // boot-print corridor to the lander
+      if (segD(x, z, AST, LANDER) < 2.2 + size * 2) continue;        // boot-print corridor to the lander
       if (Math.hypot(x + 4.8, z + 3.0) < 3) continue;
+      if (KEEP_OUT.some(([c, r]) => Math.hypot(x - c.x, z - c.z) < r + size)) continue;
       pos.set(x, mf(x, z) - size * 0.2, z); e.set(rr() * 0.4, rr() * TAU, rr() * 0.4); q.setFromEuler(e); s.set(size * (0.8 + rr() * 0.5), size, size * (0.8 + rr() * 0.5));
       M4.compose(pos, q, s); rocks.setMatrixAt(n++, M4);
     }
@@ -206,30 +223,47 @@ export function create(ctx, segment) {
   const G = (x, y, z) => V3(x, mf(x, z) + y, z);        // height above the Martian ground
   const rCam = new THREE.CatmullRomCurve3([G(1.55, 0.5, 3.7), G(1.35, 0.52, 3.1), G(1.1, 0.62, 2.8), G(0.95, 0.9, 2.9), G(0.9, 1.3, 3.2)], false, 'centripetal');
   const rK = [[tRov - 0.02, 0], [tRov + 0.2, 0.3], [tLift + 0.1, 0.55], [tArt - 0.2, 0.8], [tArt + 0.02, 1]];
-  // dawn outpost
+
+  // ---------------------------------------------------------------- the vision on Mars
+  const VM = visionMaterials(MARS_ENV);
   const visionSet = new THREE.Group(); wM.add(visionSet);
-  const outpost = buildOutpost();
-  const LANDER = V3(3.5, 0, -40); LANDER.y = mf(LANDER.x, LANDER.z) - 0.2;
-  outpost.group.position.copy(LANDER); visionSet.add(outpost.group);
-  outpost.hab.position.y = mf(LANDER.x - 13, LANDER.z + 6) - LANDER.y;
-  const beacon = glowSprite({ color: '#ffc46a', intensity: 3, scale: 1.2 }); beacon.position.copy(outpost.beaconPos).add(LANDER); visionSet.add(beacon);
+  const SUN_V = V3(0.22, 0.075, -0.97).normalize();                       // outpost: low raking dawn light
+  const SUN_B = V3(0.152, 0.105, -0.983).normalize();                     // landing: peeking past the lander
+  const SUN_C = V3(0.496, 0.113, -0.86).normalize();                     // first footsteps: low, right of the flag
+  const sunNow = V3();
+  const sunDisc = glowSprite({ color: '#fff6ea', intensity: 5, scale: 12 }); sunDisc.material.fog = false; visionSet.add(sunDisc);
+  // the crew lander: retro-burn landing, then standing at the head of the boot-print trail
+  const lander = buildLander(VM); lander.group.position.copy(LANDER); lander.group.rotation.y = 0.35; visionSet.add(lander.group);
+  const retroCore = plumeMat('#fff0d8', 2.6), retroOut = plumeMat('#ff9f5e', 0.9, { alpha: 0.7 });
+  const retro = lander.exits.map((p) => {
+    const core = plume(0.3, 0.8, 3.2, retroCore), out = plume(0.6, 3.2, 8, retroOut);
+    core.position.copy(p); out.position.copy(p); lander.group.add(core, out); return { core, out };
+  });
+  const retroGlow = glowSprite({ color: '#ffd2a0', intensity: 2.6, scale: 7 }); retroGlow.position.set(0, -0.4, 0); lander.group.add(retroGlow);
+  const blast = makeBlast(3400, { t0: tEDL - 1.6, t1: tStep, seed: 31 }); blast.position.copy(LANDER); visionSet.add(blast);
+  const BU = blast.userData.u;
+  // first footsteps: an astronaut plants the flag at the end of a trail of boot prints from the lander
+  const astro = buildAstronaut(); astro.group.position.copy(AST); astro.group.rotation.y = Math.PI / 2 - 0.12; visionSet.add(astro.group);
   const flag = buildFlag({ envMap: MARS_ENV });
-  const FLAG_P = V3(-1.25, 0, -2.4); FLAG_P.y = mf(FLAG_P.x, FLAG_P.z);
-  flag.position.copy(FLAG_P); flag.rotation.y = 0.5; flag.scale.setScalar(0.62); visionSet.add(flag);
+  const FLAG_L = V3(0.02, 0, 0.44);             // astronaut-local: the pole stands just in front of him, the cloth flies ahead
+  flag.position.copy(FLAG_L); flag.rotation.y = -Math.PI / 2 + 0.12; flag.scale.setScalar(0.86); astro.group.add(flag);
   const flagU = flag.userData.clothMat.userData.u;
-  // boot prints: a trail of alternating steps from the lens to the lander, shaded against the low sun
+  const handT = [V3(), V3()], elbowHint = [V3(1, -0.6, -0.2).normalize(), V3(-1, -0.6, -0.2).normalize()];
+  // boot prints: alternating steps from the astronaut back to the lander, shaded against the low sun
   const printTex = bootprintTexture();
   const prints = (() => {
-    const pts = [];
-    for (let i = 0; i < 64; i++) {
-      const z = 3.4 - i * 0.68, x = 0.35 + Math.sin(i * 0.11) * 0.5 + (i * 0.68) * 0.06 + (i % 2 ? 0.16 : -0.16);
-      pts.push([x, z, (i % 2 ? 1 : -1)]);
+    const pts = [], A0 = V3(AST.x, 0, AST.z - 0.55), A1 = V3(LANDER.x, 0, LANDER.z).addScaledVector(V3(AST.x - LANDER.x, 0, AST.z - LANDER.z).normalize(), 6.5);
+    const len = A0.distanceTo(A1), n = Math.floor(len / 0.68), dir = V3().subVectors(A0, A1).normalize(), perp = V3(-dir.z, 0, dir.x);
+    for (let i = 0; i < n; i++) {
+      const u = i / n, wob = Math.sin(u * 7.0 + 0.4) * 0.5 * Math.min(1, u * 4);
+      const x = A0.x + (A1.x - A0.x) * u + perp.x * (wob + (i % 2 ? 0.16 : -0.16)), z = A0.z + (A1.z - A0.z) * u + perp.z * (wob + (i % 2 ? 0.16 : -0.16));
+      pts.push([x, z, Math.atan2(dir.x, dir.z)]);
     }
-    const n = pts.length, base = new THREE.PlaneGeometry(1, 1); base.rotateX(-Math.PI / 2);
+    const base = new THREE.PlaneGeometry(1, 1); base.rotateX(-Math.PI / 2);
     const g = new THREE.InstancedBufferGeometry(); g.index = base.index; g.setAttribute('position', base.attributes.position); g.setAttribute('uv', base.attributes.uv);
-    const aP = new Float32Array(n * 4);
-    pts.forEach(([x, z, side], i) => aP.set([x, mf(x, z) + 0.012, z, -0.07 + side * 0.05 + (R() - 0.5) * 0.1], i * 4));
-    g.setAttribute('aP', new THREE.InstancedBufferAttribute(aP, 4)); g.instanceCount = n;
+    const aP = new Float32Array(pts.length * 4);
+    pts.forEach(([x, z, w], i) => aP.set([x, mf(x, z) + 0.012, z, w + (R() - 0.5) * 0.1], i * 4));
+    g.setAttribute('aP', new THREE.InstancedBufferAttribute(aP, 4)); g.instanceCount = pts.length;
     const u = { uMap: { value: printTex }, uSun: { value: V3(0, 1, 0) }, uK: { value: 0.75 }, uFogC: { value: new THREE.Color() }, uFogN: { value: 30 }, uFogF: { value: 200 } };
     const m = new THREE.ShaderMaterial({
       uniforms: u, transparent: true, depthWrite: false, fog: false,
@@ -258,14 +292,68 @@ export function create(ctx, segment) {
   })();
   visionSet.add(prints);
   const PU = prints.userData.u;
-  const marsDust = new Dust({ count: 700, size: [14, 5, 22], center: [1, 2.2, -6], color: '#ffc9a0', particleSize: 0.035, opacity: 0.35, intensity: 1.0, seed: 21 });
+  const marsDust = new Dust({ count: 700, size: [14, 5, 22], center: [0, 0, 0], color: '#ffc9a0', particleSize: 0.035, opacity: 0.35, intensity: 1.0, seed: 21 });
   visionSet.add(marsDust);
-  const SUN_V = V3(0.22, 0.075, -0.97).normalize();
-  const EARTH_V = V3(-0.2, 0.2, -0.96).normalize();
-  const sunDisc = glowSprite({ color: '#fff6ea', intensity: 5, scale: 12 }); sunDisc.material.fog = false; visionSet.add(sunDisc);
-  const vCam = new THREE.CatmullRomCurve3([G(0.7, 1.05, 5.6), G(0.85, 1.25, 2.6), G(1.1, 1.55, -1.0), G(1.45, 2.0, -5.5), G(2.2, 2.8, -15)], false, 'centripetal');
-  const vLook = new THREE.CatmullRomCurve3([G(0.2, 2.2, -30), G(0.8, 3.0, -36), G(1.8, 4.0, -39), G(3.5, 5.2, -40), G(3.6, 6.2, -40)], false, 'centripetal');
-  const vK = [[tMars - 0.02, 0], [tMars + 0.35, 0.22], [tMars + 0.75, 0.46], [DUR - 0.5, 0.7], [DUR + 0.02, 1]];
+  // the outpost: habitat, greenhouse, crew rover, a second lander, solar fields, rover tracks
+  const baseSet = new THREE.Group(); visionSet.add(baseSet);
+  const habitat = buildHabitat(VM); habitat.group.position.copy(HAB); habitat.group.rotation.y = -0.6; baseSet.add(habitat.group);
+  const beacon = glowSprite({ color: '#ffc46a', intensity: 3, scale: 1.2 }); beacon.position.copy(habitat.beaconPos).applyAxisAngle(V3(0, 1, 0), -0.6).add(HAB); baseSet.add(beacon);
+  const green = buildGreenhouse(5.8, VM); green.group.position.copy(GH); green.group.position.y -= 0.1; green.group.rotation.y = 0.3; baseSet.add(green.group);
+  const crover = buildCrewRover(VM); crover.group.position.copy(CROVER); crover.group.rotation.y = Math.atan2(-BF.x - BR.x * 0.8, -BF.z - BR.z * 0.8); baseSet.add(crover.group);
+  const domeF = buildDomeFrame(3.4, VM); domeF.group.position.copy(DOMEF); domeF.group.position.y -= 0.05; baseSet.add(domeF.group);
+  const cargo = buildLander(VM); cargo.group.position.copy(CARGO); cargo.group.rotation.y = 1.1; cargo.group.scale.setScalar(0.95); baseSet.add(cargo.group);
+  {
+    const panelGeo = new THREE.BoxGeometry(3.4, 0.06, 1.7), postGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.3, 6);
+    const rowsN = 4, colsN = 7, n = rowsN * colsN;
+    const panels = new THREE.InstancedMesh(panelGeo, VM.pv, n), posts = new THREE.InstancedMesh(postGeo, VM.dark, n);
+    const M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = V3(1, 1, 1), p = V3();
+    let i = 0;
+    for (let r = 0; r < rowsN; r++) for (let c = 0; c < colsN; c++) {
+      const x = SOLAR0.x + BR.x * (c * 3.8 - 12) + BF.x * r * 4.2, z = SOLAR0.z + BR.z * (c * 3.8 - 12) + BF.z * r * 4.2, y = mf(x, z);
+      e.set(-0.55, Math.atan2(BR.x, BR.z) - Math.PI / 2, 0, 'YXZ'); q.setFromEuler(e);
+      M4.compose(p.set(x, y + 1.35, z), q, one); panels.setMatrixAt(i, M4);
+      M4.compose(p.set(x, y + 0.65, z), q.identity(), one); posts.setMatrixAt(i, M4); i++;
+    }
+    panels.castShadow = panels.receiveShadow = true; posts.castShadow = true;
+    baseSet.add(panels, posts);
+    const tr = (d, l) => { const p = baseAt(d, l); return [p.x, p.z]; };
+    const tracks = buildTracks([
+      [tr(50, 9), tr(40, 15), tr(30, 16.5), tr(21, 10), tr(14, 4.4), tr(4, -3), tr(-10, -9)],
+      [tr(45, -10), tr(37, -9), tr(28, -9.5), tr(20, -7), tr(12, -2), tr(2, 6), tr(-10, 12)],
+    ], mf, { width: 0.5, gauge: 2.6 });
+    baseSet.add(tracks);
+  }
+  const CR_DIR = V3(-BF.x - BR.x * 0.8, 0, -BF.z - BR.z * 0.8).normalize();
+  const bCam = new THREE.CatmullRomCurve3([baseAt(-2, 3.5).setY(12.5), baseAt(1.5, 2.6).setY(11.2), baseAt(5, 1.6).setY(9.8), baseAt(10, 0.6).setY(8.0)], false, 'centripetal');
+  const bLook = new THREE.CatmullRomCurve3([baseAt(36, -1.5).setY(0), baseAt(34, -0.8).setY(0.8), baseAt(31, -0.3).setY(1.8), baseAt(29, 0).setY(2.6)], false, 'centripetal');
+  const bK = [[tBase - 0.02, 0], [tBase + 0.2, 0.25], [DUR - 0.5, 0.45], [DUR + 0.02, 1]];
+  bCam.points.forEach((p) => { p.y += mf(p.x, p.z); });
+
+  // ================================================================ 7 · THE VOYAGE (metres): a crewed ship leaving Earth and Moon behind
+  const wV = mk('voyage');
+  const ship = buildMarsShip(visionMaterials(SPACE_ENV));
+  // composed from the opening camera's basis: the ship climbs away to the upper right, its plume streaming back
+  // toward the lens over a half-lit Earth; the Moon hangs upper left
+  const vF0 = V3(20, 2.4, -32.6).normalize(), vR0 = V3().crossVectors(vF0, V3(0, 1, 0)).normalize(), vU0 = V3().crossVectors(vR0, vF0);
+  const vDir = (f, r, u) => V3().addScaledVector(vF0, f).addScaledVector(vR0, r).addScaledVector(vU0, u).normalize();
+  const SHIP_F = vDir(0.22, 1, 0.26), SHIP_ROLL = 0.9;
+  const VCAM0 = V3().addScaledVector(SHIP_F, -8).addScaledVector(vF0, -68).addScaledVector(vU0, -4);
+  const shipBase = new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), SHIP_F);
+  const shipQ = new THREE.Quaternion().setFromAxisAngle(SHIP_F, SHIP_ROLL).multiply(shipBase);
+  ship.group.quaternion.copy(shipQ); wV.add(ship.group);
+  for (const w of ship.wings) w.rotation.x = 0.45;
+  const shipCore = plumeMat('#e4eeff', 2.2, { diamonds: 0.8 }), shipOut = plumeMat('#9fbfff', 0.55, { alpha: 0.7 });
+  const shipFx = ship.exits.map((p) => {
+    const core = plume(0.45, 1.0, 16, shipCore), out = plume(1.0, 6.5, 55, shipOut);
+    core.position.copy(p); out.position.copy(p); ship.group.add(core, out);
+    return { core, out };
+  });
+  const shipGlow = glowSprite({ color: '#dfe9ff', intensity: 1.3, scale: 6 }); shipGlow.position.set(0, -37, 0); ship.group.add(shipGlow);
+  const SUN_Y = vDir(0.45, 0.85, 0.35);
+  const EARTH_Y = vDir(1, 0.12, -1.0);
+  const MOON_Y = vDir(1, -0.36, 0.42);
+  const EARTH_ROT = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.4, 2.2, 0.1)));
+  const EARTH_C = V3(-0.022, 0.407, -0.913).normalize();   // Earth in the first-footsteps sky: upper left of the astronaut
 
   // ================================================================ 6 · ARTEMIS (1 unit = 10 m), night, a vast Moon
   const wR = mk('artemis');
@@ -274,7 +362,7 @@ export function create(ctx, segment) {
   const slsOut = plume(0.3, 1.6, 9.0, plumeMat('#ffab5c', 2.4, { alpha: 0.8 }));
   sls.group.add(slsCore, slsOut); slsCore.position.y = -0.35; slsOut.position.y = -0.35;
   const slsGlow = glowSprite({ color: '#ffd8a8', intensity: 7, scale: 5.5 }); slsGlow.position.y = -0.8; sls.group.add(slsGlow);
-  const smokeR = makeSmoke(5000, { t0: tArt - 3.0, t1: tMars + 0.1, seed: 12 }); wR.add(smokeR);
+  const smokeR = makeSmoke(5000, { t0: tArt - 3.0, t1: tVis + 0.1, seed: 12 }); wR.add(smokeR);
   const SR = smokeR.userData.u;
   SR.uV0.value = 10; SR.uAcc.value = 16; SR.uSpread0.value = 0.25; SR.uSpreadK.value = 1.6; SR.uLife.value = 2.5; SR.uSize.value = 1.4; SR.uHotK.value = 8; SR.uAxis.value.set(0, 1, 0);
   SR.uTint.value.set('#ffb886');
@@ -293,12 +381,18 @@ export function create(ctx, segment) {
     { t: tGen + 0.02, end: tWebb - 0.06, main: 'HUMAN GENOME · 2003', sub: 'HUMAN GENOME PROJECT · 3 BILLION BASE PAIRS READ' },
     { t: tWebb + 0.02, end: tRov - 0.06, main: 'JAMES WEBB · 2021', sub: '18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021' },
     { t: tRov + 0.02, end: tArt - 0.06, main: 'MARS · PERSEVERANCE & INGENUITY · 2021', sub: 'JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET' },
-    { t: tArt + 0.02, end: tMars - 0.06, main: 'ARTEMIS · RETURNING TO THE MOON', sub: 'CREWED LUNAR EXPLORATION PROGRAM' },
-    { t: tMars + 0.05, end: DUR - 0.3, main: 'NEXT · MARS', sub: 'HUMANS ON ANOTHER WORLD' },
+    { t: tArt + 0.02, end: tVis - 0.05, main: 'ARTEMIS · RETURNING TO THE MOON', sub: 'CREWED LUNAR EXPLORATION PROGRAM' },
+    { t: tVis + 0.02, end: DUR - 0.3 },
+  ];
+  // captions: one per milestone; the vision (07) carries three short beats under one index
+  const CAPS = [...SHOTS.slice(0, 6),
+    { t: tVis + 0.02, end: tStep - 0.04, fast: true, main: 'NEXT · CREWED MISSIONS TO MARS', sub: 'THE VISION · HUMANS TO THE RED PLANET' },
+    { t: tStep + 0.01, end: tBase - 0.03, fast: true, main: 'NEXT · FIRST FOOTSTEPS ON MARS', sub: 'EARTH · A BLUE STAR IN THE MARTIAN DAWN' },
+    { t: tBase + 0.01, end: DUR - 0.3, fast: true, main: 'A NEW HOME AMONG THE STARS', sub: 'TOMORROW · HABITATS · GREENHOUSES · POWER' },
   ];
   const tpLeft = (txt, o, x, y) => { const tp = new TextPlane(txt, o); tp.position.set(x + tp.worldWidth / 2, y, 0); tp.opacity = 0; hud.scene.add(tp); return tp; };
-  const capMain = SHOTS.map((s) => tpLeft(s.main, { font: FONTS.mono, weight: 500, height: 0.04 * UI, letterSpacing: 0.3, color: '#f3f6fb', intensity: 1.15 }, HX(0.16), HY(-0.78)));
-  const capSub = SHOTS.map((s) => tpLeft(s.sub, { font: FONTS.mono, weight: 300, height: 0.024 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.85 }, HX(0.165), HY(-0.838)));
+  const capMain = CAPS.map((s) => tpLeft(s.main, { font: FONTS.mono, weight: 500, height: 0.04 * UI, letterSpacing: 0.3, color: '#f3f6fb', intensity: 1.15 }, HX(0.16), HY(-0.78)));
+  const capSub = CAPS.map((s) => tpLeft(s.sub, { font: FONTS.mono, weight: 300, height: 0.024 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.85 }, HX(0.165), HY(-0.838)));
   const capIdx = SHOTS.map((s, i) => tpLeft(`0${i + 1}`, { font: FONTS.mono, weight: 500, height: 0.026 * UI, letterSpacing: 0.2, color: GOLD, intensity: 1.3 }, HX(0.16), HY(-0.715)));
   const idxOf = tpLeft('/ 07  THE NEW FRONTIER', { font: FONTS.mono, weight: 300, height: 0.022 * UI, letterSpacing: 0.3, color: ICE, intensity: 0.75 }, HX(0.16) + 0.06 * UI, HY(-0.715));
   const RAIL_W = 0.95 * UI, RAIL_X = HX(0.16), RAIL_Y = HY(-0.895);
@@ -309,7 +403,7 @@ export function create(ctx, segment) {
   hud.scene.add(rail, railTicks, railFill, railDot);
   // the vision line, centred
   const leap = new TextPlane('The next giant leap.', { font: FONTS.serif, italic: true, weight: 500, height: 0.1 * Math.sqrt(HH), letterSpacing: 0.02, color: '#f6efe4', intensity: 1.1 });
-  leap.position.set(0, SQ ? -HH * 0.36 : -0.42, 0); leap.opacity = 0; hud.scene.add(leap);
+  leap.position.set(0, SQ ? HH * 0.42 : -0.42, 0); leap.opacity = 0; hud.scene.add(leap);
   // callouts pinned to 3D anchors (projected every frame through the delivered lens)
   const CS = 0.03 * UI;
   const callHeli = new Callout('INGENUITY · 1.8 KG', { dx: 0.3 * UI, dy: 0.2 * UI, size: CS, color: ICE, intensity: 1.2, sub: 'FIRST FLIGHT · 19 APRIL 2021' });
@@ -337,10 +431,11 @@ export function create(ctx, segment) {
     if (roll) camera.rotateZ(roll);
     return u;
   };
-  const cuts = [tHub, tDive, tWebb, tRov, tArt, tMars];
-  const WORLD_OF = [worlds.ascent, worlds.orbit, worlds.cosmos, worlds.webb, worlds.mars, worlds.artemis, worlds.mars];
+  const cuts = [tHub, tDive, tWebb, tRov, tArt, tVis, tEDL, tStep, tBase];
+  const cutW = [0.55, 0.55, 0.55, 0.55, 0.55, 0.2, 0.3, 0.25, 0.25];      // the vision cuts come fast: lighter accents
+  const WORLD_OF = [worlds.ascent, worlds.orbit, worlds.cosmos, worlds.webb, worlds.mars, worlds.artemis, worlds.voyage, worlds.mars, worlds.mars, worlds.mars];
   const WORLD_LIST = Object.values(worlds);
-  const shotOf = (t) => (t < tHub ? 0 : t < tDive ? 1 : t < tWebb ? 2 : t < tRov ? 3 : t < tArt ? 4 : t < tMars ? 5 : 6);
+  const shotOf = (t) => (t < tHub ? 0 : t < tDive ? 1 : t < tWebb ? 2 : t < tRov ? 3 : t < tArt ? 4 : t < tVis ? 5 : t < tEDL ? 6 : t < tStep ? 7 : t < tBase ? 8 : 9);
   const upO = V3();
   const RES = { focus: 6, dofAmt: 0, dofRange: 3, harmony: 1, bloom: 0.7, exposure: 1, envI: 0.3 };
   const ret = (focus, dofAmt, dofRange, harmony, bloom, exposure, envI) => {
@@ -360,14 +455,14 @@ export function create(ctx, segment) {
       const shot = shotOf(t);
       for (let i = 0; i < WORLD_LIST.length; i++) WORLD_LIST[i].visible = false;
       WORLD_OF[shot].visible = true;
-      roverSet.visible = shot === 4; visionSet.visible = shot === 6;
+      roverSet.visible = shot === 4; visionSet.visible = shot >= 7;
       camera.near = 0.05; camera.far = 3000; camera.fov = 35;
       glowL.intensity = 0;
       scene.fog.near = 1e5; scene.fog.far = 2e5;
       stars.visible = true; stars.material.opacity = 1;
-      SU.uGain.value = 1; SU.uEarthK.value = 0; SU.uHaze.value = 1;
+      SU.uGain.value = 1; SU.uEarthK.value = 0; SU.uHaze.value = 1; SU.uMoonK.value = 0; SU.uAur.value = 1; SU.uSunK.value = 1;
       const r = shot === 0 ? this._ascent(t, info) : shot === 1 ? this._orbit(t, info) : shot === 2 ? this._cosmos(t, info) : shot === 3 ? this._webb(t, info)
-        : shot === 4 ? this._rover(t, info) : shot === 5 ? this._artemis(t, info) : this._vision(t, info);
+        : shot === 4 ? this._rover(t, info) : shot === 5 ? this._artemis(t, info) : shot === 6 ? this._voyage(t, info) : this._mars(t, info, shot);
       const { focus, dofAmt, dofRange, harmony, bloom, exposure, envI } = r;
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
@@ -377,9 +472,9 @@ export function create(ctx, segment) {
       scene.environmentIntensity = envI;
       // cut accents: a short exposure lift across every match cut (the eye reads it as one move)
       let cutK = 0;
-      for (let i = 0; i < cuts.length; i++) cutK = Math.max(cutK, envelope(t, cuts[i] - 0.07, cuts[i] + 0.09, 0.07, 0.09, ease.inOutSine));
-      api.exposure = exposure * (1 + cutK * 0.55);
-      api.bloom.strength = bloom + cutK * 0.25;
+      for (let i = 0; i < cuts.length; i++) cutK = Math.max(cutK, cutW[i] * envelope(t, cuts[i] - 0.06, cuts[i] + 0.08, 0.06, 0.08, ease.inOutSine));
+      api.exposure = exposure * (1 + cutK);
+      api.bloom.strength = bloom + cutK * 0.45;
       api.harmony = harmony;
       api.dof.focus = focus; api.dof.range = dofRange; api.dof.amount = dofAmt;
       this._hud(t, T, shot);
@@ -540,7 +635,7 @@ export function create(ctx, segment) {
       const T = info.T;
       const y = artY(t);
       sls.group.position.set(0, y, 0);
-      sls.group.rotation.z = -0.03 - ramp(t, tArt, tMars) * 0.03;
+      sls.group.rotation.z = -0.03 - ramp(t, tArt, tVis) * 0.03;
       const flick = 0.88 + 0.12 * Math.sin(T * 97) * Math.sin(T * 41);
       slsCore.material.uniforms.uT.value = slsOut.material.uniforms.uT.value = T;
       slsCore.material.uniforms.uA.value = flick; slsOut.material.uniforms.uA.value = 0.8 * flick;
@@ -549,12 +644,12 @@ export function create(ctx, segment) {
       SR.uSrc0.value.set(-0.64, y - 0.5, 0); SR.uSrc1.value.set(0.64, y - 0.5, 0);
       SR.uGain.value = 0.55;
       // long lens from far away: the rocket crosses the face of the Moon; then a push into the lunar limb
-      const push = ramp(t, tMars - 0.34, tMars + 0.02, ease.inCubic);
+      const push = ramp(t, tVis - 0.3, tVis + 0.02, ease.inCubic);
       camera.position.copy(R_CAM);
       tmp.set(0, y + 4.5, 0).sub(R_CAM).normalize().lerp(MOON_DIR, 0.45 + 0.55 * push).normalize();
       look.copy(R_CAM).addScaledVector(tmp, 100);
       camera.lookAt(look);
-      camera.fov = lerp(11, 3.2, push);
+      camera.fov = lerp(11, 5.2, push);
       SU.uMode.value = 4;
       const moonC = tmp2.copy(MOON_DIR).multiplyScalar(1);
       SU.uPC.value.copy(moonC); SU.uPR.value = 0.105;
@@ -565,39 +660,131 @@ export function create(ctx, segment) {
       setRim(MOON_DIR, '#c9d6f2', 1.4);
       hemi.color.set('#0b1020'); hemi.groundColor.set('#000000'); hemi.intensity = 0.1;
       glowL.position.set(0, y - 1.2, 0); glowL.color.set('#ffb070'); glowL.intensity = 260 * flick;
-      return ret(camera.position.distanceTo(sls.group.position), 0, 20, 0.85, 0.78, 1 + push * 0.15, 0.12);
+      return ret(camera.position.distanceTo(sls.group.position), 0, 20, 0.85, 0.78, 1 - push * 0.12, 0.12);
     },
 
-    // ---------------------------------------------------------------- 7 · the next giant leap: Mars at dawn
-    _vision(t, info) {
+    // ---------------------------------------------------------------- 7 · the voyage: a crewed ship over Earth and Moon; ignition on the cue
+    _voyage(t, info) {
       const T = info.T;
-      place(vCam, vLook, vK, t);
-      camera.fov = 44 - ramp(t, tMars, DUR, ease.inOutSine) * 8;
-      SU.uMode.value = 5; SU.uSun.value.copy(SUN_V); SU.uEarthDir.value.copy(EARTH_V); SU.uEarthK.value = 1;
+      const k = t - tVis, burn = Math.max(0, t - tIgn);
+      const ign = ramp(t, tIgn - 0.01, tIgn + 0.05, ease.outCubic);
+      const flash = envelope(t, tIgn - 0.01, tIgn + 0.14, 0.02, 0.12);
+      ship.group.position.copy(SHIP_F).multiplyScalar(k * 5 + 170 * burn * burn);
+      const flick = 0.9 + 0.1 * Math.sin(T * 83) * Math.sin(T * 31);
+      shipCore.uniforms.uT.value = shipOut.uniforms.uT.value = T;
+      shipCore.uniforms.uA.value = ign * flick; shipOut.uniforms.uA.value = 0.7 * ign * flick;
+      for (let i = 0; i < shipFx.length; i++) shipFx[i].core.visible = shipFx[i].out.visible = ign > 0.001;
+      shipGlow.visible = ign > 0.001; shipGlow.material.opacity = ign; shipGlow.scale.setScalar(6 + flash * 9);
+      // camera: a tracking shot that gives ground as the ship surges toward it, with a short thrust shudder
+      const sh = burn > 0 ? 0.06 * Math.exp(-burn * 8) : 0;
+      camera.position.copy(VCAM0).addScaledVector(vR0, 6 * k).addScaledVector(vU0, 2 * k).add(tmp2.set(Math.sin(T * 71) * sh, Math.sin(T * 57) * sh, 0));
+      look.copy(ship.group.position).addScaledVector(SHIP_F, -14);
+      camera.lookAt(look);
+      camera.fov = 31 - ramp(t, tVis, tEDL, ease.inOutSine) * 3;
+      SU.uMode.value = 1; SU.uSun.value.copy(SUN_Y); SU.uPC.value.copy(EARTH_Y); SU.uPR.value = 0.6;
+      SU.uPRot.value.copy(EARTH_ROT);
+      SU.uMoonK.value = 1; SU.uMoonDir.value.copy(MOON_Y); SU.uMoonR.value = 0.03;
+      stars.material.opacity = 0.8;
+      setKey(SUN_Y, '#fff4e6', 3.4, ship.group.position, 45, 160);
+      setRim(EARTH_Y, '#6f9be8', 1.1);
+      hemi.color.set('#000000'); hemi.groundColor.set('#28497c'); hemi.intensity = 0.5;
+      glowL.position.copy(ship.group.position).addScaledVector(SHIP_F, -40);
+      glowL.color.set('#cfe0ff'); glowL.intensity = 4000 * ign * flick;
+      const f = camera.position.distanceTo(ship.group.position);
+      return ret(f, 0, 40, 0.85, 0.75, 1.0 + flash * 0.12, 0.4);
+    },
+
+    // ---------------------------------------------------------------- 8–10 · Mars at dawn: landing, first footsteps, the outpost
+    _mars(t, info, shot) {
+      const T = info.T;
+      const land = shot === 7, steps = shot === 8, base = shot === 9;
+      baseSet.visible = base; blast.visible = land; astro.group.visible = steps; prints.visible = steps;
+      for (let i = 0; i < retro.length; i++) retro[i].core.visible = retro[i].out.visible = land;
+      retroGlow.visible = land;
+      lander.group.position.copy(LANDER);
+      sunNow.copy(land ? SUN_B : steps ? SUN_C : SUN_V);
+      SU.uMode.value = 5; SU.uSun.value.copy(sunNow); SU.uEarthDir.value.copy(EARTH_C); SU.uEarthK.value = steps ? 1 : 0;
       stars.material.opacity = 0.3;
-      scene.fog.color.set('#3b2724'); scene.fog.near = 25; scene.fog.far = 240;
-      setKey(SUN_V, '#ffcf9e', 3.4, tmp2.set(0, 0, -14), 30, 120);
-      setRim(tmp.copy(SUN_V).setY(0.35).normalize(), '#8fb0ff', 0.7);
-      hemi.color.set('#5a4a5c'); hemi.groundColor.set('#3a170c'); hemi.intensity = 0.55;
-      sunDisc.position.copy(camera.position).addScaledVector(SUN_V, 600); sunDisc.scale.setScalar(26);
-      sunDisc.material.opacity = 1;
-      flagU.uSunV.value.copy(SUN_V).transformDirection(camera.matrixWorldInverse);
+      if (steps) { scene.fog.color.set('#4a3028'); scene.fog.near = 30; scene.fog.far = 260; } else { scene.fog.color.set('#6a4636'); scene.fog.near = 20; scene.fog.far = 260; }
+      SU.uGain.value = steps ? 0.8 : 1; SU.uAur.value = steps ? 0.5 : 1; SU.uSunK.value = steps ? 0.06 : 1;
+      setRim(tmp.copy(sunNow).setY(0.35).normalize(), '#8fb0ff', steps ? 1.1 : 0.7);
+      hemi.color.set(steps ? '#6c5048' : '#5a4a5c'); hemi.groundColor.set('#3a170c'); hemi.intensity = steps ? 0.22 : 0.55;
+      const r = land ? this._landing(t, info) : steps ? this._steps(t, info) : this._base(t, info);
+      camera.updateMatrixWorld();
+      sunDisc.position.copy(camera.position).addScaledVector(sunNow, 600); sunDisc.scale.setScalar(steps ? 9 : 18); sunDisc.material.opacity = steps ? 0.7 : 1;
+      flagU.uSunV.value.copy(sunNow).transformDirection(camera.matrixWorldInverse);
       flagU.uSunCol.value.set('#ffcf9e').multiplyScalar(key.intensity / Math.PI);
-      PU.uSun.value.copy(SUN_V); PU.uFogC.value.copy(scene.fog.color); PU.uFogN.value = scene.fog.near; PU.uFogF.value = scene.fog.far;
-      marsDust.tick(t, info);
+      PU.uSun.value.copy(sunNow); PU.uFogC.value.copy(scene.fog.color); PU.uFogN.value = scene.fog.near; PU.uFogF.value = scene.fog.far;
       beacon.material.opacity = 0.35 + 0.65 * pulse(T, { div: 1, decay: 6 });
-      const f = camera.position.distanceTo(tmp.set(1.5, 1.5, -6));
-      return ret(Math.max(4, f), 0.3 * (1 - ramp(t, DUR - 0.8, DUR - 0.4)), 12, 0.42, 0.7, 1.05, 0.3);
+      marsDust.tick(t, info);
+      return r;
+    },
+    _landing(t, info) {
+      const T = info.T, k = t - tEDL;
+      const alt = 4.6 - k * 6.5;
+      lander.group.position.y = LANDER.y + alt;
+      const flick = 0.88 + 0.12 * Math.sin(T * 97) * Math.sin(T * 43);
+      retroCore.uniforms.uT.value = retroOut.uniforms.uT.value = T;
+      retroCore.uniforms.uA.value = flick; retroOut.uniforms.uA.value = 0.8 * flick;
+      retroGlow.material.opacity = flick;
+      BU.uT.value = t; BU.uViewport.value = info.height; BU.uSun.value.copy(SUN_B); BU.uHot.value = 1;
+      // low on the plain: a slow push and tilt as the lander settles into its own dust storm
+      camera.position.set(LANDER.x - 9, 0, LANDER.z + 25).addScaledVector(tmp.set(0.8, 0, -3.5), k);
+      camera.position.y = mf(camera.position.x, camera.position.z) + 1.3 + k * 0.6;
+      look.set(LANDER.x, LANDER.y + 4.8 + alt * 0.4, LANDER.z);
+      camera.lookAt(look);
+      camera.fov = 32 - k * 6;
+      setKey(SUN_B, '#ffcf9e', 3.4, LANDER, 30, 120);
+      glowL.position.set(LANDER.x, LANDER.y + 0.6, LANDER.z); glowL.color.set('#ffa860'); glowL.intensity = 600 * flick;
+      marsDust.position.set(camera.position.x, camera.position.y - 2, camera.position.z - 8);
+      const f = camera.position.distanceTo(lander.group.position);
+      return ret(f, 0.3, 12, 0.42, 0.78, 1.0, 0.3);
+    },
+    _steps(t, info) {
+      // the pole is driven home; both gloves ride it down (two-bone IK)
+      const plant = 1 - ramp(t, tStep - 0.04, tStep + 0.24, ease.outCubic);
+      flag.position.set(FLAG_L.x, FLAG_L.y + 0.3 * plant, FLAG_L.z);
+      flag.rotation.x = -0.07 * plant;
+      handT[0].set(FLAG_L.x + 0.06, 1.0 + 0.3 * plant, FLAG_L.z - 0.04);
+      handT[1].set(FLAG_L.x - 0.05, 1.28 + 0.3 * plant, FLAG_L.z - 0.04);
+      astro.setArm(0, handT[0], elbowHint[0]); astro.setArm(1, handT[1], elbowHint[1]);
+      const u = ramp(t, tStep, tBase + 0.05);
+      camera.position.set(AST.x - 0.6 + u * 0.15, 0, AST.z + 6.4 - u * 0.7);
+      camera.position.y = mf(camera.position.x, camera.position.z) + 0.55 + u * 0.06;
+      look.set(AST.x + 0.6, AST.y + 1.05, AST.z);
+      camera.lookAt(look);
+      camera.fov = 30;
+      setKey(SUN_C, '#ffcf9e', 3.4, tmp2.set(AST.x, AST.y, AST.z - 4), 9, 60);
+      marsDust.position.set(AST.x, AST.y - 1, AST.z + 1);
+      const f = camera.position.distanceTo(tmp.set(AST.x, AST.y + 1.2, AST.z));
+      return ret(f, 0.4, 4, 0.42, 0.6, 1.05, 0.12);
+    },
+    _base(t, info) {
+      place(bCam, bLook, bK, t);
+      domeF.grow(0.12 + 0.78 * ramp(t, tBase, tBase + 0.4, ease.inOutSine));      // the outpost grows: a new dome is skinned
+      // the crew rover rolls along its tracks toward the lens
+      const d = (t - tBase) * 2.2;
+      crover.group.position.set(CROVER.x + CR_DIR.x * d, 0, CROVER.z + CR_DIR.z * d);
+      crover.group.position.y = mf(crover.group.position.x, crover.group.position.z);
+      camera.fov = 34 - ramp(t, tBase, DUR, ease.inOutSine) * 6;
+      setKey(SUN_V, '#ffcf9e', 3.4, GH, 48, 200);
+      scene.fog.color.set('#6e4a38'); scene.fog.near = 25; scene.fog.far = 240;
+      marsDust.position.set(camera.position.x + BF.x * 8, camera.position.y - 3, camera.position.z + BF.z * 8);
+      const f = camera.position.distanceTo(GH);
+      return ret(f, 0.25 * (1 - ramp(t, DUR - 0.7, DUR - 0.4)), 20, 0.42, 0.7, 1.05, 0.32);
     },
 
     // ---------------------------------------------------------------- HUD
     _hud(t, T, shot) {
+      for (let i = 0; i < CAPS.length; i++) {
+        const s = CAPS[i], k = s.fast ? 0.55 : 1;
+        const e = envelope(t, s.t - 0.01, s.end, 0.06 * k, 0.12 * k, ease.linear);
+        capMain[i].opacity = e; capMain[i].reveal = ramp(t, s.t, s.t + 0.28 * k, ease.outCubic);
+        capSub[i].opacity = e * 0.9; capSub[i].reveal = ramp(t, s.t + 0.08 * k, s.t + 0.42 * k, ease.outCubic);
+      }
       for (let i = 0; i < SHOTS.length; i++) {
         const s = SHOTS[i];
-        const e = envelope(t, s.t - 0.01, s.end, 0.06, 0.12, ease.linear);
-        capMain[i].opacity = e; capMain[i].reveal = ramp(t, s.t, s.t + 0.28, ease.outCubic);
-        capSub[i].opacity = e * 0.9; capSub[i].reveal = ramp(t, s.t + 0.08, s.t + 0.42, ease.outCubic);
-        capIdx[i].opacity = e; capIdx[i].reveal = ramp(t, s.t, s.t + 0.12);
+        capIdx[i].opacity = envelope(t, s.t - 0.01, s.end, 0.06, 0.12, ease.linear); capIdx[i].reveal = ramp(t, s.t, s.t + 0.12);
       }
       const on = envelope(t, tShut - 0.02, DUR - 0.25, 0.15, 0.2);
       idxOf.opacity = on * 0.8; idxOf.reveal = ramp(t, tShut, tShut + 0.4);
@@ -609,8 +796,8 @@ export function create(ctx, segment) {
       railFill.progress = Math.max(0.0001, pos); railFill.opacity = on;
       railDot.position.set(RAIL_X + RAIL_W * pos, RAIL_Y, 0); railDot.material.opacity = on * (0.6 + 0.4 * pulse(T, { decay: 5 }));
       // vision line
-      const lo = envelope(t, tMars + 0.25, DUR - 0.35, 0.3, 0.25);
-      leap.opacity = lo; leap.reveal = ramp(t, tMars + 0.25, tMars + 0.85, ease.outCubic);
+      const lo = envelope(t, tStep + 0.03, DUR - 0.3, 0.1, 0.22);
+      leap.opacity = lo; leap.reveal = ramp(t, tStep + 0.03, tStep + 0.36, ease.outCubic);
       // callouts
       if (shot === 4) {
         projHud(tmp.copy(heliPos).add(tmp2.set(0.1, 0.45, 0)), callHeli.position);
@@ -619,9 +806,9 @@ export function create(ctx, segment) {
         projHud(tmp.copy(rover.group.position).add(tmp2.set(0, 2.4, 0)), callRover.position); callRover.position.z = 0;
         callRover.reveal(ramp(t, tRov + 0.2, tRov + 0.5), envelope(t, tRov + 0.18, tLift + 0.2, 0.05, 0.1) * 0.9);
       } else { callHeli.reveal(0, 0); callRover.reveal(0, 0); }
-      if (shot === 6) {
-        projHud(tmp.copy(camera.position).addScaledVector(EARTH_V, 500), callEarth.position); callEarth.position.z = 0;
-        callEarth.reveal(ramp(t, tMars + 0.45, tMars + 0.8), envelope(t, tMars + 0.42, DUR - 0.4, 0.05, 0.2));
+      if (shot === 8) {
+        projHud(tmp.copy(camera.position).addScaledVector(EARTH_C, 500), callEarth.position); callEarth.position.z = 0;
+        callEarth.reveal(ramp(t, tStep + 0.05, tStep + 0.22), envelope(t, tStep + 0.04, tBase - 0.02, 0.04, 0.05));
       } else callEarth.reveal(0, 0);
     },
   };

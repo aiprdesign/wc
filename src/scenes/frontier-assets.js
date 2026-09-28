@@ -4,6 +4,7 @@
 // All motion is driven by uniforms, so every frame is a pure function of time.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { rng, TAU } from '../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { GLSL_NOISE } from '../lib/noise.js';
@@ -467,50 +468,345 @@ export function buildHeavyLift() {
   return { group: g, exits };
 }
 
-// ------------------------------------------------------------------ crewed Mars lander + surface habitat (generic; metres)
+// ------------------------------------------------------------------ THE VISION (generic; metres): crewed Mars ship, lander, astronaut, outpost
 function windowTexture() {
   const W = 512, H = 64, c = mkCanvas(W, H), g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   for (let i = 0; i < 16; i++) { const x = i * W / 16 + 8; const l = 150 + (i * 37) % 100; g.fillStyle = `rgb(255,${l},${Math.floor(l * 0.6)})`; g.fillRect(x, 14, W / 16 - 16, 36); }
   return toTexture(c);
 }
-export function buildOutpost() {
+// panel-line texture for hulls (seams + faint weld rows), tiled
+function hullSeams(seed = 17) {
+  const r = rng(seed), S = 256, c = mkCanvas(S), g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, S, S);
+  g.strokeStyle = 'rgba(90,90,96,0.55)'; g.lineWidth = 1.5;
+  for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(0, i * S / 4); g.lineTo(S, i * S / 4); g.stroke(); }
+  for (let i = 0; i < 8; i++) { const x = i * S / 8 + (r() - 0.5) * 6; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, S); g.stroke(); }
+  for (let i = 0; i < 60; i++) { const l = 225 + Math.floor(r() * 30); g.fillStyle = `rgba(${l},${l},${l + 2},0.5)`; g.fillRect(Math.floor(r() * 8) * S / 8, Math.floor(r() * 4) * S / 4, S / 8, S / 4); }
+  return toTexture(c, { repeat: true });
+}
+export function visionMaterials(env = null) {
+  const seams = hullSeams(); seams.repeat.set(6, 3);
+  return {
+    white: new THREE.MeshStandardMaterial({ color: '#dcd8cf', map: seams, roughness: 0.42, metalness: 0.28, envMap: env, envMapIntensity: 0.6 }),
+    dark: new THREE.MeshStandardMaterial({ color: '#26272b', roughness: 0.5, metalness: 0.55, envMap: env, envMapIntensity: 0.6 }),
+    bell: new THREE.MeshStandardMaterial({ color: '#3b3936', metalness: 0.92, roughness: 0.3, side: THREE.DoubleSide, envMap: env, envMapIntensity: 0.6 }),
+    foil: new THREE.MeshStandardMaterial({ color: '#c3913f', metalness: 0.95, roughness: 0.34, bumpMap: crinkleTexture(21, 256), bumpScale: 0.7, envMap: env, envMapIntensity: 0.8 }),
+    fabric: new THREE.MeshStandardMaterial({ color: '#d6cebf', roughness: 0.85, metalness: 0, envMap: env, envMapIntensity: 0.5 }),
+    pv: new THREE.MeshStandardMaterial({ map: solarTexture(12, 4, 21), metalness: 0.5, roughness: 0.35, envMap: env, envMapIntensity: 0.7 }),
+    win: new THREE.MeshBasicMaterial({ map: windowTexture(), color: new THREE.Color('#ffd49a').multiplyScalar(2.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
+  };
+}
+const addTo = (parent, geo, mat, p = [0, 0, 0], r = [0, 0, 0], s = null) => {
+  const m = new THREE.Mesh(geo, mat); m.position.set(p[0], p[1], p[2]); m.rotation.set(r[0], r[1], r[2]); if (s) m.scale.set(s[0], s[1], s[2]);
+  m.castShadow = m.receiveShadow = true; parent.add(m); return m;
+};
+// rod between two points, baked into a geometry (for merged trusses)
+function rodGeo(a, b, r, seg = 6) {
+  const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), seg, 1);
+  _q.setFromUnitVectors(_v.set(0, 1, 0), _s.copy(b).sub(a).normalize());
+  _m.compose(_v.copy(a).lerp(b, 0.5), _q, _s.set(1, 1, 1));
+  return g.applyMatrix4(_m);
+}
+// crew lander: octagonal descent stage, crew cylinder, ogive nose; landing legs in their own group (stowed in flight)
+export function buildLander(M) {
   const g = new THREE.Group();
-  const white = new THREE.MeshStandardMaterial({ color: '#d4d0c8', roughness: 0.5, metalness: 0.2 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#232427', roughness: 0.55, metalness: 0.5 });
-  const fabric = new THREE.MeshStandardMaterial({ color: '#cfc7b8', roughness: 0.85, metalness: 0 });
-  const winTex = windowTexture();
-  const win = new THREE.MeshBasicMaterial({ map: winTex, color: new THREE.Color('#ffd49a').multiplyScalar(2.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  const add = (geo, mat, p, r = [0, 0, 0], parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(...p); m.rotation.set(...r); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
-  // lander: octagonal descent stage, crew cylinder, ogive nose, splayed legs
-  const lander = new THREE.Group(); g.add(lander);
-  add(new THREE.CylinderGeometry(3.0, 3.5, 2.6, 8), white, [0, 2.3, 0], [0, Math.PI / 8, 0], lander);
-  add(new THREE.CylinderGeometry(3.52, 3.52, 0.25, 8), dark, [0, 1.05, 0], [0, Math.PI / 8, 0], lander);
-  add(new THREE.CylinderGeometry(2.4, 2.8, 7.4, 40), white, [0, 7.3, 0], [0, 0, 0], lander);
-  add(lathe(ogive(2.4, 4.6, 18, 0.6), 40), white, [0, 11.0, 0], [0, 0, 0], lander);
-  add(new THREE.CylinderGeometry(2.62, 2.62, 0.22, 40), dark, [0, 5.0, 0], [0, 0, 0], lander);
-  const lw = new THREE.Mesh(new THREE.CylinderGeometry(2.47, 2.47, 0.5, 40, 1, true), win); lw.position.y = 9.6; lander.add(lw);
+  addTo(g, new THREE.CylinderGeometry(3.0, 3.5, 2.6, 8), M.white, [0, 2.3, 0], [0, Math.PI / 8, 0]);
+  addTo(g, new THREE.CylinderGeometry(3.52, 3.52, 0.25, 8), M.dark, [0, 1.05, 0], [0, Math.PI / 8, 0]);
+  addTo(g, new THREE.CylinderGeometry(2.4, 2.8, 7.4, 40), M.white, [0, 7.3, 0]);
+  addTo(g, lathe(ogive(2.4, 4.6, 18, 0.6), 40), M.white, [0, 11.0, 0]);
+  addTo(g, new THREE.CylinderGeometry(2.62, 2.62, 0.22, 40), M.dark, [0, 5.0, 0]);
+  addTo(g, new THREE.CylinderGeometry(2.46, 2.46, 0.16, 40), M.dark, [0, 10.95, 0]);
+  const win = new THREE.Mesh(new THREE.CylinderGeometry(2.47, 2.47, 0.5, 40, 1, true), M.win); win.position.y = 9.6; g.add(win);
+  const exits = [];
+  for (let k = 0; k < 3; k++) {
+    const a = k / 3 * TAU + 0.3, x = Math.cos(a) * 1.3, z = Math.sin(a) * 1.3;
+    addTo(g, new THREE.CylinderGeometry(0.32, 0.72, 0.8, 20, 1, true), M.bell, [x, 0.6, z]);
+    exits.push(V3(x, 0.2, z));
+  }
+  const legs = new THREE.Group(); g.add(legs);
   for (let k = 0; k < 4; k++) {
     const a = k / 4 * TAU + Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
-    lander.add(strut(V3(c * 2.9, 2.6, s * 2.9), V3(c * 5.4, 0.12, s * 5.4), 0.13, dark), strut(V3(c * 3.2, 1.2, s * 3.2), V3(c * 5.2, 0.2, s * 5.2), 0.09, dark));
-    add(new THREE.CylinderGeometry(0.75, 0.85, 0.16, 18), dark, [c * 5.4, 0.08, s * 5.4], [0, 0, 0], lander);
+    legs.add(strut(V3(c * 2.9, 2.6, s * 2.9), V3(c * 5.4, 0.12, s * 5.4), 0.13, M.dark), strut(V3(c * 3.2, 1.2, s * 3.2), V3(c * 5.2, 0.2, s * 5.2), 0.09, M.dark));
+    addTo(legs, new THREE.CylinderGeometry(0.75, 0.85, 0.16, 18), M.dark, [c * 5.4, 0.08, s * 5.4]);
   }
-  // habitat: two inflatable domes joined by a tunnel, a lit airlock, a row of solar arrays
-  const hab = new THREE.Group(); hab.position.set(-13, 0, 6); g.add(hab);
+  legs.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return { group: g, legs, win, exits };
+}
+// interplanetary transfer ship (local +Y = forward): the lander rides on the nose of a truss spine with
+// propellant tanks, two long solar wings, radiators and a three-engine cluster; exits at the bell mouths
+export function buildMarsShip(M) {
+  const g = new THREE.Group();
+  const L = buildLander(M); L.legs.visible = false; g.add(L.group);
+  addTo(g, new THREE.CylinderGeometry(3.3, 1.9, 3.0, 32, 1), M.dark, [0, -0.5, 0]);
+  // square truss: four longerons, rings and alternating diagonals
+  const B = 1.35, Y0 = -1.8, Y1 = -31.5, bays = 10, corners = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
+  const tp = [];
+  for (const [x, z] of corners) tp.push(rodGeo(V3(x * B, Y0, z * B), V3(x * B, Y1, z * B), 0.1));
+  for (let i = 0; i <= bays; i++) {
+    const y = Y0 + (Y1 - Y0) * i / bays, y2 = Y0 + (Y1 - Y0) * (i + 1) / bays;
+    for (let k = 0; k < 4; k++) {
+      const [ax, az] = corners[k], [bx, bz] = corners[(k + 1) % 4];
+      tp.push(rodGeo(V3(ax * B, y, az * B), V3(bx * B, y, bz * B), 0.06));
+      if (i < bays) tp.push(rodGeo(V3(ax * B, (i + k) % 2 ? y : y2, az * B), V3(bx * B, (i + k) % 2 ? y2 : y, bz * B), 0.045));
+    }
+  }
+  const truss = new THREE.Mesh(merge(tp), M.dark); truss.castShadow = truss.receiveShadow = true; g.add(truss);
+  // propellant: four large insulated tanks, four smaller foil-wrapped ones
+  for (let k = 0; k < 4; k++) {
+    const a = k / 4 * TAU + Math.PI / 4, x = Math.cos(a) * 3.55, z = Math.sin(a) * 3.55;
+    addTo(g, new THREE.CapsuleGeometry(1.95, 6.5, 8, 28), M.white, [x, -9.5, z]);
+    addTo(g, new THREE.CylinderGeometry(1.99, 1.99, 0.35, 28, 1), M.dark, [x, -9.5, z]);
+    const x2 = Math.cos(a) * 2.9, z2 = Math.sin(a) * 2.9;
+    addTo(g, new THREE.CapsuleGeometry(1.35, 3.4, 8, 24), M.foil, [x2, -20.5, z2]);
+  }
+  // solar wings on booms (±X) and radiator panels (±Z)
+  const wings = [];
+  for (const sx of [-1, 1]) {
+    g.add(strut(V3(sx * B, -15, 0), V3(sx * 5.2, -15, 0), 0.12, M.dark));
+    const w = new THREE.Group(); w.position.set(sx * 5.2, -15, 0); g.add(w);
+    for (let j = 0; j < 3; j++) addTo(w, new THREE.BoxGeometry(7.4, 6.2, 0.08), M.pv, [sx * (4.0 + j * 7.6), 0, 0]);
+    w.add(strut(V3(0, 0, 0), V3(sx * 23, 0, 0), 0.06, M.dark));
+    wings.push(w);
+  }
+  for (const sz of [-1, 1]) addTo(g, new THREE.BoxGeometry(0.1, 9.5, 6), M.fabric, [0, -26.5, sz * (B + 3.2)]);
+  // thrust structure + engines
+  addTo(g, new THREE.CylinderGeometry(1.9, 2.4, 2.2, 28, 1), M.dark, [0, -32.4, 0]);
+  const exits = [];
+  for (let k = 0; k < 3; k++) {
+    const a = k / 3 * TAU + Math.PI / 2, x = Math.cos(a) * 1.15, z = Math.sin(a) * 1.15;
+    addTo(g, new THREE.CylinderGeometry(0.42, 1.12, 2.8, 24, 1, true), M.bell, [x, -34.9, z]);
+    exits.push(V3(x, -36.3, z));
+  }
+  return { group: g, lander: L, wings, exits };
+}
+// a suited astronaut (1.9 m); legs posed in a stride, arms solved each frame to grip a point (2-bone IK)
+export function buildAstronaut() {
+  const g = new THREE.Group();
+  const suit = new THREE.MeshStandardMaterial({ color: '#d6d1c7', roughness: 0.84, metalness: 0 });
+  const soft = new THREE.MeshStandardMaterial({ color: '#a7a298', roughness: 0.88, metalness: 0 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#2b2c30', roughness: 0.5, metalness: 0.5 });
+  const visor = new THREE.MeshStandardMaterial({ color: '#e0ac52', metalness: 1, roughness: 0.1 });
+  const red = new THREE.MeshStandardMaterial({ color: '#8e2a2a', roughness: 0.7 });
+  addTo(g, new THREE.CapsuleGeometry(0.22, 0.3, 6, 18), suit, [0, 1.33, 0], [0, 0, 0], [1.22, 1, 0.9]);
+  addTo(g, new THREE.SphereGeometry(0.2, 18, 12), suit, [0, 1.0, 0], [0, 0, 0], [1.15, 0.82, 0.95]);
+  addTo(g, new THREE.TorusGeometry(0.215, 0.028, 8, 28), soft, [0, 1.1, 0], [Math.PI / 2, 0, 0], [1.15, 0.95, 1]);
+  addTo(g, new RoundedBoxGeometry(0.54, 0.68, 0.27, 2, 0.06), suit, [0, 1.41, -0.31]);
+  addTo(g, new THREE.BoxGeometry(0.34, 0.1, 0.05), soft, [0, 1.19, -0.45]);
+  addTo(g, new RoundedBoxGeometry(0.24, 0.13, 0.11, 2, 0.02), soft, [0, 1.27, 0.23]);
+  addTo(g, new THREE.CylinderGeometry(0.14, 0.16, 0.09, 18), soft, [0, 1.6, 0]);
+  addTo(g, new THREE.SphereGeometry(0.178, 26, 18), suit, [0, 1.77, 0.0]);
+  addTo(g, new THREE.SphereGeometry(0.181, 26, 14, Math.PI / 2 - 0.95, 1.9, 0.72, 1.05), visor, [0, 1.77, 0.0]);
+  addTo(g, new THREE.BoxGeometry(0.1, 0.035, 0.005), red, [0.22, 1.44, 0.17], [0, 0.55, 0]);
+  const seg = (a, b, r, m) => { const s = strut(a, b, r, m, 14); s.castShadow = s.receiveShadow = true; g.add(s); return s; };
+  const ball = (p, r, m) => addTo(g, new THREE.SphereGeometry(r, 14, 10), m, [p.x, p.y, p.z]);
+  // legs (a stride: left forward, knees soft)
+  for (const [hip, knee, ank] of [[V3(0.11, 0.98, 0.03), V3(0.13, 0.57, 0.17), V3(0.13, 0.15, 0.07)], [V3(-0.11, 0.98, -0.03), V3(-0.13, 0.56, -0.1), V3(-0.14, 0.16, -0.3)]]) {
+    seg(hip, knee, 0.108, suit); seg(knee, ank, 0.094, suit); ball(knee, 0.108, soft); ball(hip, 0.108, suit);
+    addTo(g, new RoundedBoxGeometry(0.17, 0.14, 0.34, 2, 0.035), soft, [ank.x, ank.y - 0.08, ank.z + 0.06]);
+  }
+  // arms: unit cylinders re-aimed every frame
+  const unit = new THREE.CylinderGeometry(1, 1, 1, 14, 1);
+  const arms = [1, -1].map((sx) => {
+    const sh = V3(sx * 0.28, 1.47, 0.02);
+    ball(sh, 0.115, suit);
+    const up = addTo(g, unit, suit), fo = addTo(g, unit, suit);
+    const el = addTo(g, new THREE.SphereGeometry(0.085, 12, 8), soft), hand = addTo(g, new THREE.SphereGeometry(0.072, 12, 8), soft);
+    return { sh, up, fo, el, hand };
+  });
+  const Y = V3(0, 1, 0), d = V3(), e = V3(), h = V3(), tmp = V3();
+  const aim = (m, a, b, r) => { m.position.copy(a).lerp(b, 0.5); tmp.subVectors(b, a); m.scale.set(r, tmp.length(), r); m.quaternion.setFromUnitVectors(Y, tmp.normalize()); };
+  const L1 = 0.31, L2 = 0.3;
+  // hand target (group-local) and an elbow hint direction
+  function setArm(i, target, hint) {
+    const A = arms[i];
+    d.subVectors(target, A.sh); let dist = d.length(); d.normalize();
+    dist = Math.min(dist, L1 + L2 - 0.005);
+    h.copy(A.sh).addScaledVector(d, dist);
+    const a = (L1 * L1 - L2 * L2 + dist * dist) / (2 * dist), k = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+    e.copy(hint).addScaledVector(d, -hint.dot(d)).normalize();
+    e.multiplyScalar(k).addScaledVector(d, a).add(A.sh);
+    aim(A.up, A.sh, e, 0.086); aim(A.fo, e, h, 0.076);
+    A.el.position.copy(e); A.hand.position.copy(h);
+  }
+  return { group: g, setArm };
+}
+// habitat: two inflatable domes joined by a tunnel, lit window bands, a row of solar arrays, a mast
+export function buildHabitat(M) {
+  const hab = new THREE.Group();
   for (const [x, z, r] of [[0, 0, 4.2], [8.5, 3.5, 3.2]]) {
-    add(new THREE.SphereGeometry(r, 40, 14, 0, TAU, 0, Math.PI / 2), fabric, [x, 0, z], [0, 0, 0], hab);
-    for (let k = 0; k < 8; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(r * 1.004, 0.05, 6, 40, Math.PI), dark); rib.rotation.set(0, k / 8 * Math.PI, 0); rib.position.set(x, 0, z); hab.add(rib); }
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.35, 40, 1, true), win); band.position.set(x, r * 0.28, z); hab.add(band);
+    addTo(hab, new THREE.SphereGeometry(r, 40, 14, 0, TAU, 0, Math.PI / 2), M.fabric, [x, 0, z]);
+    for (let k = 0; k < 8; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(r * 1.004, 0.05, 6, 40, Math.PI), M.dark); rib.rotation.set(0, k / 8 * Math.PI, 0); rib.position.set(x, 0, z); rib.castShadow = true; hab.add(rib); }
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.35, 40, 1, true), M.win); band.position.set(x, r * 0.28, z); hab.add(band);
   }
-  add(new THREE.CylinderGeometry(1.1, 1.1, 5.5, 20), fabric, [4.3, 1.1, 1.75], [0, -0.39, Math.PI / 2], hab);
-  const pvMat = new THREE.MeshStandardMaterial({ map: solarTexture(12, 4, 21), metalness: 0.5, roughness: 0.35 });
+  addTo(hab, new THREE.CylinderGeometry(1.1, 1.1, 5.5, 20), M.fabric, [4.3, 1.1, 1.75], [0, -0.39, Math.PI / 2]);
   for (let i = 0; i < 5; i++) {
     const x = -6 + i * 3.2, z = -7;
-    add(new THREE.BoxGeometry(2.8, 0.05, 1.5), pvMat, [x, 1.3, z], [-0.5, 0, 0], hab);
-    hab.add(strut(V3(x, 0, z), V3(x, 1.25, z), 0.05, dark));
+    addTo(hab, new THREE.BoxGeometry(2.8, 0.05, 1.5), M.pv, [x, 1.3, z], [-0.5, 0, 0]);
+    hab.add(strut(V3(x, 0, z), V3(x, 1.25, z), 0.05, M.dark));
   }
-  const mast = strut(V3(4, 0, -3), V3(4, 6.5, -3), 0.06, dark); hab.add(mast);
-  return { group: g, lander, hab, beaconPos: V3(-9, 6.6, 3) };
+  hab.add(strut(V3(4, 0, -3), V3(4, 6.5, -3), 0.06, M.dark));
+  hab.add(strut(V3(-6, 0, 4.5), V3(-6, 2.6, 4.5), 0.08, M.dark));
+  addTo(hab, new THREE.SphereGeometry(1.3, 28, 8, 0, TAU, 0, 0.75), M.fabric, [-6, 3.5, 4.5], [0.9, 0.6, 0], [1, 0.45, 1]).material.side = THREE.DoubleSide;
+  return { group: hab, beaconPos: V3(4, 6.6, -3) };
+}
+// a dome going up: the rib cage stands, the skin is drawn up over it (grow 0..1)
+export function buildDomeFrame(r, M) {
+  const g = new THREE.Group();
+  for (let k = 0; k < 8; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(r, 0.1, 6, 40, Math.PI), M.dark); rib.rotation.set(0, k / 8 * Math.PI, 0); rib.castShadow = true; g.add(rib); }
+  addTo(g, new THREE.TorusGeometry(r, 0.12, 8, 48), M.dark, [0, 0.05, 0], [Math.PI / 2, 0, 0]);
+  const skinMat = M.fabric.clone(); skinMat.side = THREE.DoubleSide;
+  const skin = addTo(g, new THREE.SphereGeometry(r * 0.985, 40, 14, 0, TAU, Math.PI / 2 - 0.02, 0.02), skinMat);
+  // the skin is a band from the base up to the rising edge: rebuild its latitude window via scale-free geometry swap
+  const bands = [];
+  for (let i = 1; i <= 12; i++) { const th = (Math.PI / 2) * i / 12; bands.push(new THREE.SphereGeometry(r * 0.985, 40, Math.max(2, i + 1), 0, TAU, Math.PI / 2 - th, th)); }
+  skin.geometry = bands[0];
+  const seam = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 6, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd49a').multiplyScalar(2.2), toneMapped: false }));
+  seam.rotation.x = Math.PI / 2; g.add(seam);
+  function grow(k) {
+    const i = Math.max(0, Math.min(bands.length - 1, Math.round(k * (bands.length - 1))));
+    skin.geometry = bands[i];
+    const th = (Math.PI / 2) * (i + 1) / 12, y = r * Math.sin(th);
+    seam.position.y = y; seam.scale.setScalar(Math.max(0.02, Math.cos(th)));
+  }
+  grow(0);
+  return { group: g, grow };
+}
+// greenhouse: a glass dome glowing green from inside (additive fresnel shell), planting rows, light spill on the ground
+export function buildGreenhouse(r = 5.5, M) {
+  const g = new THREE.Group();
+  const u = { uK: { value: 1 }, uCol: { value: new THREE.Color('#9fe27c') } };
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 16, 0, TAU, 0, Math.PI / 2), new THREE.ShaderMaterial({
+    uniforms: u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+    vertexShader: 'varying vec3 vN; varying vec3 vV; varying float vY; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vY = position.y; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `uniform float uK; uniform vec3 uCol; varying vec3 vN; varying vec3 vV; varying float vY;
+      void main(){ float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+        float low = 1.0 - smoothstep(0.0, ${r.toFixed(2)}, vY);
+        vec3 c = uCol * (0.07 + 0.2 * low) + vec3(0.85, 1.0, 0.8) * pow(f, 5.0) * 0.28;
+        gl_FragColor = vec4(c * uK, 1.0); }`,
+  }));
+  shell.renderOrder = 3; g.add(shell);
+  for (let k = 0; k < 10; k++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(r * 1.003, 0.045, 6, 48, Math.PI), M.dark); rib.rotation.set(0, k / 10 * Math.PI, 0); rib.castShadow = true; g.add(rib); }
+  for (const y of [0.35, 0.62]) { const h = r * Math.sin(Math.acos(y)); const ring = new THREE.Mesh(new THREE.TorusGeometry(h, 0.04, 6, 64), M.dark); ring.rotation.x = Math.PI / 2; ring.position.y = r * y; g.add(ring); }
+  addTo(g, new THREE.TorusGeometry(r, 0.14, 8, 64), M.dark, [0, 0.05, 0], [Math.PI / 2, 0, 0]);
+  // planting beds: dark trays topped with luminous green foliage
+  const bed = new THREE.MeshStandardMaterial({ color: '#2a2622', roughness: 0.8 });
+  const leaf = new THREE.MeshBasicMaterial({ color: new THREE.Color('#7fd35a').multiplyScalar(1.15), toneMapped: true });
+  for (let i = -2; i <= 2; i++) {
+    const len = 2 * Math.sqrt(Math.max(0, (r - 0.9) ** 2 - (i * 1.6) ** 2));
+    addTo(g, new THREE.BoxGeometry(len, 0.5, 0.8), bed, [0, 0.25, i * 1.6]);
+    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, Math.max(0.1, len - 0.8), 4, 8), leaf); f.rotation.z = Math.PI / 2; f.scale.set(1, 1, 1.1); f.position.set(0, 0.6, i * 1.6); g.add(f);
+  }
+  const lamp = glowTexSprite('#b8eea0', 0.22, r * 1.9); lamp.position.y = r * 0.35; g.add(lamp);
+  // light spill on the regolith around the dome
+  const spillM = new THREE.ShaderMaterial({
+    uniforms: u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float uK; uniform vec3 uCol; varying vec2 vP; void main(){ float d = length(vP) / ${r.toFixed(2)}; float a = smoothstep(2.4, 1.0, d) * step(0.98, d); gl_FragColor = vec4(uCol * a * a * 0.22 * uK, 1.0); }`,
+  });
+  const spill = new THREE.Mesh(new THREE.CircleGeometry(r * 2.5, 48), spillM); spill.rotation.x = -Math.PI / 2; spill.position.y = 0.06; spill.renderOrder = 2; g.add(spill);
+  return { group: g, u, lamp };
+}
+function glowTexSprite(color, intensity, scale) {
+  const c = mkCanvas(64), x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: toTexture(c), color: new THREE.Color(color).multiplyScalar(intensity), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false, fog: false }));
+  s.scale.setScalar(scale);
+  return s;
+}
+// pressurised crew rover (front +Z)
+export function buildCrewRover(M) {
+  const g = new THREE.Group();
+  addTo(g, new THREE.CapsuleGeometry(1.05, 3.0, 6, 24), M.white, [0, 1.55, 0], [Math.PI / 2, 0, 0], [1, 1, 0.82]);
+  addTo(g, new THREE.BoxGeometry(2.3, 0.3, 4.4), M.dark, [0, 0.72, 0]);
+  const glass = new THREE.MeshStandardMaterial({ color: '#0d1014', metalness: 0.9, roughness: 0.08 });
+  addTo(g, new THREE.SphereGeometry(1.0, 24, 12, Math.PI / 2 - 0.9, 1.8, 0.55, 0.9), glass, [0, 1.58, 1.52], [0, 0, 0], [1.02, 0.86, 0.6]);
+  for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.22), M.win); w.position.set(sx * 1.06, 1.7, 0); w.rotation.y = sx * Math.PI / 2; g.add(w); }
+  for (const sx of [-1, 1]) for (const z of [-1.55, 0, 1.55]) addTo(g, new THREE.CylinderGeometry(0.52, 0.52, 0.42, 22), M.dark, [sx * 1.3, 0.52, z], [0, 0, Math.PI / 2]);
+  g.add(strut(V3(-0.5, 2.3, -1.3), V3(-0.5, 3.0, -1.3), 0.03, M.dark));
+  addTo(g, new THREE.SphereGeometry(0.28, 16, 6, 0, TAU, 0, 0.8), M.fabric, [-0.5, 3.0, -1.3], [0.5, 0, 0]);
+  const lights = [-0.55, 0.55].map((x) => { const s = glowTexSprite('#fff1d6', 1.4, 0.9); s.position.set(x, 1.1, 2.15); g.add(s); return s; });
+  return { group: g, lights };
+}
+// rover tracks: tread ribbons draped over the terrain (fn(x, z) → height) along XZ polylines
+function treadTexture() {
+  const W = 64, H = 256, c = mkCanvas(W, H), g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  for (let y = 0; y < H; y += 16) {
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath(); g.moveTo(6, y); g.lineTo(W / 2, y + 6); g.lineTo(W - 6, y); g.lineTo(W - 6, y + 7); g.lineTo(W / 2, y + 13); g.lineTo(6, y + 7); g.closePath(); g.fill();
+  }
+  const grd = g.createLinearGradient(0, 0, W, 0);
+  grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.12, 'rgba(255,255,255,0.45)'); grd.addColorStop(0.88, 'rgba(255,255,255,0.45)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.globalCompositeOperation = 'destination-over'; g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  return toTexture(c, { repeat: true, anisotropy: 8 });
+}
+export function buildTracks(paths, fn, { width = 0.45, gauge = 2.6 } = {}) {
+  const pos = [], uv = [], idx = [];
+  const P = V3(), T = V3(), N = V3();
+  for (const pts of paths) {
+    const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => V3(x, 0, z)), false, 'centripetal');
+    const n = Math.max(8, Math.floor(curve.getLength() / 0.6));
+    const len = curve.getLength();
+    for (const off of [-gauge / 2, gauge / 2]) {
+      const base = pos.length / 3;
+      for (let i = 0; i <= n; i++) {
+        curve.getPointAt(i / n, P); curve.getTangentAt(i / n, T); N.set(-T.z, 0, T.x).normalize();
+        for (const s of [-1, 1]) {
+          const x = P.x + N.x * (off + s * width / 2), z = P.z + N.z * (off + s * width / 2);
+          pos.push(x, fn(x, z) + 0.03, z); uv.push(s < 0 ? 0 : 1, (i / n) * len / 0.9);
+        }
+        if (i < n) { const a = base + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  const tex = treadTexture();
+  const m = new THREE.MeshStandardMaterial({ color: '#4a2616', alphaMap: tex, bumpMap: tex, bumpScale: -3, transparent: true, depthWrite: false, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: -4 });
+  const mesh = new THREE.Mesh(geo, m); mesh.receiveShadow = true; mesh.renderOrder = 1;
+  return mesh;
+}
+// retro-burn ground blast: a radial sheet of dust torn off the plain, billowing and slowing (pure function of uT)
+export function makeBlast(n = 3000, { t0 = 0, t1 = 3, seed = 31 } = {}) {
+  const R = rng(seed), aA = new Float32Array(n * 4), aB = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    aA.set([R() * TAU, 6 + Math.pow(R(), 0.7) * 26, Math.pow(R(), 1.6) * 5, R()], i * 4);
+    aB.set([t0 + (t1 - t0) * (i + R()) / n, R(), R(), R()], i * 4);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  g.setAttribute('aA', new THREE.BufferAttribute(aA, 4)); g.setAttribute('aB', new THREE.BufferAttribute(aB, 4));
+  const u = { uT: { value: 0 }, uViewport: { value: 800 }, uSun: { value: V3(0, 1, 0) }, uHot: { value: 1 }, uK: { value: 1 }, uColor: { value: new THREE.Color('#b87a52') }, uSunCol: { value: new THREE.Color('#ffd2a8') } };
+  const m = new THREE.ShaderMaterial({
+    uniforms: u, transparent: true, depthWrite: false, fog: false,
+    vertexShader: /* glsl */ `attribute vec4 aA; attribute vec4 aB; uniform float uT, uViewport, uHot, uK; uniform vec3 uSun, uColor, uSunCol;
+      varying vec3 vCol; varying float vA;
+      void main(){
+        float age = uT - aB.x;
+        if (age <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; vA = 0.0; vCol = vec3(0.0); return; }
+        float r = 1.2 + aA.y * (1.0 - exp(-1.8 * age)) / 1.8;
+        float y = 0.1 + aA.z * (1.0 - exp(-1.1 * age)) * (0.25 + 0.06 * r) + 0.3 * aB.w * age;
+        float a = aA.x + 0.08 * sin(age * 3.0 + aB.w * 6.28);
+        vec4 w = modelMatrix * vec4(cos(a) * r, y, sin(a) * r, 1.0);
+        vec4 mv = viewMatrix * w;
+        gl_Position = projectionMatrix * mv;
+        float sz = (0.5 + aA.w * 1.1) * (0.5 + age * 1.6) * (0.6 + 0.04 * r);
+        gl_PointSize = min(sz * uViewport * 0.5 * projectionMatrix[1][1] / max(0.1, -mv.z), 240.0);
+        vec3 V = normalize(w.xyz - cameraPosition);
+        float fwd = pow(max(dot(V, normalize(uSun)), 0.0), 5.0);
+        float top = smoothstep(0.0, 3.0, y);
+        vCol = uColor * (0.28 + 0.3 * aB.y + 0.35 * top) + uSunCol * fwd * (0.25 + 0.6 * top) * 0.9
+             + vec3(1.0, 0.5, 0.22) * uHot * exp(-r * 0.3) * 2.2;
+        vA = smoothstep(0.0, 0.08, age) * exp(-age / 2.6) * (0.16 + 0.26 * aB.z) * uK;
+      }`,
+    fragmentShader: /* glsl */ `varying vec3 vCol; varying float vA;
+      void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a * vA; if (a < 0.003) discard; gl_FragColor = vec4(vCol, a); }`,
+  });
+  const p = new THREE.Points(g, m); p.frustumCulled = false; p.userData.u = u;
+  return p;
 }
 
 // ------------------------------------------------------------------ analytic backdrop: sky gradients, planets with pixel-exact limbs
@@ -518,7 +814,7 @@ export function buildOutpost() {
 // uMode: 0 ascent sky over a cloud deck · 1 low Earth orbit · 2 deep space · 3 Mars day · 4 Moon at night · 5 Mars dawn
 const backdropFrag = /* glsl */ `
 ${GLSL_NOISE}
-uniform int uMode; uniform vec3 uSun, uPC, uEarthDir; uniform float uPR, uGain, uTime, uEarthK, uHaze;
+uniform int uMode; uniform vec3 uSun, uPC, uEarthDir, uMoonDir; uniform float uPR, uGain, uTime, uEarthK, uHaze, uMoonR, uMoonK, uAur, uSunK;
 uniform mat3 uPRot;
 varying vec3 vDir;
 float fbm(vec3 p, int o){ float a = 0.5, s = 0.0; for (int i = 0; i < 8; i++){ if (i >= o) break; s += a * snoise(p); p = p * 2.03 + 11.7; a *= 0.5; } return s; }
@@ -567,6 +863,18 @@ void main(){
       float day = smoothstep(-0.25, 0.35, dot(nc, L));
       float glow = b > 0.0 ? exp(-max(x, 0.0) * 1.2) * smoothstep(-1.5, 0.0, x) : 0.0;
       col += vec3(0.22, 0.5, 1.0) * glow * day * 1.1 + vec3(0.6, 0.8, 1.0) * exp(-abs(x) * 6.0) * day * 0.6 * step(0.0, b);
+    }
+    if (uMode == 1 && uMoonK > 0.0) {
+      // a small Moon (drawn first: the Earth occludes it)
+      vec3 mc = normalize(uMoonDir); float mb = dot(d, mc); vec3 mp = d * mb - mc; float mh = length(mp);
+      float mfw = max(fwidth(mh), 1e-6), mcov = mb > 0.0 ? smoothstep(uMoonR + mfw, uMoonR - mfw, mh) : 0.0;
+      if (mcov > 0.0) {
+        vec3 mn = normalize(d * (mb - sqrt(max(uMoonR * uMoonR - mh * mh, 0.0))) - mc);
+        float mar = smoothstep(0.0, 0.4, snoise(mn * 1.6 + 2.0) * 0.7 + snoise(mn * 3.4) * 0.3);
+        float alb = mix(0.7, 0.34, mar) * (0.85 + 0.3 * (snoise(mn * 9.0) * 0.5 + 0.5));
+        float ml = max(dot(mn, L), 0.0);
+        col = mix(col, vec3(0.97, 0.95, 0.91) * alb * pow(ml, 0.6) * smoothstep(0.0, 0.08, ml) * 1.5 * uMoonK, mcov);
+      }
     }
     if (cov > 0.0) {
       float tH = b - sqrt(max(R * R - h * h, 0.0));
@@ -627,8 +935,8 @@ void main(){
     vec3 zen = vec3(0.012, 0.012, 0.022);
     col = mix(hor, zen, pow(smoothstep(-0.03, 0.75, e), 0.55));
     // Martian sunrise: a cold blue aureole hugging the sun (fine dust forward-scatters blue)
-    col += vec3(0.30, 0.52, 0.95) * (pow(sd, 90.0) * 1.2 + pow(sd, 14.0) * 0.35);
-    col += vec3(1.0, 0.97, 0.92) * pow(sd, 3500.0) * 60.0;
+    col += vec3(0.30, 0.52, 0.95) * (pow(sd, 90.0) * 1.2 + pow(sd, 14.0) * 0.35) * uAur;
+    col += vec3(1.0, 0.97, 0.92) * pow(sd, 3500.0) * 60.0 * uSunK;
     col += vec3(0.8, 0.45, 0.25) * exp(-max(e, 0.0) * 30.0) * 0.18 * smoothstep(-0.5, 1.0, az);
     float ed = max(dot(d, normalize(uEarthDir)), 0.0);
     col += vec3(0.62, 0.8, 1.0) * (pow(ed, 60000.0) * 9.0 + pow(ed, 5000.0) * 0.35) * uEarthK;
@@ -639,6 +947,7 @@ export function makeBackdrop() {
   const u = {
     uMode: { value: 0 }, uSun: { value: V3(0, 1, 0) }, uPC: { value: V3(0, -1, 0) }, uPR: { value: 0.9 }, uGain: { value: 1 }, uTime: { value: 0 },
     uPRot: { value: new THREE.Matrix3() }, uEarthDir: { value: V3(0, 1, 0) }, uEarthK: { value: 0 }, uHaze: { value: 1 },
+    uMoonDir: { value: V3(0, 1, 0) }, uMoonR: { value: 0.03 }, uMoonK: { value: 0 }, uAur: { value: 1 }, uSunK: { value: 1 },
   };
   const m = new THREE.ShaderMaterial({
     uniforms: u, depthWrite: false, depthTest: false, side: THREE.BackSide, fog: false,
