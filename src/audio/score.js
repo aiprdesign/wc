@@ -41,10 +41,11 @@ import { arrangeMusic } from './music.js';
 import { warmPercussion } from './percussion.js';
 import { warmSfx } from './sfx.js';
 import { arrangeCues } from './cues.js';
+import { loadVoiceOver, mixVoiceOver } from './voice.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 9;
+export const SCORE_VERSION = 10;
 
 const TAIL = 1.5;              // film seconds rendered past FILM_DURATION
 const CEILING = 0.891;         // -1 dBFS
@@ -165,7 +166,8 @@ function mixInto(dst, src) {
   }
 }
 
-export async function renderScore(sampleRate = 48000) {
+export async function renderScore(sampleRate = 48000, { voiceOver = true } = {}) {
+  const voP = voiceOver ? loadVoiceOver(sampleRate) : Promise.resolve(null);   // decodes while the score renders
   // Two studios render in parallel (one OfflineAudioContext = one render thread
   // each), sharing noise and pre-rendered buffers. Both have the same mixer (so
   // every part gets the same halls, stage and film/finale automation):
@@ -202,5 +204,8 @@ export async function renderScore(sampleRate = 48000) {
   roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (end - t) / 1.5)) });
   const glued = rmsBetween(buffer, film(C.gear), film(C.pullBack));
   limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
+  // the British narrator: the music ducks under each line
+  const vo = await voP;
+  if (vo) mixVoiceOver(buffer, vo, { refRms: TARGET_LOUD_RMS, ceiling: CEILING });
   return buffer;
 }

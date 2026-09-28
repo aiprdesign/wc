@@ -17,7 +17,7 @@ async function loadScore() {
   if (params.has('noaudio')) return null;
   try {
     const mod = await import('./audio/score.js');
-    const buffer = await mod.renderScore(48000);
+    const buffer = await mod.renderScore(48000, { voiceOver: !params.has('novo') });
     return { buffer, encodeWav: mod.encodeWav };
   } catch (e) {
     console.warn('[audio] score unavailable, playing silent', e);
