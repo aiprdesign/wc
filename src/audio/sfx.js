@@ -168,14 +168,15 @@ export function click(S, t, { level = 0.1, freq = 3200, body = 900, q = 3, decay
   playBuffer(S, t, buf, { level: level * S.rand(0.85, 1.1), pan, bus, rate: S.rand(0.97, 1.03) });
 }
 
-/** Clock escapement on a grid: alternating tick / tock. */
-export function clockwork(S, t0, t1, step, { level = 0.08, bus = 'sfx' } = {}) {
+/** Clock escapement on a grid: alternating tick / tock (thinning away over the last `fade` s). */
+export function clockwork(S, t0, t1, step, { level = 0.08, bus = 'sfx', fade = 0 } = {}) {
   const k0 = Math.ceil(t0 / step - 1e-6);
-  for (let k = k0; k * step < t1; k++) {
+  for (let k = k0; k * step < t1 - 1e-6; k++) {
     const t = k * step;
     const tick = k % 2 === 0;
+    const lv = level * (fade > 0 ? Math.min(1, (t1 - t) / fade) ** 1.5 : 1);
     S.at(t, () => click(S, t, {
-      level, freq: tick ? 3600 : 2600, body: tick ? 1250 : 980, q: 4, decay: 0.016, pan: tick ? -0.25 : 0.25, bus,
+      level: lv, freq: tick ? 3600 : 2600, body: tick ? 1250 : 980, q: 4, decay: 0.016, pan: tick ? -0.25 : 0.25, bus,
     }));
   }
 }

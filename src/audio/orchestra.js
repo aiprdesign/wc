@@ -332,15 +332,19 @@ export function chord(S, kind, t0, t1, notes, o = {}) {
   S.free(...nodes);
 }
 
-/** Brass chord: filter envelope opens on the swell; `sfz` gives an accented "blat". */
+/**
+ * Brass chord: filter envelope opens on the swell; `sfz` gives an accented "blat". `from`
+ * (0..1) starts a swell part-way up instead of from silence (for chords that take over from
+ * another swell: the section re-articulates and grows, with no hole at the change).
+ */
 export function brass(S, t0, dur, notes, o = {}) {
-  const { level = 0.2, attack = 0.7, release = 1.2, bright = 1800, bus = 'brass', sfz = false, kind = 'brass' } = o;
+  const { level = 0.2, attack = 0.7, release = 1.2, bright = 1800, bus = 'brass', sfz = false, kind = 'brass', from = 0 } = o;
   const t1 = t0 + dur;
   const end = t1 + release;
   const tPeak = t0 + (sfz ? S.phys(0.04) : attack);
   const lp = S.filter('lowpass', 150, sfz ? 2.5 : 1.2);
   const f = lp.frequency;
-  f.setValueAtTime(sfz ? 300 : 120, t0);
+  f.setValueAtTime(sfz ? 300 : 120 + bright * 0.5 * from, t0);
   f.exponentialRampToValueAtTime(bright * (sfz ? 1.8 : 1), tPeak);
   // (finite ramps rather than setTarget: an automated biquad costs 3× a static one)
   const settle = bright * (sfz ? 0.4 : 0.7);
@@ -354,7 +358,7 @@ export function brass(S, t0, dur, notes, o = {}) {
   const amp = S.gain(0);
   const g = amp.gain;
   const lv = level / Math.sqrt(notes.length);
-  g.setValueAtTime(0, t0);
+  g.setValueAtTime(sfz ? 0 : lv * from, t0);
   if (sfz) {
     g.linearRampToValueAtTime(lv * 1.3, tPeak);
     g.setTargetAtTime(lv * 0.45, tPeak, 0.25);

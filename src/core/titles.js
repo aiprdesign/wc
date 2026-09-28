@@ -76,7 +76,7 @@ class LiveText extends THREE.Mesh {
 
 // A line of text split into words, each its own plane, so words can rise in one after another.
 class WordLine extends THREE.Group {
-  constructor(text, { height = 0.05, font = FONTS.serif, italic = true, weight = 500, color = '#fff', intensity = 1 } = {}) {
+  constructor(text, { height = 0.05, font = FONTS.serif, italic = true, weight = 500, color = '#fff', intensity = 1, maxWidth = Infinity } = {}) {
     super();
     const size = 160, k = height / size;
     const ctx = document.createElement('canvas').getContext('2d');
@@ -84,16 +84,34 @@ class WordLine extends THREE.Group {
     const space = ctx.measureText(' ').width * k;
     const parts = text.split(' ');
     const widths = parts.map((w) => ctx.measureText(w).width * k);
-    this.width = widths.reduce((a, b) => a + b, 0) + space * (parts.length - 1);
-    let x = -this.width / 2;
-    this.words = parts.map((w, i) => {
-      const plane = new TextPlane(w, { font, italic, weight, height, size, color, intensity, padding: 0.12 });
-      plane.material.depthTest = false;
-      const base = x + widths[i] / 2;
-      plane.position.x = base;
-      x += widths[i] + space;
-      this.add(plane);
-      return { plane, base, i };
+    // greedy wrap into lines no wider than maxWidth (tall formats), balanced by splitting at the
+    // word nearest the middle when two lines are enough
+    const total = widths.reduce((a, b) => a + b, 0) + space * (parts.length - 1);
+    let breaks = [];
+    if (total > maxWidth) {
+      let acc = 0, best = 0, bestD = Infinity;
+      for (let i = 0; i < parts.length - 1; i++) { acc += widths[i] + space; const d = Math.abs(acc - total / 2); if (d < bestD) { bestD = d; best = i + 1; } }
+      breaks = [best];
+    }
+    const lines = [];
+    let from = 0;
+    for (const b of [...breaks, parts.length]) { lines.push([from, b]); from = b; }
+    const lineW = lines.map(([a, b]) => widths.slice(a, b).reduce((x, y) => x + y, 0) + space * (b - a - 1));
+    this.width = Math.max(...lineW);
+    this.lineCount = lines.length;
+    const lh = height * 1.25;
+    this.words = [];
+    lines.forEach(([a, b], li) => {
+      let x = -lineW[li] / 2;
+      for (let i = a; i < b; i++) {
+        const plane = new TextPlane(parts[i], { font, italic, weight, height, size, color, intensity, padding: 0.12 });
+        plane.material.depthTest = false;
+        const base = x + widths[i] / 2;
+        plane.position.x = base;
+        x += widths[i] + space;
+        this.add(plane);
+        this.words.push({ plane, base, baseY: -li * lh, i });
+      }
     });
   }
 }
@@ -146,7 +164,7 @@ export class TitleLayer {
     reel.add(this.corners);
     const top = my - 0.005, bot = -my + 0.035;
     // the square frame is ~2.4x narrower: HUD type grows so it stays legible at delivery size
-    const hs = a < 1.9 ? 1.3 : 1;
+    const hs = a < 0.9 ? 0.95 : a < 1.9 ? 1.3 : 1;   // tall frames: the counter must fit the narrow width
     this.tcText = new LiveText({ height: 0.03 * hs, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035 * hs, 0);
     this.idxText = new LiveText({ height: 0.03 * hs, chars: 48, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035 * hs, 0);
     this.techText = new LiveText({ height: 0.026 * hs, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035 * hs, 0);
@@ -285,11 +303,12 @@ export class TitleLayer {
     const color = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(seg.start + 1)) / 2));
     // era line: mono, widely tracked, numbers count up (drawn live)
     const align = LAYOUT[seg.id]?.align ?? 'center';
-    const era = new LiveText({ height: 0.034, chars: 40, align, spacing: 0.42 });
+    const tall = OUTPUT_ASPECT < 0.9;                  // 9:16 / 4:5 — narrow frame: tighter era tracking, wrapped story
+    const era = new LiveText({ height: 0.034, chars: 40, align, spacing: tall ? 0.16 : 0.42 });
     era.position.y = 0.062;
     const eraText = `${c.n}   ·   ${c.era}`;
     // story: italic serif, word by word
-    const story = new WordLine(c.story, { height: 0.056, color: INK, intensity: 1.0 });
+    const story = new WordLine(c.story, { height: 0.056, color: INK, intensity: 1.0, maxWidth: tall ? (2 * OUTPUT_ASPECT * 0.86) / this.scale : Infinity });
     story.position.y = -0.032;
     const half = Math.min(1.05, story.width / 2 + 0.06);
     // side-aligned cards: text flush to the edge, a single rule drawing from that edge
@@ -349,6 +368,11 @@ export class TitleLayer {
       g.add(cite);
     }
     text.letters.forEach((l) => { l.mesh.material.depthTest = false; });
+    // narrow frames: the line (and its glow) shrinks to fit the width
+    let lx0 = Infinity, lx1 = -Infinity;
+    for (const l of text.letters) { lx0 = Math.min(lx0, l.base.x); lx1 = Math.max(lx1, l.base.x); }
+    const tw = (lx1 - lx0 + h) * this.scale;
+    if (tw > 2 * OUTPUT_ASPECT * 0.9) g.scale.setScalar(this.scale * (2 * OUTPUT_ASPECT * 0.9) / tw);
     this.scene.add(g);
     return { g, text, cite, shade, glow, t0: d.start, t1: d.end };
   }
@@ -378,7 +402,7 @@ export class TitleLayer {
         const wb = Math.round((c.t0 + 0.35 + w.i * 0.125) / 0.25) * 0.25 - c.t0;
         const kin = ramp(t, wb, wb + 0.4, ease.outCubic);
         const kout = ramp(to, w.i * 0.025, 0.3 + w.i * 0.025, ease.inCubic);
-        w.plane.position.y = (1 - kin) * -0.028 + kout * 0.022;
+        w.plane.position.y = w.baseY + (1 - kin) * -0.028 + kout * 0.022;
         w.plane.opacity = kin * (1 - kout) * 0.94;
         w.plane.intensity = 1.05 + (1 - kin) * 1.2 * (kin > 0 ? 1 : 0);
       });

@@ -69,10 +69,49 @@ const env = (t, pts) => {
 const MOON_PULSE = [[38.9, 1], [39.8, 0.72], [40.3, 0.72], [40.6, 0.86], [41.5, 0.86], [41.8, 1]];
 // percussion thinning over the translunar coast (the layers then drop out for the descent)
 const COAST = (t) => env(t, [[38.5, 1], [39.6, 0.35]]);
+// (v11: the hats carry on half a bar into the descent and fade out there, instead of stopping
+// with the drums on the lunarDescent cue — the top of the texture no longer drops away at once)
+const COAST_HATS = (t) => env(t, [[38.5, 1], [39.6, 0.35], [40.1, 0.08]]);
 // ostinato / pulse level through the frontier: eased back (never stopped) for the rover's
 // moment of wonder, growing through Artemis into the Mars vision
 const FRONT_PULSE = [[C.rover - 0.1, 1], [C.rover, 0.88], [C.artemis - 0.1, 0.88], [C.marsVision, 1.08], [F1 - 0.1, 1.08], [F1, 1]];
 const fpulse = (t) => env(t, FRONT_PULSE);
+
+// ------------------------------------------------------------------ the tempo map (v11)
+//
+// Some of the picture's biggest hit points fall between 16ths: templeReveal 10.6, earthWide
+// 38.2, moonLanding 40.6, earthrise 41.8, processorDive 45.3, marsVision 54.6. A hit placed
+// on such a cue flams against the running groove (a kit stroke 25–50 ms before or after it);
+// a hit moved onto the grid misses the picture. So, as with a film composer's tempo map,
+// the grid bends instead: over a beat or three before and after, the 16ths lean ahead or
+// hold back (by ≤ 3.3 %, 6.7 % over the moon landing's held breath), so that the grid point
+// nearest each hit lands exactly ON its cue. Bar lines away from the hits are untouched.
+// `groove(g)` maps grid time → performance time (both story seconds); the identity elsewhere.
+// Everything written on the grid (patterns, rolls, grid-timed notes and chord changes) goes
+// through it; everything written on a cue stays on the cue — so hits and groove coincide.
+const q16 = (t) => Math.round(t / STEP) * STEP;   // the 16th nearest t
+const GROOVE = [   // [grid time, performance time], in order
+  [9.0, 9.0], [q16(C.templeReveal), C.templeReveal], [11.5, 11.5],                  // the tom roll into the temple
+  [36.75, 36.75], [q16(C.earthWide), C.earthWide],                                  // pushes into BRAAM 2 …
+  [q16(C.moonLanding), C.moonLanding], [q16(C.earthrise), C.earthrise], [43.25, 43.25], // … breathes through the landing into the earthrise
+  [43.75, 43.75], [q16(C.processorDive), C.processorDive], [46.75, 46.75],          // broadens into the processor dive
+  [53.875, 53.875], [q16(C.marsVision), C.marsVision], [55.5, 55.5],                // Artemis' roll lands on the Mars vision
+];
+export function groove(g) {
+  const k = GROOVE;
+  if (g <= k[0][0] || g >= k.at(-1)[0]) return g;
+  for (let i = 1; i < k.length; i++) {
+    const [g1, p1] = k[i];
+    if (g <= g1) {
+      const [g0, p0] = k[i - 1];
+      return g === g1 ? p1 : p0 + (p1 - p0) * (g - g0) / (g1 - g0);
+    }
+  }
+  return g;
+}
+const onGrid = (t) => Math.abs(t / STEP - Math.round(t / STEP)) < 1e-6;
+/** A time written on the grid follows the tempo map; one written on a cue stays put. */
+const gT = (t) => (onGrid(t) ? groove(t) : t);
 
 // ------------------------------------------------------------------ harmony
 
@@ -94,6 +133,7 @@ export const CHORDS = {
   BbL:  { str: [46, 53, 57, 62, 64],     hi: [69, 74, 76],     choir: [58, 62, 65, 69],     brass: [34, 41, 46, 50], root: 34 },
 };
 
+const WEBB = q16(C.webb);   // 52.25: the frontier's theme sings its A (and the chord turns to F) on the grid
 export const HARMONY = [
   // ACT I
   [0.0, 4.0, 'D5'],    // open fifth, no third yet
@@ -122,8 +162,8 @@ export const HARMONY = [
   // THE NEW FRONTIER (chords change on the picture's cues)
   [49.5, C.hubble, 'Dm'],         // shuttle: the brass theme
   [C.hubble, C.genome, 'Bb'],     // Hubble's deep field: awe (D' over B♭)
-  [C.genome, C.webb, 'Gm'],       // genome: the pulse
-  [C.webb, C.rover, 'F'],         // Webb: golden (III)
+  [C.genome, WEBB, 'Gm'],         // genome: the pulse
+  [WEBB, C.rover, 'F'],           // Webb: golden (III) (on the 16th where the brass theme's A lands)
   [C.rover, C.artemis, 'BbL'],    // rover: B♭ lydian, light — wonder
   [C.artemis, C.marsVision, 'C'], // Artemis: the rising build (♭VII)
   [C.marsVision, 55.5, 'D'],      // Mars: the heroic D-major lift (♭VI – ♭VII – I)
@@ -132,15 +172,20 @@ export const HARMONY = [
   [60.0, 60.5, 'A'],
   [60.5, 62.0, 'D'],   // pullBack: Picardy D major
 ];
+// chord changes written on the grid follow the tempo map (those on cues already sit on them)
+for (const h of HARMONY) { h[0] = gT(h[0]); h[1] = gT(h[1]); }
 
 export const chordAt = (t) => CHORDS[(HARMONY.find(([a, b]) => t >= a && t < b) ?? HARMONY.at(-1))[2]];
 
-/** Call fn(time, velocity, step) for every non-rest step of a 16-step bar pattern in [from, to). */
+/**
+ * Call fn(time, velocity, step) for every non-rest step of a 16-step bar pattern in [from, to)
+ * (grid time); `time` is the step's performance time on the tempo map (see groove).
+ */
 export function pattern(from, to, pat, fn, step = STEP) {
   const vel = { X: 1, x: 0.75, o: 0.45 };
   for (let k = Math.ceil(from / step - 1e-6); k * step < to - 1e-6; k++) {
     const ch = pat[k % pat.length];
-    if (ch !== '.') fn(k * step, vel[ch] ?? 0.75, k);
+    if (ch !== '.') fn(groove(k * step), vel[ch] ?? 0.75, k);
   }
 }
 
@@ -148,25 +193,29 @@ export function pattern(from, to, pat, fn, step = STEP) {
 // [time, midi, duration] per statement.
 const THEME_NOTES = [62, 69, 74, 72, 70, 69, 67, 69];
 const mk = (times, durs, tr = 0) => THEME_NOTES.map((m, i) => [times[i], m + tr, durs[i]]).filter(([t]) => t != null);
+/** Notes written on the grid follow the tempo map (their ends too, so legato lines stay joined). */
+const onMap = (notes) => notes.map(([t, m, d]) => { const a = gT(t); return [a, m, gT(t + d) - a]; });
 
 // 1. fragment (piano, after the title): D — A — D' … C'
 const FRAGMENT = [[6.0, 62, 0.5], [6.5, 69, 0.5], [7.0, 74, 1.0], [8.0, 72, 1.5]];
 // 2. gentle full statement (piano + celesta), a bar per two notes
 const GENTLE = mk([12.0, 13.0, 14.0, 15.5, 16.0, 17.0, 17.5, 18.0], [1, 1, 1.5, 0.5, 1, 0.5, 0.5, 0.4]);
 // 3. horns, act II: D A D' C' — the C' hangs over the Earth as the moonshot begins …
-const HORNS = mk([36.0, 36.5, 37.0, 38.0], [0.5, 0.5, 1, 0.9]);
+const HORNS = onMap(mk([36.0, 36.5, 37.0, 38.0], [0.5, 0.5, 1, 0.9]));
 // … the moonshot completes it: the head D — A on moonLanding (horns + choir), then
 // D' C' Bb A G A from earthrise into computing (horns + strings)
 const LANDING = [[C.moonLanding, 62, 0.4], [C.moonLanding + 0.4, 69, 0.8]];
-const EARTHRISE = [[C.earthrise, 74, 0.45], [C.earthrise + 0.45, 72, 0.25], [42.5, 70, 0.5], [43.0, 69, 0.5], [43.5, 67, 0.5], [44.0, 69, 1.3]];
+const EARTHRISE = [[C.earthrise, 74, groove(42.25) - C.earthrise], ...onMap([[42.25, 72, 0.25], [42.5, 70, 0.5], [43.0, 69, 0.5], [43.5, 67, 0.5], [44.0, 69, 1.3]])];
 // 4. the new frontier: brass (horns + trumpets) sing D A D' C' Bb A over the shuttle,
 // Hubble, the genome and Webb; the rover's wonder interrupts, and Artemis / the Mars vision
 // finish it heroically — G — A — D' on the D-major lift
+// (v11: the notes sit on the 16ths nearest the cues — 49.875, 50.25, 50.75, 51.875, 52.25 —
+// so the melody is in time with the ostinato; the picture's glints stay on the cues)
 const FRONT_THEME = [
-  [C.shuttle, 62, 0.4], [C.shuttle + 0.4, 69, 0.4], [C.hubble, 74, 0.75],
-  [C.genome, 72, 0.4], [C.genome + 0.4, 70, 0.4], [C.webb, 69, 1.15], // (the A lingers: B♭ lydian's 7th)
+  [q16(C.shuttle), 62, 0.375], [50.25, 69, 0.5], [q16(C.hubble), 74, 0.75],
+  [C.genome, 72, 0.375], [51.875, 70, 0.375], [WEBB, 69, 1.2], // (the A lingers: B♭ lydian's 7th)
 ];
-const MARS_THEME = [[C.artemis, 67, 0.35], [C.artemis + 0.35, 69, 0.35], [C.marsVision, 74, 0.8]];
+const MARS_THEME = onMap([[q16(C.artemis), 67, 0.375], [54.25, 69, 0.375]]).concat([[C.marsVision, 74, 0.8]]);
 // 5. epic statement → high D on the D-major pullBack
 const EPIC = [
   [55.5, 62, 0.5], [56.0, 69, 1.0], [57.0, 74, 1.0], [58.0, 72, 0.5], [58.5, 70, 0.5],
@@ -229,8 +278,10 @@ function stringsLayer(S) {
     if (a >= C.pullBack) break;
     const lv = lift(a);
     const first = a === 0;
-    const start = first ? 1.0 : a - 0.12;
     const moon = MOON_STR[a];
+    // (v11: the moonshot's / frontier's arrivals are cued hits, so their strings enter just
+    // before the cue rather than a full 0.12 early — the bow's bite no longer pre-empts the hit)
+    const start = first ? 1.0 : moon ? a - Math.min(0.12, moon.attack * 0.3) : a - 0.12;
     // while the sub pulse runs, it owns the bass fundamental: a string note in unison
     // with it would only beat against it (slow, deep cancellations of the low end)
     const notes = a >= 20 ? CHORDS[name].str.filter((m) => m !== subRoot(CHORDS[name])) : CHORDS[name].str;
@@ -248,9 +299,10 @@ function stringsLayer(S) {
   }
   // act I: tremolo crescendo + low tom roll carry the columns into the temple reveal
   S.at(8.4, () => O.tremolo(S, 8.4, C.templeReveal - 0.02, [58, 62, 65, 70], { level: 0.3, cutoff: 3500 }));
-  for (let t = 9.0; t < C.templeReveal - 0.01; t += STEP) {
-    const u = (t - 9.0) / 1.6;
-    S.at(t, () => I.tom(S, t, 0.08 + 0.22 * u, { f: 88, pan: Math.round(t / STEP) % 2 ? 0.3 : -0.3 }));
+  // (on the tempo map: the roll leans ahead a little, so that its next 16th is the hit)
+  for (let g = 9.0; g < q16(C.templeReveal) - 0.01; g += STEP) {
+    const u = (g - 9.0) / 1.6, t = groove(g);
+    S.at(t, () => I.tom(S, t, 0.08 + 0.22 * u, { f: 88, pan: Math.round(g / STEP) % 2 ? 0.3 : -0.3 }));
   }
   // tremolo tension before the two big act II arrivals and the climax
   S.at(44.0, () => O.tremolo(S, 44.0, C.processorDive, [69, 73, 76, 81], { level: 0.15 }));
@@ -279,7 +331,7 @@ const CHOIR = [
   [C.webb - 0.05, C.rover, 'F', 'choirO', 0.18, 0.3, 0.3],
   [C.rover, C.artemis, 'BbL', 'choirO', 0.1, 0.35, 0.2],
   [C.artemis, C.marsVision, 'C', 'choirA', 0.24, 0.6, 0.05],
-  [C.marsVision, 55.42, 'D', 'choirA', 0.42, 0.1, 0.12],
+  [C.marsVision, 55.5, 'D', 'choirA', 0.42, 0.1, 0.25],  // (v11: into act III's downbeat, released under the hit)
   [55.5, 57.0, 'Dm', 'choirA', 0.26, 0.05, 0.2], // act III chords under the epic theme
   [57.0, 58.0, 'Bb', 'choirA', 0.28, 0.05, 0.2],
   [58.0, 59.0, 'F', 'choirA', 0.3, 0.05, 0.2],
@@ -312,7 +364,8 @@ function actOne(S) {
   // civic words: celesta answers
   [[C.wordCivic, 81], [C.wordLaw, 86], [C.wordRepresentation, 84]].forEach(([t, m]) => S.at(t, () => I.celesta(S, t, m, { level: 0.03 })));
   // a low pulse that foreshadows act II (quarter notes, 16–20, very soft pizz)
-  pattern(16.0, 20.0, 'x...o...x...o...', (t, v) => S.at(t, () => I.pizz(S, t, chordAt(t).root + 12, { level: 0.12 * v })));
+  // (the quarter right after the model3D whoosh-hit, 18.5, is left to the hit's ring)
+  pattern(16.0, 20.0, 'x...o...x...o...', (t, v) => t !== 18.5 && S.at(t, () => I.pizz(S, t, chordAt(t).root + 12, { level: 0.12 * v })));
   // the falling apple lands on the downbeat of act II
   [81, 76, 72, 69, 64, 57].forEach((m, k) => {
     const t = C.fallStart + k * 0.09;
@@ -360,10 +413,12 @@ function pulse(S) {
   const hits = [];
   for (let t = t0; t < OST_END - 1e-6; t += BEAT / 2) {
     const on = Math.round(t / (BEAT / 2)) % 2 === 0;
-    hits.push({ t, v: (on ? 1 : 0.65) * (t < 24 ? 0.6 : t < 28 ? 0.8 : 1) * env(t, [[39.4, 1], [39.7, 0.75], [41.6, 0.75], [41.8, 1]]) * Math.min(1, fpulse(t)), len: 0.22 });
+    hits.push({ t: groove(t), v: (on ? 1 : 0.65) * (t < 24 ? 0.6 : t < 28 ? 0.8 : 1) * env(t, [[39.4, 1], [39.7, 0.75], [41.6, 0.75], [41.8, 1]]) * Math.min(1, fpulse(t)), len: 0.22 });
   }
-  hits.push({ t: C.pullBack, v: 1.1, len: 1.4 });
-  S.at(t0, () => I.subPulse(S, t0, C.earthReveal + 0.3, roots, hits, { level: 0.36 }));
+  // the pullBack's sub dies away naturally under the bloom (v11: it used to hold at -13 dB and
+  // stop dead at the earthReveal, a hole in the low end just as the reprise begins)
+  hits.push({ t: C.pullBack, v: 1.1, len: 2.4, floor: 0 });
+  S.at(t0, () => I.subPulse(S, t0, C.earthReveal + 1.5, roots, hits, { level: 0.36, release: 0.4 }));
 }
 
 // Layer entries, every 4 bars. [from, to, pattern, level(t)?] — the kit thins out over
@@ -389,7 +444,7 @@ const TAIKO = [
 const KICK = [[28.0, M0, 'X...x...X...x...'], [M0, 39.6, 'X...x...X...x...', COAST], [41.8, 49.5, 'X...x...X...x...'],
   [49.5, C.rover, 'X...x...X...x...'], [C.rover, C.artemis, 'X.......X...x...', LIGHT], [C.artemis, 55.5, 'X...x...X...x.x.'],
   [55.5, OST_END, 'X...x...X...x.x.']];
-const HATS = [[28.0, 32.0, 'x.o.x.oox.o.x.oo'], [32.0, M0, 'xoxoxoxoxoxoxoxo'], [M0, 39.6, 'x.o.x.o.x.o.x.o.', COAST], [41.8, 44.0, 'xoxoxoxoxoxoxoxo'],
+const HATS = [[28.0, 32.0, 'x.o.x.oox.o.x.oo'], [32.0, M0, 'xoxoxoxoxoxoxoxo'], [M0, 40.1, 'x.o.x.o.x.o.x.o.', COAST_HATS], [41.8, 44.0, 'xoxoxoxoxoxoxoxo'],
   [44.0, C.rover, 'xoxoXoxoxoxoXoxo'], [C.rover, C.artemis, 'xoxoxoxoxoxoxoxo', LIGHT], [C.artemis, OST_END, 'xoxoXoxoxoxoXoxo']];
 const SNARE = [[32.0, M0, '....x.......x...'], [42.5, 48.0, '....x.......x...'], [48.0, 49.5, '....x...x.x.xxxx'],
   [49.5, C.rover, '....x.......x...'], [C.marsVision, 55.5, '....x.......x...'], [55.5, 59.0, '....x.......x...']];
@@ -410,8 +465,9 @@ function rhythm(S, kicks) {
     level: 0.03 + 0.015 * (ot(t) - 24) / 21.5, freq: k % 4 ? 2600 : 3600, body: k % 4 ? 980 : 1250, q: 4, decay: 0.016, pan: k % 4 ? 0.3 : -0.3, bus: 'perc',
   })));
   // the frontier: a snare roll (16ths) crescendos through Artemis into the Mars vision
-  for (let t = Math.ceil(C.artemis / STEP) * STEP; t < C.marsVision - 0.05; t += STEP) {
-    const u = (t - C.artemis) / (C.marsVision - C.artemis);
+  // (on the tempo map: its next 16th is the Mars hit)
+  for (let g = Math.ceil(C.artemis / STEP) * STEP; g < q16(C.marsVision) - 0.01; g += STEP) {
+    const u = (g - C.artemis) / (C.marsVision - C.artemis), t = groove(g);
     S.at(t, () => I.snare(S, t, 0.05 + 0.14 * u * u, { pan: -0.1 }));
   }
   // act III: accelerating snare roll (16ths from 59, 32nds from 60) into the suck-back
@@ -430,7 +486,10 @@ function lowBrass(S) {
   for (const [a, b, name] of HARMONY) {
     if (a < 24 || a >= F0 || (a >= 39.6 && a < M1)) continue;
     const u = ot(a);
-    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.2 + 0.16 * (u - 24) / 21, attack: Math.min(1.4, (b - a) * 0.7), release: 0.5, bright: 1400 + 1200 * (u - 24) / 21 }));
+    // (v11: each swell after the first takes over from the last one part-way up, and the last
+    // one lets go more slowly — the section no longer drops a hole of 3–6 dB at every chord)
+    const cont = a > 24 && !(a >= M1 && a < 43);
+    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.2 + 0.16 * (u - 24) / 21, attack: Math.min(1.4, (b - a) * 0.7), release: 0.8, bright: 1400 + 1200 * (u - 24) / 21, from: cont ? 0.5 : 0 }));
   }
   for (const [a, b, name] of HARMONY) {
     if (a < F1 || a >= C.pullBack) continue;
@@ -518,19 +577,52 @@ function accents(S) {
   hit(S, 20.0, { power: 0.45 });                                                 // act II begins
   hit(S, C.gear, { power: 0.55 });
   hit(S, 28.0, { power: 0.6 });                                                  // layer 3, bar line (train)
-  S.at(C.spark, () => I.taiko(S, C.spark, 0.35, { size: 0.6 }));
+  // (v11: the spark's own taiko went — it flammed 50 ms after the kit's 28.75 stroke; the spark's
+  // crackle and arc carry it, and the chapter lands on 28.5 — see chapters)
   hit(S, 32.0, { power: 0.6 });
   hit(S, 36.0, { power: 0.7 });
+  // the rocket lifts off (37.4): a low thump of ignition under the horns (a sub, on the cue)
+  S.at(C.rocketLaunch, () => I.boom(S, C.rocketLaunch, { level: 0.26, f0: 60, f1: 30, decay: 2.0 }));
   hit(S, C.earthWide, { power: 1.0, braam: 41, chord: 'F', down: true });        // BRAAM 2
   hit(S, C.processorDive, { power: 0.95, down: true });
-  S.at(C.pageSphere, () => { I.taiko(S, C.pageSphere, 0.4, { size: 0.6 }); I.crash(S, C.pageSphere, 0.04); });
+  const ps = q16(C.pageSphere); // 47.625: on the 16th (35 ms film after the cue) instead of 25 ms before the kit's
+  S.at(ps, () => { I.taiko(S, ps, 0.4, { size: 0.6 }); I.crash(S, ps, 0.04); });
   hit(S, C.earthrise, { power: 0.72, chord: 'Bb' });                             // the noble lift
   hit(S, 49.5, { power: 0.9, chord: 'Dm' });                                     // the frontier
   hit(S, 55.5, { power: 1.0, chord: 'Dm' });                                     // ACT III
   hit(S, C.pullBack, { power: 1.3, braam: 50, chord: 'D', subHz: 95, ring: 0.8 }); // BRAAM 3: the peak (blooms, then dies away)
   S.at(C.pullBack, () => { I.taiko(S, C.pullBack + 0.02, 0.6, { size: 0.6 }); I.kick(S, C.pullBack, 0.9); });
   S.at(C.pullBack, () => O.brass(S, C.pullBack, 0.9, CHORDS.D.brass, { level: 0.6, sfz: true, bright: 2800, release: 0.5 }));
-  S.at(C.pullBack, () => O.chord(S, 'strings', C.pullBack, C.pullBack + 0.9, CHORDS.D.str, { level: 0.55, attack: 0.03, release: 0.4, cutoff: 5500 }));
+  // (v11: a longer release, so the chord hands over to the reprise's low D pedal (61.2) instead of
+  // dropping out under the bloom at 61.4)
+  S.at(C.pullBack, () => O.chord(S, 'strings', C.pullBack, C.pullBack + 0.9, CHORDS.D.str, { level: 0.55, attack: 0.03, release: 1.4, cutoff: 5500 }));
+}
+
+// Every chapter change lands on a downbeat (segment start, on the beat grid): a reverse cymbal
+// breathes into it, a soft taiko, sub and cymbal land on it, and a glint marks the HUD flip an
+// 8th later. (Chapters that open on a designed hit — 20.0, 49.5, 55.5 — or right after one —
+// 38.5, after BRAAM 2 — have theirs already; 60.0 is the zoom through the A of STARS.)
+const CHAPTERS = [
+  // [segment start, power]  act I soft, act II fuller
+  [7.5, 0.5], [12.0, 0.5], [15.5, 0.5], [24.5, 0.9], [28.5, 1.0], [31.5, 1.0], [34.5, 1.0], [42.5, 1.0], [46.5, 1.0],
+];
+function chapters(S) {
+  for (const [b, p] of CHAPTERS) {
+    const t = groove(b), hud = groove(b + BEAT / 2);
+    S.at(t - 0.5, () => I.revCymbal(S, t, 0.5, { level: 0.03 * p }));
+    S.at(t, () => {
+      I.taiko(S, t, 0.38 * p, { size: p < 0.6 ? 0.6 : 1 });
+      I.boom(S, t, { level: 0.18 * p, f0: 72, f1: 34, decay: 1.1 });
+      if (p >= 0.6) I.crash(S, t, 0.045 * p);
+    });
+    const glint = chordAt(hud).choir.at(-1) + 24;
+    S.at(hud, () => I.bell(S, hud, glint, { level: 0.012, decay: 1.4, pan: 0.35, bus: 'far' }));
+  }
+  // montage → finale: the heading's A zooms toward us (60.0 – 60.5): a rush of air through the
+  // letter that peaks into the suck-back, landing on the pullBack's D major
+  // (lower and fuller than the climb's riser, so it reads as its own movement on top of it)
+  S.at(59.95, () => I.whoosh(S, 59.95, 0.6, { level: 0.5, f0: 180, f1: 3600, pan0: -0.15, pan1: 0.15, peak: 0.72, kind: 'pink' }));
+  S.at(60.25, () => I.bell(S, 60.25, 93, { level: 0.012, decay: 1.2, pan: -0.3, bus: 'far' }));
 }
 
 // ------------------------------------------------------------------ the CODA (60.5 – 78.5)
@@ -578,6 +670,11 @@ const REPRISE_LH = [
   [66.0, 45, 1], [66.25, 52], [66.5, 57], [66.75, 62],
 ];
 const SUCK = C.finalImpact - 0.08; // the short suck-back before the button
+// v11: the held breath and the sunrise sit on the 16th grid the pulse has been playing:
+// the pulse's last stroke is 69.25, the cut falls exactly where the next 16th would be (69.375),
+// and the light breaks two 16ths later (69.625, 35 ms film after the sunrise cue)
+const HOLD = q16(C.sunrise - 0.25);   // 69.375
+const SUN = q16(C.sunrise);           // 69.625
 const D_MAJOR = [38, 50, 57, 62, 66, 69, 74];
 
 // Studio A: reprise → gathering → hush → swell (film buses)
@@ -608,7 +705,7 @@ function coda(S) {
   });
 
   // ideasLine: the hush — piano + choir on A sus4, a thread of violins and a soft low A
-  const h0 = C.ideasLine, h1 = C.sunrise + 0.1;
+  const h0 = C.ideasLine, h1 = SUN + 0.1;
   S.at(h0 - 0.1, () => {
     O.chord(S, 'choirO', h0 - 0.1, h1, [57, 62, 64, 69], { level: 0.1, attack: 0.5, release: 0.5, cutoff: 3000, dark: 0.5, bus: 'choir' });
     O.chord(S, 'strings', h0 - 0.1, h1, [81, 86, 88], { level: 0.045, attack: 0.6, release: 0.5, cutoff: 3200, dark: 0.55 });
@@ -627,18 +724,20 @@ function coda(S) {
   // TENSION (v9): from storyTwo a low spiccato pulse on D / A drives under the reprise, pushing
   // from 8ths to 16ths through the hush; a high Bb harmonic rubs a semitone against the A sus4
   // and is left hanging — it becomes the root of the Bb chord at the sunrise (the release)
-  const HOLD = C.sunrise - 0.25;    // the held breath: the pulse stops a quarter-second before the light breaks
-  for (let t = C.storyTwo, k = 0; t < HOLD - 1e-6; k++) {
+  // (HOLD: the held breath — the pulse stops a quarter-second before the light breaks)
+  // (v11: the step now advances in the loop header — advanced inside the body, it moved the
+  // time the notes' builders saw, so every stroke sounded a step late: the pulse began after
+  // storyTwo and its last stroke fell on 69.375, INTO the held breath)
+  for (let t = C.storyTwo, k = 0; t < HOLD - 1e-6; t += t < 68.5 ? STEP * 2 : STEP, k++) {
     const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
     const m = k % 4 === 3 ? 45 : 38;
     S.at(t, () => O.spiccato(S, t, m, { level: 0.06 + 0.14 * u * u, decay: 0.11 }));
     S.at(t, () => O.spiccato(S, t, m - 12, { level: 0.03 + 0.06 * u * u, decay: 0.14 }));
-    t += t < 68.5 ? STEP * 2 : STEP;
   }
-  S.at(C.ideasLine + 0.4, () => O.chord(S, 'strings', C.ideasLine + 0.4, C.sunrise + 0.05, [82, 94], { level: 0.035, attack: 1.6, release: 0.1, cutoff: 5200, swell: 0.7 }));
+  S.at(C.ideasLine + 0.4, () => O.chord(S, 'strings', C.ideasLine + 0.4, SUN + 0.05, [82, 94], { level: 0.035, attack: 1.6, release: 0.1, cutoff: 5200, swell: 0.7 }));
 
   // sunrise: the swell, Bb → C, everything crescendo into the suck-back
-  const s0 = C.sunrise, s1 = 70.3;
+  const s0 = SUN, s1 = 70.3;
   S.at(s0 - 0.05, () => {
     O.chord(S, 'strings', s0 - 0.05, s1, CHORDS.Bb.str.concat([74, 77]), { level: 0.42, attack: 0.3, release: 0.15, cutoff: 4200, swell: 0.45 });
     O.chord(S, 'choirA', s0 - 0.05, s1, [58, 62, 65, 70], { level: 0.26, attack: 0.3, release: 0.15, cutoff: 4800, swell: 0.45, bus: 'choir' });
@@ -667,7 +766,6 @@ function codaFinale(S) {
   // TENSION (v9): a heartbeat (lub-dub on every beat) from storyTwo, a ticking clock on 8ths
   // from the D/F♯ bar, a slow low riser through the hush — all cut together a quarter-second
   // before the sunrise, a held breath before the release
-  const HOLD = C.sunrise - 0.25;
   for (let t = C.storyTwo; t < HOLD - 1e-6; t += BEAT) {
     const u = (t - C.storyTwo) / (HOLD - C.storyTwo);
     S.at(t, () => {
@@ -680,9 +778,12 @@ function codaFinale(S) {
     S.at(t, () => X.click(S, t, { level: 0.02 + 0.045 * u, freq: k % 2 ? 2600 : 3400, body: 1100, decay: 0.012, pan: k % 2 ? 0.35 : -0.35, bus: 'endDry' }));
   }
   S.at(C.ideasLine, () => I.riser(S, C.ideasLine, HOLD, { level: 0.03, from: 120, to: 2400, bus: 'end' }));
+  // (v11: a short intake of breath snaps off with the pulse on the 16th (69.375), so the held
+  // breath opens as a clean, deliberate cut)
+  S.at(HOLD - 0.5, () => I.swellIn(S, HOLD, 0.5, { level: 0.022, bus: 'end', top: 4500 }));
 
   // sunrise: a rising timpani roll on D and a cymbal swell into the suck-back
-  const s0 = C.sunrise;
+  const s0 = SUN;
   for (let t = s0, k = 0; t < SUCK - 0.03; t += STEP / 2, k++) {
     const u = (t - s0) / (SUCK - s0);
     S.at(t, () => I.tom(S, t, 0.03 + 0.3 * u * u, { f: 72, pan: k % 2 ? 0.2 : -0.2, bus: 'endDry' }));
@@ -761,7 +862,8 @@ function moonshot(S) {
   });
   // … and high harmonics: an open fifth with the E that leans onto F♯ at the landing
   S.at(39.45, () => O.chord(S, 'strings', 39.45, 40.62, [86, 88, 93], { level: 0.07, attack: 0.5, release: 0.25, cutoff: 3600, dark: 0.7 }));
-  S.at(40.5, () => O.chord(S, 'strings', 40.5, 41.8, [86, 90, 93], { level: 0.06, attack: 0.12, release: 0.5, cutoff: 3800, dark: 0.7 }));
+  const ml = C.moonLanding - 0.03;   // (v11: with the landing, not 0.1 before it)
+  S.at(ml, () => O.chord(S, 'strings', ml, 41.8, [86, 90, 93], { level: 0.06, attack: 0.12, release: 0.5, cutoff: 3800, dark: 0.7 }));
   // moonLanding: a reverent crescendo of low brass into D major; horns + choir sing D — A
   S.at(40.05, () => O.brass(S, 40.05, 1.7, CHORDS.D.brass, { level: 0.13, attack: 0.55, release: 0.35, bright: 1300 }));
   S.at(C.moonLanding, () => {
@@ -779,12 +881,12 @@ function moonshot(S) {
 // Rhythm studio: a heartbeat for the descent, a soft swell and bloom on the landing, a
 // shimmer on the footprint, and a snare pickup that rebuilds act II's energy.
 function moonshotRhythm(S) {
-  for (const t of [40.0, 41.0]) S.at(t, () => I.kick(S, t, 0.24));
+  for (const t of [40.0, 41.0].map(groove)) S.at(t, () => I.kick(S, t, 0.24));
   // soft low tom roll swelling into the landing
   // (it stops a beat short, so the landing arrives in a held breath of strings and choir)
-  for (let t = 39.875; t < C.moonLanding - 0.2; t += STEP) {
-    const u = (t - 39.875) / (C.moonLanding - 0.2 - 39.875);
-    S.at(t, () => I.tom(S, t, 0.03 + 0.07 * u * u, { f: 78, pan: Math.round(t / STEP) % 2 ? 0.25 : -0.25 }));
+  for (let g = 39.875; g < C.moonLanding - 0.2; g += STEP) {
+    const u = (g - 39.875) / (C.moonLanding - 0.2 - 39.875), t = groove(g);
+    S.at(t, () => I.tom(S, t, 0.03 + 0.07 * u * u, { f: 78, pan: Math.round(g / STEP) % 2 ? 0.25 : -0.25 }));
   }
   const tl = C.moonLanding;
   S.at(tl, () => {
@@ -799,11 +901,11 @@ function moonshotRhythm(S) {
     I.celesta(S, tf + 0.02, 93, { level: 0.02, pan: 0.2 });
   });
   // guidanceComputer: snare 16ths and toms rebuild into the computing bar
-  for (let t = 42.0; t < 42.5 - 1e-6; t += STEP) {
-    const u = (t - 42.0) / 0.5;
+  for (let g = 42.0; g < 42.5 - 1e-6; g += STEP) {
+    const u = (g - 42.0) / 0.5, t = groove(g);
     S.at(t, () => I.snare(S, t, 0.05 + 0.1 * u, { pan: 0.05 }));
   }
-  [[42.25, 128], [42.375, 96]].forEach(([t, f]) => S.at(t, () => I.tom(S, t, 0.16, { f, pan: f > 100 ? 0.4 : -0.4 })));
+  [[42.25, 128], [42.375, 96]].forEach(([g, f]) => { const t = groove(g); S.at(t, () => I.tom(S, t, 0.16, { f, pan: f > 100 ? 0.4 : -0.4 })); });
 }
 
 // ------------------------------------------------------------------ the NEW FRONTIER
@@ -822,7 +924,7 @@ function moonshotRhythm(S) {
 // Orchestra studio: the brass theme, low brass, harmonics, the rover's harp and celesta,
 // Artemis' build and the Mars swell.
 function frontier(S) {
-  S.at(C.shuttle, () => {
+  S.at(FRONT_THEME[0][0], () => {
     O.line(S, 'horn', FRONT_THEME, { level: 0.44, cutoff: 3000, bus: 'horn', octaves: [0, -12], release: 0.6 });
     O.line(S, 'brass', FRONT_THEME, { level: 0.14, cutoff: 3400, bus: 'brass', octaves: [12], release: 0.4 });
   });
@@ -830,7 +932,7 @@ function frontier(S) {
   for (const [a, b, name] of HARMONY) {
     if (a < F0 || a >= C.rover) continue;
     // (the last one, under Webb, dies away into the rover)
-    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.34, attack: Math.min(0.5, (b - a) * 0.6), release: b === C.rover ? 0.8 : 0.35, bright: 2300 }));
+    S.at(a, () => O.brass(S, a, b - a, CHORDS[name].brass, { level: 0.34, attack: Math.min(0.5, (b - a) * 0.6), release: b === C.rover ? 0.8 : 0.6, bright: 2300, from: a > F0 ? 0.5 : 0 }));
   }
   // awe: high string harmonics over Hubble's deep field (B♭ add D) and Webb's gold (Fmaj7)
   S.at(C.hubble - 0.05, () => O.chord(S, 'strings', C.hubble - 0.05, C.genome + 0.15, [82, 86, 89], { level: 0.075, attack: 0.3, release: 0.4, cutoff: 3800, dark: 0.7 }));
@@ -851,13 +953,16 @@ function frontier(S) {
   S.at(ta, () => {
     O.tremolo(S, ta, mv - 0.02, [72, 76, 79, 84], { level: 0.2, cutoff: 4500 });
     O.brass(S, ta, mv - ta - 0.03, CHORDS.C.brass, { level: 0.38, attack: 0.55, release: 0.08, bright: 2400 });
+  });
+  S.at(MARS_THEME[0][0], () => {
     O.line(S, 'horn', MARS_THEME, { level: 0.48, cutoff: 3200, bus: 'horn', octaves: [0, -12], release: 0.35 });
     O.line(S, 'brass', MARS_THEME, { level: 0.18, cutoff: 3600, bus: 'brass', octaves: [12], release: 0.3 });
   });
-  // Mars: the heroic D-major swell (brass + horns), cut clean for act III's downbeat
+  // Mars: the heroic D-major swell (brass + horns), held right up to act III's downbeat and
+  // released under its hit (v11: no gap — the D and A carry straight into D minor)
   S.at(mv, () => {
-    O.brass(S, mv, F1 - 0.08 - mv, CHORDS.D.brass, { level: 0.46, attack: 0.07, release: 0.1, bright: 2700 });
-    O.brass(S, mv, F1 - 0.08 - mv, [57, 62, 66], { kind: 'horn', level: 0.26, attack: 0.15, release: 0.1, bright: 2200, bus: 'horn' });
+    O.brass(S, mv, F1 - mv, CHORDS.D.brass, { level: 0.46, attack: 0.07, release: 0.3, bright: 2700 });
+    O.brass(S, mv, F1 - mv, [57, 62, 66], { kind: 'horn', level: 0.26, attack: 0.15, release: 0.25, bright: 2200, bus: 'horn' });
     I.celesta(S, mv + 0.02, 90, { level: 0.02, pan: 0.3 });
   });
 }
@@ -865,16 +970,18 @@ function frontier(S) {
 // Rhythm studio: the shuttle's low bloom, bells for the telescopes, the genome's synth
 // helix, and the percussion bloom of the Mars vision.
 function frontierRhythm(S) {
-  S.at(C.shuttle, () => I.boom(S, C.shuttle, { level: 0.2, f0: 62, f1: 30, decay: 2.2 }));
+  // (v11: the musical accents of the frontier sit on the 16ths nearest their cues, with the theme)
+  const sh = q16(C.shuttle), ro = q16(C.rover);
+  S.at(sh, () => I.boom(S, sh, { level: 0.2, f0: 62, f1: 30, decay: 2.2 }));
   // telescopes: glassy bell cascades (deep field: B♭ add9; Webb: Fmaj7, golden)
   [[C.hubble, [86, 89, 93, 94, 98, 101]], [C.webb, [81, 84, 88, 89, 93, 96]]].forEach(([t0, notes]) => notes.forEach((m, i) => {
     const t = t0 + 0.03 + i * 0.055;
     S.at(t, () => I.bell(S, t, m, { level: 0.016, decay: 2.4, pan: -0.6 + i * 0.24 }));
   }));
   // rover: a soft low bloom and a light taiko stroke — the kit goes half time
-  S.at(C.rover, () => {
-    I.boom(S, C.rover, { level: 0.14, f0: 58, f1: 34, decay: 1.8 });
-    I.taiko(S, C.rover, 0.3, { size: 0.6 });
+  S.at(ro, () => {
+    I.boom(S, ro, { level: 0.14, f0: 58, f1: 34, decay: 1.8 });
+    I.taiko(S, ro, 0.3, { size: 0.6 });
   });
   // genome: two synth strands on 16ths, panned around each other (a double helix), the
   // filter opening with each turn; they fade under Webb
@@ -979,6 +1086,7 @@ export function arrangeMusic(S, part = 'all') {
     arps(S);
     transitions(S);
     accents(S);
+    chapters(S);
     codaFinale(S);
   }
   duckPads(S);

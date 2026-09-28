@@ -5,6 +5,7 @@ import { CUES as C } from '../timeline.js';
 import * as I from './instruments.js';
 import * as X from './sfx.js';
 import * as O from './orchestra.js';
+import { groove } from './music.js';
 
 function opening(S) {
   // Distant atmospheric resonance: sub drone + airy filtered noise, very wet.
@@ -105,9 +106,11 @@ function science(S) {
   });
   // instruments: clock escapement on 8ths (tick / tock), wind-up at the cue
   S.at(C.instruments, () => X.ratchet(S, C.instruments, 0.3, { level: 0.035, rate: 30, pan: -0.2 }));
-  X.clockwork(S, C.instruments, C.gear, 0.25, { level: 0.032 });
+  X.clockwork(S, C.instruments, C.gear, 0.25, { level: 0.032, fade: 0.5 });
   // orrery: finer gear teeth on 16ths + a slow metallic ring
-  X.clockwork(S, C.orrery + 0.075, 24.4, 0.125, { level: 0.011 });
+  // (v11: the gear teeth run on to the spectrum's chapter change and thin away over its last beat
+  // instead of stopping dead just before it)
+  X.clockwork(S, C.orrery + 0.075, C.spectrum, 0.125, { level: 0.011, fade: 0.5 });
   S.at(C.orrery, () => {
     I.metal(S, C.orrery, 520, { level: 0.03, decay: 1.8, pan: 0.3, bus: 'far' });
     I.metal(S, C.orrery + 1.0, 390, { level: 0.02, decay: 1.8, pan: -0.3, bus: 'far' });
@@ -163,7 +166,9 @@ function electricity(S) {
     X.zap(S, C.spark, { level: 0.08 });
     X.zap(S, C.spark + 0.12, { level: 0.05, from: 3800, to: 400, pan: 0.4 });
     X.sparks(S, C.spark + 0.4, C.circuitCity + 0.3 - C.spark - 0.4, { level: 0.05, bursts: 0.8, pan: 0.2 });
-    X.hum(S, C.spark, C.circuitCity, { level: 0.03, freq: 100, cutoff: 1600, pan: -0.2 });
+    // (v11: the mains hum tuned to D (73.4 Hz), the common tone of the D minor and B♭ bars it
+    // sits under — at 100 Hz it sat 35 cents sharp of G)
+    X.hum(S, C.spark, C.circuitCity, { level: 0.03, freq: 73.42, cutoff: 1600, pan: -0.2, release: 0.8 });
   });
   // telegraph: morse "W C"
   S.at(C.telegraph, () => X.telegraph(S, C.telegraph, 'WC', { unit: 0.045, level: 0.055 }));
@@ -244,11 +249,12 @@ function computing(S) {
   // relays: a clicking bank on the 16th grid
   const bits = [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0];
   bits.forEach((b, k) => {
-    const t = C.relays + 0.1 + k * 0.125; // 43.5 … on the grid
+    const t = groove(C.relays + 0.1 + k * 0.125); // 43.5 … on the grid (and its tempo map)
     if (b) S.at(t, () => X.relay(S, t, { level: 0.035, pan: k % 3 === 0 ? -0.4 : 0.35 }));
   });
-  // vacuum tubes: warm hum
-  S.at(C.tubes, () => X.hum(S, C.tubes, C.processor + 0.2, { level: 0.035, freq: 60, cutoff: 500, attack: 0.25, release: 0.35 }));
+  // vacuum tubes: warm hum (v11: tuned to A (55 Hz), the dominant it sits under — at 60 Hz it
+  // was a quarter-tone flat of B♭ against the A chord — and eased in / out more gently)
+  S.at(C.tubes, () => X.hum(S, C.tubes, C.processor + 0.2, { level: 0.03, freq: 55, cutoff: 500, attack: 0.4, release: 0.6 }));
   // transistors: tiny high blips on 32nds
   for (let k = 0; k < 8; k++) {
     const t = C.transistors + k * 0.0625;
@@ -260,7 +266,7 @@ function computing(S) {
   // binary: arpeggiated digital blips on 16ths, 1 = high square, 0 = low sine
   const tones = [74, 77, 81, 86, 89];
   for (let k = 0; C.binary + 0.075 + k * 0.125 < BINARY_END; k++) {
-    const t = Math.round((C.binary + 0.075 + k * 0.125) / 0.125) * 0.125; // snap to the 16th grid (45.875 …)
+    const t = groove(Math.round((C.binary + 0.075 + k * 0.125) / 0.125) * 0.125); // snap to the 16th grid (45.875 …)
     const bit = S.random() < 0.55;
     if (S.random() < 0.18) continue;
     const m = tones[(k * 3) % tones.length] + (bit ? 12 : 0);
@@ -361,10 +367,13 @@ function finale(S) {
   S.at(C.closingLine, () => [86, 90, 93, 100].forEach((m, i) => I.bell(S, C.closingLine + i * 0.07, m, { level: 0.01, decay: 2.5, pan: -0.45 + i * 0.3, bus: 'end' })));
 }
 
-// Designed air movement on the sequence changes that have no hit of their own.
+// Designed air movement through the sequence changes: each whoosh peaks on the chapter's
+// downbeat (v11: every chapter has one; the moonshot's moves from 38.6 onto its downbeat, 38.5).
 function transitionAir(S) {
-  for (const [t, p0] of [[12.0, -0.6], [20.0, 0.6], [28.5, -0.5], [34.5, 0.5], [38.6, -0.4], [42.5, 0.4], [46.5, -0.4]]) {
-    S.at(t - 0.35, () => I.whoosh(S, t - 0.35, 0.9, { level: 0.05, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
+  for (const [t, p0, lv = 0.05] of [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5],
+    [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4]]) {
+    const tt = groove(t);
+    S.at(tt - 0.35, () => I.whoosh(S, tt - 0.35, 0.9, { level: lv, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
   }
 }
 

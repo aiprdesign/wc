@@ -230,9 +230,9 @@ export { taiko, tom, kick, snare, stick, hat, crash, warmPercussion } from './pe
  * Pulsing sub bass: ONE sine + ONE lowpassed saw for the whole span, with pitch
  * following `roots` ([time, midi]) and an 8th-note pump envelope per `hits`.
  */
-export function subPulse(S, t0, t1, roots, hits, { level = 0.35, bus = 'bass' } = {}) {
-  const sine = S.osc('sine', hz(roots[0][1]), t0, t1 + 0.4);
-  const saw = S.osc('sawtooth', hz(roots[0][1]) * 2, t0, t1 + 0.4);
+export function subPulse(S, t0, t1, roots, hits, { level = 0.35, bus = 'bass', release = 0.08 } = {}) {
+  const sine = S.osc('sine', hz(roots[0][1]), t0, t1 + release * 5);
+  const saw = S.osc('sawtooth', hz(roots[0][1]) * 2, t0, t1 + release * 5);
   for (const [t, m] of roots) {
     sine.frequency.setValueAtTime(hz(m), t);
     saw.frequency.setValueAtTime(hz(m) * 2, t);
@@ -246,11 +246,11 @@ export function subPulse(S, t0, t1, roots, hits, { level = 0.35, bus = 'bass' } 
   const g = amp.gain;
   g.setValueAtTime(0, t0);
   const bite = S.phys(0.004);
-  for (const { t, v, len = 0.2 } of hits) { // v in 0..1
+  for (const { t, v, len = 0.2, floor = 0.22 } of hits) { // v in 0..1; each hit decays to `floor` of its peak
     g.setTargetAtTime(level * v, t, bite);
-    g.setTargetAtTime(level * v * 0.22, t + 0.03, len / 3);
+    g.setTargetAtTime(level * v * floor, t + 0.03, len / 3);
   }
-  g.setTargetAtTime(0, t1, 0.08);
+  g.setTargetAtTime(0, t1, release);
   S.out(amp, bus);
   S.free(sine, sine, saw, lp, sg, amp);
 }
