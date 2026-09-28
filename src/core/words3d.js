@@ -144,7 +144,7 @@ export class Words3D {
       const matte = OUTPUT_ASPECT < FILM_ASPECT ? Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.85) : 1;
       // stay in front of the subject even when the sequence match-cuts to something closer
       // (size scales with distance, so the word looks identical on screen — only parallax changes)
-      const focusNow = inst.dof?.focus > 0 ? inst.dof.focus : Infinity;
+      const focusNow = inst.dof?.focus > 0 && it.focus !== false ? inst.dof.focus : Infinity;
       const dist = Math.max(it.d * 0.35, Math.min(it.d, focusNow * (it.swap ? 0.55 : 0.62)));
       const H = 2 * dist * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * matte;
       const visW = H * OUTPUT_ASPECT;

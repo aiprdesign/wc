@@ -277,7 +277,8 @@ export const INTELLIGENCE = {
       l.u.uPattern.value = 0;
     }
     const pos = fx.dots.geometry.attributes.position.array, col = fx.dots.geometry.attributes.color.array;
-    fx.traces.forEach((tr, i) => {
+    for (let i = 0; i < fx.traces.length; i++) {
+      const tr = fx.traces[i];
       const dp = ramp(t, tr.a, tr.a + 0.5, ease.outCubic);
       tr.line.progress = Math.max(0.0001, dp * (1 - s.exit));
       tr.line.opacity = 0.75 * s.fade;
@@ -294,7 +295,7 @@ export const INTELLIGENCE = {
         if (on) tr.l.u.uPattern.value = Math.max(tr.l.u.uPattern.value, Math.exp(-f * 7) * 0.9);
       }
       tr.l.u.uPattern.value = Math.max(tr.l.u.uPattern.value, 0.3 * dp) * (1 - s.exit);
-    });
+    }
     fx.dots.geometry.attributes.position.needsUpdate = true;
     fx.dots.geometry.attributes.color.needsUpdate = true;
     fx.dots.material.size = 0.075 * s.k;
@@ -347,7 +348,7 @@ export const KNOWLEDGE = {
         const target = a.clone().addScaledVector(b.clone().sub(a), uu).addScaledVector(cc.clone().sub(a), vv);
         target.x += l.x; target.y += l.baseY + l.h / 2; target.z += 0.03;
         const R = 1.4 + r(4) * 2.2, th = r(5) * Math.PI * 2;
-        flakes.push({ l, target, R, th, y0: (r(6) - 0.5) * 1.6, delay: r(7) * 0.4, spin: [r(8) * 9 - 4.5, r(9) * 9 - 4.5, r(10) * 5], outDelay: r(11) * 0.2 });
+        flakes.push({ l, target, R, th, y0: (r(6) - 0.5) * 1.6, delay: r(7) * 0.4, spin: [r(8) * 9 - 4.5, r(9) * 9 - 4.5, r(10) * 5], outDelay: r(11) * 0.15 });
         mesh.setColorAt(id, c.copy(cA).lerp(cB, r(12) < 0.22 ? 0.85 : r(13) * 0.2));
       }
     });
@@ -366,9 +367,10 @@ export const KNOWLEDGE = {
       const land = t - l.d0 - 1.0;
       l.u.uFlash.value = land > 0 ? Math.exp(-land * 6) * 0.45 : 0;
     }
-    fx.flakes.forEach((f, i) => {
+    for (let i = 0; i < fx.flakes.length; i++) {
+      const f = fx.flakes[i];
       const e = sat((t - f.l.d0 - f.delay) / 0.85), w8 = ease.inOutCubic(e);
-      const eo = ease.inCubic(sat((outT - f.outDelay) / 0.55));
+      const eo = ease.inCubic(sat((outT - f.outDelay) / 0.42));
       const conv = w8 * (1 - eo);
       // swirl around the word's vertical axis, converging on the target
       const th = f.th + (1 - w8) * 2.6 + eo * 2.2, R = f.R * (1 - 0.35 * w8) * (1 + 0.3 * eo);
@@ -382,7 +384,7 @@ export const KNOWLEDGE = {
       const sc = Math.max(0.0001, Math.max(vis * (1 - eo), vo) * s.fade);
       fx.m.compose(fx.p, fx.q, fx.sc.set(sc, sc, sc));
       fx.mesh.setMatrixAt(i, fx.m);
-    });
+    }
     fx.mesh.instanceMatrix.needsUpdate = true;
   },
 };
@@ -399,6 +401,7 @@ const SWAP_LOOKS = {
   STARS: { face: { color: '#d0d4da', metal: 1, rough: 0.22 }, edge: { color: '#f3d493', metal: 1, rough: 0.1 }, side: { color: '#9aa0a8', metal: 1, rough: 0.3 }, pattern: 'brushed', env: 0.9 },
 };
 export function swapTreatment(text) {
+  const etched = SWAP_LOOKS[text]?.pattern === 'circuit' ? 0.28 : 0;
   return {
     look: { ...(SWAP_LOOKS[text] ?? SWAP_LOOKS.STARS), sweep: 0.16 },
     geo: { depth: 0.3, bevel: 0.035 },
@@ -411,9 +414,8 @@ export function swapTreatment(text) {
         l.mesh.rotation.x = (1 - e) * Math.PI / 2 - eo * Math.PI / 2;      // roll up in, roll on out
         l.mesh.position.y = l.h / 2 - (1 - ease.outCubic(u)) * l.h * 0.55 + eo * l.h * 0.55;
         l.opacity = s.fade * sat(u * 3) * (1 - sat(out * 1.4));
-        l.u.uPattern.value = SWAP_LOOKS[text]?.pattern === 'circuit' ? 0.3 : 0;
+        l.u.uPattern.value = etched;            // CIRCUITS: the die traces glow faintly
       }
-      if (text === 'CIRCUITS') for (const l of w.letters) l.u.uPattern.value = 0.25;
     },
   };
 }

@@ -115,7 +115,7 @@ export function facetMaterial(look, env, shared, key) {
           float flick = 0.72 + 0.28 * snoise(vec3(fP.xy * 3.0, uTime * 1.7));
           totalEmissiveRadiance += uTint * band * uSweepK * (0.4 + 0.6 * max(fEdge, fFace * 0.6));
           totalEmissiveRadiance += uGlowCol * uGlow;
-          totalEmissiveRadiance += uEdgeGlowCol * uEdgeGlow * (fEdge + fSide * 0.75 + fres * 0.5 + fPat * 0.8) * flick;
+          totalEmissiveRadiance += uEdgeGlowCol * uEdgeGlow * (fEdge + fSide * 0.4 + fres * 0.4 + fPat * 0.8) * flick;
           totalEmissiveRadiance += uFlashCol * uFlash * (fEdge + 0.2);
           totalEmissiveRadiance += uPatCol * uPattern * fPat;
         }`)

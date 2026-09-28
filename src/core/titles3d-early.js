@@ -90,12 +90,13 @@ export const LAW = {
     face: { color: '#7a4c2b', metal: 1, rough: 0.46 }, edge: { color: '#d19a5c', metal: 1, rough: 0.2 },
     side: { color: '#5e3c22', metal: 1, rough: 0.5 }, pattern: 'patina', env: 0.75, sweep: 0.14,
   },
-  inDur: 0.3, st: 0.2,
+  inDur: 0.3, st: 0.2, sweepAt: 1.15,
   build(w) {
     const { half } = w, n = w.letters.length;
-    // stamp order: centre first, then outward, left before right
+    // stamp order: centre first, then outward, left before right — each stamp on the half-beat grid
     const order = w.letters.map((l) => l).sort((a, b) => a.c - b.c || a.i - b.i);
-    order.forEach((l, r) => (l.hit = 0.32 + r * 0.2));
+    const grid = BEAT / 2, first = Math.ceil((w.t0 + 0.3) / grid - 1e-6) * grid - w.t0;
+    order.forEach((l, r) => (l.hit = first + r * grid));
     w.fx.firstHit = order[0].hit; w.fx.lastHit = order[n - 1].hit;
     const R = Math.max(half + 0.5, 1.25);
     w.fx.R = R;
@@ -156,8 +157,8 @@ export const LAW = {
 };
 
 // ---------------------------------------------------------------------------
-// BEAUTY — polished gold. Letters glide out of the centre on gentle arcs, turning like
-// dancers into place, while a golden rectangle subdivides itself and the golden spiral
+// BEAUTY — polished gold. Letters glide down gentle arcs from above and behind the word,
+// centre first, turning like dancers into place, while a golden rectangle subdivides itself and the golden spiral
 // draws through the word from its outer arc into the eye.
 export const BEAUTY = {
   geo: { depth: 0.26, bevel: 0.03 },
@@ -199,12 +200,14 @@ export const BEAUTY = {
       const u = s.u(l), out = s.out(l), e = ease.inOutCubic(u), sg = Math.sign(l.x) || 1;
       const arc = Math.sin(Math.PI * e);
       const eo = ease.inOutCubic(out);
-      l.pivot.position.x = l.x * (0.3 + 0.7 * e) * (1 - 0.6 * eo);
-      l.pivot.position.y = l.baseY + arc * (0.28 + 0.22 * l.c) + eo * 0.25;
-      l.pivot.position.z = arc * 0.3 - (1 - e) * 0.4 + eo * 0.25;
-      l.pivot.rotation.y = (1 - e) * 0.55 * sg - eo * 0.5 * sg;
-      l.pivot.rotation.z = -(1 - e) * 0.22 * sg + eo * 0.15 * sg;
-      l.pivot.scale.setScalar(0.85 + 0.15 * e);
+      // glide down a gentle arc from above and behind the word into its slot
+      l.pivot.position.x = l.x * (0.74 + 0.26 * e) * (1 - 0.5 * eo);
+      l.pivot.position.y = l.baseY + (1 - e) * 0.6 + arc * 0.08 + eo * 0.35;
+      l.pivot.position.z = -(1 - e) * 0.9 + eo * 0.3;
+      l.pivot.rotation.x = (1 - e) * 0.4 - eo * 0.3;
+      l.pivot.rotation.y = (1 - e) * 0.5 * sg - eo * 0.4 * sg;
+      l.pivot.rotation.z = -(1 - e) * 0.16 * sg + eo * 0.12 * sg;
+      l.pivot.scale.setScalar(0.9 + 0.1 * e);
       l.opacity = s.fade * ease.inOutSine(sat(u * 2.2)) * (1 - sat(out * 1.6));
       const land = t - l.d0 - s.inDur * 0.85;
       l.u.uFlash.value = land > 0 ? Math.exp(-land * 7) * 0.35 : 0;
@@ -214,8 +217,8 @@ export const BEAUTY = {
 };
 
 // ---------------------------------------------------------------------------
-// REASON — turned brass. Letters are flung out of the centre on orbital paths (a tilted
-// orbital plane) and fall into alignment — order out of chaos; a gold orbit ellipse is
+// REASON — turned brass. Each letter rides its own concentric orbit in a tilted orbital
+// plane and swings into alignment, centre first — order out of chaos; a gold orbit ellipse is
 // drawn by a small planet travelling it, a fainter second orbit crosses behind.
 export const REASON = {
   geo: { depth: 0.32, bevel: 0.038 },
@@ -254,11 +257,11 @@ export const REASON = {
       const u = s.u(l), out = s.out(l);
       const e = ease.outCubic(u), sg = Math.sign(l.x) || 1;
       const af = sg > 0 ? 0 : Math.PI;
-      const a = af - (1 - e) * (2.3 + 0.5 * l.c) * sg;          // every letter orbits the same way
-      const r = lerp(0.45 + Math.abs(l.x) * 0.4, Math.abs(l.x), ease.inOutCubic(u)) * (1 - 0.6 * out);
+      // each letter rides its own concentric orbit and swings into alignment (every letter orbits the same way)
+      const a = af - (1 - e) * (1.15 + 0.35 * l.c) * sg;
+      const r = Math.abs(l.x) * (0.9 + 0.1 * e) * (1 - 0.6 * out);
       v.set(Math.cos(a) * r, 0, Math.sin(a) * r).applyMatrix4(fx.tilt);
-      const settle = u < 1 ? 0 : 0;
-      l.pivot.position.set(v.x, l.baseY + v.y + settle + out * 0.2, v.z);
+      l.pivot.position.set(v.x, l.baseY + v.y + out * 0.2, v.z);
       l.pivot.rotation.y = (a - af) * 0.5 * sg * -1 + out * 0.5 * sg;
       l.pivot.rotation.z = -(1 - e) * 0.4 * sg;
       l.pivot.scale.setScalar(0.75 + 0.25 * e);
@@ -289,9 +292,9 @@ export const REASON = {
 export const POWER = {
   geo: { depth: 0.46, bevel: 0.05 },
   look: {
-    face: { color: '#2c2826', metal: 0.7, rough: 0.58 }, edge: { color: '#4a423d', metal: 0.9, rough: 0.32 },
-    side: { color: '#221e1c', metal: 0.7, rough: 0.62 }, pattern: 'forged', env: 0.35, sweep: 0.06,
-    edgeGlow: '#ff6a1c', pat: '#ff7a26', flash: '#ffb060', tint: '#ffb070',
+    face: { color: '#2a2624', metal: 0.7, rough: 0.58 }, edge: { color: '#3a332f', metal: 0.9, rough: 0.34 },
+    side: { color: '#1a1716', metal: 0.6, rough: 0.66 }, pattern: 'forged', env: 0.3, sweep: 0.06,
+    edgeGlow: '#ff8a24', pat: '#ff8a2a', flash: '#ffc070', tint: '#ffb070',
   },
   inDur: 0.2, st: 0.25,
   build(w) {
@@ -322,7 +325,7 @@ export const POWER = {
       l.pivot.scale.set(sc * (1 + sq * 0.6), sc * (1 - sq), sc * (1 + sq));
       l.opacity = s.fade * sat(f * 3) * (1 - out);
       // heat: flare at impact → glowing ember that breathes on the beat → cools on exit
-      const heat = dt > 0 ? (0.22 + 0.55 * Math.exp(-dt * 3.2) + 0.1 * breath) * (1 - out) : 0;
+      const heat = dt > 0 ? (0.34 + 0.5 * Math.exp(-dt * 3.2) + 0.12 * breath) * (1 - out) : 0;
       l.u.uEdgeGlow.value = heat;
       l.u.uPattern.value = heat * 0.5;
       l.u.uFlash.value = dt > 0 ? Math.exp(-dt * 12) * 0.5 : 0;
