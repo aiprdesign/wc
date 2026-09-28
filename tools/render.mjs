@@ -75,8 +75,17 @@ async function worker(w) {
     const file = path.join(framesDir, `f_${String(i).padStart(5, '0')}.jpg`);
     if (fs.existsSync(file) && !args.overwrite) { done++; continue; }
     const T = from + i / fps;
-    await page.evaluate((t) => window.__film.renderFrame(t), T);
-    await canvas.screenshot({ path: file, type: 'jpeg', quality: 93 });
+    // retry: under heavy machine load a screenshot can time out — never lose the whole render to it
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await page.evaluate((t) => window.__film.renderFrame(t), T);
+        await canvas.screenshot({ path: file, type: 'jpeg', quality: 93, timeout: 180000 });
+        break;
+      } catch (e) {
+        if (attempt >= 3) throw e;
+        console.warn(`frame ${i}: ${e.name}, retrying`);
+      }
+    }
     done++;
     if (done % 30 === 0) {
       const rate = done / ((Date.now() - started) / 1000);
