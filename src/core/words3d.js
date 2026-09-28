@@ -66,7 +66,7 @@ function letterMaterial(era, env, shared, invert = false) {
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
           if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
-        gl_FragColor.rgb += uTint * band * uShine * 1.6;`);
+        gl_FragColor.rgb += uTint * band * uShine * 0.45;`);
   };
   m.customProgramCacheKey = () => 'word3d-v5';
   return m;
@@ -157,12 +157,12 @@ export class Words3D {
         start[o + 2] = z + 0.6 + r() * 2.2;
       }
     });
-    const dust = new MorphParticles({ count: per * glyphs.length, positions: start, targets: target, size: 0.03, color: '#ffd98f', intensity: 1.25, opacity: 0, stagger: 0.55, seed: text.length + 5 });
+    const dust = new MorphParticles({ count: per * glyphs.length, positions: start, targets: target, size: 0.03, color: '#ffd98f', intensity: 0.8, opacity: 0, stagger: 0.55, seed: text.length + 5 });
     dust.u.noise = 0.05; dust.u.noiseFreq = 1.4; dust.u.swirl = 0; dust.u.twinkle = 0.5;
     dust.renderOrder = 6;
     group.add(dust);
     // star glint that rides the leading edge of the shine
-    const glint = glowSprite({ color: '#fff4d6', intensity: 1.7, scale: 0.6 });
+    const glint = glowSprite({ color: '#fff4d6', intensity: 0.8, scale: 0.6 });
     glint.material.depthTest = false;
     glint.position.set(0, capH / 2 + 0.02, 0.25);
     glint.visible = false;
@@ -255,7 +255,7 @@ export class Words3D {
         l.mesh.scale.setScalar((0.8 + 0.2 * kc) * (1 - kout * 0.4));
         // landing flash as each letter reaches its place
         const land = t - d0 - inDur * 0.62;
-        l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.9 : 0;
+        l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.45 : 0;
         l.mat.opacity = fade * ease.inOutSine(sat((u - 0.25) / 0.6)) * (1 - kout);
       });
       // formation particles: converge over the entrance, then dissolve into the solid letters
@@ -274,8 +274,8 @@ export class Words3D {
       it.shared.uShine.value = shine;
       it.glint.visible = shine > 0.02;
       it.glint.position.x = it.shared.uSweep.value;
-      it.glint.scale.setScalar((0.22 + 0.36 * shine) * (1 + 0.15 * Math.sin(t * 40)));
-      it.glint.material.opacity = shine;
+      it.glint.scale.setScalar((0.14 + 0.2 * shine) * (1 + 0.15 * Math.sin(t * 40)));
+      it.glint.material.opacity = shine * 0.6;
       it.glint.material.rotation = t * 1.5;
       it.light.position.x = it.shared.uSweep.value;
       it.light.intensity = Math.sin(Math.PI * sweepP) * 1.1 * k * k * fade;
