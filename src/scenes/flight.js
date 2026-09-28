@@ -624,11 +624,11 @@ export function create(ctx, segment) {
   const rocket = new THREE.Group(); worldA.add(rocket);
   {
     const K = 0.044;                                            // metres → units
-    const white = new THREE.MeshStandardMaterial({ color: '#eef0f2', roughness: 0.45, metalness: 0.08 });
+    const white = new THREE.MeshStandardMaterial({ color: '#c9ccd0', roughness: 0.5, metalness: 0.08 });
     const black = new THREE.MeshStandardMaterial({ color: '#141619', roughness: 0.5, metalness: 0.3 });
     const alu = new THREE.MeshStandardMaterial({ color: '#b9bec5', roughness: 0.32, metalness: 0.85, map: brushedMetalTexture() });
     const f1 = new THREE.MeshStandardMaterial({ color: '#2a2724', roughness: 0.5, metalness: 0.7, side: THREE.DoubleSide });
-    const stageMat = (kind) => new THREE.MeshStandardMaterial({ map: saturnTexture(kind), roughness: 0.45, metalness: 0.08 });
+    const stageMat = (kind) => new THREE.MeshStandardMaterial({ map: saturnTexture(kind), color: '#d2d4d8', roughness: 0.5, metalness: 0.08 });
     const cyl = (r0, r1, y0, y1, mat, seg = 48, open = false) => {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(r1 * K, r0 * K, (y1 - y0) * K, seg, 1, open), mat);
       m.position.y = (y0 + y1) / 2 * K; rocket.add(m); return m;
@@ -802,7 +802,7 @@ export function create(ctx, segment) {
   // modules: the core (modB) is on station; the lab (modA) makes its final approach along +Z onto the central node.
   // Each is a group built along +Z: MMOD-blanketed shell, end cones, berthing rings, handrails (in the texture),
   // antennas and a window; the node carries radial ports.
-  const modWhite = new THREE.MeshStandardMaterial({ map: moduleTexture('#e9e7e1', 3), metalness: 0.15, roughness: 0.62, envMapIntensity: 0.6 });
+  const modWhite = new THREE.MeshStandardMaterial({ map: moduleTexture('#e9e7e1', 3), color: '#b4b2ac', metalness: 0.15, roughness: 0.62, envMapIntensity: 0.5 });
   const modGrey = new THREE.MeshStandardMaterial({ map: moduleTexture('#c7cacf', 7), metalness: 0.55, roughness: 0.4, envMapIntensity: 0.7 });
   const stDark = new THREE.MeshStandardMaterial({ color: '#2b2e33', metalness: 0.6, roughness: 0.45 });
   const stGlass = new THREE.MeshStandardMaterial({ color: '#06080b', metalness: 0.3, roughness: 0.08, envMapIntensity: 1.2 });

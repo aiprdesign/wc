@@ -680,10 +680,25 @@ export function buildLM(M, { folded = false } = {}) {
   const as = new THREE.Group(); as.position.y = DS_Y + DS_H + 0.05; lm.add(as);
   const shape = new THREE.Shape();
   [[-1.35, -0.9], [1.35, -0.9], [1.35, 0.35], [0.8, 1.15], [-0.8, 1.15], [-1.35, 0.35]].forEach(([x, z], i) => (i ? shape.lineTo(x, -z) : shape.moveTo(x, -z)));
-  const cabG = new THREE.ExtrudeGeometry(shape, { depth: 2.0, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1 });
+  const cabG = new THREE.ExtrudeGeometry(shape, { depth: 1.8, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1 });
   cabG.rotateX(-Math.PI / 2);
   const cab = add(new THREE.Mesh(cabG, M.skin), as);
   cab.position.y = 0.1;
+  // upper cabin: set back from the window face, joined to it by a sloping forehead panel
+  {
+    const up = new THREE.Shape();
+    [[-1.35, -0.9], [1.35, -0.9], [1.35, 0.2], [0.62, 0.8], [-0.62, 0.8], [-1.35, 0.2]].forEach(([x, z], i) => (i ? up.lineTo(x, -z) : up.moveTo(x, -z)));
+    const ug = new THREE.ExtrudeGeometry(up, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1 });
+    ug.rotateX(-Math.PI / 2);
+    add(new THREE.Mesh(ug, M.skin), as).position.y = 1.9;
+    const A = [-0.86, 1.96, 1.21], B = [0.86, 1.96, 1.21], C = [0.62, 2.16, 0.86], D = [-0.62, 2.16, 0.86], A2 = [-0.86, 1.96, 0.86], B2 = [0.86, 1.96, 0.86];
+    const tris = [A, B, C, A, C, D, A, D, A2, B, B2, C];
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat(), 3));
+    fg.setAttribute('uv', new THREE.Float32BufferAttribute(tris.flatMap((p) => [p[0] * 0.5 + 0.5, p[1] * 0.5 + p[2] * 0.3]), 2));
+    fg.computeVertexNormals();
+    add(new THREE.Mesh(fg, M.skin), as);
+  }
   // black thermal surround + triangular windows (canted like the real LM's) + frames
   const triPts = (sx) => [V3(0, 0, 0), V3(sx * 0.7, 0, 0), V3(sx * 0.06, 0.66, 0)];
   const tri = (sx) => {
@@ -735,7 +750,7 @@ export function buildLM(M, { folded = false } = {}) {
   }
   // rendezvous radar: dish on a yoke, front-top
   {
-    const rg = new THREE.Group(); rg.position.set(0, 2.2, 0.82); as.add(rg);
+    const rg = new THREE.Group(); rg.position.set(0.25, 2.16, 0.55); as.add(rg);
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.14, 12), M.dark), rg).position.y = 0.07;
     for (const sx of [-1, 1]) box(0.03, 0.32, 0.06, M.silverFoil, sx * 0.3, 0.26, 0, rg);
     box(0.62, 0.04, 0.06, M.silverFoil, 0, 0.12, 0, rg);

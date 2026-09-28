@@ -556,9 +556,16 @@ export function create(ctx, segment) {
       }
       if (t >= tS2) dPlate.scale.set(3, 3, 1);                           // the LM panel reaches past any explore view
     },
+    // after the explore camera is posed: never below the regolith, and the Earth kept "at infinity" for the new eye
+    explorePosed(cam) {
+      if (!worldL.visible) return;
+      const gx = cam.position.x - L0.x, gz = cam.position.z - L0.z, g = field(gx, gz) + L0.y + (camera.near < 0.05 ? 0.06 : 0.3);
+      if (cam.position.y < g) { cam.position.y = g; cam.updateMatrixWorld(); }
+      if (earthL.visible) { earthL.position.set(gx, cam.position.y - L0.y, gz).addScaledVector(earthDir, EARTH_D); earthL.updateMatrixWorld(); }
+    },
     get exploreLimits() {
       if (tNow > tFoot - 0.4 && tNow < tFoot + 0.3) return { zoomOut: 9, fly: 5, pitchDown: 0.3 };   // macro: pull back to see him
-      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.12, pitchUp: 0.4 };    // low lens over the flat site (the curved horizon shows from high up)
+      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.04, pitchUp: 0.4, zoomOut: 2 };    // low lens over the flat site (the curved horizon shows from high up)
       if (tNow >= tS2) return { yaw: 0.95, zoomOut: 2.5 };
       return undefined;
     },

@@ -16,6 +16,7 @@ import { glowSprite } from '../lib/materials.js';
 import { Dust } from '../lib/particles.js';
 import { manuscriptTexture } from '../lib/textures.js';
 import { gearGeometry, meshAngle, brassMat, latheTexture } from './industrial-gear.js';
+import { bakePlanetMaps, planetUniforms, planetMaterial, atmosphereShell, ringMesh, sunMaterial, saturnRingTexture, uranusRingTexture, SATURN_RING, URANUS_RING } from '../lib/orrery-planets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -325,53 +326,69 @@ export function create(ctx, segment) {
     const grp = new THREE.Group(); grp.position.set(Math.cos(dir) * d, 0.06, -Math.sin(dir) * d); grp.rotation.x = -Math.PI / 2; grp.add(pg); orrery.add(grp);
     pinions.push({ grp, pz, dir });
   }
-  // sun
-  const sunMat = new THREE.ShaderMaterial({
-    uniforms: { uI: { value: 5 } },
-    vertexShader: `varying vec3 vN; varying vec3 vV; varying vec3 vP; void main(){ vP = position; vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: `uniform float uI; varying vec3 vN; varying vec3 vV; varying vec3 vP;
-      void main(){ float mu = abs(dot(normalize(vN), normalize(vV)));
-        float g = 0.8 + 0.12*sin(vP.x*60.0+sin(vP.y*50.0)*2.0)*sin(vP.z*55.0) + 0.08*sin(vP.y*140.0+sin(vP.x*90.0)*3.0);
-        vec3 c = mix(vec3(1.0,0.4,0.1), vec3(1.0,0.86,0.62), pow(mu,0.8));
-        gl_FragColor = vec4(c*uI*(0.3+0.7*mu*mu)*g, 1.0); }`,
-  });
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.3, 64, 48), sunMat); sun.position.copy(S); scene.add(sun);
+  // sun: animated granulation, sunspots and faculae, photospheric limb darkening (orrery-planets.js)
+  const sunMat = sunMaterial();
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.3, 96, 64), sunMat); sun.position.copy(S); sun.name = 'body:sun'; scene.add(sun);
   const sunGlow = glowSprite({ color: '#ffc98a', intensity: 0.55, scale: 1.7 }); sunGlow.position.copy(S); scene.add(sunGlow);
   const sunGlow2 = glowSprite({ color: '#ff9a4a', intensity: 0.16, scale: 5 }); sunGlow2.position.copy(S); scene.add(sunGlow2);
   const sunLight = new THREE.PointLight('#ffcf98', 0, 14, 2); sunLight.position.copy(S); scene.add(sunLight);
-  // planets
+  // planets: GPU-baked surface maps, lit by the orrery's sun (phases and terminators face it), each
+  // spinning on a correctly tilted axis that stays fixed in space while its arm carries it round.
+  // Sizes are orrery-readable but ordered like the real bodies; Uranus and Neptune ride the two
+  // lowest arms, outside the zodiac ring.
+  const maps = bakePlanetMaps(ctx.renderer);
+  const PU = planetUniforms(S, key.position);
+  const unitSphere = new THREE.SphereGeometry(1, 64, 48);
+  const DEG = Math.PI / 180;
   const PL = [
-    { r: 0.75, s: 0.05, k: 'mercury', h: 0.18 }, { r: 1.1, s: 0.075, k: 'venus', h: 0.3 }, { r: 1.5, s: 0.082, k: 'earth', h: 0.42, moon: true },
-    { r: 1.95, s: 0.062, k: 'mars', h: 0.54 }, { r: 2.5, s: 0.17, k: 'jupiter', h: 0.66 }, { r: 3.1, s: 0.14, k: 'saturn', h: 0.78, ring: true },
+    { r: 0.75, s: 0.05, k: 'mercury', tilt: 0.03, az: 0, spin: 0.2 },
+    { r: 1.1, s: 0.075, k: 'venus', tilt: 177.4, az: 0.6, spin: 0.15 },
+    { r: 1.5, s: 0.082, k: 'earth', tilt: 23.44, az: 2.27, spin: 1.3, moon: true },
+    { r: 1.95, s: 0.062, k: 'mars', tilt: 25.19, az: 1.9, spin: 1.25 },
+    { r: 2.5, s: 0.17, k: 'jupiter', tilt: 3.13, az: 0.4, spin: 2.4 },
+    { r: 3.1, s: 0.14, k: 'saturn', tilt: 26.73, az: 0.8, spin: 2.2, ring: 'saturn' },
+    { r: 3.8, s: 0.105, k: 'uranus', tilt: 97.77, az: 2.0, spin: 1.6, ring: 'uranus', armY: hs - 1.05, sR: 0.1145, phase0: 2.3 },
+    { r: 4.35, s: 0.1, k: 'neptune', tilt: 28.32, az: 1.0, spin: 1.7, armY: hs - 1.15, sR: 0.121, phase0: 3.6 },
   ];
-  const pr = rng(31);
+  const ringTex = { saturn: saturnRingTexture(), uranus: uranusRingTexture() };
+  const ringSpec = { saturn: SATURN_RING, uranus: URANUS_RING };
+  const pr = rng(31), spinR = rng(77);
   PL.forEach((p, i) => {
     const grp = new THREE.Group(); grp.position.y = 0; orrery.add(grp);
-    const armY = hs - 0.95 + i * 0.1;
+    const armY = p.armY ?? hs - 0.95 + i * 0.1;
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, p.r, 10), brass); arm.rotation.z = Math.PI / 2; arm.position.set(p.r / 2, armY, 0); grp.add(arm);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, hs - armY, 10), brassPolish); post.position.set(p.r, (hs + armY) / 2, 0); grp.add(post);
     // coaxial sleeves: each planet rides its own tube (outermost = lowest arm), capped by a knurled collar
-    const sR = 0.108 - i * 0.0065;
+    const sR = p.sR ?? 0.108 - i * 0.0065;
     const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(sR, sR, armY - 0.07, 32, 1, true), i % 2 ? brass : brassPolish); sleeve.position.y = 0.07 + (armY - 0.07) / 2; orrery.add(sleeve);
     const collar = new THREE.Mesh(new THREE.CylinderGeometry(sR + 0.014, sR + 0.014, 0.045, 32), brassPolish); collar.position.y = armY; grp.add(collar);
     const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 20), bronzeDark); cw.rotation.z = Math.PI / 2; cw.position.set(-0.13 - sR, armY, 0); grp.add(cw);   // counterweight
     const cwArm = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.13, 8), brass); cwArm.rotation.z = Math.PI / 2; cwArm.position.set(-0.065 - sR, armY, 0); grp.add(cwArm);
     const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 8), brassPolish); elbow.position.set(p.r, armY, 0); grp.add(elbow);
-    const planet = new THREE.Mesh(new THREE.SphereGeometry(p.s, 48, 32), new THREE.MeshStandardMaterial({ map: planetTexture(p.k, i + 5), roughness: 0.55, metalness: 0.05 }));
-    planet.position.set(p.r, hs, 0); grp.add(planet);
-    const pcup = new THREE.Mesh(new THREE.CylinderGeometry(p.s * 0.45, 0.012, p.s * 0.35, 20), brassPolish); pcup.position.set(p.r, hs - p.s * 0.95, 0); grp.add(pcup);
-    if (p.ring) {
-      const rc = document.createElement('canvas'); rc.width = 256; rc.height = 4; const rx = rc.getContext('2d');
-      for (let k = 0; k < 256; k++) { const u = k / 255, a = (0.35 + 0.55 * Math.abs(Math.sin(u * 23.0)) * (u > 0.62 && u < 0.68 ? 0.1 : 1)) * Math.sin(Math.PI * u) ** 0.4; rx.fillStyle = `rgba(${216 - u * 40},${192 - u * 40},${138 - u * 30},${a})`; rx.fillRect(k, 0, 1, 4); }
-      const rt = new THREE.CanvasTexture(rc); rt.colorSpace = THREE.SRGBColorSpace;
-      const rgG = new THREE.RingGeometry(p.s * 1.35, p.s * 2.2, 96, 1);
-      { const q = rgG.attributes.position, uv = rgG.attributes.uv; for (let k = 0; k < q.count; k++) uv.setXY(k, (Math.hypot(q.getX(k), q.getY(k)) - p.s * 1.35) / (p.s * 0.85), 0.5); }
-      const rg = new THREE.Mesh(rgG, new THREE.MeshStandardMaterial({ map: rt, color: '#ffffff', roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide, transparent: true, depthWrite: false }));
-      rg.rotation.x = -Math.PI / 2 + 0.45; planet.add(rg);
+    // hold cancels the arm's revolution (axis fixed in space), tilt sets the obliquity, the body spins
+    const hold = new THREE.Group(); hold.position.set(p.r, hs, 0); grp.add(hold);
+    const tiltG = new THREE.Group(); tiltG.rotation.set(0, p.az, p.tilt * DEG); hold.add(tiltG);
+    const ring = p.ring ? { tex: ringTex[p.ring], spec: ringSpec[p.ring] } : null;
+    const planet = new THREE.Mesh(unitSphere, planetMaterial(p.k, maps, PU, ring ? { ringTex: ring.tex, ring: ring.spec, ringK: p.ring === 'saturn' ? 0.85 : 0.5 } : {}));
+    planet.scale.setScalar(p.s); planet.name = `body:${p.k}`; tiltG.add(planet);
+    if (p.k === 'earth' || p.k === 'venus') {
+      const a = atmosphereShell(p.k === 'earth' ? [0.28, 0.55, 1.0] : [1.0, 0.86, 0.6], PU, p.k === 'earth' ? { k: 0.9, hs: 0.022 } : { k: 0.55, hs: 0.03 });
+      const shell = new THREE.Mesh(unitSphere, a.material); shell.scale.setScalar(a.scale); planet.add(shell);
     }
-    if (p.moon) { const mg = new THREE.Group(); mg.position.copy(planet.position); grp.add(mg); const mn = new THREE.Mesh(new THREE.SphereGeometry(0.025, 24, 16), new THREE.MeshStandardMaterial({ map: planetTexture('moon', 9), roughness: 0.8 })); mn.position.x = 0.17; mg.add(mn); const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.17, 6), brass); rod.rotation.z = Math.PI / 2; rod.position.x = 0.085; mg.add(rod); p.moonGrp = mg; }
-    p.grp = grp; p.phase = pr() * TAU; p.w = 1.25 * Math.pow(p.r, -1.5);
+    if (ring) {
+      const rm = ringMesh(ring.tex, ring.spec, PU, p.ring === 'saturn' ? { k: 1, glow: 1 } : { k: 0.9, glow: 0.6 });
+      rm.scale.setScalar(p.s); tiltG.add(rm);
+    }
+    const pcup = new THREE.Mesh(new THREE.CylinderGeometry(p.s * 0.45, 0.012, p.s * 0.35, 20), brassPolish); pcup.position.set(p.r, hs - p.s * 0.95, 0); grp.add(pcup);
+    if (p.moon) {
+      const mg = new THREE.Group(); mg.position.copy(hold.position); grp.add(mg);
+      const mn = new THREE.Mesh(unitSphere, planetMaterial('moon', maps, PU)); mn.scale.setScalar(0.025); mn.name = 'body:moon'; mn.position.x = 0.17; mn.rotation.z = 6.7 * DEG; mg.add(mn);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.17, 6), brass); rod.rotation.z = Math.PI / 2; rod.position.x = 0.085; mg.add(rod); p.moonGrp = mg;
+    }
+    const ph = pr() * TAU;
+    p.grp = grp; p.hold = hold; p.planet = planet; p.phase = p.phase0 ?? ph; p.w = 1.25 * Math.pow(p.r, -1.5); p.spin0 = spinR() * TAU;
   });
+  const earthMat = PL[2].planet.material;
   // orbit rings (glowing lines) with ticks
   const orbitLines = [], orbitTicks = [];
   PL.forEach((p, i) => {
@@ -890,7 +907,13 @@ export function create(ctx, segment) {
     const orrOn = t > 1.8;
     orrery.visible = sun.visible = sunGlow.visible = sunGlow2.visible = orrOn;
     const tw = t * 1.0;
-    PL.forEach((p) => { p.grp.rotation.y = p.phase + tw * p.w; if (p.moonGrp) p.moonGrp.rotation.y = tw * 3.0; });
+    PL.forEach((p) => {
+      p.grp.rotation.y = p.phase + tw * p.w; p.hold.rotation.y = -p.grp.rotation.y;
+      p.planet.rotation.y = p.spin0 + t * p.spin;
+      if (p.moonGrp) p.moonGrp.rotation.y = tw * 3.0;
+    });
+    earthMat.uniforms.uCloudOff.value = t * 0.006;
+    PU.uTime.value = t;
     const thC = t * 0.35;
     crownSpin.rotation.z = thC;
     pinions.forEach((pp) => { pp.grp.rotation.z = meshAngle(thC, 56, pp.pz, pp.dir); });
@@ -901,7 +924,8 @@ export function create(ctx, segment) {
     const sunI = 1 + 0.08 * Math.sin(T * 9.0);
     sunMat.uniforms.uI.value = 1.7 * sunI * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.9);   // bright but still a textured sphere, not a clipped white disc
     sunLight.intensity = 18 * ramp(t, 1.9, 2.5);   // brass under a close point light was blooming into a gold wash
-    sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3;
+    sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3; sunMat.uniforms.uT.value = t;
+    PU.uSunI.value = 1.6 * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.25);
 
     // light: beam → prism → spectrum (the light itself is slow-motion: the fan unfurls over ~0.45 s)
     const bp = ramp(t, tBeam - 0.28, tBeam, ease.inQuad);
@@ -936,7 +960,9 @@ export function create(ctx, segment) {
     capO.reveal = ramp(t, tBeam + 0.15, tBeam + 0.5, ease.outCubic); capO.opacity = eqN.opacity * 0.9;
     prism.visible = t > 3.0;
     // the grade's colour harmony steps aside so the spectrum shows every true hue
-    out.harmony = 1 - 0.97 * ramp(t, tBeam - 0.05, tBeam + 0.2);
+    // (the harmony only pulls off-palette hues; while the orrery is on show it eases so the planets keep
+    // their true colours — Earth's oceans, the ice giants' blues — and the brass is untouched)
+    out.harmony = Math.min(1 - 0.45 * envelope(t, 2.2, 4.05, 0.35, 0.2), 1 - 0.97 * ramp(t, tBeam - 0.05, tBeam + 0.2));
 
     // labels face the camera (flat zodiac numerals excepted)
     for (const l of labels3D) l.quaternion.copy(camera.quaternion);
@@ -963,7 +989,7 @@ export function create(ctx, segment) {
     bloom.strength = 0.55 + 0.2 * smoothstep(tBeam, tSpec, t);
   }
 
-  function explore(t) { if (t > 1.8) bench.visible = true; }
+  function explore(t) { if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.55); } }
   const out = { scene, camera, update, explore, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
   return out;
 }
