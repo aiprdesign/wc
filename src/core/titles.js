@@ -2,7 +2,7 @@
 // Each chapter gets an era line, a kinetic heading and one line of story; a few
 // story-only cards carry the narrative between chapters. Pure function of time.
 import * as THREE from 'three';
-import { SEGMENTS, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
+import { SEGMENTS, CUES, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
 import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
@@ -21,6 +21,15 @@ const CHAPTERS = {
   computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.' },
   knowledge:   { n: 'XI',   era: '1450 — TODAY',                heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
 };
+
+// The one word that defines each chapter — shown huge, SaaS-keynote style, before the heading.
+const CONCEPT = {
+  classical: 'Order.', civic: 'Law.', renaissance: 'Beauty.', science: 'Reason.', industrial: 'Power.',
+  electricity: 'Connection.', medicine: 'Life.', flight: 'Flight.', moonshot: 'One giant leap.',
+  computing: 'Intelligence.', knowledge: 'Knowledge.',
+};
+// Montage: rapid word swaps locked to the shape morphs.
+const SWAPS = [['mColumns', 'Order.'], ['mGears', 'Motion.'], ['mOrbits', 'Orbits.'], ['mAtoms', 'Atoms.'], ['mCircuit', 'Circuits.'], ['mStars', 'Stars.']];
 
 // Showreel breakdown: the craft each chapter demonstrates.
 const TECHNIQUE = {
@@ -42,7 +51,7 @@ const TECHNIQUE = {
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.25, end: 3.0, text: 'Every achievement begins as an idea.' },
-  { start: 49.75, end: 52.6, text: 'If I have seen further, it is by standing on the shoulders of giants.', cite: 'ISAAC NEWTON · 1675' },
+  { start: 49.9, end: 54.2, text: 'Standing on the shoulders of giants.', cite: 'ISAAC NEWTON · 1675', low: true },
 ];
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
@@ -87,11 +96,17 @@ export class TitleLayer {
     this.y = square ? 0.72 : 0.7;
     this.scale = square ? 1.0 : 0.92;
     this.cards = [];
+    this.words = [];
     for (const seg of SEGMENTS) {
       const c = CHAPTERS[seg.id];
+      if (CONCEPT[seg.id]) this.words.push(this.makeWord(CONCEPT[seg.id], seg.start + 0.28, seg.start + 1.55, c?.n, seg));
       if (!c || !c.heading) continue;
       this.cards.push(this.makeCard(seg, c));
     }
+    SWAPS.forEach(([cue, w], i) => {
+      const t = CUES[cue], next = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
+      this.words.push(this.makeWord(w, t - 0.05, next - 0.05, null, SEGMENTS.find((sg) => sg.id === 'montage'), { swap: true }));
+    });
     this.interludes = INTERLUDES.map((d) => this.makeInterlude(d));
     this.makeReel(a);
   }
@@ -176,6 +191,67 @@ export class TitleLayer {
     return this.reel.visible;
   }
 
+  // A giant concept word that fills the frame (Inter SemiBold, tight tracking).
+  makeWord(text, t0, t1, numeral, seg, { swap = false } = {}) {
+    const a = OUTPUT_ASPECT;
+    const g = new THREE.Group();
+    const color = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(t0 + 0.5)) / 2));
+    const word = new KineticText(text, { font: FONTS.sans, weight: 600, height: 0.3, size: 360, letterSpacing: -0.035, color: '#ffffff', intensity: 0.92, padding: 0.18 });
+    const ls = word.letters;
+    const w = ls.length ? (ls.at(-1).base.x - ls[0].base.x) + 0.3 * 0.62 : 1;
+    // fill ~78% of the frame width, but never taller than ~46% of the frame
+    const k = Math.min((2 * a * 0.78) / w, 0.46 / 0.3 * (a < 1.9 ? 1 : 0.85));
+    word.scale.setScalar(k);
+    ls.forEach((l) => { l.mesh.material.depthTest = false; l.mesh.color.copy(color).lerp(new THREE.Color('#ffffff'), 0.55); });
+    g.add(word);
+    const halfW = (w * k) / 2;
+    const rule = progressLine([new THREE.Vector3(-halfW, 0, 0), new THREE.Vector3(halfW, 0, 0)], { color, intensity: 0.9, head: 0.05 });
+    rule.position.y = -0.3 * k * 0.78;
+    g.add(rule);
+    let label = null;
+    if (numeral) {
+      label = new TextPlane(`CHAPTER ${numeral}`, { font: FONTS.mono, height: 0.034, letterSpacing: 0.5, color, intensity: 1.1 });
+      label.position.set(-halfW + label.worldWidth / 2 - 0.02, 0.3 * k * 0.62, 0);
+      label.material.depthTest = false;
+      g.add(label);
+    }
+    const dim = new THREE.Mesh(new THREE.PlaneGeometry(2 * a + 0.2, 2.2), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+    dim.renderOrder = -2;
+    g.add(dim);
+    g.position.y = swap ? 0.02 : 0.02;
+    this.scene.add(g);
+    return { g, word, rule, label, dim, t0, t1, swap, k };
+  }
+
+  updateWords(T) {
+    let any = false;
+    for (const w of this.words) {
+      const on = T > w.t0 - 0.02 && T < w.t1 + 0.4;
+      w.g.visible = on;
+      if (!on) continue;
+      any = true;
+      const t = T - w.t0, n = w.word.letters.length;
+      const inDur = w.swap ? 0.22 : 0.45, stagger = w.swap ? 0.012 : 0.035;
+      const outStart = w.t1 - (w.swap ? 0.06 : 0.28);
+      // slow push while held (the keynote "breathing" move)
+      w.word.scale.setScalar(w.k * (1 + 0.045 * sat(t / Math.max(0.1, w.t1 - w.t0))));
+      w.word.letters.forEach((l, i) => {
+        const kin = ease.outExpo(sat((t - i * stagger) / inDur));
+        const kout = ease.inCubic(sat((T - outStart - i * stagger * 0.5) / (w.swap ? 0.12 : 0.26)));
+        const h = 0.3;
+        l.mesh.position.set(l.base.x, l.base.y + (1 - kin) * -h * 0.9 + kout * h * 0.7, 0);
+        l.mesh.opacity = sat(kin * 1.4) * (1 - kout);
+        l.mesh.intensity = 0.92 + (1 - kin) * 1.6 * (kin > 0 ? 1 : 0);   // crisp, only the entrance flares
+      });
+      const hold = sat(t / 0.25) * (1 - sat((T - outStart) / 0.25));
+      w.dim.material.opacity = (w.swap ? 0.28 : 0.4) * hold;
+      w.rule.progress = Math.max(0.0001, ease.outExpo(sat((t - 0.12) / 0.5)) * (1 - ease.inCubic(sat((T - outStart) / 0.25))));
+      w.rule.opacity = w.rule.progress > 0.001 ? 0.9 : 0;
+      if (w.label) { w.label.reveal = ramp(t, 0.05, 0.45, ease.outCubic); w.label.opacity = hold * 0.9; }
+    }
+    return any;
+  }
+
   makeCard(seg, c) {
     const g = new THREE.Group();
     g.position.y = this.y;
@@ -202,15 +278,15 @@ export class TitleLayer {
     this.scene.add(g);
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
-    const t0 = seg.start + 0.45, t1 = seg.start + Math.min(3.3, dur - 0.9);
+    const t0 = seg.start + 1.55, t1 = seg.start + Math.min(3.7, dur - 0.55);
     return { g, era, heading, ruleL, ruleR, story, scrim, t0, t1 };
   }
 
   makeInterlude(d) {
     const g = new THREE.Group();
-    g.position.y = d.cite ? this.y - 0.02 : 0;
+    g.position.y = d.low ? -0.42 : d.cite ? this.y - 0.02 : 0;
     g.scale.setScalar(this.scale);
-    const text = new KineticText(d.text, { font: FONTS.serif, italic: true, weight: 500, height: d.cite ? 0.066 : 0.08, letterSpacing: 0.02, color: '#fff1d8', intensity: 1.2 });
+    const text = new KineticText(d.text, { font: FONTS.serif, italic: true, weight: 500, height: d.low ? 0.058 : d.cite ? 0.066 : 0.08, letterSpacing: 0.02, color: '#fff1d8', intensity: 1.2 });
     g.add(text);
     let cite = null;
     if (d.cite) {
@@ -226,6 +302,7 @@ export class TitleLayer {
 
   update(T) {
     let any = this.updateReel(T);
+    any = this.updateWords(T) || any;
     for (const c of this.cards) {
       const on = T > c.t0 - 0.05 && T < c.t1 + 0.7;
       c.g.visible = on;
