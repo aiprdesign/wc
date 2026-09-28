@@ -535,8 +535,8 @@ export function create(ctx, segment) {
   for (let i = 0; i <= 80; i++) { const u = i / 80; const a = -0.9 + u * 1.3; const r = earthR * (1.0 + u * 0.3); ascentPts.push(V3(Math.cos(a) * r * 0.2 - 3, Math.sin(a) * r * 0.1 + 3.5 + u * 1.5, Math.sqrt(Math.max(0, r * r - 9 - 12)) * (0.96 + u * 0.05))); }
   const ascent = progressLine(ascentPts, { color: '#ffd7a8', headColor: '#ffffff', intensity: 2.2, head: 0.03, fade: 0.25 });
   worldB.add(ascent);
-  // station in zero gravity (camera-relative, co-orbiting): the truss is already on station; two modules
-  // berth along their common axis (±Z) with a soft capture, and four ISS-style array wings deploy —
+  // station in zero gravity (camera-relative, co-orbiting): truss and core module are on station; a second module
+  // berths along its own axis (+Z) with a soft capture, and four ISS-style array wings deploy —
   // each wing is two accordion-folded blankets flanking a telescoping mast; the Z-folded panel pairs
   // open root-first, the mast pushing the tip bar out, and every hinge settles with a small damped overshoot.
   const station = new THREE.Group(); scene.add(station);
@@ -560,7 +560,7 @@ export function create(ctx, segment) {
     }
     return toTexture(c);
   })();
-  const blanketMat = new THREE.MeshStandardMaterial({ map: blanketTex, color: '#9fb2d4', metalness: 0.75, roughness: 0.3, envMapIntensity: 1.2, emissive: '#6f8fc4', emissiveMap: blanketTex, emissiveIntensity: 0.35 });
+  const blanketMat = new THREE.MeshStandardMaterial({ map: blanketTex, color: '#9fb2d4', metalness: 0.6, roughness: 0.38, envMapIntensity: 1.0, emissive: '#6f8fc4', emissiveMap: blanketTex, emissiveIntensity: 0.35 });
   const blanketBack = new THREE.MeshStandardMaterial({ color: '#b8b3a4', metalness: 0.2, roughness: 0.6, emissive: '#2a2a2a' });
   const blanketEdge = new THREE.MeshStandardMaterial({ color: '#8c93a0', metalness: 0.8, roughness: 0.4 });
   // one geometry per panel index: hinge at the local origin, extends along +Z; its cell face (+Y) samples its own slice
@@ -576,25 +576,28 @@ export function create(ctx, segment) {
   const segMats = [blanketEdge, blanketEdge, blanketMat, blanketBack, blanketEdge, blanketEdge];
   const mastGeo = new THREE.CylinderGeometry(1, 1, 1, 8); mastGeo.rotateX(Math.PI / 2); mastGeo.translate(0, 0, 0.5);   // unit, spans z ∈ [0,1]
   const MAST_R = [0.016, 0.012, 0.009];
-  const wings = [[-1.25, 1], [-1.25, -1], [1.25, 1], [1.25, -1]].map(([x, s], wi) => {
+  const PLATE_H = ARR_SEG + 0.04, PLATE_Y = ARR_SEG / 2 - 0.01;
+  const plateGeo = new THREE.BoxGeometry(2 * ARR_W + ARR_GAP + 0.03, PLATE_H, 0.012);
+  const plateMat = new THREE.MeshStandardMaterial({ color: '#d4d1c8', metalness: 0.35, roughness: 0.5, envMapIntensity: 0.8, emissive: '#3a3c42' });
+  const wings = [[-1.25, 1], [-1.25, -1], [1.25, 1], [1.25, -1]].map(([x, s]) => {
     const root = new THREE.Group(); root.position.set(x, 0, s * 0.085); if (s < 0) root.rotation.y = Math.PI; station.add(root);
-    const box = new THREE.Mesh(new THREE.BoxGeometry(2 * ARR_W + ARR_GAP + 0.04, 0.03, 0.05), stSteel); box.position.set(0, -0.018, 0.0); root.add(box);
+    // blanket box: the stack is stowed between a base plate and a lid; the mast carries the lid out to become the tip bar
+    const base = new THREE.Mesh(plateGeo, plateMat); base.position.set(0, PLATE_Y, -0.009); root.add(base);
     const blankets = [-1, 1].map((side) => {
       const segs = segGeos.map((geo) => { const m = new THREE.Mesh(geo, segMats); m.position.x = side * (ARR_W + ARR_GAP) / 2; root.add(m); return m; });
       return segs;
     });
     const mast = MAST_R.map((r) => { const m = new THREE.Mesh(mastGeo, stSteel); m.scale.set(r, r, 0.001); root.add(m); return m; });
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(2 * ARR_W + ARR_GAP + 0.02, 0.014, 0.022), stSteel); root.add(tip);
-    // lock times keep the old dock cues (the first wing locks flat on the beat at tEarth + 0.3)
-    return { blankets, mast, tip, t1: tEarth + 0.3 + wi * 0.07, phi: new Float32Array(ARR_N / 2) };
+    const tip = new THREE.Mesh(plateGeo, plateMat); root.add(tip);
+    // mirror pairs deploy together: the port wings lock flat on the beat (tEarth + 0.3), the starboard wings a moment later
+    return { blankets, mast, tip, t1: tEarth + 0.3 + (x > 0 ? 0.14 : 0), phi: new Float32Array(ARR_N / 2) };
   });
-  // modules: berth along ±Z (their own axis) onto the truss's central node
+  // modules: the core (modB) is on station; the lab (modA) makes its final approach along +Z onto the central node
   const modA = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.9, 32), stGold); modA.rotation.x = Math.PI / 2; station.add(modA);
-  const modB = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.7, 32), stSteel); modB.rotation.x = Math.PI / 2; station.add(modB);
+  const modB = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.7, 32), stSteel); modB.rotation.x = Math.PI / 2; modB.position.z = -0.45; station.add(modB);
   const node = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.2, 24), stSteel); node.rotation.x = Math.PI / 2; station.add(node);
   const berths = [
-    { obj: modA, home: 0.55, dir: 1, dist: 1.6, t1: tEarth + 0.15, port: V3(0, 0, 0.1) },
-    { obj: modB, home: -0.45, dir: -1, dist: 1.4, t1: tEarth + 0.25, port: V3(0, 0, -0.1) },
+    { obj: modA, home: 0.55, dir: 1, dist: 1.0, t1: tEarth + 0.15, port: V3(0, 0, 0.1) },
   ];
   const dockFlashes = berths.map((b) => { const g = glowSprite({ color: '#dff0ff', intensity: 2, scale: 0.22 }); g.position.copy(b.port); station.add(g); return g; });
   const truss = new THREE.Group();
@@ -844,16 +847,16 @@ export function create(ctx, segment) {
       tmp.set(0.35 + t * 0.12, -0.6 + t * 0.1, 0.25);
       e.set(tmp.x, tmp.y, tmp.z); q.setFromEuler(e); station.quaternion.multiply(q);
       // modules berth along their axis: smooth approach, soft capture, a faint glint at the port on contact
-      berths.forEach((b, i) => {
-        const k = settle(t, b.t1, 0.5, 0.35, 40, 20);
+      for (let i = 0; i < berths.length; i++) {
+        const b = berths[i], k = settle(t, b.t1, 0.45, 0.35, 40, 20);
         b.obj.position.set(0, 0, b.home + b.dir * b.dist * (1 - k));
         const f = envelope(t, b.t1 - 0.01, b.t1 + 0.18, 0.01, 0.16);
         dockFlashes[i].material.opacity = f * 0.8; dockFlashes[i].visible = f > 0.001;
-      });
+      }
       // array wings: panel pairs unfold root-first (Z-fold), the telescoping mast carries the tip bar out
       for (let wi = 0; wi < wings.length; wi++) {
         const w = wings[wi];
-        for (let p = 0; p < ARR_N / 2; p++) w.phi[p] = ARR_FOLD * (1 - settle(t, w.t1 - (ARR_N / 2 - 1 - p) * 0.06, 0.24));
+        for (let p = 0; p < ARR_N / 2; p++) w.phi[p] = ARR_FOLD * (1 - settle(t, w.t1 - (ARR_N / 2 - 1 - p) * 0.07, 0.26));
         for (const segs of w.blankets) {
           let y = 0, z = 0;
           for (let k = 0; k < ARR_N; k++) {
@@ -861,7 +864,7 @@ export function create(ctx, segment) {
             const m = segs[k]; m.position.y = y; m.position.z = z; m.rotation.x = -sg * phi;
             y += sg * ARR_SEG * Math.sin(phi); z += ARR_SEG * Math.cos(phi);
           }
-          w.tip.position.set(0, y, z + 0.011);
+          w.tip.position.set(0, y + PLATE_Y, z + 0.009);
         }
         const zt = w.tip.position.z;                        // mast: three nested stages sharing the extension
         for (let s = 0; s < 3; s++) { const a = Math.max(0, zt * s / 3 - 0.03), m = w.mast[s]; m.position.z = a; m.scale.z = Math.max(0.001, zt * (s + 1) / 3 - a); }
