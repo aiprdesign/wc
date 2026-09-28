@@ -25,21 +25,27 @@ import { gearGeometry, meshAngle, steelMat, brassMat, ironMat, surfaceTexture, l
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // ---------------------------------------------------------------------------
-// Billboard smoke: every particle's life is a pure function of uTime (birth, drag, buoyancy, curl-ish noise).
-function makeSteam(count, emitters, { seed = 5, size = 0.9 } = {}) {
+// Volumetric-looking steam: soft gaussian puffs eroded by animated noise (edges fray and thin out as
+// they age), lit as a scattering medium — Henyey–Greenstein forward scattering toward a back light
+// (bright silver linings where the puff is thin and faces the light), a soft key from above and a cool
+// ambient in the dense core. Every particle's life is a pure function of uTime (birth, drag, buoyancy,
+// growing turbulence); nothing is simulated per frame.
+function makeSteam(count, emitters, { seed = 5, lightPos = new THREE.Vector3(0, 10, -8), keyDir = new THREE.Vector3(-0.4, 0.8, 0.5) } = {}) {
   const r = rng(seed);
-  const emit = new Float32Array(count * 3), vel = new Float32Array(count * 3), sd = new Float32Array(count * 4), birth = new Float32Array(count), life = new Float32Array(count);
+  const emit = new Float32Array(count * 3), vel = new Float32Array(count * 3), sd = new Float32Array(count * 4), birth = new Float32Array(count), life = new Float32Array(count), size = new Float32Array(count);
   let n = 0;
   const totalW = emitters.reduce((s, e) => s + e.weight, 0);
+  const d = new THREE.Vector3();
   for (const e of emitters) {
     const k = Math.round((count * e.weight) / totalW);
     for (let i = 0; i < k && n < count; i++, n++) {
-      emit.set([e.pos.x + (r() - 0.5) * e.jitter, e.pos.y + (r() - 0.5) * e.jitter, e.pos.z + (r() - 0.5) * e.jitter], n * 3);
-      const d = e.dir.clone().add(V((r() - 0.5) * e.spread, (r() - 0.5) * e.spread, (r() - 0.5) * e.spread)).normalize().multiplyScalar(e.speed * (0.6 + r() * 0.8));
-      vel.set([d.x, d.y, d.z], n * 3);
-      sd.set([r(), r(), r(), r()], n * 4);
+      emit[n * 3] = e.pos.x + (r() - 0.5) * e.jitter; emit[n * 3 + 1] = e.pos.y + (r() - 0.5) * e.jitter; emit[n * 3 + 2] = e.pos.z + (r() - 0.5) * e.jitter;
+      d.copy(e.dir).add(new THREE.Vector3((r() - 0.5) * e.spread, (r() - 0.5) * e.spread, (r() - 0.5) * e.spread)).normalize().multiplyScalar(e.speed * (0.6 + r() * 0.8));
+      vel[n * 3] = d.x; vel[n * 3 + 1] = d.y; vel[n * 3 + 2] = d.z;
+      sd[n * 4] = r(); sd[n * 4 + 1] = r(); sd[n * 4 + 2] = r(); sd[n * 4 + 3] = r();
       birth[n] = e.birth(r(), i / k);
       life[n] = e.life * (0.7 + r() * 0.6);
+      size[n] = (e.size ?? 1) * (0.7 + r() * 0.6);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -48,47 +54,70 @@ function makeSteam(count, emitters, { seed = 5, size = 0.9 } = {}) {
   g.setAttribute('aSeed', new THREE.BufferAttribute(sd, 4));
   g.setAttribute('aBirth', new THREE.BufferAttribute(birth, 1));
   g.setAttribute('aLife', new THREE.BufferAttribute(life, 1));
+  g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
   g.setDrawRange(0, n);
   const m = new THREE.ShaderMaterial({
     uniforms: {
-      uTime: { value: 0 }, uViewport: { value: 800 }, uSize: { value: size }, uOpacity: { value: 1 },
-      uAmb: { value: new THREE.Color('#2a2d31') }, uKey: { value: new THREE.Color('#a0a8b0') }, uRim: { value: new THREE.Color('#ff9a52').multiplyScalar(1.8) },
-      uLight: { value: new THREE.Vector2(0.6, 0.8) },
+      uTime: { value: 0 }, uViewport: { value: 800 }, uOpacity: { value: 1 },
+      uAmb: { value: new THREE.Color('#565a60') }, uKey: { value: new THREE.Color('#bdb9b2') }, uBack: { value: new THREE.Color('#ffe2c2').multiplyScalar(3.0) },
+      uLightPos: { value: lightPos.clone() }, uKeyW: { value: keyDir.clone().normalize() },
+      uFirePos: { value: new THREE.Vector3() }, uFire: { value: new THREE.Color('#ff8a3c') }, uFireI: { value: 0 },
     },
     vertexShader: /* glsl */ `${GLSL_NOISE}
-      attribute vec3 aVel; attribute vec4 aSeed; attribute float aBirth; attribute float aLife;
-      uniform float uTime, uViewport, uSize; varying float vA; varying vec4 vSeed; varying float vAge;
+      attribute vec3 aVel; attribute vec4 aSeed; attribute float aBirth; attribute float aLife; attribute float aSize;
+      uniform float uTime, uViewport, uFireI; uniform vec3 uLightPos, uKeyW, uFirePos;
+      varying float vA; varying vec4 vSeed; varying float vAge; varying float vPhase; varying vec2 vL2; varying vec3 vKey; varying float vFire; varying vec2 vF2;
       void main(){
         float age = uTime - aBirth;
         if (age < 0.0 || age > aLife) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
-        float k = 2.4;
-        vec3 p = position + aVel * (1.0 - exp(-k * age)) / k + vec3(0.0, 0.9 * age * age + 0.3 * age, 0.0);
-        p += snoise3(p * 0.45 + aSeed.xyz * 9.0 + vec3(0.0, -uTime * 0.4, 0.0)) * (0.05 + age * 0.7);
+        float u = age / aLife;
+        float k = 2.6;
+        vec3 p = position + aVel * (1.0 - exp(-k * age)) / k;
+        p.y += 0.28 * age * age + 0.22 * age;                                   // buoyancy
+        p += snoise3(p * 0.42 + aSeed.xyz * 9.0 + vec3(0.0, -uTime * 0.45, 0.0)) * (0.03 + age * 0.55);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        float u = age / aLife;
-        float s = uSize * mix(0.5, 1.9 + aSeed.w * 0.8, sqrt(u));
-        gl_PointSize = min(900.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.2, -mv.z));
-        vA = smoothstep(0.0, 0.18, u) * (1.0 - smoothstep(0.35, 1.0, u)) * smoothstep(0.15, 0.9, -mv.z);
+        float s = aSize * mix(0.3, 2.3 + aSeed.w * 0.9, pow(u, 0.55));
+        gl_PointSize = min(1000.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.2, -mv.z));
+        // expanding puffs thin out; fade in fast, dissipate slowly; never pop against the lens
+        vA = smoothstep(0.0, 0.07, u) * pow(1.0 - u, 1.3) * smoothstep(0.35, 1.4, -mv.z) / (0.6 + 0.8 * u);
+        vec3 L = normalize(uLightPos - p), Vv = normalize(cameraPosition - p);
+        float g = 0.7, ct = dot(-Vv, L);
+        vPhase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5) * (1.0 - g) * (1.0 - g) / (1.0 + g);
+        vec3 lv = (viewMatrix * vec4(L, 0.0)).xyz; vL2 = normalize(lv.xy + vec2(1e-4));
+        vKey = normalize((viewMatrix * vec4(uKeyW, 0.0)).xyz);
+        vec3 fd = uFirePos - p; float fl = length(fd);
+        vFire = uFireI / (1.0 + fl * fl * 0.35);
+        vec3 fv = (viewMatrix * vec4(fd / max(fl, 1e-3), 0.0)).xyz; vF2 = normalize(fv.xy + vec2(1e-4));
         vSeed = aSeed; vAge = u;
       }`,
     fragmentShader: /* glsl */ `${GLSL_NOISE}
-      uniform float uOpacity; uniform vec3 uAmb, uKey, uRim; uniform vec2 uLight;
-      varying float vA; varying vec4 vSeed; varying float vAge;
+      uniform float uOpacity; uniform vec3 uAmb, uKey, uBack, uFire;
+      varying float vA; varying vec4 vSeed; varying float vAge; varying float vPhase; varying vec2 vL2; varying vec3 vKey; varying float vFire; varying vec2 vF2;
       void main(){
         vec2 c = gl_PointCoord * 2.0 - 1.0; c.y = -c.y;
-        float r = length(c);
-        if (r > 1.0) discard;
-        float n = snoise(vec3(c * 1.5 + vSeed.xy * 10.0, vSeed.z * 10.0 + vAge * 1.2)) * 0.5 + 0.5;
-        float n2 = snoise(vec3(c * 3.6 + vSeed.yz * 10.0, vAge * 2.0 + vSeed.w * 5.0)) * 0.5 + 0.5;
-        float d = smoothstep(1.0, 0.0, r + (n - 0.5) * 0.7 + (n2 - 0.5) * 0.35); d *= d;
-        float a = d * vA * uOpacity;
-        if (a < 0.003) discard;
-        vec3 N = normalize(vec3(c, sqrt(max(0.0, 1.0 - r * r))));
-        float rim = pow(1.0 - N.z, 1.4) * max(0.0, dot(normalize(c + 1e-4), normalize(uLight)));
-        float front = max(0.0, dot(N, normalize(vec3(-0.4, 0.6, 0.7))));
-        vec3 col = uAmb * (0.6 + n) + uKey * front * (0.4 + n2 * 0.6) + uRim * rim * (0.4 + n);
-        gl_FragColor = vec4(col, a * 0.5);
+        float r2 = dot(c, c);
+        if (r2 > 1.0) discard;
+        float a = vSeed.w * 6.283 + vAge * 0.9;
+        vec2 cr = mat2(cos(a), -sin(a), sin(a), cos(a)) * c;
+        vec3 q = vec3(cr * 0.8 + vSeed.xy * 10.0, vSeed.z * 10.0 + vAge * 0.7);
+        float n1 = snoise(q);
+        float n2 = snoise(q * 2.3 + vec3(n1 * 0.6, -n1 * 0.4, vAge));
+        float n3 = snoise(q * 5.1 + vec3(n2 * 0.5, 0.0, vAge * 2.0));
+        float f = clamp(0.5 + 0.5 * (n1 * 0.55 + n2 * 0.3 + n3 * 0.15), 0.0, 1.0);
+        // billows: gaussian body eroded by the noise; erosion grows with age so edges fray into wisps
+        float body = exp(-r2 * 2.4);
+        float dens = smoothstep(0.0, 0.75, body * (0.35 + 1.25 * f) - (0.12 + 0.55 * vAge) * (1.0 - f) - 0.05);
+        float alpha = dens * vA * uOpacity * 0.55;
+        if (alpha < 0.003) discard;
+        vec3 N = normalize(vec3(c, sqrt(max(0.0, 1.0 - r2))));
+        float limb = max(0.0, dot(normalize(c + 1e-4), vL2)) * sqrt(r2);
+        float thin = 1.0 - smoothstep(0.05, 0.7, dens);
+        float self = mix(0.55, 1.0, f);                                  // crude self-shadowing in the folds
+        vec3 col = (uAmb * (0.5 + 0.6 * f) + uKey * (0.25 + 0.75 * max(0.0, dot(N, vKey)))) * self
+                 + uBack * vPhase * (0.2 + 1.2 * thin + 0.8 * limb)
+                 + uFire * vFire * (0.35 + 0.9 * max(0.0, dot(normalize(c + 1e-4), vF2)) * sqrt(r2)) * (0.6 + 0.4 * thin);
+        gl_FragColor = vec4(col, alpha);
       }`,
     transparent: true, depthWrite: false,
   });
@@ -115,7 +144,7 @@ export function create(ctx, segment) {
   const rim = new THREE.DirectionalLight('#ff9448', 3.2); rim.position.set(6, 5, -9); scene.add(rim);
   const fill = new THREE.DirectionalLight('#8fb0d0', 0.7); fill.position.set(9, 2, 7); scene.add(fill);
   const side = new THREE.DirectionalLight('#ffd0a0', 0); side.position.set(12, 6, 5); scene.add(side);
-  const ember = new THREE.PointLight('#ff7a30', 0, 9, 2); scene.add(ember);
+  const ember = new THREE.PointLight('#ff7a30', 0, 16, 2); scene.add(ember);
 
   // ---- materials --------------------------------------------------------------
   const steel = steelMat({ roughness: 0.24, color: '#a9b2bc' });
@@ -236,140 +265,254 @@ export function create(ctx, segment) {
   scene.add(calloutA, calloutB);
 
   // =====================================================================================
-  // SET 2 — steam engine (crank axis along x)
-  const YC = 2.3, ZC = 3.0, CR = 0.42, CL = 1.55;
-  const PX = [-1.8, -0.6, 0.6, 1.8];
-  const PPH = [0, Math.PI, Math.PI, 0];
+  // SET 2 — twin horizontal mill engine: two cylinders drive cranks 90° apart on one shaft, a rope-grooved
+  // flywheel turning in its pit between them, a flyball governor, and a Lancashire boiler front with
+  // glowing furnace doors, gauges and brass fittings. Crank axis along z; strokes along x.
+  const YC = 2.0, ZC = 3.0, XC = 0, CR = 0.55, CL = 2.25, ROD = 1.5;
+  const ENG = [{ z: ZC + 1.4, ph: 0, near: true }, { z: ZC - 1.4, ph: Math.PI / 2, near: false }];
   const machine = new THREE.Group(); scene.add(machine);
-  const crankUnits = [];
-  {
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 7.6, 32), steelPol); shaft.rotation.z = Math.PI / 2; shaft.position.set(0.9, YC, ZC); machine.add(shaft);
-    // bearing pedestals
-    [-2.6, -1.2, 0, 1.2, 2.6].forEach((x) => {
-      const ped = new THREE.Mesh(new THREE.BoxGeometry(0.3, YC, 0.7), iron); ped.position.set(x, YC / 2, ZC); machine.add(ped);
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.32, 32), steel); cap.rotation.z = Math.PI / 2; cap.position.set(x, YC, ZC); machine.add(cap);
-    });
-    const webGeo = new THREE.BoxGeometry(0.12, CR + 0.3, 0.34); webGeo.translate(0, CR / 2 - 0.05, 0);
-    const cwGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 32, 1, false, Math.PI, Math.PI); cwGeo.rotateZ(Math.PI / 2);
-    const pinGeo2 = new THREE.CylinderGeometry(0.1, 0.1, 0.36, 24); pinGeo2.rotateZ(Math.PI / 2);
-    const rodGeo = new THREE.BoxGeometry(0.1, CL, 0.16); rodGeo.translate(0, CL / 2, 0);
-    const bigEnd = new THREE.CylinderGeometry(0.17, 0.17, 0.14, 32); bigEnd.rotateZ(Math.PI / 2);
-    const pistonGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.55, 48); pistonGeo.translate(0, 0.2, 0);
-    const ringGeo = new THREE.TorusGeometry(0.332, 0.012, 8, 48); ringGeo.rotateX(Math.PI / 2);
-    PX.forEach((x, i) => {
-      const crank = new THREE.Group(); crank.position.set(x, YC, ZC); machine.add(crank);
-      const w1 = new THREE.Mesh(webGeo, steel); w1.position.x = -0.2; crank.add(w1);
-      const w2 = new THREE.Mesh(webGeo, steel); w2.position.x = 0.2; crank.add(w2);
-      const c1 = new THREE.Mesh(cwGeo, iron); c1.position.x = -0.2; crank.add(c1);
-      const c2 = new THREE.Mesh(cwGeo, iron); c2.position.x = 0.2; crank.add(c2);
-      const pin = new THREE.Mesh(pinGeo2, steelPol); pin.position.y = CR; crank.add(pin);
-      const rod = new THREE.Group(); machine.add(rod);
-      rod.add(new THREE.Mesh(rodGeo, forged));
-      const be = new THREE.Mesh(bigEnd, steel); rod.add(be);
-      const piston = new THREE.Group(); machine.add(piston);
-      piston.add(new THREE.Mesh(pistonGeo, pistonM));
-      for (let k = 0; k < 3; k++) { const rg = new THREE.Mesh(ringGeo, iron); rg.position.y = 0.35 + k * 0.07; piston.add(rg); }
-      const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.5, 16).rotateZ(Math.PI / 2), steel); piston.add(wrist);
-      crankUnits.push({ crank, rod, piston, x, ph: PPH[i] });
-    });
-    // cylinder block: 4 open-bottom liners + head
-    const yTop = YC + CR + CL;
-    PX.forEach((x) => {
-      const liner = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.3, 48, 1, true), ironDark); liner.position.set(x, yTop + 0.9, ZC); machine.add(liner);
-      const linerIn = new THREE.Mesh(new THREE.CylinderGeometry(0.345, 0.345, 1.3, 48, 1, true), new THREE.MeshStandardMaterial({ color: '#1a1a1a', metalness: 0.8, roughness: 0.5, side: THREE.BackSide })); linerIn.position.copy(liner.position); machine.add(linerIn);
-      const fl = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 10, 48).rotateX(Math.PI / 2), steel); fl.position.set(x, yTop + 0.28, ZC); machine.add(fl);
-      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.18, 48), steel); head.position.set(x, yTop + 1.62, ZC); machine.add(head);
-      for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; const b = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.08, 6), steelPol); b.position.set(x + Math.cos(a) * 0.4, yTop + 1.74, ZC + Math.sin(a) * 0.4); machine.add(b); }
-      const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.45, 24), brass); valve.position.set(x, yTop + 1.94, ZC); machine.add(valve);
-    });
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.36, 0.5), paint); chest.position.set(0, yTop + 1.9, ZC - 0.6); machine.add(chest);
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.22, 1.2), paint); frame.position.set(0, yTop + 0.18, ZC); machine.add(frame);
-    [-2.55, 2.55].forEach((x) => { const col = new THREE.Mesh(new THREE.BoxGeometry(0.24, yTop + 0.1, 0.24), paint); col.position.set(x, (yTop + 0.1) / 2, ZC + 0.5); machine.add(col); const col2 = col.clone(); col2.position.z = ZC - 0.5; machine.add(col2); });
+  // (set-2 polish is kept a touch broader than set 1's: tight highlights on small parts bloom into glare)
+  const oiled = new THREE.MeshPhysicalMaterial({ color: '#c6cdd4', metalness: 1, roughness: 0.24, clearcoat: 0.45, clearcoatRoughness: 0.32, roughnessMap: latheTexture(512, 7) });
+  const steelPol2 = steelMat({ roughness: 0.26, color: '#c4cbd2', lathe: false });
+  const maroon = new THREE.MeshStandardMaterial({ color: '#3b1712', metalness: 0.25, roughness: 0.55, bumpMap: surfaceTexture('cast'), bumpScale: 0.12 });
+  const brassPol = brassMat({ roughness: 0.3, color: '#c9a060' });
+  const lagging = new THREE.MeshStandardMaterial({ color: '#4a2e1d', metalness: 0.1, roughness: 0.6, map: surfaceTexture('walnut', 512, 21), bumpMap: surfaceTexture('walnut', 512, 21), bumpScale: 0.3 });
+  const boreMat = new THREE.MeshStandardMaterial({ color: '#8f969d', metalness: 1, roughness: 0.28, side: THREE.BackSide });
+  const add = (parent, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+  const alongX = (g) => g.rotateZ(Math.PI / 2);
+  const alongZ = (g) => g.rotateX(Math.PI / 2);
+  const engines = [];
+  const CYL = { x0: -5.15, x1: -2.95, r: 0.66 };
+  for (const e of ENG) {
+    const u = { e, parts: {} };
+    const g = new THREE.Group(); g.position.z = e.z; machine.add(g);
+    // cast bed (girder with top flange) from cylinder to main bearing
+    add(g, new THREE.BoxGeometry(6.3, 1.05, 0.62), maroon, -2.2, 0.53, 0);
+    add(g, new THREE.BoxGeometry(6.4, 0.1, 0.95), maroon, -2.2, 1.1, 0);
+    add(g, new THREE.BoxGeometry(6.44, 0.03, 0.97), brassPol, -2.2, 1.16, 0);            // brass lining
+    // cylinder pedestal + lagged cylinder with brass bands and polished covers
+    add(g, new THREE.BoxGeometry(1.9, YC - 1.15, 0.8), maroon, (CYL.x0 + CYL.x1) / 2, 1.15 + (YC - 1.15) / 2 - 0.05, 0);
+    const len = CYL.x1 - CYL.x0, cx = (CYL.x0 + CYL.x1) / 2;
+    if (e.near) {
+      // cut-away: a window in the lagging and bore lets us watch the piston work
+      const gap = 0.62, mid = 0.42;
+      add(g, alongX(new THREE.CylinderGeometry(CYL.r, CYL.r, len, 64, 1, true, mid + gap, TAU - 2 * gap)), lagging, cx, YC, 0);
+      add(g, alongX(new THREE.CylinderGeometry(0.5, 0.5, len, 64, 1, true, mid + gap, TAU - 2 * gap)), boreMat, cx, YC, 0);
+      for (const s of [-1, 1]) {
+        const a = mid + s * gap;
+        const face = add(g, new THREE.BoxGeometry(len, CYL.r - 0.5, 0.012), oiled, cx, YC + Math.sin(a) * 0.58, Math.cos(a) * 0.58);
+        face.rotation.x = -a + Math.PI / 2;
+      }
+      // warm interior glow (steam admission flashes on each stroke)
+      u.inner = new THREE.PointLight('#ffb070', 0, 2.2, 2); u.inner.position.set(cx, YC + 0.1, 0.25); g.add(u.inner);
+    } else {
+      add(g, alongX(new THREE.CylinderGeometry(CYL.r, CYL.r, len, 64)), lagging, cx, YC, 0);
+    }
+    for (const bx of [CYL.x0 + 0.3, cx, CYL.x1 - 0.3]) {
+      add(g, alongX(new THREE.CylinderGeometry(CYL.r + 0.012, CYL.r + 0.012, 0.07, 64, 1, true, e.near ? 0.42 + 0.62 : 0, e.near ? TAU - 1.24 : TAU)), brassPol, bx, YC, 0);
+    }
+    for (const [x, s] of [[CYL.x0, -1], [CYL.x1, 1]]) {
+      add(g, alongX(new THREE.CylinderGeometry(0.74, 0.74, 0.12, 64)), steelPol2, x + s * 0.02, YC, 0);
+      add(g, alongX(new THREE.CylinderGeometry(0.5, 0.56, 0.1, 48)), steel, x + s * 0.12, YC, 0);
+      for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU; add(g, alongX(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 6)), brassPol, x + s * 0.09, YC + Math.sin(a) * 0.66, Math.cos(a) * 0.66); }
+    }
+    // stuffing gland (brass) where the piston rod leaves the front cover
+    add(g, alongX(new THREE.CylinderGeometry(0.15, 0.19, 0.22, 32)), brassPol, CYL.x1 + 0.25, YC, 0);
+    // Corliss steam chest on top: valve bonnets, wrist plate, oil cups
+    add(g, new THREE.BoxGeometry(len - 0.2, 0.36, 0.7), maroon, cx, YC + CYL.r + 0.16, 0);
+    for (const bx of [CYL.x0 + 0.25, CYL.x1 - 0.25]) {
+      add(g, alongZ(new THREE.CylinderGeometry(0.16, 0.16, 0.86, 32)), steelPol2, bx, YC + CYL.r + 0.12, 0);
+      add(g, alongZ(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 16)), brassPol, bx, YC + CYL.r + 0.12, 0);
+      add(g, new THREE.CylinderGeometry(0.05, 0.07, 0.14, 16), brassPol, bx, YC + CYL.r + 0.42, 0);        // oil cup
+    }
+    const wrist = new THREE.Group(); wrist.position.set(cx, YC + 0.05, 0.72); g.add(wrist);
+    add(wrist, alongZ(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32)), steelPol2);
+    for (const a of [0.5, 2.6]) { const arm = add(wrist, new THREE.BoxGeometry(0.42, 0.04, 0.03), oiled, Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0.03); arm.rotation.z = a; }
+    u.wrist = wrist;
+    // guide bars (upper / lower) on their chairs
+    for (const s of [-1, 1]) add(g, new THREE.BoxGeometry(2.2, 0.08, 0.34), oiled, -1.95, YC + s * 0.24, 0);
+    add(g, new THREE.BoxGeometry(2.2, YC - 0.3 - 1.15, 0.12), maroon, -1.95, 1.15 + (YC - 0.3 - 1.15) / 2, 0);
+    // main bearing pedestal with brass cap and oil cup
+    add(g, new THREE.BoxGeometry(0.8, YC - 1.15 + 0.15, 0.55), maroon, XC, 1.15 + (YC - 1.15) / 2, e.z > ZC ? -0.62 : 0.62);
+    add(g, alongZ(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 32)), brassPol, XC, YC, e.z > ZC ? -0.62 : 0.62);
+    add(g, new THREE.CylinderGeometry(0.05, 0.08, 0.2, 16), brassPol, XC, YC + 0.38, e.z > ZC ? -0.62 : 0.62);
+    // moving parts ---------------------------------------------------------------
+    const piston = new THREE.Group(); g.add(piston);
+    add(piston, alongX(new THREE.CylinderGeometry(0.49, 0.49, 0.3, 48)), oiled);
+    for (let k = -1; k <= 1; k++) add(piston, new THREE.TorusGeometry(0.492, 0.014, 8, 48).rotateY(Math.PI / 2), iron, k * 0.08, 0, 0);
+    add(piston, alongX(new THREE.CylinderGeometry(0.065, 0.065, ROD + 0.2, 20)), oiled, (ROD + 0.2) / 2, 0, 0);
+    const cross = new THREE.Group(); g.add(cross);
+    add(cross, new THREE.BoxGeometry(0.42, 0.3, 0.3), oiled);
+    add(cross, new THREE.BoxGeometry(0.46, 0.06, 0.36), brassPol, 0, 0.17, 0);
+    add(cross, new THREE.BoxGeometry(0.46, 0.06, 0.36), brassPol, 0, -0.17, 0);
+    add(cross, alongZ(new THREE.CylinderGeometry(0.07, 0.07, 0.44, 16)), steelPol2);
+    const rod = new THREE.Group(); g.add(rod);                                        // local +x from crosshead pin to crank pin
+    const shank = add(rod, alongX(new THREE.CylinderGeometry(0.1, 0.075, CL - 0.5, 24)), oiled, CL / 2, 0, 0);
+    shank.scale.set(1, 1.35, 0.8);
+    add(rod, new THREE.BoxGeometry(0.34, 0.26, 0.2), oiled, 0.05, 0, 0);
+    add(rod, new THREE.BoxGeometry(0.42, 0.4, 0.22), oiled, CL - 0.02, 0, 0);
+    add(rod, new THREE.BoxGeometry(0.1, 0.44, 0.24), brassPol, CL - 0.02, 0, 0);
+    const crank = new THREE.Group(); crank.position.set(XC, YC, 0); g.add(crank);
+    const discZ = e.z > ZC ? -0.3 : 0.3;
+    const discShape = new THREE.Shape(); discShape.absarc(0, 0, 0.82, 0, TAU, false);
+    const discGeo = new THREE.ExtrudeGeometry(discShape, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, curveSegments: 64 }); discGeo.translate(0, 0, -0.08);
+    add(crank, discGeo, steel, 0, 0, discZ);
+    add(crank, new THREE.CylinderGeometry(0.8, 0.8, 0.2, 48, 1, false, Math.PI, Math.PI).rotateX(Math.PI / 2), iron, 0, 0, discZ);   // counterweight, opposite the pin
+    add(crank, alongZ(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 24)), steelPol2, CR, 0, discZ / 2);
+    add(crank, alongZ(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 24)), brassPol, 0, 0, discZ * 1.6);
+    u.parts = { piston, cross, rod, crank, g };
+    engines.push(u);
   }
-  const yTop = YC + CR + CL;
-  // ember glow inside the cylinder heads (beat flashes)
-  const emberSprites = PX.map((x) => { const s = glowSprite({ color: '#ff8a3a', intensity: 2.2, scale: 1.1 }); s.position.set(x, yTop + 0.3, ZC + 0.36); scene.add(s); return s; });
-
-  // ---- assembly parts (lock on the beat at 28.0) --------------------------------
-  const parts = [];
-  const PR = rng(99);
-  function addPart(obj, delay, spread = 7) {
-    machine.add(obj);
-    const dir = V(PR() - 0.5, PR() * 0.8, PR() - 0.9).normalize();
-    parts.push({ obj, delay, p1: obj.position.clone(), q1: obj.quaternion.clone(), p0: obj.position.clone().addScaledVector(dir, spread * (0.7 + PR() * 0.6)), q0: new THREE.Quaternion().setFromEuler(new THREE.Euler((PR() - 0.5) * 2, (PR() - 0.5) * 2, (PR() - 0.5) * 2)).multiply(obj.quaternion) });
-    return obj;
-  }
-  // flywheel
-  const FW = { x: 4.7, r: 2.9 };
-  const fly = new THREE.Group(); fly.position.set(FW.x, YC, ZC);
+  // crankshaft + flywheel (rope-grooved rim, eight spokes, keyed hub), turning in a floor pit
+  const FW = { r: 2.35, w: 0.62 };
+  const fly = new THREE.Group(); fly.position.set(XC, YC, ZC); machine.add(fly);
+  add(machine, alongZ(new THREE.CylinderGeometry(0.17, 0.17, 4.0, 32)), steelPol2, XC, YC, ZC);
   {
     const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, FW.r, 0, TAU, false);
-    const hole = new THREE.Path(); hole.absarc(0, 0, FW.r - 0.38, 0, TAU, true); rimShape.holes.push(hole);
-    const rimGeo = new THREE.ExtrudeGeometry(rimShape, { depth: 0.55, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2, curveSegments: 96 });
-    rimGeo.translate(0, 0, -0.275); rimGeo.rotateY(Math.PI / 2);
-    fly.add(new THREE.Mesh(rimGeo, iron));
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(FW.r + 0.045, FW.r + 0.045, 0.2, 128, 1, true), steelPol); band.rotation.z = Math.PI / 2; fly.add(band);
-    for (let i = 0; i < 6; i++) {
-      const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.16, FW.r - 0.5, 16), iron); sp.position.y = (FW.r - 0.5) / 2 + 0.3; const g = new THREE.Group(); g.rotation.x = (i / 6) * TAU; g.add(sp); fly.add(g);
+    const hole = new THREE.Path(); hole.absarc(0, 0, FW.r - 0.3, 0, TAU, true); rimShape.holes.push(hole);
+    const rimGeo = new THREE.ExtrudeGeometry(rimShape, { depth: FW.w, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2, curveSegments: 128 });
+    rimGeo.translate(0, 0, -FW.w / 2);
+    add(fly, rimGeo, iron);
+    for (let k = 0; k < 6; k++) add(fly, new THREE.TorusGeometry(FW.r + 0.02, 0.028, 8, 160), ironDark, 0, 0, -FW.w / 2 + 0.07 + k * 0.096);   // rope grooves
+    add(fly, new THREE.TorusGeometry(FW.r - 0.3, 0.035, 8, 160), brassPol, 0, 0, FW.w / 2 + 0.01);
+    for (let i = 0; i < 8; i++) {
+      const sg = new THREE.Group(); sg.rotation.z = (i / 8) * TAU; fly.add(sg);
+      const sp = add(sg, new THREE.CylinderGeometry(0.08, 0.15, FW.r - 0.75, 16), iron, 0, (FW.r - 0.75) / 2 + 0.5, 0); sp.scale.z = 0.7;
     }
-    const hubF = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.8, 48), steel); hubF.rotation.z = Math.PI / 2; fly.add(hubF);
+    add(fly, alongZ(new THREE.CylinderGeometry(0.55, 0.55, 0.72, 48)), steel);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; add(fly, alongZ(new THREE.CylinderGeometry(0.045, 0.045, 0.8, 6)), brassPol, Math.cos(a) * 0.42, Math.sin(a) * 0.42, 0); }
+    // pit: a black slot in the floor with an iron kerb
+    add(machine, new THREE.BoxGeometry(FW.r * 2 + 0.4, 0.02, FW.w + 0.5), new THREE.MeshBasicMaterial({ color: '#000000' }), XC, 0.012, ZC);
+    for (const s of [-1, 1]) add(machine, new THREE.BoxGeometry(FW.r * 2 + 0.6, 0.12, 0.1), iron, XC, 0.06, ZC + s * (FW.w / 2 + 0.3));
   }
-  addPart(fly, 0.0, 9);
-  // boiler with rivets, dome, chimney, firebox
-  const BO = { x0: -11.5, x1: -4.2, y: 2.6, z: 2.2, r: 1.75 };
-  const boiler = new THREE.Group(); boiler.position.set((BO.x0 + BO.x1) / 2, BO.y, BO.z);
-  const boilerLen = BO.x1 - BO.x0;
+  // flyball governor on its column above the near bed
+  const gov = new THREE.Group(); gov.position.set(1.2, 0, ENG[0].z - 0.1); machine.add(gov);
+  const govSpin = new THREE.Group(); govSpin.position.y = 3.45; gov.add(govSpin);
   {
-    const shell = new THREE.Mesh(new THREE.CylinderGeometry(BO.r, BO.r, boilerLen, 96, 1, true), paint); shell.rotation.z = Math.PI / 2; boiler.add(shell);
-    [-1, 1].forEach((s) => { const cap = new THREE.Mesh(new THREE.SphereGeometry(BO.r, 64, 24, 0, TAU, 0, Math.PI / 2), paint); cap.scale.y = 0.35; cap.rotation.z = -s * Math.PI / 2; cap.position.x = (s * boilerLen) / 2; boiler.add(cap); });
-    for (let i = 0; i <= 6; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(BO.r + 0.03, BO.r + 0.03, 0.14, 96, 1, true), iron); b.rotation.z = Math.PI / 2; b.position.x = -boilerLen / 2 + (boilerLen * i) / 6; boiler.add(b); }
-    const rivG = new THREE.SphereGeometry(0.034, 6, 3, 0, TAU, 0, Math.PI / 2);
-    const NRING = 7, NPER = 56;
-    const rivets = new THREE.InstancedMesh(rivG, steel, NRING * NPER * 2);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(1, 1, 1), pos = V(0, 0, 0);
+    add(gov, new THREE.CylinderGeometry(0.1, 0.2, 3.4, 20), maroon, 0, 1.7, 0);
+    add(gov, new THREE.CylinderGeometry(0.17, 0.17, 0.08, 24), brassPol, 0, 3.4, 0);
+    add(govSpin, new THREE.CylinderGeometry(0.03, 0.03, 0.8, 12), steelPol2, 0, 0.4, 0);
+    add(govSpin, new THREE.SphereGeometry(0.05, 16, 12), brassPol, 0, 0.82, 0);
+    for (const s of [-1, 1]) {
+      const arm = new THREE.Group(); arm.position.y = 0.74; arm.rotation.z = s * 0.62; govSpin.add(arm);
+      add(arm, new THREE.CylinderGeometry(0.012, 0.012, 0.5, 8), steelPol2, 0, -0.25, 0);
+      add(arm, new THREE.SphereGeometry(0.11, 32, 24), brassPol, 0, -0.52, 0);
+    }
+    add(govSpin, new THREE.CylinderGeometry(0.07, 0.07, 0.06, 20), brassPol, 0, 0.3, 0);
+  }
+
+  // Lancashire boiler, front end toward camera: riveted shell on brick seating, two furnace doors,
+  // pressure gauge, water glasses, stop valve, safety valve, whistle and a stack at the back
+  const BO = { x: -8.9, y: 2.15, z0: -4.2, z1: 4.6, r: 1.65 };
+  const boiler = new THREE.Group(); boiler.position.set(BO.x, BO.y, 0); scene.add(boiler);
+  const boilerLen = BO.z1 - BO.z0;
+  {
+    const shellMat = new THREE.MeshPhysicalMaterial({ color: '#2d2926', metalness: 0.6, roughness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.4, bumpMap: surfaceTexture('cast', 512, 12), bumpScale: 0.3 });
+    add(boiler, alongZ(new THREE.CylinderGeometry(BO.r, BO.r, boilerLen, 96, 1, true)), shellMat, 0, 0, (BO.z0 + BO.z1) / 2);
+    add(boiler, new THREE.BoxGeometry(BO.r * 2 + 0.5, BO.y - 0.7, boilerLen - 0.4), new THREE.MeshStandardMaterial({ color: '#3a2a22', roughness: 0.9, bumpMap: surfaceTexture('cast', 512, 5), bumpScale: 1 }), 0, -BO.y + (BO.y - 0.7) / 2, (BO.z0 + BO.z1) / 2);
+    // front plate (slightly dished), steel band and rivet rings
+    add(boiler, alongZ(new THREE.CylinderGeometry(BO.r + 0.04, BO.r + 0.04, 0.1, 96)), shellMat, 0, 0, BO.z1);
+    add(boiler, new THREE.TorusGeometry(BO.r + 0.02, 0.05, 12, 96), steelPol2, 0, 0, BO.z1 + 0.04);
+    const rivG = new THREE.SphereGeometry(0.03, 8, 4, 0, TAU, 0, Math.PI / 2);
+    const NFR = 64, NSEAM = 5, NPER = 72;
+    const rivets = new THREE.InstancedMesh(rivG, steelPol2, NFR * 2 + NSEAM * NPER * 2);
+    const m4r = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = V(1, 1, 1), pos = V(0, 0, 0), nrm = V(0, 0, 0), Yup = V(0, 1, 0);
     let ri = 0;
-    for (let i = 0; i < NRING; i++) for (let side = -1; side <= 1; side += 2) for (let k = 0; k < NPER; k++) {
-      const a = (k / NPER) * TAU, x = -boilerLen / 2 + (boilerLen * i) / 6 + side * 0.1;
-      const nrm = V(0, Math.cos(a), Math.sin(a));
-      pos.set(x, nrm.y * (BO.r + 0.03), nrm.z * (BO.r + 0.03));
-      q.setFromUnitVectors(V(0, 1, 0), nrm);
-      m4.compose(pos, q, sc); rivets.setMatrixAt(ri++, m4);
+    for (let ring = 0; ring < 2; ring++) for (let k = 0; k < NFR; k++) {
+      const a = (k / NFR) * TAU, rr = BO.r - 0.1 - ring * 0.1;
+      pos.set(Math.cos(a) * rr, Math.sin(a) * rr, BO.z1 + 0.05); q.setFromUnitVectors(Yup, nrm.set(0, 0, 1)); m4r.compose(pos, q, sc); rivets.setMatrixAt(ri++, m4r);
     }
-    boiler.add(rivets);
-    const dome = new THREE.Group(); dome.position.set(1.2, BO.r - 0.05, 0);
-    dome.add(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.8, 48), brass));
-    const dt = new THREE.Mesh(new THREE.SphereGeometry(0.55, 48, 16, 0, TAU, 0, Math.PI / 2), brass); dt.position.y = 0.4; dome.add(dt);
-    boiler.add(dome);
-    const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 7.0, 48, 1, true), ironDark); chim.position.set(-2.6, BO.r + 3.3, 0); boiler.add(chim);
-    const chimCap = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.1, 12, 48).rotateX(Math.PI / 2), iron); chimCap.position.set(-2.6, BO.r + 6.8, 0); boiler.add(chimCap);
-    const fireDoor = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff6a20').multiplyScalar(3), toneMapped: false })); fireDoor.position.set(2.2, -0.9, BO.r * 0.92); fireDoor.rotation.x = -0.45; boiler.add(fireDoor);
-    boiler.userData.fire = fireDoor;
-    // pressure gauge
-    const gauge = new THREE.Group(); gauge.position.set(-0.6, 0.55, BO.r + 0.12); boiler.add(gauge);
-    gauge.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 48).rotateX(Math.PI / 2), brass));
-    const face = new THREE.Mesh(new THREE.CircleGeometry(0.26, 48), new THREE.MeshStandardMaterial({ color: '#e8dfc8', roughness: 0.6 })); face.position.z = 0.051; gauge.add(face);
-    const needle = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.22, 0.01).translate(0, 0.1, 0), new THREE.MeshStandardMaterial({ color: '#8a1a10' })); needle.position.z = 0.06; gauge.add(needle);
-    boiler.userData.needle = needle;
-  }
-  addPart(boiler, 0.05, 8);
-  // steam pipes
-  const pipeGrp = new THREE.Group();
-  {
-    const domeTop = V(boiler.position.x + 1.2, BO.y + BO.r + 0.9, BO.z);
-    const curve = new THREE.CatmullRomCurve3([domeTop, domeTop.clone().add(V(0, 1.2, 0)), V(-2.8, yTop + 3.2, ZC - 0.6), V(-1.5, yTop + 2.6, ZC - 0.6), V(-0.2, yTop + 2.1, ZC - 0.6)]);
-    pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 96, 0.16, 20), copperM));
-    for (let k = 0; k <= 4; k++) { const p = curve.getPointAt(k / 4), tng = curve.getTangentAt(k / 4); const f = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.07, 24), steel); f.position.copy(p); f.quaternion.setFromUnitVectors(V(0, 1, 0), tng); pipeGrp.add(f); }
-    PX.forEach((x, i) => {
-      const c = new THREE.CatmullRomCurve3([V(x, yTop + 2.0, ZC), V(x, yTop + 2.8 + i * 0.1, ZC - 0.3), V(x + 0.5, yTop + 3.4 + i * 0.25, ZC - 1.6), V(x + 1.2, 13, ZC - 2.4)]);
-      pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(c, 48, 0.09, 12), i % 2 ? copperM : steel));
+    for (let i = 0; i < NSEAM; i++) for (let side = -1; side <= 1; side += 2) for (let k = 0; k < NPER; k++) {
+      const a = (k / NPER) * TAU, z = BO.z1 - 0.3 - i * (boilerLen - 0.6) / (NSEAM - 1) + side * 0.06;
+      nrm.set(Math.cos(a), Math.sin(a), 0);
+      pos.set(nrm.x * BO.r, nrm.y * BO.r, z); q.setFromUnitVectors(Yup, nrm); m4r.compose(pos, q, sc); rivets.setMatrixAt(ri++, m4r);
+    }
+    rivets.count = ri; boiler.add(rivets);
+    for (let i = 0; i < NSEAM; i++) add(boiler, alongZ(new THREE.CylinderGeometry(BO.r + 0.012, BO.r + 0.012, 0.18, 96, 1, true)), shellMat, 0, 0, BO.z1 - 0.3 - i * (boilerLen - 0.6) / (NSEAM - 1));
+    // furnace doors: fire seen through the grate slots (animated in update)
+    const fireMat = new THREE.ShaderMaterial({
+      uniforms: { uT: { value: 0 }, uI: { value: 1 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `${GLSL_NOISE}
+        uniform float uT, uI; varying vec2 vUv;
+        void main(){
+          vec2 p = vUv - 0.5; float r = length(p);
+          if (r > 0.5) discard;
+          float n = snoise(vec3(p * 5.0 + vec2(0.0, -uT * 1.6), uT * 0.7)) * 0.5 + 0.5;
+          float n2 = snoise(vec3(p * 11.0 + vec2(0.0, -uT * 2.6), uT * 1.3)) * 0.5 + 0.5;
+          float heat = clamp(0.55 + 0.6 * (n * 0.7 + n2 * 0.3) - (p.y + 0.5) * 0.45, 0.0, 1.0);
+          vec3 c = mix(vec3(0.9, 0.18, 0.02), vec3(1.0, 0.62, 0.22), heat) * (0.6 + 1.6 * heat * heat);
+          float slots = smoothstep(0.02, 0.05, abs(fract(vUv.x * 7.0) - 0.5));        // door bars
+          float rim = smoothstep(0.5, 0.42, r);
+          gl_FragColor = vec4(c * uI * mix(0.18, 1.0, slots) * rim, 1.0);
+        }`,
     });
-    const lowPipe = new THREE.CatmullRomCurve3([V(BO.x1 + 0.2, 1.2, BO.z + 0.8), V(-3.4, 0.6, ZC + 1.0), V(-2.6, 0.5, ZC + 1.2), V(3.0, 0.5, ZC + 1.2), V(3.6, 1.4, ZC + 1.2)]);
-    pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(lowPipe, 96, 0.12, 16), copperM));
+    const doors = [];
+    for (const dx of [-0.72, 0.72]) {
+      const d = add(boiler, new THREE.CircleGeometry(0.44, 48), fireMat, dx, -0.55, BO.z1 + 0.061); doors.push(d);
+      add(boiler, new THREE.TorusGeometry(0.46, 0.05, 12, 48), iron, dx, -0.55, BO.z1 + 0.07);
+      const hinge = new THREE.Group(); hinge.position.set(dx + 0.47, -0.55, BO.z1 + 0.09); hinge.rotation.y = -1.95; boiler.add(hinge);   // door swung open
+      add(hinge, new THREE.CylinderGeometry(0.45, 0.45, 0.06, 48).rotateX(Math.PI / 2), iron, -0.46, 0, 0);
+      add(hinge, new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16).rotateX(Math.PI / 2), brassPol, -0.62, 0, 0.05);
+    }
+    boiler.userData.fire = fireMat;
+    // pressure gauge: brass bezel, painted dial with ticks, red working line, needle
+    const gc = document.createElement('canvas'); gc.width = gc.height = 256;
+    { const x = gc.getContext('2d'); x.fillStyle = '#efe6cf'; x.beginPath(); x.arc(128, 128, 128, 0, TAU); x.fill();
+      x.strokeStyle = '#2a2018'; x.lineCap = 'round';
+      for (let i = 0; i <= 40; i++) { const a = Math.PI * 0.75 + (i / 40) * Math.PI * 1.5, L = i % 5 ? 12 : 22; x.lineWidth = i % 5 ? 2 : 4; x.beginPath(); x.moveTo(128 + Math.cos(a) * 112, 128 + Math.sin(a) * 112); x.lineTo(128 + Math.cos(a) * (112 - L), 128 + Math.sin(a) * (112 - L)); x.stroke(); }
+      x.strokeStyle = '#a3261a'; x.lineWidth = 6; x.beginPath(); x.arc(128, 128, 104, Math.PI * 0.75 + Math.PI * 1.5 * 0.78, Math.PI * 0.75 + Math.PI * 1.5 * 0.86); x.stroke();
+      x.fillStyle = '#2a2018'; x.font = '600 26px "IBM Plex Mono", monospace'; x.textAlign = 'center'; x.fillText('LB / IN²', 128, 190); }
+    const gTex = new THREE.CanvasTexture(gc); gTex.colorSpace = THREE.SRGBColorSpace;
+    const gauge = new THREE.Group(); gauge.position.set(0, 0.72, BO.z1 + 0.08); boiler.add(gauge);
+    add(gauge, alongZ(new THREE.CylinderGeometry(0.36, 0.36, 0.1, 64)), brassPol);
+    add(gauge, new THREE.TorusGeometry(0.34, 0.03, 12, 64), brassPol, 0, 0, 0.05);
+    add(gauge, new THREE.CircleGeometry(0.32, 64), new THREE.MeshStandardMaterial({ map: gTex, roughness: 0.5 }), 0, 0, 0.052);
+    add(gauge, new THREE.CircleGeometry(0.33, 64), new THREE.MeshPhysicalMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, roughness: 0.02, metalness: 0, clearcoat: 1 }), 0, 0, 0.07);
+    const needle = add(gauge, new THREE.BoxGeometry(0.014, 0.27, 0.008).translate(0, 0.11, 0), new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: 0.4 }), 0, 0, 0.06);
+    add(gauge, new THREE.CylinderGeometry(0.03, 0.03, 0.02, 16).rotateX(Math.PI / 2), brassPol, 0, 0, 0.065);
+    add(gauge, new THREE.CylinderGeometry(0.03, 0.03, 0.5, 12), brassPol, 0, -0.5, -0.02);                   // syphon pipe
+    boiler.userData.needle = needle;
+    // water gauge glasses with brass cocks
+    for (const dx of [-1.02, 1.02]) {
+      add(boiler, new THREE.CylinderGeometry(0.035, 0.035, 0.62, 16), new THREE.MeshPhysicalMaterial({ color: '#cfe0e6', transparent: true, opacity: 0.35, roughness: 0.02, clearcoat: 1 }), dx, 0.55, BO.z1 + 0.2);
+      add(boiler, new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffc890').multiplyScalar(0.5) }), dx, 0.42, BO.z1 + 0.2);
+      for (const dy of [0.22, 0.88]) add(boiler, new THREE.BoxGeometry(0.12, 0.1, 0.22), brassPol, dx, dy, BO.z1 + 0.14);
+    }
+    // top fittings: stop valve with hand wheel, safety valve with lever and weight, whistle
+    add(boiler, new THREE.CylinderGeometry(0.28, 0.34, 0.5, 32), brassPol, 0, BO.r + 0.2, 2.6);
+    const wheel = add(boiler, new THREE.TorusGeometry(0.28, 0.03, 10, 48), brassPol, 0, BO.r + 0.62, 2.6); wheel.rotation.x = Math.PI / 2;
+    add(boiler, new THREE.CylinderGeometry(0.04, 0.04, 0.4, 8), steelPol2, 0, BO.r + 0.5, 2.6);
+    add(boiler, new THREE.CylinderGeometry(0.22, 0.3, 0.45, 32), brassPol, 0, BO.r + 0.2, -1.2);
+    const lever = add(boiler, new THREE.BoxGeometry(0.06, 0.06, 1.4), steelPol2, 0, BO.r + 0.5, -1.7);
+    add(boiler, new THREE.CylinderGeometry(0.14, 0.14, 0.22, 24), iron, 0, BO.r + 0.4, -2.35);
+    add(boiler, new THREE.CylinderGeometry(0.05, 0.08, 0.5, 16), brassPol, 0.6, BO.r + 0.25, 3.8);
+    add(boiler, new THREE.CylinderGeometry(0.1, 0.1, 0.12, 16), brassPol, 0.6, BO.r + 0.56, 3.8);
+    lever.userData = {};
+    // stack at the back
+    add(boiler, new THREE.CylinderGeometry(0.55, 0.62, 9, 48, 1, true), ironDark, 0, BO.r + 4.0, BO.z0 + 0.6);
+    add(boiler, new THREE.TorusGeometry(0.58, 0.1, 12, 48).rotateX(Math.PI / 2), iron, 0, BO.r + 8.5, BO.z0 + 0.6);
   }
-  addPart(pipeGrp, 0.1, 6);
+  // steam main (lagged, brass-flanged) from the stop valve across to both steam chests; exhaust up to the roof
+  const pipeGrp = new THREE.Group(); machine.add(pipeGrp);
+  {
+    const chestY = YC + CYL.r + 0.34, chestX = (CYL.x0 + CYL.x1) / 2;
+    const main = new THREE.CatmullRomCurve3([V(BO.x, BO.y + BO.r + 0.45, 2.6), V(BO.x, BO.y + BO.r + 1.3, 2.6), V(-6.6, 4.3, ZC), V(chestX - 0.4, 4.1, ZC), V(chestX, 3.6, ZC)]);
+    const lagMat = new THREE.MeshStandardMaterial({ color: '#4b4540', roughness: 0.85, metalness: 0.05, bumpMap: surfaceTexture('cast', 512, 8), bumpScale: 0.6 });
+    pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(main, 120, 0.17, 20), lagMat));
+    for (let k = 1; k <= 4; k++) { const p = main.getPointAt(k / 5), tng = main.getTangentAt(k / 5); const f = add(pipeGrp, new THREE.CylinderGeometry(0.23, 0.23, 0.06, 24), brassPol, p.x, p.y, p.z); f.quaternion.setFromUnitVectors(V(0, 1, 0), tng); }
+    for (const e of ENG) {
+      const br = new THREE.CatmullRomCurve3([V(chestX, 3.6, ZC), V(chestX, 3.2, (ZC + e.z) / 2), V(chestX, chestY, e.z)]);
+      pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(br, 32, 0.11, 16), copperM));
+      add(pipeGrp, new THREE.CylinderGeometry(0.19, 0.19, 0.06, 24), brassPol, chestX, chestY + 0.02, e.z);
+    }
+    const exh = new THREE.CatmullRomCurve3([V(CYL.x0 + 0.4, 1.1, ENG[1].z - 0.5), V(CYL.x0 + 0.2, 3.0, ENG[1].z - 0.9), V(-5.2, 6.5, ZC - 3.0), V(-5.0, 11, ZC - 3.4)]);
+    pipeGrp.add(new THREE.Mesh(new THREE.TubeGeometry(exh, 64, 0.22, 16), ironDark));
+  }
+  const EXH = V(-5.0, 11.0, ZC - 3.4);
   // floor + light shafts
   const floorTex = surfaceTexture('cast', 512, 3); floorTex.repeat.set(40, 40);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#1c1b1a', metalness: 0.7, roughness: 0.55, roughnessMap: floorTex, bumpMap: floorTex, bumpScale: 1 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ color: '#1c1b1a', metalness: 0.4, roughness: 0.72, roughnessMap: floorTex, bumpMap: floorTex, bumpScale: 1 }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
   const shafts = [];
   for (let i = 0; i < 3; i++) {
@@ -377,7 +520,6 @@ export function create(ctx, segment) {
     s.position.set(-8 + i * 6.5, 21, -3 + i * 1.5); s.rotation.z = 0.42; s.rotation.x = 0.12; scene.add(s); shafts.push(s);
   }
   const lamps = [];
-  for (let i = 0; i < 8; i++) { const l = glowSprite({ color: '#ffb070', intensity: 0.7, scale: 1.2 }); l.position.set(-22 + i * 5.5, 14 + (i % 3) * 1.5, -3.5); scene.add(l); lamps.push(l); }
 
   // railway along z at x = RX
   const RX = 9.6, GAUGE = 0.72;
@@ -430,25 +572,28 @@ export function create(ctx, segment) {
   const hallDust = new Dust({ count: 900, size: [30, 14, 20], center: [-2, 6, 0], particleSize: 0.016, color: '#ffe0c0', opacity: 0.3, intensity: 0.8, seed: 34 });
   scene.add(hallDust);
 
-  // steam
-  const beatBirth = (b0, spread) => (u) => b0 + u * spread;
+  // steam: gland wisps (macro), the drain-cock blast at 27.3 and on each stroke after, the exhaust
+  // chuffing from the roof on the beat, the boiler's safety valve lifting, stack smoke, trackside drift
+  const beats = (t0, n, w) => (u) => t0 + Math.floor(u * n) * BEAT + (u * n - Math.floor(u * n)) * w;
+  const cockY = YC - CYL.r - 0.02, nearZ = ENG[0].z;
   const emitters = [
-    // eruption at the exhaust valves (27.3) then chuffs on 27.5 / 28.0 / 28.5
-    ...PX.map((x, i) => ({ pos: V(x, yTop + 2.2, ZC), dir: V(0.35 * (i - 1.5), 1, 0.5), spread: 0.9, speed: 4.2, jitter: 0.2, life: 1.8, weight: 1.4, birth: (u) => tSteam + u * u * 0.6 })),
-    { pos: V(-2.7, 3.9, ZC + 0.3), dir: V(-1, 0.15, 0.25), spread: 0.4, speed: 8, jitter: 0.1, life: 1.2, weight: 0.8, birth: (u) => tSteam + u * 0.3 },
-    { pos: V(2.7, 3.9, ZC + 0.3), dir: V(1, 0.15, 0.25), spread: 0.4, speed: 8, jitter: 0.1, life: 1.2, weight: 0.8, birth: (u) => tSteam + u * 0.3 },
-    ...[0, 1, 2].map((k) => ({ pos: V(-2.4 + k * 2.4, yTop + 2.2, ZC), dir: V(0, 1, 0.3), spread: 0.9, speed: 6, jitter: 0.3, life: 1.4, weight: 0.8, birth: (u) => [3.0, 3.5, 4.0][k] + u * 0.12 })),
-    { pos: V(boiler.position.x + 1.2, BO.y + BO.r + 1.0, BO.z), dir: V(0, 1, 0.2), spread: 0.4, speed: 8, jitter: 0.1, life: 1.7, weight: 1.0, birth: (u) => tSteam + 0.2 + u * 1.5 },
-    { pos: V(boiler.position.x - 2.6, BO.y + BO.r + 6.9, BO.z), dir: V(0.2, 1, 0), spread: 0.5, speed: 3, jitter: 0.3, life: 2.4, weight: 1.2, birth: (u) => 1.8 + u * 2.7 },
-    { pos: V(RX - 1.0, 0.3, -3), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 2, jitter: 1.2, life: 1.6, weight: 0.6, birth: (u) => 3.6 + u * 0.9 },
+    { pos: V(CYL.x1 + 0.3, YC + 0.05, nearZ + 0.1), dir: V(0.4, 1, 0.5), spread: 0.8, speed: 0.5, jitter: 0.08, life: 1.3, weight: 0.35, size: 0.3, birth: (u) => 1.85 + u * 2.7 },
+    { pos: V(CYL.x0 + 0.35, cockY, nearZ + 0.35), dir: V(-0.15, -0.25, 1), spread: 0.4, speed: 7.5, jitter: 0.04, life: 1.1, weight: 1.5, size: 0.4, birth: (u) => (u < 0.55 ? tSteam + (u / 0.55) * 0.3 : beats(tSteam + 0.2, 3, 0.14)((u - 0.55) / 0.45)) },
+    { pos: V(CYL.x1 - 0.35, cockY, nearZ + 0.35), dir: V(0.15, -0.25, 1), spread: 0.4, speed: 7.5, jitter: 0.04, life: 1.1, weight: 1.5, size: 0.4, birth: (u) => (u < 0.55 ? tSteam + 0.04 + (u / 0.55) * 0.3 : beats(tSteam + 0.45, 3, 0.14)((u - 0.55) / 0.45)) },
+    { pos: V(CYL.x0 + 0.35, cockY, ENG[1].z + 0.3), dir: V(-0.3, -0.3, 1), spread: 0.4, speed: 5.5, jitter: 0.05, life: 1.0, weight: 0.45, size: 0.55, birth: (u) => tSteam + 0.08 + u * 0.35 },
+    { pos: EXH.clone(), dir: V(0.1, 1, 0.15), spread: 0.5, speed: 5, jitter: 0.2, life: 2.0, weight: 0.9, size: 1.3, birth: beats(tSteam - 0.3, 4, 0.16) },
+    { pos: V(BO.x, BO.y + BO.r + 0.55, -1.2), dir: V(0.12, 1, 0.1), spread: 0.35, speed: 7, jitter: 0.1, life: 2.1, weight: 1.3, size: 1.1, birth: (u) => tSteam + 0.05 + u * 1.65 },
+    { pos: V(BO.x, BO.y + BO.r + 8.6, BO.z0 + 0.6), dir: V(0.25, 1, 0.1), spread: 0.45, speed: 2.4, jitter: 0.3, life: 2.6, weight: 0.8, size: 1.7, birth: (u) => 1.6 + u * 2.9 },
+    { pos: V(RX - 1.0, 0.3, -3), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 2, jitter: 1.2, life: 1.6, weight: 0.45, size: 1.2, birth: (u) => 3.6 + u * 0.9 },
   ];
-  const steam = makeSteam(3200, emitters, { size: 1.15, seed: 17 });
+  const steam = makeSteam(4200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
   scene.add(steam);
+  steam.material.uniforms.uFirePos.value.set(BO.x, 1.6, BO.z1 + 0.9);
 
   // ---- HUD ---------------------------------------------------------------------
   const hud = ctx.makeHUD();
   const hudT = new TextPlane('WATT · STEAM ENGINE · 1769', { font: FONTS.mono, height: 0.034, letterSpacing: 0.32, color: '#ffd9b8', intensity: 0.95 });
-  const hudS = new TextPlane('120 RPM · 3.4 BAR · 40 HP', { font: FONTS.mono, height: 0.026, letterSpacing: 0.3, color: '#ffd9b8', intensity: 0.7 });
+  const hudS = new TextPlane('60 RPM · 3.4 BAR · 40 HP', { font: FONTS.mono, height: 0.026, letterSpacing: 0.3, color: '#ffd9b8', intensity: 0.7 });
   hudT.position.set(-ctx.aspect + 0.16 + hudT.worldWidth / 2, -0.8, 0);
   hudS.position.set(-ctx.aspect + 0.16 + hudS.worldWidth / 2, -0.87, 0);
   hud.scene.add(hudT, hudS);
@@ -462,14 +607,18 @@ export function create(ctx, segment) {
   const Hp = (x, y, z) => H.clone().add(V(x, y, z));
   const camA = makePath([[0, Hp(3.6, -2.4, 3.1)], [0.8, Hp(2.9, 1.9, 3.8)], [1.5, Hp(0.6, 0.8, 5.6)], [2.0, Hp(4.5, 0.2, 17)]]);
   const tgtA = makePath([[0, Hp(1.45, -0.85, 0)], [0.8, Hp(0.95, 0.35, 0)], [1.5, Hp(0.25, 0.1, 0)], [2.0, Hp(4.2, -1.8, 0)]]);
-  const camC = makePath([[2.0, V(-2.3, 2.95, 6.3)], [2.8, V(0.9, 3.1, 6.2)], [3.05, V(1.7, 4.2, 8.2)], [3.35, V(3.4, 5.2, 11.0)], [3.85, V(11.5, 7.6, 15.5)], [4.12, V(RX + 0.2, 0.85, 13.5)], [4.5, V(RX + 0.05, 0.5, 3.8)]]);
-  const tgtC = makePath([[2.0, V(-0.8, 3.55, 3.0)], [2.8, V(0.8, 3.7, 3.0)], [3.05, V(0.5, 5.9, 3.0)], [3.35, V(0.3, 5.3, 2.5)], [3.85, V(-3.0, 3.2, 1.0)], [4.12, V(RX - 0.4, 1.0, 0)], [4.5, V(RX - 0.15, 1.5, -8)]]);
+  // C: cut-away macro on the near cylinder, dolly along piston rod → crosshead → con-rod → crank;
+  // D: crane up and back as steam erupts; E: hero wide of the whole engine hall (lock on 28.0); F: railway
+  // (C stays a medium shot: the chapter word floats ~2.8 units in front of the lens with a real light in it,
+  // and machinery closer than that would take a hot spot of its light)
+  const camC = makePath([[2.0, V(-5.4, 3.7, 11.2)], [2.5, V(-3.6, 3.6, 11.0)], [2.8, V(-2.3, 2.9, 9.7)], [3.1, V(-0.7, 1.9, 9.1)], [3.5, V(2.9, 0.95, 10.4)], [3.75, V(6.4, 1.4, 12.6)], [4.12, V(RX + 0.2, 0.85, 13.5)], [4.5, V(RX + 0.05, 0.5, 3.8)]]);
+  const tgtC = makePath([[2.0, V(-3.2, 2.3, 3.6)], [2.5, V(-2.2, 2.3, 3.5)], [2.8, V(-2.7, 2.1, 4.0)], [3.1, V(-3.0, 2.3, 3.6)], [3.5, V(-3.1, 2.95, 2.5)], [3.75, V(-1.4, 2.7, 1.8)], [4.12, V(RX - 0.4, 1.0, 0)], [4.5, V(RX - 0.15, 1.5, -8)]]);
 
   // ---- scratch ------------------------------------------------------------------
   const cp = V(0, 0, 0), ct = V(0, 0, 0), m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), zAxis = V(0, 0, 1), s3 = V(1, 1, 1), p3 = V(0, 0, 0);
   const dof = { focus: 1.2, range: 0.5, amount: 0.8 };
   const bloom = { strength: 0.6 };
-  const out = { scene, camera, hud, dof, bloom, exposure: 1, background: BG, update };
+  const out = { scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update };
 
   // clockwork tick: advance one step per beat with an eased, slightly overshooting snap
   const tick = (T, len = 0.22) => { const n = Math.floor(T / BEAT), ph = sat((T - n * BEAT) / len); return n + ease.outBack(ph); };
@@ -506,48 +655,58 @@ export function create(ctx, segment) {
       im.instanceMatrix.needsUpdate = true;
     }
     const set1 = shotA;
-    wallMat.color.setScalar(shotA ? 1 : lerp(0.12, 0.3, smoothstep(3.2, 3.6, t)));
-    heroSpin.visible = pinSpin.visible = wheelSpin.visible = true;
+    // As the camera pulls back from the gear wall (26.0–26.5) the key would mirror off hundreds of flat gear
+    // faces straight into the lens (a white wash in the open-matte frame): dim the key, broaden the wall's
+    // highlights. In the engine hall the wall recedes into a soft, matte backdrop.
+    const pull = smoothstep(1.35, 1.85, t);
+    key.intensity = shotA ? lerp(2.0, 0.55, pull) : 1.5;
+    wallMat.color.setScalar(shotA ? lerp(1, 0.55, pull) : 0.13);
+    wallMat.roughness = shotA ? lerp(0.34, 0.6, pull) : 0.8;
+    heroSpin.visible = pinSpin.visible = wheelSpin.visible = shotA;
     calloutA.position.copy(H).add(V(Math.cos(0.35) * hero.r, Math.sin(0.35) * hero.r, 0.26));
     calloutB.position.copy(pinSpin.position).add(V(0.35, -0.3, 0.3));
     calloutA.reveal(ramp(t, tGear + 0.05, tGear + 0.55), 1 - smoothstep(1.35, 1.6, t));
     calloutB.reveal(ramp(t, tGear + 0.3, tGear + 0.8), 1 - smoothstep(1.35, 1.6, t));
     calloutA.visible = calloutB.visible = set1;
 
-    // ---------- crank / pistons ---------------------------------------------------
-    // one revolution per beat; TDC (θ = 0) is kicked on every beat and coasts to the next
+    // ---------- engine --------------------------------------------------------------
+    // half a revolution per beat (60 rpm): a dead centre lands on every beat, with a slight surge
+    // through each power stroke — the flywheel carries it, the governor balls ride out on their arms
     const n = Math.floor(T / BEAT), ph = (T - n * BEAT) / BEAT;
-    const theta = TAU * (n + (1 - Math.pow(1 - ph, 1.9)));
-    for (const u of crankUnits) {
-      const th = theta + u.ph;
-      u.crank.rotation.x = th;
-      const s = Math.sin(th), c = Math.cos(th);
-      const pinY = YC + CR * c, pinZ2 = ZC + CR * s;
-      const yp = CR * c + Math.sqrt(CL * CL - CR * CR * s * s);
-      u.piston.position.set(u.x, YC + yp, ZC);
-      u.rod.position.set(u.x, pinY, pinZ2);
-      u.rod.rotation.x = Math.atan2(ZC - pinZ2, YC + yp - pinY);
-    }
-    fly.rotation.x = theta * 0.25;
+    const theta = Math.PI * (n + ph + 0.05 * Math.sin(TAU * ph));
     const hit = pulse(T, { decay: 5 });
-    emberSprites.forEach((s, i) => { const on = crankUnits[i].ph === 0 ? hit : 0; s.material.opacity = on * ramp(t, tPist - 0.05, tPist) ; s.visible = s.material.opacity > 0.01; s.scale.setScalar(0.6 + on * 0.9); });
-    ember.position.set(0, yTop + 0.9, ZC + 0.2);
-    ember.intensity = 10 * hit * ramp(t, tPist - 0.05, tPist) + 2 * ramp(t, tPist, tPist + 0.3);
-    if (boiler.userData.fire) boiler.userData.fire.material.color.setRGB(1, 0.42, 0.12).multiplyScalar(2.2 + 1.8 * hit);
-    boiler.userData.needle.rotation.z = 1.2 - 2.0 * ramp(t, 3.3, 3.6) - 0.15 * hit;
-
-    // ---------- assembly --------------------------------------------------------
-    const ta = t - (tMach - 0.2);
-    for (const p of parts) {
-      const k = ease.outCubic(sat((ta - p.delay) / (0.5 - p.delay)));
-      p.obj.position.lerpVectors(p.p0, p.p1, k);
-      p.obj.quaternion.slerpQuaternions(p.q0, p.q1, ease.inOutCubic(sat((ta - p.delay) / (0.5 - p.delay))));
-      p.obj.visible = ta - p.delay > 0 || t > 4.0;
+    for (const u of engines) {
+      const th = theta + u.e.ph, P = u.parts;
+      P.crank.rotation.z = th;
+      const px = XC + CR * Math.cos(th), dy = CR * Math.sin(th);
+      const xh = px - Math.sqrt(CL * CL - dy * dy);
+      P.cross.position.set(xh, YC, 0);
+      P.rod.position.set(xh, YC, 0); P.rod.rotation.z = Math.atan2(dy, px - xh);
+      P.piston.position.set(xh - ROD - 0.2, YC, 0);
+      u.wrist.rotation.z = 0.32 * Math.sin(th + Math.PI / 2);
+      if (u.inner) u.inner.intensity = (1.2 + 5 * hit) * ramp(t, tPist - 0.3, tPist);
     }
+    fly.rotation.z = theta;
+    govSpin.rotation.y = theta * 2.0;
+    const on2 = ramp(t, tPist - 0.3, tPist);
+    const flick = 0.82 + 0.1 * Math.sin(T * 23.0) + 0.08 * Math.sin(T * 37.0 + 1.3);
+    ember.position.set(BO.x, 1.5, BO.z1 + 0.9);
+    ember.intensity = 26 * flick * on2;
+    ember.distance = 9;
+    steam.material.uniforms.uFireI.value = 2.2 * flick * on2;
+    boiler.userData.fire.uniforms.uT.value = T;
+    boiler.userData.fire.uniforms.uI.value = 1.6 * flick;
+    boiler.userData.needle.rotation.z = 2.1 - 2.9 * ramp(t, 2.6, 3.4) - 0.04 * hit;
+    const set2 = !shotA;
+    machine.visible = boiler.visible = set2 || t > tPist - 0.6;
+
     const lock = pulse(T, { decay: 4 }) * (Math.abs(T - 28.0) < 0.3 ? 1 : 0) * (T >= 28.0 ? 1 : 0);
-    rim.intensity = 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * (shotA ? 0.7 : 1) + 4 * lock;
+    // (in the engine hall the back light is softer and whiter: an orange 3.2 rim facing the lens turned the
+    // floor and the bed plates into one big glare behind the chapter word)
+    rim.intensity = shotA ? 3.2 * (0.3 + 0.7 * ramp(t, tGear - 0.2, tGear + 0.3)) * 0.7 : 1.1 + 1.8 * lock;
+    rim.color.setHex(shotA ? 0xff9448 : 0xffc890);
     side.intensity = 1.6 * ramp(t, 3.2, 3.6);
-    shafts.forEach((sh) => { sh.visible = t > 3.25; });
+    shafts.forEach((sh) => { sh.visible = t > 2.75; });
 
     // ---------- steam, sparks, dust ------------------------------------------------
     steam.tick(t, info);
@@ -572,7 +731,7 @@ export function create(ctx, segment) {
     camera.position.copy(cp);
     camera.up.set(shotA ? Math.sin(t * 0.8) * 0.05 : (t > 3.9 ? 0.08 * smoothstep(3.9, 4.3, t) : 0), 1, 0).normalize();
     camera.lookAt(ct);
-    camera.fov = shotA ? lerp(26, 34, smoothstep(1.5, 2.0, t)) : t < 3.3 ? 30 : t < 4.0 ? lerp(30, 36, smoothstep(3.3, 3.85, t)) : lerp(36, 58, smoothstep(3.95, 4.5, t));
+    camera.fov = shotA ? lerp(26, 34, smoothstep(1.5, 2.0, t)) : t < 4.0 ? 30 + 7 * smoothstep(2.9, 3.45, t) - 1 * smoothstep(3.5, 3.9, t) : lerp(36, 58, smoothstep(3.95, 4.5, t));
     camera.updateProjectionMatrix();
 
     // exposure / DOF per shot
@@ -582,7 +741,14 @@ export function create(ctx, segment) {
     else { dof.focus = 6; dof.range = 3; dof.amount = 0.45; }
     bloom.strength = 0.6 + 0.3 * hit * (t > tPist ? 1 : 0) + fe * 0.6;
     out.exposure = 1.0 + 0.15 * lock;
+    // the prism's spectrum wipe (science → here) keeps its true colours until it has crossed the frame
+    out.harmony = smoothstep(0.3, 0.52, t);
 
+    const sq = globalThis.location?.search ?? '';
+    if (sq.includes('dbgR')) rim.intensity = 0;
+    if (sq.includes('dbgK')) { key.intensity = 0; fill.intensity = 0; }
+    if (sq.includes('dbgL')) floor.visible = false;
+    if (sq.includes('dbgS')) { steam.visible = false; hallDust.visible = false; }
     // HUD
     const he = envelope(t, 3.35, 4.6, 0.25, 0.3);
     hudT.opacity = he; hudT.reveal = ramp(t, 3.35, 3.8, ease.outCubic);

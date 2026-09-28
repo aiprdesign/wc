@@ -97,7 +97,9 @@ export const TransitionShader = {
         vec3 bandB;
         float off = 0.012 * clamp(1.0 - abs(d), 0.0, 1.0);
         bandB.r = safe(texture2D(tB, uv + vec2(off, 0.0)).rgb).r; bandB.g = B.g; bandB.b = safe(texture2D(tB, uv - vec2(off, 0.0)).rgb).b;
-        vec3 band = spectrum(clamp(d, 0.0, 1.0) * 0.85) * 2.2 * smoothstep(1.0, 0.0, abs(d - 0.5) * 2.0);
+        // equal-luminance hues (red → violet) with soft ends, so no single colour burns to white under bloom
+        vec3 sc = spectrum(clamp(d, 0.0, 1.0) * 0.8); sc /= 0.3 + lum(sc);
+        vec3 band = sc * 0.55 * smoothstep(0.0, 0.2, d) * smoothstep(1.0, 0.75, d);
         col = d < 0.0 ? bandB : mix(bandB, A, smoothstep(0.0, 1.0, d));
         col += band * smoothstep(-0.05, 0.1, d) * smoothstep(1.05, 0.9, d);
       } else if (uMode == 5) {

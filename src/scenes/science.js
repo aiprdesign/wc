@@ -97,7 +97,7 @@ export function create(ctx, segment) {
 
   const O = V(1.9, -7.9, -1.6);          // orrery base centre
   const S = O.clone().add(V(0, 1.35, 0)); // sun
-  const P = S.clone().add(V(4.8, -0.05, 2.0)); // prism
+  const P = S.clone().add(V(4.8, 2.0, 2.0));  // prism (raised: the beam climbs into it, the classic path)
   const beamDir = P.clone().sub(S).setY(0).normalize();
   const beamPerp = V(-beamDir.z, 0, beamDir.x).multiplyScalar(-1); // toward camera side (+z-ish)
   if (beamPerp.z < 0) beamPerp.multiplyScalar(-1);
@@ -116,8 +116,8 @@ export function create(ctx, segment) {
   // ---- hero: polished brass sphere ------------------------------------------
   const sphereMat = new THREE.MeshPhysicalMaterial({ color: '#c99a55', metalness: 1, roughness: 0.14, clearcoat: 0.4, clearcoatRoughness: 0.12, envMapIntensity: 0.75 });
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.2, 96, 64), sphereMat);
-  const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.0035, 8, 128), new THREE.MeshStandardMaterial({ color: '#3a2610', metalness: 1, roughness: 0.4 }));
-  ball.add(band); band.rotation.x = Math.PI / 2 - 0.35;
+  const ballBand = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.0035, 8, 128), new THREE.MeshStandardMaterial({ color: '#3a2610', metalness: 1, roughness: 0.4 }));
+  ball.add(ballBand); ballBand.rotation.x = Math.PI / 2 - 0.35;
   scene.add(ball);
 
   // trajectory curve (arc-length table so the drawing front sits exactly on the sphere)
@@ -344,80 +344,301 @@ export function create(ctx, segment) {
   }
 
   // ---- prism & light --------------------------------------------------------
+  // A physically traced dispersing prism. Everything is laid out in prism-local coordinates (x along the
+  // horizontal beam heading, y up, z toward the camera side): the white ray from the orrery's sun rises
+  // into the left face, refracts per wavelength with Snell's law (Cauchy dispersion, exaggerated ×11 so
+  // the fan reads on screen), crosses the glass as a narrow internal fan and leaves the right face as a
+  // continuous spectrum — red least deviated, violet most — which lands on a matte card as a band.
   const prism = new THREE.Group(); prism.position.copy(P); prism.rotation.y = -Math.atan2(beamDir.z, beamDir.x); scene.add(prism);
-  const side = 0.9, hgt = side * Math.sqrt(3) / 2;
-  const triA = new THREE.Vector2(-side / 2, -hgt / 2), triB = new THREE.Vector2(side / 2, -hgt / 2), triC = new THREE.Vector2(0, hgt / 2);
-  const triShape = new THREE.Shape([triA, triB, triC]);
-  const prismGeo = new THREE.ExtrudeGeometry(triShape, { depth: 0.8, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2 });
-  prismGeo.translate(0, 0, -0.4);
-  const glassMat = new THREE.MeshPhysicalMaterial({ fog: false, color: '#ffffff', metalness: 0, roughness: 0.0, transmission: 1, thickness: 0.35, ior: 1.52, transparent: true, envMapIntensity: 0.45, specularIntensity: 0.5, clearcoat: 0.4, clearcoatRoughness: 0.02, attenuationColor: new THREE.Color('#dfefff'), attenuationDistance: 3 });
-  const prismMesh = new THREE.Mesh(prismGeo, glassMat); prism.add(prismMesh);
-  const prismEdges = new THREE.LineSegments(new THREE.EdgesGeometry(prismGeo, 30), new THREE.LineBasicMaterial({ color: new THREE.Color('#fff4e6').multiplyScalar(0.9), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
-  prism.add(prismEdges);
-  const prismFres = new THREE.Mesh(prismGeo, new THREE.ShaderMaterial({
-    uniforms: { uO: { value: 0 } },
-    vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vN = normalize(normalMatrix*normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
-    fragmentShader: `uniform float uO; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0-abs(dot(normalize(vN),normalize(vV))),4.0); gl_FragColor = vec4(vec3(0.85,0.92,1.0)*f*0.45*uO, 1.0); }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  }));
-  prism.add(prismFres);
-  // plinth for the prism (brass stand)
-  const pstand = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.4, 20), brassPolish); pstand.position.y = -hgt / 2 - 0.72; prism.add(pstand);
-  const pfoot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.06, 48), brass); pfoot.position.y = -hgt / 2 - 1.42; prism.add(pfoot);
-  const pcradle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.05, 0.05, 32), brassPolish); pcradle.position.y = -hgt / 2 - 0.035; prism.add(pcradle);
-  // ray geometry in prism-local coordinates
-  const yIn = -0.04;
-  const E = V(-side / 2 + ((yIn + hgt / 2) / hgt) * (side / 2), yIn, 0);
-  const yOut = -0.13;
-  const X = V(((hgt / 2 - yOut) / hgt) * (side / 2), yOut, 0);
-  const Ew = E.clone(); prism.updateMatrixWorld(); prism.localToWorld(Ew);
-  const beam = progressTube(new THREE.LineCurve3(S.clone(), Ew), { radius: 0.009, segments: 64, color: '#fff6ea', intensity: 4.0 });
-  const beamHalo = progressTube(new THREE.LineCurve3(S.clone(), Ew), { radius: 0.05, segments: 64, color: '#ffe6c8', intensity: 0.4, opacity: 0.45 });
-  const inner = progressTube(new THREE.LineCurve3(E.clone(), X.clone()), { radius: 0.012, segments: 16, color: '#ffffff', intensity: 4 });
-  prism.add(inner);
-  scene.add(beam, beamHalo);
-  const entryGlow = glowSprite({ color: '#fff4e0', intensity: 2, scale: 0.6 }); entryGlow.position.copy(E); prism.add(entryGlow);
-  const exitGlow = glowSprite({ color: '#ffffff', intensity: 1.5, scale: 0.4 }); exitGlow.position.copy(X); prism.add(exitGlow);
-  // spectral fan: vertex shader places vertices from uniforms (angles, length) — pure function of t
-  const FU = 96, FD = 24;
-  const fanGeo = new THREE.BufferGeometry();
-  {
-    const uvs = [], idx = [];
-    for (let j = 0; j <= FD; j++) for (let i = 0; i <= FU; i++) uvs.push(i / FU, j / FD);
-    for (let j = 0; j < FD; j++) for (let i = 0; i < FU; i++) { const a = j * (FU + 1) + i, b = a + 1, c = a + FU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
-    fanGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(uvs.length / 2 * 3), 3));
-    fanGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    fanGeo.setIndex(idx);
+  prism.updateMatrixWorld();
+  const Sl = prism.worldToLocal(S.clone());
+  const side = 0.9, hgt = side * Math.sqrt(3) / 2, DEPTH = 0.62;
+  const v2 = (x, y) => new THREE.Vector2(x, y);
+  const rot2 = (p, a) => v2(p.x * Math.cos(a) - p.y * Math.sin(a), p.x * Math.sin(a) + p.y * Math.cos(a));
+  // index of refraction by spectral coordinate u (0 = 700 nm red … 1 = 400 nm violet; uniform in 1/λ²)
+  const invL2 = (u) => lerp(1 / 700 ** 2, 1 / 400 ** 2, u);
+  const nOf = (u) => 1.5046 + 4200 * 11 * invL2(u);
+  // choose the roll so the mid-spectrum ray passes at minimum deviation (the textbook symmetric path)
+  const nMid = nOf(0.5), iMin = Math.asin(nMid * Math.sin(Math.PI / 6));
+  let roll = 0, tA, tB, tC, Ein, dIn;
+  for (let it = 0; it < 4; it++) {
+    tA = rot2(v2(-side / 2, -hgt / 3), roll); tB = rot2(v2(side / 2, -hgt / 3), roll); tC = rot2(v2(0, (2 * hgt) / 3), roll);
+    Ein = tA.clone().lerp(tC, 0.42);
+    dIn = Ein.clone().sub(v2(Sl.x, Sl.y)).normalize();
+    const nL = v2(-(tC.y - tA.y), tC.x - tA.x).normalize();           // outward normal of the entry face
+    const inc = Math.acos(-dIn.dot(nL));
+    roll += inc - iMin;                                                // rotating the prism by +δ lowers incidence by δ
   }
-  const fanMat = new THREE.ShaderMaterial({
-    uniforms: { uA0: { value: -0.3 }, uA1: { value: -0.5 }, uLen: { value: 0 }, uMax: { value: 9 }, uI: { value: 1.6 }, uApex: { value: X.clone() }, uO: { value: 1 } },
-    vertexShader: `uniform float uA0, uA1, uLen, uMax; uniform vec3 uApex; varying vec2 vUv; varying float vD;
-      void main(){ vUv = uv; float a = mix(uA0, uA1, uv.x); float d = uv.y * uMax; vD = d;
-        vec3 p = uApex + vec3(cos(a), sin(a), 0.0) * d; gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }`,
-    fragmentShader: `uniform float uLen, uMax, uI, uO; varying vec2 vUv; varying float vD;
-      vec3 spec(float x){ // x: 0 red → 1 violet, roughly equal-luminance
-        vec3 c = clamp(abs(mod(x*0.8*6.0 + vec3(0.0,4.0,2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-        c += vec3(0.35,0.0,0.25) * smoothstep(0.82, 1.0, x);
-        return c / (0.25 + dot(c, vec3(0.2126,0.7152,0.0722)) * 1.5); }
+  const nLeft = v2(-(tC.y - tA.y), tC.x - tA.x).normalize();
+  const nRight = v2(tC.y - tB.y, -(tC.x - tB.x)).normalize();
+  const refract2 = (d, N, eta) => {                                    // N faces against d
+    const ci = -d.dot(N), k = 1 - eta * eta * (1 - ci * ci);
+    if (k < 0) return null;
+    return d.clone().multiplyScalar(eta).add(N.clone().multiplyScalar(eta * ci - Math.sqrt(k))).normalize();
+  };
+  const reflect2 = (d, N) => d.clone().sub(N.clone().multiplyScalar(2 * d.dot(N)));
+  const hitLine = (o, d, a, b) => {                                    // ray o + s·d against segment a–b → s
+    const e = b.clone().sub(a), den = d.x * e.y - d.y * e.x;
+    if (Math.abs(den) < 1e-9) return Infinity;
+    const w = a.clone().sub(o);
+    const s = (w.x * e.y - w.y * e.x) / den, q = (w.x * d.y - w.y * d.x) / den;
+    return s > 1e-5 && q >= -1e-3 && q <= 1 + 1e-3 ? s : Infinity;
+  };
+  const NU = 72;
+  const exitP = [], exitD = [], inD = [];
+  for (let i = 0; i <= NU; i++) {
+    const u = i / NU, n = nOf(u);
+    const d1 = refract2(dIn, nLeft, 1 / n);
+    const s = hitLine(Ein, d1, tB, tC);
+    const X = Ein.clone().addScaledVector(d1, s);
+    const d2 = refract2(d1, nRight.clone().negate(), n);
+    inD.push(d1); exitP.push(X); exitD.push(d2);
+  }
+  const Xmid = exitP[NU >> 1], dMid = exitD[NU >> 1];
+  // matte projection card: 2 units down-range, turned 48° toward the camera
+  const DS = 2.15;
+  const Q2 = Xmid.clone().addScaledVector(dMid, DS);
+  const beta = 1.0;
+  const cardN = V(-dMid.x * Math.cos(beta), -dMid.y * Math.cos(beta), Math.sin(beta)).normalize();
+  const Q = V(Q2.x, Q2.y, 0);
+  const lenAt = exitP.map((X, i) => { const d = exitD[i]; return ((Q.x - X.x) * cardN.x + (Q.y - X.y) * cardN.y) / (d.x * cardN.x + d.y * cardN.y); });
+  const hitAt = exitP.map((X, i) => V(X.x + exitD[i].x * lenAt[i], X.y + exitD[i].y * lenAt[i], 0));
+
+  // spectral colour: CIE 1931 multi-lobe fit (Wyman, Sloan & Shirley 2013) → XYZ → linear sRGB, gamut-clipped,
+  // then blurred along the spectrum by the beam's finite width (as on a real card: that overlap is what
+  // widens the thin yellow and cyan zones), value-normalised with a lift for the dim blues. Baked into a
+  // 256×1 lookup so every shader samples identical colour.
+  const SPEC_N = 256;
+  const lobe = (x, mu, s1, s2) => { const q = (x - mu) / (x < mu ? s1 : s2); return Math.exp(-0.5 * q * q); };
+  const rawSpec = [];
+  for (let i = 0; i < SPEC_N; i++) {
+    const lam = 1 / Math.sqrt(invL2(i / (SPEC_N - 1)));
+    const X = 1.056 * lobe(lam, 599.8, 37.9, 31.0) + 0.362 * lobe(lam, 442.0, 16.0, 26.7) - 0.065 * lobe(lam, 501.1, 20.4, 26.2);
+    const Y = 0.821 * lobe(lam, 568.8, 46.9, 40.5) + 0.286 * lobe(lam, 530.9, 16.3, 31.1);
+    const Z = 1.217 * lobe(lam, 437.0, 11.8, 36.0) + 0.681 * lobe(lam, 459.0, 26.0, 13.8);
+    rawSpec.push([Math.max(0, 3.2406 * X - 1.5372 * Y - 0.4986 * Z), Math.max(0, -0.9689 * X + 1.8758 * Y + 0.0415 * Z), Math.max(0, 0.0557 * X - 0.2040 * Y + 1.0570 * Z)]);
+  }
+  const specData = new Uint8Array(SPEC_N * 4);
+  for (let i = 0; i < SPEC_N; i++) {
+    const c = [0, 0, 0]; let ws = 0;
+    for (let k = -14; k <= 14; k++) {
+      const j = Math.min(SPEC_N - 1, Math.max(0, i + k)), w = Math.exp(-0.5 * (k / 6) ** 2);
+      const r = rawSpec[j], m = Math.max(r[0], r[1], r[2], 1e-4);
+      c[0] += (r[0] / m) * w; c[1] += (r[1] / m) * w; c[2] += (r[2] / m) * w; ws += w;
+    }
+    const m = Math.max(c[0], c[1], c[2]);
+    const l = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / m;
+    const k = (1 + 0.9 * (1 - l) ** 2) / m;                  // stored at half scale → ×2 in the shader
+    for (let ch = 0; ch < 3; ch++) specData[i * 4 + ch] = Math.round(Math.min(1, (c[ch] * k) / 2) * 255);
+    specData[i * 4 + 3] = 255;
+  }
+  const specTex = new THREE.DataTexture(specData, SPEC_N, 1, THREE.RGBAFormat);
+  specTex.magFilter = specTex.minFilter = THREE.LinearFilter; specTex.needsUpdate = true;
+  const SPECTRAL = /* glsl */ `
+    uniform sampler2D uSpec;
+    vec3 spectral(float u){ return texture2D(uSpec, vec2((clamp(u, 0.0, 1.0) * 255.0 + 0.5) / 256.0, 0.5)).rgb * 2.0; }`;
+
+  // glass body: extruded triangle (bevelled so the edges catch speculars), custom additive glass shading —
+  // fresnel sheen from a soft studio gradient, sharp key/sun speculars, and the beam's scatter glowing
+  // through the body from its internal path. (No transmission pass: cheaper, and fully controllable.)
+  const triShape = new THREE.Shape([tA, tB, tC]);
+  const prismGeo = new THREE.ExtrudeGeometry(triShape, { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3 });
+  prismGeo.translate(0, 0, -DEPTH / 2);
+  const E3 = V(Ein.x, Ein.y, 0), X3 = V(Xmid.x, Xmid.y, 0);
+  const glassU = {
+    uO: { value: 0 }, uBeam: { value: 0 }, uE: { value: E3 }, uX: { value: X3 },
+    uKey: { value: key.position.clone().normalize() }, uSun: { value: S.clone() },
+  };
+  const glassMat = new THREE.ShaderMaterial({
+    uniforms: glassU,
+    vertexShader: /* glsl */ `varying vec3 vN; varying vec3 vW; varying vec3 vL;
+      void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: /* glsl */ `uniform float uO, uBeam; uniform vec3 uE, uX, uKey, uSun; varying vec3 vN; varying vec3 vW; varying vec3 vL;
+      float segD(vec3 p, vec3 a, vec3 b){ vec3 ab = b - a; float h = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0); return length(p - a - ab * h); }
       void main(){
-        if (vD > uLen) discard;
-        float front = smoothstep(uLen, uLen - 0.35, vD);
-        float edge = smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x);
-        float bands = 0.35 + 0.65 * pow(0.5 + 0.5*cos((vUv.x - 0.5/7.0) * 6.2831 * 7.0), 6.0);
-        float near = 1.0 + 1.5 * exp(-vD * 3.0);
-        float fall = 1.0 / (1.0 + vD * 0.12);
-        vec3 c = spec(vUv.x) * bands * near * fall * uI * edge * front * (1.0 + 2.0 * smoothstep(uLen - 0.35, uLen, vD));
-        gl_FragColor = vec4(c * uO, 1.0);
+        vec3 N = normalize(vN), Vd = normalize(cameraPosition - vW);
+        if (!gl_FrontFacing) N = -N;
+        float mu = abs(dot(N, Vd));
+        float F = 0.04 + 0.96 * pow(1.0 - mu, 5.0);
+        vec3 R = reflect(-Vd, N);
+        vec3 env = mix(vec3(0.05, 0.04, 0.035), vec3(0.55, 0.48, 0.4), smoothstep(-0.2, 0.9, R.y)) + vec3(0.9, 0.7, 0.45) * pow(max(0.0, dot(R, normalize(uSun - vW))), 30.0) * 1.5;
+        float spec = pow(max(0.0, dot(R, uKey)), 180.0) * 2.5;
+        float dB = segD(vL, uE, uX);
+        vec3 scatter = vec3(1.0, 0.97, 0.92) * (exp(-dB * dB / 0.004) * 0.55 + exp(-dB * 5.0) * 0.14) * uBeam;
+        vec3 col = env * F * 0.9 + vec3(1.0, 0.95, 0.88) * spec * F * 4.0 + scatter + vec3(0.012, 0.014, 0.016);
+        gl_FragColor = vec4(col * uO, 1.0);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
-  const fan = new THREE.Mesh(fanGeo, fanMat); fan.frustumCulled = false; prism.add(fan);
-  const lamRed = new TextPlane('λ 700 nm', { font: FONTS.mono, height: 0.045, letterSpacing: 0.2, color: '#ffb8a0', intensity: 1.2 });
-  const lamVio = new TextPlane('λ 400 nm', { font: FONTS.mono, height: 0.045, letterSpacing: 0.2, color: '#c8b8ff', intensity: 1.2 });
+  const prismMesh = new THREE.Mesh(prismGeo, glassMat); prismMesh.renderOrder = 2; prism.add(prismMesh);
+  // polished arrises: nine thin rods whose brightness swells where the beam enters and leaves
+  const edgeMat = new THREE.ShaderMaterial({
+    uniforms: { uO: { value: 0 }, uBeam: { value: 0 }, uE: { value: E3 }, uX: { value: X3 } },
+    vertexShader: /* glsl */ `varying vec3 vL; void main(){ vL = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `uniform float uO, uBeam; uniform vec3 uE, uX; varying vec3 vL; uniform mat4 uInv;
+      void main(){ vec3 p = (uInv * vec4(vL, 1.0)).xyz;
+        float g = exp(-pow(length(p.xy - uE.xy), 2.0) / 0.02) + 0.8 * exp(-pow(length(p.xy - uX.xy), 2.0) / 0.02);
+        float zf = exp(-p.z * p.z / 0.03);
+        vec3 c = vec3(1.0, 0.94, 0.86) * (0.32 + g * zf * 2.2 * uBeam + g * 0.35 * uBeam);
+        gl_FragColor = vec4(c * uO, 1.0); }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  edgeMat.uniforms.uInv = { value: prism.matrixWorld.clone().invert() };
+  {
+    const zf = DEPTH / 2 + 0.004, tri = [tA, tB, tC];
+    const rodBetween = (a, b) => {
+      const len = a.distanceTo(b);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.0032, 0.0032, len, 6, 1, true), edgeMat);
+      m.position.copy(a).add(b).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(V(0, 1, 0), b.clone().sub(a).normalize());
+      prism.add(m);
+    };
+    for (let k = 0; k < 3; k++) {
+      const a = tri[k], b = tri[(k + 1) % 3];
+      rodBetween(V(a.x, a.y, zf), V(b.x, b.y, zf));
+      rodBetween(V(a.x, a.y, -zf), V(b.x, b.y, -zf));
+      rodBetween(V(a.x, a.y, -zf), V(a.x, a.y, zf));
+    }
+  }
+  // brass stand (cradle, column, foot) reaching down to the orrery's plinth level
+  const baseY = Math.min(tA.y, tB.y);
+  const standLen = P.y - O.y + baseY + 0.15;
+  const pcradle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.05, 0.05, 32), brassPolish); pcradle.position.y = baseY - 0.028; prism.add(pcradle);
+  const pstand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, standLen, 20), brassPolish); pstand.position.y = baseY - 0.05 - standLen / 2; prism.add(pstand);
+  const pfoot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.06, 48), brass); pfoot.position.y = baseY - 0.05 - standLen; prism.add(pfoot);
+
+  // incoming beam: thin white-hot core + faint haze sheath (from the sun's surface to the entry point)
+  const Ew = E3.clone(); prism.localToWorld(Ew);
+  const sunEdge = S.clone().addScaledVector(Ew.clone().sub(S).normalize(), 0.26);
+  const beam = progressTube(new THREE.LineCurve3(sunEdge, Ew), { radius: 0.0065, segments: 64, color: '#fff8f0', intensity: 3.2 });
+  const beamHalo = progressTube(new THREE.LineCurve3(sunEdge, Ew), { radius: 0.035, segments: 64, color: '#ffeedd', intensity: 0.22, opacity: 0.5 });
+  scene.add(beam, beamHalo);
+  const entryGlow = glowSprite({ color: '#fff4e6', intensity: 1.1, scale: 0.35 }); entryGlow.position.copy(E3); prism.add(entryGlow);
+
+  // spectral fans: columns (u) × rows (along the ray); vertex positions from per-column start/dir/length
+  function fanMesh(starts, dirs, lens, frag, uniforms) {
+    const pos = [], uvs = [], st = [], dr = [], ln = [], idx = [], ROWS = 24;
+    for (let j = 0; j <= ROWS; j++) for (let i = 0; i <= NU; i++) {
+      pos.push(0, 0, 0); uvs.push(i / NU, j / ROWS);
+      st.push(starts[i].x, starts[i].y, 0); dr.push(dirs[i].x, dirs[i].y, 0); ln.push(lens[i]);
+    }
+    for (let j = 0; j < ROWS; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    g.setAttribute('aStart', new THREE.Float32BufferAttribute(st, 3));
+    g.setAttribute('aDir', new THREE.Float32BufferAttribute(dr, 3));
+    g.setAttribute('aLen', new THREE.Float32BufferAttribute(ln, 1));
+    g.setIndex(idx);
+    const m = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: /* glsl */ `attribute vec3 aStart, aDir; attribute float aLen; varying vec2 vUv; varying float vD; varying float vL;
+        void main(){ vUv = uv; vD = uv.y * aLen; vL = aLen; vec3 p = aStart + aDir * vD; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
+      fragmentShader: SPECTRAL + frag,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
+    return mesh;
+  }
+  // outer fan through the air: white where the colours still overlap at the exit face, separating with distance;
+  // intensity falls as the fan widens; soft red/violet margins; a whisper of drifting haze
+  const fanU = { uLen: { value: 0 }, uI: { value: 1 }, uTime: { value: 0 }, uSpec: { value: specTex } };
+  const fan = fanMesh(exitP, exitD, lenAt, /* glsl */ `
+    uniform float uLen, uI, uTime; varying vec2 vUv; varying float vD; varying float vL;
+    void main(){
+      if (vD > uLen) discard;
+      float u = vUv.x;
+      float edge = smoothstep(0.0, 0.07, u) * smoothstep(1.0, 0.9, u);
+      float sep = smoothstep(0.0, 0.55, vD);
+      vec3 c = mix(vec3(1.0, 0.97, 0.94) * 1.1, spectral(u), sep);
+      float haze = 0.82 + 0.18 * sin(vD * 9.0 - uTime * 1.3 + sin(u * 7.0 + uTime) * 1.5);
+      float front = 1.0 + 1.6 * smoothstep(uLen - 0.12, uLen, vD) * step(uLen, vL - 0.02);
+      float landing = smoothstep(vL - 0.25, vL, vD);
+      float I = uI * edge * haze * front * (0.34 / (1.0 + vD * 1.1)) * (1.0 - 0.35 * landing);
+      gl_FragColor = vec4(c * I, 1.0);
+    }`, fanU);
+  prism.add(fan);
+  // internal fan inside the glass (barely split, mostly white)
+  const innerLens = exitP.map((X) => X.distanceTo(Ein));
+  const innerU = { uLen: { value: 0 }, uI: { value: 1 }, uSpec: { value: specTex } };
+  const innerFan = fanMesh(exitP.map(() => Ein), inD, innerLens, /* glsl */ `
+    uniform float uLen, uI; varying vec2 vUv; varying float vD; varying float vL;
+    void main(){
+      if (vD > uLen * vL) discard;
+      float u = vUv.x, s = vD / vL;
+      float edge = smoothstep(0.0, 0.1, u) * smoothstep(1.0, 0.88, u);
+      vec3 c = mix(vec3(1.0, 0.97, 0.93), spectral(u), 0.25 + 0.45 * s);
+      gl_FragColor = vec4(c * uI * edge * (1.1 - 0.4 * s), 1.0);
+    }`, innerU);
+  prism.add(innerFan);
+  // secondary rays: ~4 % external reflection off the entry face, internal reflection off the exit face
+  // (landing on the base as a faint caustic) — the tell-tale ghosts of real glass
+  const reflOut = reflect2(dIn, nLeft);
+  // (drawn from its far end toward the prism with a full tail, so it is brightest at the glass and fades out)
+  const ghostOut = progressTube(new THREE.LineCurve3(V(Ein.x + reflOut.x * 0.8, Ein.y + reflOut.y * 0.8, 0), E3.clone()), { radius: 0.0035, segments: 16, color: '#fff2e4', intensity: 0.3, tail: 1 });
+  prism.add(ghostOut);
+  const dRefl = reflect2(inD[NU >> 1], nRight);
+  const sBase = Math.min(hitLine(Xmid, dRefl, tA, tB), hitLine(Xmid, dRefl, tA, tC));
+  const Cst = Xmid.clone().addScaledVector(dRefl, Number.isFinite(sBase) ? sBase : 0.3);
+  const ghostIn = progressTube(new THREE.LineCurve3(X3.clone(), V(Cst.x, Cst.y, 0)), { radius: 0.004, segments: 16, color: '#fff6ec', intensity: 0.22 });
+  prism.add(ghostIn);
+  const caustic = glowSprite({ color: '#ffe9d0', intensity: 0.5, scale: 0.16 }); caustic.position.set(Cst.x, Cst.y, 0); prism.add(caustic);
+
+  // projection card: dark linen board on a slim brass post; the band is drawn in its shader from the
+  // traced landing points (u mapped along the red→violet chord, gaussian across the beam width)
+  const cardW = 0.95, cardH = 1.05;
+  const cardGrp = new THREE.Group(); cardGrp.position.copy(Q);
+  cardGrp.quaternion.setFromUnitVectors(V(0, 0, 1), cardN);
+  prism.add(cardGrp);
+  // align the card's local y with the band direction (red → violet chord projected in its plane)
+  const chordW = hitAt[0].clone().sub(hitAt[NU]);
+  {
+    const yL = chordW.clone().applyQuaternion(cardGrp.quaternion.clone().invert()).setZ(0).normalize();
+    cardGrp.rotateZ(Math.atan2(yL.y, yL.x) - Math.PI / 2);
+  }
+  const toCard = cardGrp.quaternion.clone().invert();
+  const hitR = hitAt[0].clone().sub(Q).applyQuaternion(toCard), hitV = hitAt[NU].clone().sub(Q).applyQuaternion(toCard);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(cardW, cardH, 0.025), new THREE.MeshStandardMaterial({ color: '#23201d', roughness: 0.95, metalness: 0.0 }));
+  board.position.z = -0.014; cardGrp.add(board);
+  const boardFrame = new THREE.Mesh(new THREE.BoxGeometry(cardW + 0.03, cardH + 0.03, 0.02), bronzeDark); boardFrame.position.z = -0.03; cardGrp.add(boardFrame);
+  const bandU = { uLit: { value: 0 }, uI: { value: 1 }, uR: { value: new THREE.Vector2(hitR.x, hitR.y) }, uV: { value: new THREE.Vector2(hitV.x, hitV.y) }, uReveal: { value: 0 }, uSpec: { value: specTex } };
+  const specBand = new THREE.Mesh(new THREE.PlaneGeometry(cardW, cardH), new THREE.ShaderMaterial({
+    uniforms: bandU,
+    vertexShader: /* glsl */ `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: SPECTRAL + /* glsl */ `uniform float uLit, uI, uReveal; uniform vec2 uR, uV; varying vec2 vP;
+      void main(){
+        vec2 ax = uV - uR; float L = length(ax); vec2 dir = ax / L;
+        float u = dot(vP - uR, dir) / L;
+        float across = dot(vP - uR, vec2(-dir.y, dir.x));
+        float w = 0.05;
+        float core = exp(-across * across / (w * w));
+        float win = smoothstep(-0.07, 0.07, u) * smoothstep(1.07, 0.9, u);
+        float lit = smoothstep(u - 0.08, u + 0.02, uReveal);
+        vec3 c = spectral(u) * core * win * 1.2;
+        float scatter = exp(-across * across / 0.02) * exp(-pow(max(0.0, abs(u - 0.5) - 0.5) * 6.0, 2.0)) * 0.07;
+        c += spectral(u) * scatter;
+        gl_FragColor = vec4(c * uI * lit * uLit, 1.0);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  specBand.position.z = 0.002; cardGrp.add(specBand);
+  const cardPost = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 2.4, 12), brassPolish);
+  cardPost.position.copy(Q).add(V(0, -cardH / 2 - 1.2 + 0.1, -0.05)); prism.add(cardPost);
+
+  const lamRed = new TextPlane('λ 700 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#ffc2b0', intensity: 1.1 });
+  const lamVio = new TextPlane('λ 400 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#d6c8ff', intensity: 1.1 });
   const capO = new TextPlane('NEWTON · OPTICKS · 1704', { font: FONTS.mono, height: 0.04, letterSpacing: 0.3, color: '#fff0dc', intensity: 1.0 });
   const eqN = equation([['n = sin θ'], ['1', 'sub'], [' / sin θ'], ['2', 'sub']], { height: 0.1, intensity: 1.4, color: '#fff0dc' });
-  prism.add(lamRed, lamVio, capO, eqN);
-  eqN.position.set(-1.05, 0.34, 0.05); capO.position.set(-1.05, 0.22, 0.05);
+  prism.add(capO, eqN);
+  cardGrp.add(lamRed, lamVio);
+  eqN.position.set(1.8, 0.24, 0.05); capO.position.set(1.8, 0.12, 0.05);
+  {
+    // pencilled onto the card beside each end of the band
+    const across = V(hitR.y - hitV.y, -(hitR.x - hitV.x), 0).normalize();
+    if (across.x < 0) across.negate();
+    lamRed.position.copy(hitR).addScaledVector(across, 0.2).add(V(0, 0.03, 0.004));
+    lamVio.position.copy(hitV).addScaledVector(across, 0.2).add(V(0, -0.03, 0.004));
+  }
 
   // ---- HUD: chapter-like experiment captions --------------------------------
   const hud = ctx.makeHUD();
@@ -437,8 +658,8 @@ export function create(ctx, segment) {
     return (t, out) => curve.getPoint(clamp(timeWarp(t, warp), 0, 1), out);
   }
   const d0 = beamPerp.clone();
-  const camEnd = P.clone().addScaledVector(d0, 3.0).addScaledVector(beamDir, 0.85).add(V(0, 0.28, 0));
-  const tgtEnd = P.clone().addScaledVector(beamDir, 1.25).add(V(0, -0.22, 0));
+  const camEnd = P.clone().addScaledVector(d0, 3.45).addScaledVector(beamDir, 0.8).add(V(0, -0.2, 0));
+  const tgtEnd = P.clone().addScaledVector(beamDir, 1.0).add(V(0, -0.42, 0));
   const camPath = makePath([
     [1.3, V(-1.55, 1.33, 1.9)],
     [1.95, V(0.2, 0.45, 7.0)],
@@ -579,32 +800,40 @@ export function create(ctx, segment) {
     sunLight.intensity = 26 * ramp(t, 1.9, 2.5);
     sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3;
 
-    // light: beam → prism → spectrum
+    // light: beam → prism → spectrum (the light itself is slow-motion: the fan unfurls over ~0.45 s)
     const bp = ramp(t, tBeam - 0.28, tBeam, ease.inQuad);
     beam.progress = bp; beamHalo.progress = bp;
-    beam.opacity = bp > 0 ? 1 : 0; beamHalo.opacity = bp > 0 ? 0.45 : 0;
+    beam.opacity = bp > 0 ? 1 : 0; beamHalo.opacity = bp > 0 ? 0.5 : 0;
     const hit = t - tBeam;
-    inner.progress = sat(hit / 0.06);
-    inner.opacity = hit > 0 ? 1 : 0;
+    const on = hit > 0 ? 1 : 0;
     entryGlow.visible = hit > -0.02;
-    entryGlow.scale.setScalar(0.35 + 1.4 * Math.exp(-Math.max(0, hit) * 7) * sat((hit + 0.02) / 0.02));
-    exitGlow.visible = hit > 0.05;
-    const fp = sat((hit - 0.05) / 0.9);
-    const fe = ease.outCubic(fp);
-    fanMat.uniforms.uLen.value = fe * 9.0;
-    fanMat.uniforms.uA0.value = lerp(-0.3, -0.06, ease.inOutCubic(sat((hit - 0.1) / 0.85)));
-    fanMat.uniforms.uA1.value = lerp(-0.38, -0.72, ease.inOutCubic(sat((hit - 0.1) / 0.85)));
-    fan.visible = hit > 0.05;
-    fanMat.uniforms.uI.value = 0.5 + 0.5 * Math.exp(-Math.max(0, hit - 0.05) * 4);
-    prismFres.material.uniforms.uO.value = ramp(t, 3.4, 3.9) * (1 + 0.6 * Math.exp(-Math.max(0, hit) * 5) * (hit > 0 ? 1 : 0));
-    const a0 = fanMat.uniforms.uA0.value, a1 = fanMat.uniforms.uA1.value, Lr = Math.min(2.3, fe * 9);
-    lamRed.position.set(X.x + Math.cos(a0) * Lr, X.y + Math.sin(a0) * Lr + 0.07, 0.02); lamRed.rotation.z = a0;
-    lamVio.position.set(X.x + Math.cos(a1) * Lr * 0.8, X.y + Math.sin(a1) * Lr * 0.8 - 0.07, 0.02); lamVio.rotation.z = a1;
-    lamRed.reveal = lamVio.reveal = ramp(t, tBeam + 0.25, tBeam + 0.55);
-    lamRed.opacity = lamVio.opacity = ramp(t, tBeam + 0.25, tBeam + 0.3);
+    entryGlow.scale.setScalar(0.22 + 0.5 * Math.exp(-Math.max(0, hit) * 8) * sat((hit + 0.02) / 0.02));
+    innerU.uLen.value = sat(hit / 0.05);
+    innerU.uI.value = 0.9 * on;
+    innerFan.visible = hit > 0;
+    const fe = ease.outCubic(sat((hit - 0.04) / 0.5));
+    fanU.uLen.value = fe * (lenAt[0] + 0.05);
+    fanU.uI.value = 1 + 0.5 * Math.exp(-Math.max(0, hit - 0.1) * 5);
+    fanU.uTime.value = t;
+    fan.visible = hit > 0.04;
+    const reach = fanU.uLen.value;
+    bandU.uLit.value = sat((reach - lenAt[NU] + 0.05) / 0.1);
+    bandU.uReveal.value = 1.15 * sat((reach - lenAt[NU]) / Math.max(0.05, lenAt[0] - lenAt[NU]) + 0.1);
+    bandU.uI.value = 1 + 0.35 * Math.exp(-Math.max(0, hit - 0.45) * 5);
+    specBand.visible = bandU.uLit.value > 0;
+    ghostIn.progress = sat((hit - 0.02) / 0.08); ghostOut.progress = 1;
+    ghostOut.opacity = ghostIn.opacity = 0.6 * sat((hit - 0.02) / 0.06);
+    caustic.visible = hit > 0.08;
+    const glassO = ramp(t, 3.3, 3.8);
+    glassU.uO.value = glassO; glassU.uBeam.value = on * (1 + 0.8 * Math.exp(-Math.max(0, hit) * 6));
+    edgeMat.uniforms.uO.value = glassO; edgeMat.uniforms.uBeam.value = glassU.uBeam.value;
+    lamRed.reveal = lamVio.reveal = ramp(t, tBeam + 0.4, tBeam + 0.7);
+    lamRed.opacity = lamVio.opacity = ramp(t, tBeam + 0.4, tBeam + 0.45);
     eqN.reveal = ramp(t, tBeam + 0.05, tBeam + 0.45, ease.outCubic); eqN.opacity = ramp(t, tBeam + 0.05, tBeam + 0.1);
     capO.reveal = ramp(t, tBeam + 0.15, tBeam + 0.5, ease.outCubic); capO.opacity = eqN.opacity * 0.9;
     prism.visible = t > 3.0;
+    // the grade's colour harmony steps aside so the spectrum shows every true hue
+    out.harmony = 1 - 0.97 * ramp(t, tBeam - 0.05, tBeam + 0.2);
 
     // labels face the camera (flat zodiac numerals excepted)
     for (const l of labels3D) l.quaternion.copy(camera.quaternion);
@@ -626,10 +855,11 @@ export function create(ctx, segment) {
     if (t < 1.6) { dof.focus = camera.position.distanceTo(ballPos) - 0.1; dof.range = 0.7; dof.amount = 0.7; }
     else if (t < 2.4) { dof.focus = lerp(camera.position.distanceTo(ballPos), camera.position.distanceTo(S), smoothstep(2.0, 2.4, t)); dof.range = lerp(0.6, 1.2, smoothstep(1.6, 2.2, t)); dof.amount = 0.65; }
     else if (t < 3.8) { dof.focus = camera.position.distanceTo(S) * lerp(1, 0.75, smoothstep(2.9, 3.4, t)); dof.range = 1.6; dof.amount = 0.6; }
-    else { dof.focus = lerp(dof.focus, camera.position.distanceTo(P), 1); dof.range = 1.1; dof.amount = 0.55; }
+    else { dof.focus = camera.position.distanceTo(P) + 0.1; dof.range = 1.8; dof.amount = 0.4; }
     if (t >= 3.4 && t < 3.8) dof.focus = lerp(camera.position.distanceTo(S) * 0.75, camera.position.distanceTo(P), smoothstep(3.4, 3.8, t));
     bloom.strength = 0.55 + 0.2 * smoothstep(tBeam, tSpec, t);
   }
 
-  return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG };
+  const out = { scene, camera, update, hud, dof, bloom, exposure: 1, harmony: 1, background: BG };
+  return out;
 }

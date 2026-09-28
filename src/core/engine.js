@@ -190,7 +190,8 @@ export class Engine {
     let a = segs[0], b = segs[1];
     const instA = this.instances.get(a.id);
     tu.tA.value = this.renderInstance(instA, T, dt, this.rtA, this.dofA);
-    let bloomStrength = instA.bloom?.strength ?? 0.7, exposure = instA.exposure ?? 1;
+    // harmony: 0..1 scale on the grade's 60-30-10 colour harmony (scenes lower it to show true spectral colour)
+    let bloomStrength = instA.bloom?.strength ?? 0.7, exposure = instA.exposure ?? 1, harmony = instA.harmony ?? 1;
     if (b) {
       const instB = this.instances.get(b.id);
       tu.tB.value = this.renderInstance(instB, T, dt, this.rtB, this.dofB);
@@ -201,6 +202,7 @@ export class Engine {
       const s = p * p * (3 - 2 * p);
       bloomStrength = THREE.MathUtils.lerp(bloomStrength, instB.bloom?.strength ?? 0.7, s);
       exposure = THREE.MathUtils.lerp(exposure, instB.exposure ?? 1, s);
+      harmony = THREE.MathUtils.lerp(harmony, instB.harmony ?? 1, s);
     } else {
       tu.uSingle.value = 1;
     }
@@ -217,6 +219,7 @@ export class Engine {
     fu.tInput.value = this.comp.texture;
     fu.uExposure.value = exposure;
     fu.uWarmth.value = warmthAt(T);
+    fu.uHarmony.value = FinalShader.uniforms.uHarmony.value * Math.min(1, Math.max(0, harmony));
     fu.uTime.value = T;
     fu.uFade.value = Math.min(1, (DURATION - T) / 0.6);
     r.setRenderTarget(null);
