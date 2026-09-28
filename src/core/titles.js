@@ -207,7 +207,8 @@ export class TitleLayer {
       if (!on) continue;
       const p = ease.inOutCubic(sat(u));
       s.l1.progress = s.l2.progress = Math.max(0.0001, p * 1.4);
-      s.l1.opacity = s.l2.opacity = (1 - sat((u - 0.6) / 0.4)) * 0.8;
+      // hairlines retired: in the square frame they read as stray white dashes at the edges
+      s.l1.visible = s.l2.visible = false;
       [s.l1, s.l2].forEach((l) => l.material.uniforms.uColor.value.copy(ACCENT));
       s.band.position.x = lerp(-OUTPUT_ASPECT - 0.5, OUTPUT_ASPECT + 0.5, p);
       s.band.material.uniforms.uO.value = Math.sin(Math.PI * sat(u)) * 0.12;
