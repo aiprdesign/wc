@@ -128,11 +128,11 @@ export function buildBody({ arm = 0, leg = 0, clipFloor = true } = {}) {
   // ================================================================ torso
   group('torso');
   ell([0, 0.318, -0.016], [0.145, 0.168, 0.104], 0.035);               // ribcage
-  ell([0, 0.402, -0.018], [0.178, 0.078, 0.094], 0.045);               // upper chest / shoulder girdle
+  ell([0, 0.402, -0.018], [0.17, 0.078, 0.094], 0.045);                // upper chest / shoulder girdle
   ell([0, 0.28, -0.058], [0.118, 0.17, 0.064], 0.035);                 // back
   for (const s of [1, -1]) {
     ell([s * 0.074, 0.362, 0.048], [0.088, 0.062, 0.047], 0.03, rotZ(s * -0.2));   // pectoralis
-    ell([s * 0.128, 0.27, -0.03], [0.052, 0.14, 0.068], 0.045, rotZ(s * 0.25));     // latissimus
+    ell([s * 0.115, 0.28, -0.034], [0.042, 0.135, 0.062], 0.05, rotZ(s * 0.25));    // latissimus
     ell([s * 0.094, 0.05, -0.014], [0.038, 0.1, 0.066], 0.055, rotZ(s * -0.06));    // external oblique
     ell([s * 0.07, -0.14, -0.058], [0.07, 0.085, 0.068], 0.035);                     // gluteus
     ell([s * 0.106, -0.08, -0.018], [0.044, 0.07, 0.062], 0.045);                   // gluteus medius
@@ -165,10 +165,10 @@ export function buildBody({ arm = 0, leg = 0, clipFloor = true } = {}) {
   ell([0, 0.568, 0.053], [0.025, 0.019, 0.022], 0.018);                   // chin
   for (const s of [1, -1]) {
     cone([s * 0.058, 0.632, -0.026], [s * 0.022, 0.572, 0.044], 0.017, 0.015, 0.02);  // jaw
-    ell([s * 0.04, 0.65, 0.046], [0.022, 0.014, 0.02], 0.024);                        // zygomatic
+    ell([s * 0.04, 0.65, 0.042], [0.022, 0.014, 0.02], 0.026);                        // zygomatic
     sph([s * 0.029, 0.668, 0.093], 0.0165, 0.012, 1);                                 // eye socket
-    layer = 2; ell([s * 0.029, 0.667, 0.071], [0.0145, 0.012, 0.0145], 0.005); layer = 0;       // eyeball
-    ell([s * 0.074, 0.652, -0.014], [0.008, 0.025, 0.015], 0.012, rotX(0.2));         // ear
+    layer = 2; ell([s * 0.029, 0.667, 0.065], [0.0145, 0.012, 0.0142], 0.005); ell([s * 0.029, 0.6735, 0.07], [0.0165, 0.0065, 0.0095], 0.005); layer = 0;       // eyeball
+    ell([s * 0.064, 0.652, -0.016], [0.0075, 0.025, 0.015], 0.012, mul3(rotY(s * 0.35), rotX(0.2)));  // ear
     ell([s * 0.011, 0.621, 0.091], [0.0095, 0.0085, 0.009], 0.008);                   // nose alae
   }
   cone([-0.046, 0.686, 0.073], [0.046, 0.686, 0.073], 0.0115, 0.0115, 0.02);          // brow ridge
@@ -198,9 +198,9 @@ export function buildBody({ arm = 0, leg = 0, clipFloor = true } = {}) {
       curls.push([c[0], c[1], c[2], rr]);
     }
     for (const s of [1, -1]) for (let j = 0; j < 6; j++) {          // locks falling behind the ears to the nape
-      const y = 0.66 - j * 0.019, x = s * (0.07 - j * 0.004), z = -0.045 - (j % 2) * 0.012;
-      const rr = 0.02 - j * 0.0012;
-      sph([x, y, z], rr, 0.012); curls.push([x, y, z, rr]);
+      const y = 0.655 - j * 0.019, x = s * (0.06 - j * 0.004), z = -0.05 - (j % 2) * 0.012;
+      const rr = 0.019 - j * 0.0012;
+      sph([x, y, z], rr, 0.014); curls.push([x, y, z, rr]);
       sph([x * 0.55, y - 0.004, z - 0.03], rr, 0.012); curls.push([x * 0.55, y - 0.004, z - 0.03, rr]);
     }
   }
@@ -271,7 +271,7 @@ export function buildBody({ arm = 0, leg = 0, clipFloor = true } = {}) {
     ell([s * 0.058, -0.688, 0.046], [0.024, 0.03, 0.014], 0.014);                        // patella
     ell([s * 0.058, -0.735, 0.036], [0.016, 0.025, 0.012], 0.012);                       // patellar tendon
     cone([s * 0.058, -0.72, 0.0], [s * 0.043, -1.12, -0.02], 0.043, 0.026, 0.02);         // shin
-    ell([s * 0.04, -0.83, -0.031], [0.041, 0.1, 0.044], 0.022, rotZ(s * -0.06));         // gastrocnemius medial
+    ell([s * 0.045, -0.82, -0.031], [0.04, 0.085, 0.044], 0.025, rotZ(s * -0.06));        // gastrocnemius medial
     ell([s * 0.079, -0.81, -0.028], [0.034, 0.085, 0.04], 0.022, rotZ(s * 0.05));         // gastrocnemius lateral
     ell([s * 0.057, -0.95, -0.028], [0.035, 0.1, 0.034], 0.025);                         // soleus
     ell([s * 0.07, -0.85, 0.028], [0.024, 0.11, 0.024], 0.02);                            // tibialis anterior
@@ -351,6 +351,31 @@ function filterList(groups, bb, m) {
   return out;
 }
 
+// Keep only primitives/groups that can affect f anywhere within radius `rad` of (x,y,z), given f there = dc.
+// (A primitive changes a smooth-min only while it is within k of the running value; distances are
+// 1-Lipschitz up to the ellipsoid approximation, so we pad generously.)
+function pruneList(list, x, y, z, dc, rad) {
+  // an additive primitive can only matter where its distance is within k (+ the group's join k) of f;
+  // a subtractive one only where it is within k of −f.
+  const out = [];
+  const addLim = dc + 2 * rad + 0.012, subLim = -dc + 2 * rad + 0.012;
+  for (let gi = 0; gi < list.length; gi++) {
+    const L = list[gi], g = L.g;
+    const kj = g.kjY ? Math.max(g.kjY[2], g.kjY[3]) : g.kj;
+    const P = L.prims, keep = [];
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      const pl = p.op === 0 ? addLim + kj + p.k : subLim + p.k;
+      if (pl <= 0) continue;
+      if (boxDist2(p.bb, x, y, z) > pl * pl) continue;
+      if (primDist(p, x, y, z) * 0.85 > pl) continue;
+      keep.push(p);
+    }
+    if (keep.length) out.push({ g, prims: keep });
+  }
+  return out;
+}
+
 export function bodySDF(body) {
   const all = body.groups.map((g) => ({ g, prims: g.sorted }));
   return (x, y, z) => evalList(all, body.floorY, x, y, z);
@@ -379,10 +404,30 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
     // sparse refinement: 2³-cell sub-blocks, tested at their centre (a grid point), sampled only near the surface
     const vals = new Float32Array(S1 * S1 * S1).fill(NaN);
     const fillv = new Float32Array(S1 * S1 * S1).fill(NaN);
+    const HB = BS >> 1, act = new Uint8Array(HB * HB * HB);
     const subR = Math.sqrt(3) * h * 1.15 + 0.0015;
+    const subHD = Math.sqrt(3) * h;
+    // two levels: 4³-cell quadrants, then 2³-cell sub-blocks
+    const quadR = Math.sqrt(3) * 2 * h * 1.15 + 0.0015;
+    const quadL = new Array(8);
+    for (let qc = 0; qc < 2; qc++) for (let qb = 0; qb < 2; qb++) for (let qa = 0; qa < 2; qa++) {
+      const a = qa * 4 + 2, b = qb * 4 + 2, c = qc * 4 + 2;
+      const X = x0 + a * h, Y = y0 + b * h, Z = z0 + c * h;
+      const dq = evalList(list, body.floorY, X, Y, Z); samples++;
+      const qi = qa + 2 * (qb + 2 * qc);
+      if (Math.abs(dq) > quadR) {
+        quadL[qi] = null;
+        const fv = dq > 0 ? dq - quadR : dq + quadR;
+        for (let cc = c - 2; cc <= c + 2; cc++) for (let bb2 = b - 2; bb2 <= b + 2; bb2++) for (let aa = a - 2; aa <= a + 2; aa++) {
+          const q = aa + S1 * (bb2 + S1 * cc); if (Number.isNaN(fillv[q]) || Math.abs(fv) < Math.abs(fillv[q])) fillv[q] = fv;
+        }
+      } else quadL[qi] = pruneList(list, X, Y, Z, dq, Math.sqrt(3) * 2 * h);
+    }
     for (let c = 1; c < S1; c += 2) for (let b = 1; b < S1; b += 2) for (let a = 1; a < S1; a += 2) {
       const ci = a + S1 * (b + S1 * c);
-      const dc2 = evalList(list, body.floorY, x0 + a * h, y0 + b * h, z0 + c * h);
+      const ql = quadL[(a >> 2) + 2 * ((b >> 2) + 2 * (c >> 2))];
+      if (!ql) continue;
+      const dc2 = evalList(ql, body.floorY, x0 + a * h, y0 + b * h, z0 + c * h);
       vals[ci] = dc2; samples++;
       if (Math.abs(dc2) > subR) {
         const fv = dc2 > 0 ? dc2 - subR : dc2 + subR;
@@ -391,18 +436,20 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
         }
         continue;
       }
+      // prune to the primitives that can influence this 2³-cell neighbourhood (exact: the rest are > k away)
+      act[(a >> 1) + HB * ((b >> 1) + HB * (c >> 1))] = 1;
+      const sub = pruneList(ql, x0 + a * h, y0 + b * h, z0 + c * h, dc2, subHD);
       for (let cc = c - 1; cc <= c + 1; cc++) for (let bb2 = b - 1; bb2 <= b + 1; bb2++) for (let aa = a - 1; aa <= a + 1; aa++) {
         const q = aa + S1 * (bb2 + S1 * cc);
-        if (Number.isNaN(vals[q])) { vals[q] = evalList(list, body.floorY, x0 + aa * h, y0 + bb2 * h, z0 + cc * h); samples++; }
+        if (Number.isNaN(vals[q])) { vals[q] = evalList(sub, body.floorY, x0 + aa * h, y0 + bb2 * h, z0 + cc * h); samples++; }
       }
     }
     for (let q = 0; q < vals.length; q++) if (Number.isNaN(vals[q])) vals[q] = fillv[q];
-    blocks.set(I + bx * (J + by * K), { I, J, K, list, vals });
+    blocks.set(I + bx * (J + by * K), { I, J, K, list, vals, act, vid: new Int32Array(BS * BS * BS).fill(-1) });
   }
   const tSample = (typeof performance !== 'undefined' ? performance : Date).now();
 
   // ---------------------------------------------------------------- surface nets
-  const cellVert = new Map();
   const pos = [], vlist = [];
   const cv = new Float32Array(8);
   const EDGES = [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7];
@@ -410,6 +457,7 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
   for (const blk of blocks.values()) {
     const { I, J, K, vals } = blk;
     for (let c = 0; c < BS; c++) for (let b = 0; b < BS; b++) for (let a = 0; a < BS; a++) {
+      if (!blk.act[(a >> 1) + (BS >> 1) * ((b >> 1) + (BS >> 1) * (c >> 1))]) continue;
       const gi = I * BS + a, gj = J * BS + b, gk = K * BS + c;
       if (gi >= nx || gj >= ny || gk >= nz) continue;
       let mask = 0;
@@ -436,27 +484,35 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
       const vi = pos.length / 3;
       pos.push(X0 + (gi + sx / n) * h, Y0 + (gj + sy / n) * h, Z0 + (gk + sz / n) * h);
       vlist.push(blk.list);
-      cellVert.set(gi + nx * (gj + ny * gk), vi);
+      blk.vid[a + BS * (b + BS * c)] = vi;
     }
   }
   const idx = [];
-  const id = (i, j, k) => (i < 0 || j < 0 || k < 0) ? undefined : cellVert.get(i + nx * (j + ny * k));
+  const id = (i, j, k) => {
+    if (i < 0 || j < 0 || k < 0) return undefined;
+    const I = (i / BS) | 0, J = (j / BS) | 0, K = (k / BS) | 0;
+    const bk = blocks.get(I + bx * (J + by * K));
+    if (!bk) return undefined;
+    const v = bk.vid[(i - I * BS) + BS * ((j - J * BS) + BS * (k - K * BS))];
+    return v < 0 ? undefined : v;
+  };
   for (const blk of blocks.values()) {
     const { I, J, K, vals } = blk;
     for (let c = 0; c < BS; c++) for (let b = 0; b < BS; b++) for (let a = 0; a < BS; a++) {
+      if (!blk.act[(a >> 1) + (BS >> 1) * ((b >> 1) + (BS >> 1) * (c >> 1))]) continue;
       const gi = I * BS + a, gj = J * BS + b, gk = K * BS + c;
       if (gi >= nx || gj >= ny || gk >= nz) continue;
       const v0 = vals[a + S1 * (b + S1 * c)];
       const in0 = v0 < 0;
       // edges along x, y, z from this grid point
       for (let ax = 0; ax < 3; ax++) {
-        const v1 = vals[(a + (ax === 0)) + S1 * ((b + (ax === 1)) + S1 * (c + (ax === 2)))];
+        const v1 = vals[(ax === 0 ? a + 1 : a) + S1 * ((ax === 1 ? b + 1 : b) + S1 * (ax === 2 ? c + 1 : c))];
         if (in0 === (v1 < 0)) continue;
         // the four cells sharing this edge
         let du, dv;
         if (ax === 0) { du = [0, 1, 0]; dv = [0, 0, 1]; } else if (ax === 1) { du = [0, 0, 1]; dv = [1, 0, 0]; } else { du = [1, 0, 0]; dv = [0, 1, 0]; }
         const q0 = id(gi, gj, gk), q1 = id(gi - du[0], gj - du[1], gk - du[2]), q2 = id(gi - du[0] - dv[0], gj - du[1] - dv[1], gk - du[2] - dv[2]), q3 = id(gi - dv[0], gj - dv[1], gk - dv[2]);
-        if (q0 === undefined || q1 === undefined || q2 === undefined || q3 === undefined) { if (globalThis.__miss) globalThis.__miss.push([X0 + gi * h, Y0 + gj * h, Z0 + gk * h, ax, v0, v1]); continue; }
+        if (q0 === undefined || q1 === undefined || q2 === undefined || q3 === undefined) continue;
         if (in0) idx.push(q0, q1, q2, q0, q2, q3); else idx.push(q0, q2, q1, q0, q3, q2);
       }
     }
@@ -538,7 +594,7 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
     }
   }
   // front-surface normal + cavity (how much the surface curls back over itself: creases between masses)
-  const fAll = bodySDF(body);
+  const fGlobal = bodySDF(body), fAll = fGlobal;
   // refine the silhouette band exactly: golden-section minimisation of f along z around the grid's argmin
   // (the sparse grid's skipped blocks only hold bounds, which would leave steps in the contour)
   {
@@ -546,10 +602,12 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const o = i + W * j; if (sil[o] > 0.03 || sil[o] < -0.02) continue;
       const x = X0 + i * h, y = Y0 + j * h;
+      const bk = blocks.get(Math.min(bx - 1, Math.floor(i / BS)) + bx * (Math.min(by - 1, Math.floor(j / BS)) + by * Math.min(bz - 1, Math.max(0, Math.floor((silZ[o] - Z0) / h / BS)))));
+      const fAll = bk ? (X, Y, Z) => evalList(bk.list, body.floorY, X, Y, Z) : fGlobal;
       let a = silZ[o] - 2.5 * h, b = silZ[o] + 2.5 * h;
       let c = b - (b - a) * (1 - gr), d = a + (b - a) * (1 - gr);
       let fc = fAll(x, y, c), fd = fAll(x, y, d);
-      for (let it = 0; it < 9; it++) {
+      for (let it = 0; it < 6; it++) {
         if (fc < fd) { b = d; d = c; fd = fc; c = b - (b - a) * (1 - gr); fc = fAll(x, y, c); }
         else { a = c; c = d; fc = fd; d = a + (b - a) * (1 - gr); fd = fAll(x, y, d); }
       }
@@ -563,7 +621,8 @@ export function meshBody(body, { cell = 0.0065, bounds = [-1.03, -1.215, -0.2, 1
     const blk = blocks.get(Math.min(bx - 1, Math.floor(i / BS)) + bx * (Math.min(by - 1, Math.floor(j / BS)) + by * Math.min(bz - 1, Math.floor((z - Z0) / h / BS))));
     const f = blk ? (X, Y, Z) => evalList(blk.list, body.floorY, X, Y, Z) : fAll;
     const e = 0.002;
-    const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e);
+    const t1 = f(x + e, y - e, z - e), t2 = f(x - e, y - e, z + e), t3 = f(x - e, y + e, z - e), t4 = f(x + e, y + e, z + e);
+    const gx = t1 - t2 - t3 + t4, gy = -t1 - t2 + t3 + t4, gz = -t1 + t2 - t3 + t4;
     const gl = Math.hypot(gx, gy, gz) || 1;
     const n0 = gx / gl, n1 = gy / gl, n2 = gz / gl;
     nrm[o * 3] = n0; nrm[o * 3 + 1] = n1; nrm[o * 3 + 2] = n2;

@@ -8,7 +8,7 @@
 // with surface nets, inflates into a marble statue (camera orbit with DOF through Alberti
 // perspective grids and a proportion HUD) and a pigment particle explosion into the 'flash'.
 import * as THREE from 'three';
-import { CUES } from '../timeline.js';
+import { CUES, OUTPUT_ASPECT } from '../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, rng, clamp } from '../lib/math.js';
 import { progressLine, segmentsLine, circlePoints } from '../lib/lines.js';
 import { MorphParticles, Dust, sampleGeometry } from '../lib/particles.js';
@@ -165,7 +165,7 @@ export function create(ctx, segment) {
       const turb = noise3(x * 3.1, y * 3.1, z * 3.1) * 0.6 + noise3(x * 7.3 + 4, y * 7.3, z * 7.3) * 0.25;
       const band = Math.abs(Math.sin((x * 1.7 + y * 1.1 - z * 0.8 + turb * 1.4) * Math.PI * 2));
       const vein = Math.pow(1 - band, 22) * 0.35 + Math.pow(1 - band, 5) * 0.05;
-      const cloud = noise3(x * 11 + 9, y * 11, z * 11) * 0.025;
+      const cloud = noise3(x * 4 + 9, y * 4, z * 4) * 0.03;
       const ao = MB.ao[i], occ = 0.28 + 0.72 * Math.pow(ao, 1.3);
       const k = (1 - vein + cloud) * occ;
       col[i * 3] = 0.8 * k + 0.03 * (1 - ao); col[i * 3 + 1] = 0.76 * k; col[i * 3 + 2] = 0.7 * k * (0.95 + 0.05 * ao);
@@ -266,8 +266,8 @@ export function create(ctx, segment) {
   scene.add(spot, spot.target);
   const rim = new THREE.DirectionalLight('#ffcf94', 0); rim.position.set(3, 3, -4);
   const kick = new THREE.DirectionalLight('#9fb8ff', 0); kick.position.set(-4, 1, -3);
-  const fill = new THREE.AmbientLight('#2b1d12', 0.35);
-  const key = new THREE.DirectionalLight('#ffe6c4', 0); key.position.set(-2.5, 3, 5); key.target.position.set(0, -0.2, 1);
+  const fill = new THREE.AmbientLight('#2b1d12', 0.2);
+  const key = new THREE.DirectionalLight('#ffe6c4', 0); key.position.set(-4.5, 3.2, 2.6); key.target.position.set(0, -0.2, 1);
   scene.add(rim, kick, fill, key, key.target);
   const beam = lightShaft({ length: 9, radiusTop: 0.2, radiusBottom: 2.6, color: '#ffe0b0', intensity: 0.1 });
   beam.position.copy(spot.position);
@@ -278,6 +278,7 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------- update
   const camPos = new THREE.Vector3(), look = new THREE.Vector3(), C3 = V(0, -0.2, 1.0);
+  const RAD3 = OUTPUT_ASPECT > 1.5 ? 4.8 : 4.15;         // orbit radius: the 1:1 frame can sit closer
   const dof = { focus: 6, range: 1.6, amount: 0 };
   const bloom = { strength: 0.75 };
   const seqProg = (t, a, b) => sat((t - a) / (b - a));
@@ -296,7 +297,7 @@ export function create(ctx, segment) {
       // 2D phase: slow push toward the canvas; 3D phase: orbit the lifted figure
       const d2 = lerp(8.4, 5.5, approach);
       const ang = lerp(0.07, -1.05, orb);
-      const rad = lerp(d2, 4.15, lift) - push * 1.8;
+      const rad = lerp(d2, RAD3, lift) - push * 1.8;
       const cy = lerp(lerp(0.25, 0.02, approach), 0.85, orb);
       const target = look.set(0, lerp(0.0, -0.1, lift), lerp(0, C3.z, lift));
       camPos.set(target.x + Math.sin(ang) * rad, cy, target.z + Math.cos(ang) * rad);
@@ -308,9 +309,9 @@ export function create(ctx, segment) {
       const recede = ramp(t, m3, m3 + 0.9, ease.inOutCubic);
       canvasRig.position.set(-recede * 0.6, lerp(-0.25, 0, arrive) + Math.sin(t * 0.9) * 0.02, lerp(-1.2, 0, arrive) - recede * 3.4);
       canvasRig.rotation.set(lerp(0.08, 0, arrive) + Math.sin(t * 0.7) * 0.01, lerp(-0.42, 0.04, arrive) + recede * 0.25, lerp(0.03, 0, arrive));
-      spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede);
+      spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede) * (1 - 0.55 * ramp(t, m3, m3 + 0.4));
       spot.target.position.set(lerp(-0.45, 0, lift), lerp(0.5, -0.2, lift), lerp(0, C3.z, lift));
-      key.intensity = 1.7 * lift;
+      key.intensity = 2.3 * lift;
       canvasMat.color.setRGB(0.95, 0.92, 0.87).multiplyScalar(1 - 0.72 * recede);
       rim.intensity = 2.2 * lift;
       kick.intensity = 0.7 * lift;
@@ -351,7 +352,7 @@ export function create(ctx, segment) {
       const glowIn = envelope(t, m3 - 0.1, m3 + 0.8, 0.2, 0.4);
       for (const s of [strokesA, strokesB, strokesC, strokesI, strokesP, strokesH, strokesT]) {
         s.material.uniforms.uColor.value.copy(cSepia).lerp(cGold, glowIn);
-        s.intensity = 1 + glowIn * 1.4;
+        s.intensity = 1 + glowIn * 0.9;
       }
       for (let i = 0; i < hand.length; i++) {
         hand[i].reveal = ramp(t, s0 + (0.55 + i * 0.12) * span, s0 + (0.85 + i * 0.12) * span, ease.inOutSine);

@@ -52,8 +52,8 @@ export function drawVitruvian({ grid: GD, poseB: PB, noise2, rng }) {
     const u = fx - i, v = fy - j, o = i + PB.w * j, d = PB.data;
     return (d[o] * (1 - u) + d[o + 1] * u) * (1 - v) + (d[o + PB.w] * (1 - u) + d[o + PB.w + 1] * u) * v;
   };
-  const BX0 = -1.1, BX1 = 1.1, BY0 = -1.3, BY1 = 0.9;
-  const wob = (amp, freq, seed) => (x, y) => fA(x, y) + amp * noise2(x * freq + seed, y * freq - seed * 0.7);
+  const BX0 = -1.06, BX1 = 1.06, BY0 = -1.26, BY1 = 0.88;
+  const wob = (amp, freq, seed) => (x, y) => { const d = fA(x, y); return Math.abs(d) > 0.03 ? d : d + amp * noise2(x * freq + seed, y * freq - seed * 0.7); };
 
   // light construction pass (radial, from the navel outward)
   const segA = contour(wob(0.005, 3.0, 1.3), BX0, BX1, BY0, BY1, 0.0075);
@@ -63,7 +63,7 @@ export function drawVitruvian({ grid: GD, poseB: PB, noise2, rng }) {
   const segC0 = contour((x, y) => fA(x, y) - 0.006 + 0.005 * noise2(x * 11 + 9, y * 11), BX0, BX1, BY0, BY1, 0.009);
   // interior anatomy: the crease (cavity) field of the same body — pectorals, abdominals, knees, face, curls
   const CAV = 0.19;
-  const segI0 = contour((x, y) => CAV - cavAt(x, y) + 0.04 * noise2(x * 17, y * 17 + 5), BX0, BX1, BY0, BY1, 0.0045, (x, y) => {
+  const segI0 = contour((x, y) => { const c = cavAt(x, y); return c < 0.1 ? 1 : CAV - c + 0.04 * noise2(x * 17, y * 17 + 5); }, BX0, BX1, BY0, BY1, 0.0045, (x, y) => {
     if (fA(x, y) > -0.007) return false;
     // keep one flank of each crease (the side turned away from the light) → open, single strokes
     const e = 0.006, gx = cavAt(x + e, y) - cavAt(x - e, y), gy = cavAt(x, y + e) - cavAt(x, y - e);
@@ -97,7 +97,7 @@ export function drawVitruvian({ grid: GD, poseB: PB, noise2, rng }) {
           const x = px * o + dx * s, y = py * o + dy * s;
           if (x < BX0 || x > BX1 || y < BY0 || y > BY1) { run = null; continue; }
           const sh = shade(x, y);
-          const dark = sh < -0.5 ? false : (1 - sh) > thr + 0.08 * noise2(x * 9 + seed, y * 9);
+          const dark = sh < -0.5 || (1 - sh) < thr - 0.08 ? false : (1 - sh) > thr + 0.08 * noise2(x * 9 + seed, y * 9);
           if (dark) {
             if (!run) run = { x, y, n: 0, target: len * (0.6 + r() * 0.8) };
             run.n += step;
@@ -113,8 +113,8 @@ export function drawVitruvian({ grid: GD, poseB: PB, noise2, rng }) {
         }
       }
     };
-    layer(-Math.PI / 4, 0.011, 0.56, 0.06, 3);        // Leonardo's left-handed parallel hatching
-    layer(Math.PI / 4, 0.014, 0.74, 0.05, 7);         // cross-hatch in the deeper shadow
+    layer(-Math.PI / 4, 0.011, 0.6, 0.06, 3);        // Leonardo's left-handed parallel hatching
+    layer(Math.PI / 4, 0.014, 0.8, 0.05, 7);         // cross-hatch in the deeper shadow
     layer(-Math.PI / 3, 0.02, 0.88, 0.04, 11);
   }
   const segC = segC0.filter(() => R() < 0.5);
