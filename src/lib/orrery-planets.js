@@ -86,8 +86,8 @@ void main(){
            + craters(p, 14.0, 0.65, 3.0) * 0.35 * (1.0 - plains * 0.5) + craters(p, 30.0, 0.7, 4.0) * 0.18 + craters(p, 62.0, 0.7, 5.0) * 0.08;
     float ry = rays(p, dirLL(-18.0, 30.0), 0.05, 1.0) + rays(p, dirLL(35.0, -120.0), 0.035, 2.0) * 0.8 + rays(p, dirLL(-50.0, 160.0), 0.03, 3.0) * 0.7 + rays(p, dirLL(10.0, -40.0), 0.025, 4.0) * 0.6;
     alb *= 1.0 + 0.35 * c.y;
-    alb = mix(alb, vec3(0.62, 0.6, 0.57), clamp(ry * 0.45, 0.0, 0.6));
-    alb *= 0.9 + 0.2 * (snoise(p * 90.0) * 0.5 + 0.5);
+    alb = mix(alb, vec3(0.66, 0.64, 0.6), clamp(ry * 0.55, 0.0, 0.7));
+    alb *= 0.82 + 0.3 * (snoise(p * 90.0) * 0.5 + 0.5) + 0.12 * fbm(p * 7.0, 4);
     hgt = 0.5 + 0.22 * c.x + 0.03 * fbm(p * 20.0, 3);
   } else if (uMode == 1) {
     // VENUS: an unbroken cloud deck, cream with soft sulphur-tan streaks and the sideways-Y chevron
@@ -167,7 +167,8 @@ void main(){
     dark = max(dark, blob(p, dirLL(-25.0, -40.0), 0.25, 0.14) * 0.7);          // Mare Erythraeum
     float thar = blob(p, dirLL(2.0, -110.0), 0.45, 0.25);
     dark *= 1.0 - thar * 0.85;                                                 // Tharsis stays bright & dusty
-    vec3 basalt = vec3(0.2, 0.12, 0.075);
+    dark *= 0.62 + 0.38 * smoothstep(-0.35, 0.35, fbm(p * 11.0 + 5.0, 5));      // streaky, wind-blown edges
+    vec3 basalt = mix(vec3(0.19, 0.11, 0.07), vec3(0.3, 0.17, 0.1), smoothstep(-0.3, 0.3, fbm(p * 6.0 + 2.0, 4)));
     alb = mix(dust, basalt, dark * 0.85);
     // Hellas: a bright, deep impact basin
     float hel = adist(p, dirLL(-42.0, 70.0));
@@ -324,7 +325,7 @@ void main(){
   gl_FragColor = vec4(sqrt(clamp(alb, 0.0, 1.0)), clamp(hgt, 0.0, 1.0));
 }`;
 
-const SIZES = { mercury: 1024, venus: 512, earth: 2048, earthClouds: 2048, mars: 1024, jupiter: 2048, saturn: 1024, uranus: 256, neptune: 512, moon: 1024 };
+const SIZES = { mercury: 1024, venus: 512, earth: 2048, earthClouds: 2048, mars: 2048, jupiter: 2048, saturn: 1024, uranus: 256, neptune: 512, moon: 1024 };
 
 export function bakePlanetMaps(renderer) {
   const mat = new THREE.ShaderMaterial({
@@ -408,7 +409,7 @@ export function uranusRingTexture() {
 export function planetUniforms(sunPos, keyDir) {
   return {
     uSunPos: { value: sunPos.clone() }, uSunI: { value: 1.35 }, uSunCol: { value: new THREE.Color(1.0, 0.9, 0.76) },
-    uKeyDir: { value: keyDir.clone().normalize() }, uKeyCol: { value: new THREE.Color(0.2, 0.17, 0.13) },
+    uKeyDir: { value: keyDir.clone().normalize() }, uKeyCol: { value: new THREE.Color(0.32, 0.27, 0.21) },
     uAmb: { value: new THREE.Color(0.014, 0.012, 0.011) }, uTime: { value: 0 },
   };
 }
@@ -492,7 +493,7 @@ void main(){
     vec3 H = normalize(L + V);
     float nh = max(dot(n, H), 0.0);
     float F = 0.02 + 0.98 * pow(1.0 - max(dot(H, V), 0.0), 5.0);
-    float spec = (pow(nh, 260.0) * 3.0 + pow(nh, 30.0) * 0.12) * F * 4.0;
+    float spec = (pow(nh, 400.0) * 2.0 + pow(nh, 40.0) * 0.05) * F * 4.0;
     col += sunE * spec * water * (1.0 - cl) * (1.0 - 0.6 * csh) * smoothstep(0.0, 0.1, ndl0) * uOcean;
   }
   if (uCloudK > 0.0) {
@@ -517,13 +518,13 @@ void main(){
 // per-body look (planet radius-independent: geometry is a unit sphere scaled by the body size)
 const LOOK = {
   mercury: { bump: 3.6, rocky: 1, gloss: 0.02 },
-  venus: { atm: [1.0, 0.85, 0.55], atmK: 0.5, limb: 0.3, gloss: 0.03, bright: 0.72 },
-  earth: { bump: 3.0, ocean: 1, atm: [0.3, 0.55, 1.0], atmK: 0.7, gloss: 0.02, clouds: true },
-  mars: { bump: 2.6, rocky: 0.35, atm: [0.9, 0.55, 0.4], atmK: 0.18, gloss: 0.02 },
-  jupiter: { flow: 1, limb: 0.45, atm: [0.9, 0.82, 0.7], atmK: 0.2, gloss: 0.03, bright: 0.85 },
-  saturn: { flow: 0.6, limb: 0.45, atm: [0.95, 0.85, 0.62], atmK: 0.2, gloss: 0.03, bright: 0.82 },
-  uranus: { flow: 0.2, limb: 0.35, atm: [0.5, 0.9, 1.0], atmK: 0.3, gloss: 0.03, bright: 0.72 },
-  neptune: { flow: 0.4, limb: 0.35, atm: [0.35, 0.55, 1.0], atmK: 0.4, gloss: 0.03 },
+  venus: { rocky: 0.3, atm: [1.0, 0.85, 0.55], atmK: 0.5, limb: 0.3, gloss: 0.03, bright: 0.72 },
+  earth: { bump: 1.2, ocean: 1, atm: [0.3, 0.55, 1.0], atmK: 0.7, gloss: 0.02, clouds: true },
+  mars: { bump: 1.6, rocky: 0.35, atm: [0.9, 0.55, 0.4], atmK: 0.18, gloss: 0.02 },
+  jupiter: { flow: 1, rocky: 0.4, limb: 0.4, atm: [0.9, 0.82, 0.7], atmK: 0.2, gloss: 0.03, bright: 0.85 },
+  saturn: { flow: 0.6, rocky: 0.4, limb: 0.4, atm: [0.95, 0.85, 0.62], atmK: 0.2, gloss: 0.03, bright: 0.82 },
+  uranus: { flow: 0.2, rocky: 0.3, limb: 0.35, atm: [0.5, 0.9, 1.0], atmK: 0.3, gloss: 0.03, bright: 0.72 },
+  neptune: { flow: 0.4, rocky: 0.3, limb: 0.35, atm: [0.35, 0.55, 1.0], atmK: 0.4, gloss: 0.03 },
   moon: { bump: 3.2, rocky: 1, gloss: 0.015 },
 };
 
@@ -569,8 +570,11 @@ void main(){
   float x = (h - vR) / (vR * uHs);
   float g = x > 0.0 ? exp(-x) : 1.0;
   vec3 nc = (Pc - vC) / max(h, 1e-5);
-  float lit = smoothstep(-0.25, 0.35, dot(nc, normalize(uSunPos - vC)));
-  gl_FragColor = vec4(uAtm * uSunI * g * lit * uK, 1.0);
+  vec3 Ls = normalize(uSunPos - vC);
+  float lit = smoothstep(-0.25, 0.35, dot(nc, Ls));
+  // forward scattering: backlit by the sun, the limb becomes a thin bright ring
+  float fwd = pow(max(dot(dir, Ls), 0.0), 6.0) * 1.5;
+  gl_FragColor = vec4(uAtm * uSunI * g * (lit + fwd) * uK, 1.0);
 }`;
 export function atmosphereShell(color, shared, { k = 0.6, hs = 0.025, scale = 1.08 } = {}) {
   const m = new THREE.ShaderMaterial({
