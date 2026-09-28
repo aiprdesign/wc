@@ -341,7 +341,7 @@ export function create(ctx, segment) {
   }
   const loadLabel = new Callout('LOAD PATH · COMPRESSION', { dx: 1.0, dy: 4.0, size: 0.4, color: '#ffe3b3', sub: 'DEAD LOAD → STYLOBATE' });
   loadLabel.position.set(-7, 6.0, 0.05);   // label up in the open sky left of the pediment: pointing left it ran off the square frame
-  const pedLabel = new Callout('PEDIMENT · 13.7°', { dx: -1.0, dy: 2.2, size: 0.4, color: '#cfe0ff', sub: 'RAKING CORNICE' });
+  const pedLabel = new Callout('PEDIMENT · 13.7°', { dx: -0.6, dy: 3.4, size: 0.4, color: '#cfe0ff', sub: 'RAKING CORNICE' });
   pedLabel.position.set(4, 8.4, 0.05);
   const pedArc = progressLine(circlePoints(2.6, 24, { start: Math.PI, end: Math.PI - 0.239, center: V(7.95, 7.48) }), { color: BLUE_LINE, intensity: 1.4 });
   const colDim = new Dimension(V(8.4, 0), V(8.4, 6), 'H = 7 D', { size: 0.34, tick: 0.25, color: '#cfe0ff' });

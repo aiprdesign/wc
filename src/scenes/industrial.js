@@ -679,7 +679,9 @@ export function create(ctx, segment) {
     { pos: EXH.clone(), dir: V(0.1, 1, 0.15), spread: 0.5, speed: 5, jitter: 0.2, life: 2.0, weight: 0.9, size: 1.3, birth: beats(tSteam - 0.3, 4, 0.16) },
     { pos: V(BO.x, BO.y + BO.r + 0.55, -1.2), dir: V(0.12, 1, 0.1), spread: 0.35, speed: 7, jitter: 0.1, life: 2.1, weight: 1.3, size: 1.1, birth: (u) => tSteam + 0.05 + u * 1.65 },
     { pos: V(BO.x, BO.y + BO.r + 8.6, BO.z0 + 0.6), dir: V(0.25, 1, 0.1), spread: 0.45, speed: 2.4, jitter: 0.3, life: 2.6, weight: 0.8, size: 1.7, birth: (u) => 1.6 + u * 2.9 },
-    { pos: V(RX + 0.3, 1.7, -16), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 1.2, jitter: 1.4, life: 1.6, weight: 0.45, size: 0.9, birth: (u) => 3.6 + u * 0.9 },
+    // (trackside drift retired: at the vanishing point it read as a flat grey block against the dawn haze; the
+    //  slot is kept so the other emitters' particle counts and seeds stay exactly as approved)
+    { pos: V(RX + 0.3, 1.7, -16), dir: V(0.2, 1, 0.3), spread: 1.2, speed: 1.2, jitter: 1.4, life: 1.6, weight: 0.45, size: 0.9, birth: () => 99 },
   ];
   const steam = makeSteam(5200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
   scene.add(steam);
