@@ -378,7 +378,8 @@ export function create(ctx, segment) {
   const sweepT = sweepOverlay(title), sweepS = sweepOverlay(sub);
   sweepT.position.copy(title.position); sweepS.position.copy(sub.position);
   const rule = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.84, 0.58).multiplyScalar(1.2), transparent: true, depthWrite: false, depthTest: false }));
-  rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002, 0);
+  // centred in the VISIBLE gap (caps baseline → sub-heading cap line), a touch nearer the title so it never touches the sub-heading
+  rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002 + 0.13 * (titleY - subY), 0);
   rule.renderOrder = 11;
   const closing = new TextPlane('THE JOURNEY CONTINUES', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
   const cS = L(2.45, 1.6) / inkW(closing, 0.2);
