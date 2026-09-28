@@ -1,14 +1,13 @@
 // ART & THE RENAISSANCE (15.5 – 20.5 s)
-// Technique: procedural drawing from a sculpted signed-distance-field body (see
-// renaissance-body.js: ~300 anatomical primitives blended with smooth-min). Its
-// orthographic silhouette field → marching-squares contours in several wobbly passes,
-// its crease (cavity) field → interior anatomy lines, its front-surface normals →
-// Leonardo-style left-handed hatching; ~10k strokes revealed in a staged order. Then a
-// 2D→3D transformation: the strokes lift off the canvas and the very same field, meshed
-// with surface nets, inflates into a marble statue (camera orbit with DOF through Alberti
-// perspective grids and a proportion HUD) and a pigment particle explosion into the 'flash'.
+// Technique: procedural drawing (a Vitruvian figure defined as signed-distance
+// primitives → marching-squares contours in several wobbly passes + light-driven
+// cross-hatching, ~9k strokes revealed in a staged order), 2D→3D transformation (the
+// strokes lift off the canvas and the very same primitives inflate into a lit 3D
+// study, camera orbit with DOF through Alberti perspective grids and proportion HUD)
+// and a pigment particle explosion into the 'flash'.
 import * as THREE from 'three';
-import { CUES, OUTPUT_ASPECT } from '../timeline.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CUES } from '../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, rng, clamp } from '../lib/math.js';
 import { progressLine, segmentsLine, circlePoints } from '../lib/lines.js';
 import { MorphParticles, Dust, sampleGeometry } from '../lib/particles.js';
@@ -16,9 +15,7 @@ import { TextPlane, FONTS } from '../lib/text.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { fresnel, lightShaft, glowSprite } from '../lib/materials.js';
 import { Callout, Dimension, faceCamera } from '../lib/hud.js';
-import { noise2, noise3 } from '../lib/noise.js';
-import { buildBody, meshBody, projectGroups } from './renaissance-body.js';
-import { drawVitruvian } from './renaissance-drawing.js';
+import { noise2 } from '../lib/noise.js';
 import { pulse } from '../lib/rhythm.js';
 
 const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
@@ -28,6 +25,126 @@ const CHALK = '#8a3f1f';
 const EMBER = '#ff8a3a';
 const GOLD = '#f2c46e';
 const HUD = '#f3d08a';
+
+// ---------------------------------------------------------------------------
+// Figure: round cones (uneven capsules) + an ellipsoid head, all in the XY plane.
+// Feet at y = -1.2, head top at 0.8 (height 2.0 = arm span), navel at y = 0.
+function figureParts(pose = 0) {
+  const P = [];
+  const rc = (ax, ay, bx, by, ra, rb, flat = 1, limb = true) => P.push({ a: [ax, ay], b: [bx, by], ra, rb, flat, limb });
+  // torso & neck (shared by both poses): V-shaped chest, abdomen, pelvis
+  rc(0.105, 0.41, 0.07, 0.1, 0.098, 0.078, 0.6, false);
+  rc(-0.105, 0.41, -0.07, 0.1, 0.098, 0.078, 0.6, false);
+  rc(0, 0.36, 0, 0.12, 0.11, 0.1, 0.62, false);
+  rc(0, 0.14, 0, -0.04, 0.1, 0.106, 0.66, false);
+  rc(-0.2, 0.445, 0.2, 0.445, 0.062, 0.062, 0.8, false);
+  rc(0, 0.5, 0, 0.6, 0.046, 0.041, 1, false);
+  rc(-0.085, -0.075, 0.085, -0.075, 0.098, 0.098, 0.75, false);
+  rc(0.09, -0.02, 0.09, -0.13, 0.095, 0.09, 0.75, false);
+  rc(-0.09, -0.02, -0.09, -0.13, 0.095, 0.09, 0.75, false);
+  if (pose === 0) {
+    for (const s of [1, -1]) {
+      rc(0.2 * s, 0.445, 0.31 * s, 0.447, 0.07, 0.056);
+      rc(0.2 * s, 0.445, 0.52 * s, 0.45, 0.056, 0.042);
+      rc(0.52 * s, 0.45, 0.8 * s, 0.452, 0.042, 0.031);
+      rc(0.54 * s, 0.452, 0.66 * s, 0.452, 0.047, 0.04);
+      rc(0.815 * s, 0.452, 0.975 * s, 0.456, 0.034, 0.018, 0.55);
+      rc(0.085 * s, -0.12, 0.075 * s, -0.62, 0.076, 0.05);
+      rc(0.075 * s, -0.62, 0.062 * s, -1.1, 0.047, 0.03);
+      rc(0.077 * s, -0.68, 0.07 * s, -0.86, 0.053, 0.04);
+      rc(0.062 * s, -1.13, 0.13 * s, -1.175, 0.03, 0.024, 0.8);
+    }
+  } else {
+    const aa = 0.36;   // arms raised
+    for (const s of [1, -1]) {
+      const cx = 0.2 * s, cy = 0.445, dx = Math.cos(aa) * s, dy = Math.sin(aa);
+      rc(cx, cy, cx + dx * 0.32, cy + dy * 0.32, 0.056, 0.044);
+      rc(cx + dx * 0.32, cy + dy * 0.32, cx + dx * 0.6, cy + dy * 0.6, 0.043, 0.032);
+      rc(cx + dx * 0.615, cy + dy * 0.615, cx + dx * 0.78, cy + dy * 0.78, 0.034, 0.018, 0.55);
+      const la = 0.4, hx = 0.085 * s, hy = -0.12, ex = Math.sin(la) * s, ey = -Math.cos(la);
+      rc(hx, hy, hx + ex * 0.5, hy + ey * 0.5, 0.076, 0.05);
+      rc(hx + ex * 0.5, hy + ey * 0.5, hx + ex * 0.98, hy + ey * 0.98, 0.048, 0.031);
+    }
+  }
+  return P;
+}
+const HEAD = { c: [0, 0.672], r: [0.094, 0.125] };
+
+function sdRoundCone(px, py, part) {
+  // local frame: origin at a, y along a→b
+  const [ax, ay] = part.a, [bx, by] = part.b;
+  const dx = bx - ax, dy = by - ay, h = Math.hypot(dx, dy) || 1e-6;
+  const ux = dx / h, uy = dy / h;
+  const qx0 = px - ax, qy0 = py - ay;
+  const ly = qx0 * ux + qy0 * uy, lx = Math.abs(-qx0 * uy + qy0 * ux);
+  const r1 = part.ra, r2 = part.rb;
+  const b = (r1 - r2) / h, a = Math.sqrt(Math.max(0, 1 - b * b));
+  const k = -b * lx + a * ly;
+  if (k < 0) return Math.hypot(lx, ly) - r1;
+  if (k > a * h) return Math.hypot(lx, ly - h) - r2;
+  return lx * a + ly * b - r1;
+}
+function sdHead(px, py) {
+  const x = (px - HEAD.c[0]) / HEAD.r[0], y = (py - HEAD.c[1]) / HEAD.r[1];
+  return (Math.hypot(x, y) - 1) * Math.min(HEAD.r[0], HEAD.r[1]);
+}
+function makeSDF(parts, withHead = true) {
+  return (x, y) => {
+    let d = withHead ? sdHead(x, y) : 1e9;
+    for (let i = 0; i < parts.length; i++) { const v = sdRoundCone(x, y, parts[i]); if (v < d) d = v; }
+    return d;
+  };
+}
+
+// Marching squares over f on a grid → array of [Vector3, Vector3] segments (z = 0).
+function contour(f, x0, x1, y0, y1, cell, keep = null) {
+  const nx = Math.ceil((x1 - x0) / cell), ny = Math.ceil((y1 - y0) / cell);
+  const vals = new Float32Array((nx + 1) * (ny + 1));
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) vals[j * (nx + 1) + i] = f(x0 + i * cell, y0 + j * cell);
+  const segs = [];
+  const lerpP = (xa, ya, va, xb, yb, vb) => { const t = va / (va - vb); return [xa + (xb - xa) * t, ya + (yb - ya) * t]; };
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const X = x0 + i * cell, Y = y0 + j * cell;
+      const a = vals[j * (nx + 1) + i], b = vals[j * (nx + 1) + i + 1], c = vals[(j + 1) * (nx + 1) + i + 1], d = vals[(j + 1) * (nx + 1) + i];
+      let idx = 0;
+      if (a < 0) idx |= 1; if (b < 0) idx |= 2; if (c < 0) idx |= 4; if (d < 0) idx |= 8;
+      if (idx === 0 || idx === 15) continue;
+      const eB = () => lerpP(X, Y, a, X + cell, Y, b);                 // bottom edge
+      const eR = () => lerpP(X + cell, Y, b, X + cell, Y + cell, c);   // right
+      const eT = () => lerpP(X + cell, Y + cell, c, X, Y + cell, d);   // top
+      const eL = () => lerpP(X, Y + cell, d, X, Y, a);                 // left
+      const pairs = {
+        1: [[eL, eB]], 2: [[eB, eR]], 3: [[eL, eR]], 4: [[eR, eT]], 5: [[eL, eT], [eB, eR]], 6: [[eB, eT]], 7: [[eL, eT]],
+        8: [[eT, eL]], 9: [[eT, eB]], 10: [[eB, eL], [eR, eT]], 11: [[eT, eR]], 12: [[eR, eL]], 13: [[eR, eB]], 14: [[eB, eL]],
+      }[idx];
+      for (const [p, q] of pairs) {
+        const A = p(), B = q();
+        if (keep && !keep((A[0] + B[0]) / 2, (A[1] + B[1]) / 2)) continue;
+        segs.push([V(A[0], A[1]), V(B[0], B[1])]);
+      }
+    }
+  }
+  return segs;
+}
+
+// A 3D round cone (lathe) from a to b in the XY plane, flattened in z.
+function roundConeGeo(part, radial = 22) {
+  const [ax, ay] = part.a, [bx, by] = part.b;
+  const h = Math.hypot(bx - ax, by - ay);
+  const r1 = part.ra, r2 = part.rb;
+  const al = Math.asin(clamp((r1 - r2) / h, -0.99, 0.99));
+  const pts = [];
+  const n = 8;
+  for (let i = 0; i <= n; i++) { const th = -Math.PI / 2 + (al + Math.PI / 2) * (i / n); pts.push(new THREE.Vector2(Math.max(1e-4, r1 * Math.cos(th)), r1 * Math.sin(th))); }
+  for (let i = 0; i <= n; i++) { const th = al + (Math.PI / 2 - al) * (i / n); pts.push(new THREE.Vector2(Math.max(1e-4, r2 * Math.cos(th)), h + r2 * Math.sin(th))); }
+  const g = new THREE.LatheGeometry(pts, radial);
+  const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), V(bx - ax, by - ay, 0).normalize());
+  g.applyQuaternion(q);
+  g.translate(ax, ay, 0);
+  g.scale(1, 1, part.flat);
+  return g;
+}
 
 function weaveTexture() {
   const S = 512, c = mkCanvas(S, S), ctx = c.getContext('2d');
@@ -101,36 +218,98 @@ export function create(ctx, segment) {
   goldGroup.add(gRect, gDiv, gSpiral, gDiag);
 
   // ---------------------------------------------------------------- the sketch (procedural strokes)
-  // One sculpted SDF body drives everything: the drawing (orthographic fields) and the statue (mesh).
-  const bodyA = buildBody();
-  const MB = meshBody(bodyA);
-  const GD = MB.grid;
-  // the second pose (arms raised to the crown, legs opened 1/14 of the height): limbs only
-  const bodyB = buildBody({ arm: 0.45, leg: 0.52, clipFloor: false });
-  const PB = projectGroups(bodyB, (n) => /^(arm|hand|finger|thumb|leg|foot)/.test(n), { x0: -1.1, y0: -1.3, x1: 1.1, y1: 0.95, h: 0.008 });
-  const DR = drawVitruvian({ grid: GD, poseB: PB, noise2, rng });
-  const toV = (list) => list.map((q) => [V(q[0], q[1]), V(q[2], q[3])]);
-  const segA = toV(DR.segA), segB = toV(DR.segB), segC = toV(DR.segC), segI = toV(DR.segI), segP = toV(DR.segP), hatch = toV(DR.hatch);
+  const partsA = figureParts(0), partsB = figureParts(1);
+  const fA = makeSDF(partsA);
+  const torsoParts = partsA.filter((p) => !p.limb);
+  const fTorso = makeSDF(torsoParts);
+  const limbsB = partsB.filter((p) => p.limb);
+  const fLimbsB = makeSDF(limbsB, false);
   const BX0 = -1.1, BX1 = 1.1, BY0 = -1.3, BY1 = 0.9;
+  const wob = (amp, freq, seed) => (x, y) => fA(x, y) + amp * noise2(x * freq + seed, y * freq - seed * 0.7);
   const navelY = 0;
   const radialOrder = (a, b) => { const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2; return Math.min(1, Math.hypot(mx, (my - navelY) * 0.9) / 1.15); };
-  const topDown = (a, b) => 1 - ((a.y + b.y) / 2 - BY0) / (BY1 - BY0);
   const sketch = new THREE.Group();     // lives in world space so it can lift off the (receding) canvas
   scene.add(sketch);
   const inkOpts = (color, opacity, extra = {}) => ({ color, headColor: EMBER, intensity: 1, opacity, head: 0.012, additive: false, ...extra });
-  // construction pass (radial from the navel), firm pass (top → bottom), loose outer pass,
-  // interior anatomy (crease field), the faint second pose, then form-following hatching
+
+  // light construction pass (radial, from the navel outward)
+  const segA = contour(wob(0.006, 3.0, 1.3), BX0, BX1, BY0, BY1, 0.0075);
   const strokesA = segmentsLine(segA, inkOpts(CHALK, 0.42, { orderFn: (a, b) => radialOrder(a, b) * 0.8 + R() * 0.05, stagger: 0.86 }));
-  const strokesB = segmentsLine(segB, inkOpts(SEPIA, 0.9, { orderFn: (a, b) => topDown(a, b) * 0.72 + Math.abs(a.x) * 0.08 + R() * 0.04, stagger: 0.86 }));
-  const strokesC = segmentsLine(segC, inkOpts(CHALK, 0.32, { orderFn: (a, b) => radialOrder(a, b) * 0.7 + R() * 0.1, stagger: 0.8 }));
-  const strokesI = segmentsLine(segI, inkOpts(SEPIA, 0.75, { orderFn: (a, b) => topDown(a, b) * 0.7 + R() * 0.15, stagger: 0.85 }));
+  // firm pass (top → bottom with a little noise)
+  const segB = contour(wob(0.0035, 7.0, 4.1), BX0, BX1, BY0, BY1, 0.0065);
+  const strokesB = segmentsLine(segB, inkOpts(SEPIA, 0.9, { orderFn: (a, b) => (1 - ((a.y + b.y) / 2 - BY0) / (BY1 - BY0)) * 0.72 + Math.abs(a.x) * 0.08 + R() * 0.04, stagger: 0.86 }));
+  // third, loose pass slightly outside the form
+  const segC = contour((x, y) => fA(x, y) - 0.007 + 0.006 * noise2(x * 11 + 9, y * 11), BX0, BX1, BY0, BY1, 0.009);
+  const strokesC = segmentsLine(segC.filter(() => R() < 0.55), inkOpts(CHALK, 0.32, { orderFn: (a, b) => radialOrder(a, b) * 0.7 + R() * 0.1, stagger: 0.8 }));
+  // second pose (arms raised, legs apart) — limbs only, outside the torso
+  const segP = contour((x, y) => fLimbsB(x, y) + 0.004 * noise2(x * 6, y * 6 + 3), BX0, BX1, BY0, BY1, 0.0085, (x, y) => fTorso(x, y) > 0.004);
   const strokesP = segmentsLine(segP, inkOpts(CHALK, 0.4, { orderFn: (a, b) => radialOrder(a, b) * 0.75 + R() * 0.05, stagger: 0.85 }));
+
+  // hatching driven by a fake 3D normal: light from the upper left
+  const hatch = [], details = [];
+  {
+    const L = V(-0.55, 0.55, 0.63).normalize(), N = new THREE.Vector3();
+    const shade = (x, y) => {
+      const d = fA(x, y);
+      if (d > -0.004) return -1;
+      const e = 0.004;
+      const gx = fA(x + e, y) - fA(x - e, y), gy = fA(x, y + e) - fA(x, y - e);
+      const gl = Math.hypot(gx, gy) || 1;
+      const k = Math.sqrt(sat(-d / 0.075));
+      N.set((gx / gl) * (1 - k), (gy / gl) * (1 - k), k).normalize();
+      return Math.max(0, N.dot(L));
+    };
+    const layer = (ang, spacing, thr, len, seed) => {
+      const r = rng(seed);
+      const dx = Math.cos(ang), dy = Math.sin(ang), px = -dy, py = dx;
+      const ext = 1.7;
+      for (let o = -ext; o <= ext; o += spacing) {
+        let run = null;
+        const step = 0.006;
+        for (let s = -ext; s <= ext; s += step) {
+          const x = px * o + dx * s, y = py * o + dy * s;
+          if (x < BX0 || x > BX1 || y < BY0 || y > BY1) { run = null; continue; }
+          const sh = shade(x, y);
+          const dark = sh < 0 ? false : (1 - sh) > thr + 0.08 * noise2(x * 9 + seed, y * 9);
+          if (dark) {
+            if (!run) run = { x, y, n: 0, target: len * (0.6 + r() * 0.8) };
+            run.n += step;
+            if (run.n >= run.target) {
+              const j = (r() - 0.5) * 0.004;
+              hatch.push([V(run.x + j, run.y + j), V(x + j, y - j)]);
+              run = null; s += step * (1 + Math.floor(r() * 3));
+            }
+          } else if (run) {
+            if (run.n > 0.02) hatch.push([V(run.x, run.y), V(x - dx * step, y - dy * step)]);
+            run = null;
+          }
+        }
+      }
+    };
+    layer(-Math.PI / 4, 0.0125, 0.5, 0.07, 3);
+    layer(Math.PI / 4, 0.016, 0.72, 0.06, 7);
+    // curls of hair around the crown + minimal facial marks (drawn last, with the ticks)
+    const r = rng(19);
+    for (let i = 0; i < 44; i++) {
+      const a = -0.35 + (Math.PI + 0.7) * r(), k = 0.96 + r() * 0.2;
+      const cx = HEAD.c[0] + Math.cos(a) * HEAD.r[0] * k, cy = HEAD.c[1] + 0.012 + Math.sin(a) * HEAD.r[1] * k;
+      const cr = 0.01 + r() * 0.012, a0 = r() * Math.PI * 2;
+      let px = cx + Math.cos(a0) * cr, py = cy + Math.sin(a0) * cr;
+      for (let j = 1; j <= 5; j++) { const aa = a0 + j * 0.9; const qx = cx + Math.cos(aa) * cr, qy = cy + Math.sin(aa) * cr; details.push([V(px, py), V(qx, qy)]); px = qx; py = qy; }
+    }
+    const fy = HEAD.c[1];
+    details.push([V(-0.052, fy + 0.012), V(-0.02, fy + 0.014)], [V(0.02, fy + 0.014), V(0.052, fy + 0.012)]);
+    details.push([V(0.002, fy - 0.004), V(0.008, fy - 0.045)], [V(0.008, fy - 0.045), V(-0.008, fy - 0.05)]);
+    details.push([V(-0.022, fy - 0.075), V(0.022, fy - 0.075)]);
+    layer(-Math.PI / 3, 0.022, 0.86, 0.05, 11);
+  }
   const strokesH = segmentsLine(hatch, inkOpts(SEPIA, 0.7, { orderFn: (a, b) => (1 - ((a.y + b.y) / 2 - BY0) / (BY1 - BY0)) * 0.55 + R() * 0.3, stagger: 0.9, head: 0.02 }));
   // proportion ticks across the figure (head, chin, chest, navel, groin, knees)
   const ticks = [];
   for (const y of [0.8, 0.55, 0.3, 0.0, -0.2, -0.7, -1.2]) ticks.push([V(-0.22, y), V(0.22, y)]);
   for (const x of [-0.75, -0.5, -0.25, 0.25, 0.5, 0.75]) ticks.push([V(x, 0.4), V(x, 0.5)]);
   const nTicks = ticks.length;
+  ticks.push(...details);
   const strokesT = segmentsLine(ticks, inkOpts(SEPIA, 0.55, { orderFn: (a, b, i) => (i < nTicks ? i / nTicks * 0.3 : 0.25 + R() * 0.4), stagger: 0.7 }));
   // compass circle + square (two passes each)
   const circleR = 1.2, sqHalf = 1.0, sqCy = -0.2;
@@ -139,7 +318,7 @@ export function create(ctx, segment) {
   const sq2 = progressLine(sqPts(0.004), inkOpts(CHALK, 0.4, { head: 0.02 }));
   const ci1 = progressLine(circlePoints(circleR, 240, { start: -Math.PI / 2, end: Math.PI * 1.5, center: V(0, navelY) }), inkOpts(SEPIA, 0.85, { head: 0.02 }));
   const ci2 = progressLine(circlePoints(circleR + 0.005, 240, { start: -Math.PI / 2 + 0.3, end: Math.PI * 1.5 + 0.3, center: V(0, navelY) }), inkOpts(CHALK, 0.4, { head: 0.02 }));
-  sketch.add(strokesA, strokesB, strokesC, strokesI, strokesP, strokesH, strokesT, sq1, sq2, ci1, ci2);
+  sketch.add(strokesA, strokesB, strokesC, strokesP, strokesH, strokesT, sq1, sq2, ci1, ci2);
   // mirror-script handwriting
   const hand = [];
   const handLine = (txt, y, h = 0.075) => {
@@ -151,35 +330,24 @@ export function create(ctx, segment) {
   handLine('che le misure dell’omo sono dalla natura distribuite', 1.3);
   handLine('tanto apre l’omo nelle braccia quanto è la sua altezza', -1.4);
   hand.forEach((h) => { h.material.uniforms.uColor.value.set('#4a2812'); });
-  const strokeCount = segA.length + segB.length + segC.length + segI.length + segP.length + hatch.length + ticks.length;
+  const strokeCount = segA.length + segB.length + segC.length + segP.length + hatch.length + ticks.length;
 
   // ---------------------------------------------------------------- 3D figure (same primitives)
   const figGroup = new THREE.Group();
   scene.add(figGroup);
   const figGeo = (() => {
-    const g = new THREE.BufferGeometry();
-    const P = MB.positions, nv = P.length / 3, col = new Float32Array(nv * 3);
-    // Carrara marble baked per vertex: warm white body, faint grey veins, SDF ambient occlusion in the creases
-    for (let i = 0; i < nv; i++) {
-      const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
-      const turb = noise3(x * 3.1, y * 3.1, z * 3.1) * 0.6 + noise3(x * 7.3 + 4, y * 7.3, z * 7.3) * 0.25;
-      const band = Math.abs(Math.sin((x * 1.7 + y * 1.1 - z * 0.8 + turb * 1.4) * Math.PI * 2));
-      const vein = Math.pow(1 - band, 22) * 0.35 + Math.pow(1 - band, 5) * 0.05;
-      const cloud = noise3(x * 4 + 9, y * 4, z * 4) * 0.03;
-      const ao = MB.ao[i], occ = 0.28 + 0.72 * Math.pow(ao, 1.3);
-      const k = (1 - vein + cloud) * occ;
-      col[i * 3] = 0.8 * k + 0.03 * (1 - ao); col[i * 3 + 1] = 0.76 * k; col[i * 3 + 2] = 0.7 * k * (0.95 + 0.05 * ao);
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(P, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(MB.normals, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.setIndex(new THREE.BufferAttribute(MB.index, 1));
-    g.computeBoundingSphere();
-    return g;
+    const parts = partsA.map((p) => roundConeGeo(p));
+    const head = new THREE.SphereGeometry(1, 32, 20); head.scale(HEAD.r[0], HEAD.r[1], 0.11); head.translate(HEAD.c[0], HEAD.c[1], 0);
+    parts.push(head);
+    const clean = parts.map((g) => { const n = g.index ? g.toNonIndexed() : g; if (n.attributes.uv) n.deleteAttribute('uv'); return n; });
+    const m = mergeGeometries(clean);
+    m.computeVertexNormals();
+    return m;
   })();
-  const figMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.4, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35, sheen: 0.6, sheenRoughness: 0.55, sheenColor: new THREE.Color('#ffc996'), transparent: true, opacity: 0 });
+  // a silhouette, not a portrait: near-black form defined only by its gold rim light
+  const figMat = new THREE.MeshStandardMaterial({ color: '#0d0b09', roughness: 0.85, metalness: 0, transparent: true, opacity: 0 });
   const figMesh = new THREE.Mesh(figGeo, figMat);
-  const figRim = new THREE.Mesh(figGeo, fresnel({ color: '#ffc877', intensity: 0.8, power: 3.4, opacity: 0 }));
+  const figRim = new THREE.Mesh(figGeo, fresnel({ color: '#ffc877', intensity: 2.0, power: 2.2, opacity: 0 }));
   figGroup.add(figMesh, figRim);
   // gold circle & square that lift off with the figure (3D proportion rig)
   const goldRig = new THREE.Group();
@@ -266,8 +434,8 @@ export function create(ctx, segment) {
   scene.add(spot, spot.target);
   const rim = new THREE.DirectionalLight('#ffcf94', 0); rim.position.set(3, 3, -4);
   const kick = new THREE.DirectionalLight('#9fb8ff', 0); kick.position.set(-4, 1, -3);
-  const fill = new THREE.AmbientLight('#2b1d12', 0.2);
-  const key = new THREE.DirectionalLight('#ffe6c4', 0); key.position.set(-4.5, 3.2, 2.6); key.target.position.set(0, -0.2, 1);
+  const fill = new THREE.AmbientLight('#2b1d12', 0.35);
+  const key = new THREE.DirectionalLight('#ffe6c4', 0); key.position.set(-2.5, 3, 5); key.target.position.set(0, -0.2, 1);
   scene.add(rim, kick, fill, key, key.target);
   const beam = lightShaft({ length: 9, radiusTop: 0.2, radiusBottom: 2.6, color: '#ffe0b0', intensity: 0.1 });
   beam.position.copy(spot.position);
@@ -278,7 +446,6 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------- update
   const camPos = new THREE.Vector3(), look = new THREE.Vector3(), C3 = V(0, -0.2, 1.0);
-  const RAD3 = OUTPUT_ASPECT > 1.5 ? 4.8 : 4.15;         // orbit radius: the 1:1 frame can sit closer
   const dof = { focus: 6, range: 1.6, amount: 0 };
   const bloom = { strength: 0.75 };
   const seqProg = (t, a, b) => sat((t - a) / (b - a));
@@ -297,7 +464,7 @@ export function create(ctx, segment) {
       // 2D phase: slow push toward the canvas; 3D phase: orbit the lifted figure
       const d2 = lerp(8.4, 5.5, approach);
       const ang = lerp(0.07, -1.05, orb);
-      const rad = lerp(d2, RAD3, lift) - push * 1.8;
+      const rad = lerp(d2, 4.7, lift) - push * 1.8;
       const cy = lerp(lerp(0.25, 0.02, approach), 0.85, orb);
       const target = look.set(0, lerp(0.0, -0.1, lift), lerp(0, C3.z, lift));
       camPos.set(target.x + Math.sin(ang) * rad, cy, target.z + Math.cos(ang) * rad);
@@ -309,12 +476,12 @@ export function create(ctx, segment) {
       const recede = ramp(t, m3, m3 + 0.9, ease.inOutCubic);
       canvasRig.position.set(-recede * 0.6, lerp(-0.25, 0, arrive) + Math.sin(t * 0.9) * 0.02, lerp(-1.2, 0, arrive) - recede * 3.4);
       canvasRig.rotation.set(lerp(0.08, 0, arrive) + Math.sin(t * 0.7) * 0.01, lerp(-0.42, 0.04, arrive) + recede * 0.25, lerp(0.03, 0, arrive));
-      spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede) * (1 - 0.55 * ramp(t, m3, m3 + 0.4));
+      spot.intensity = lerp(1.2, 4.6, ramp(t, 0.05, cC + 0.1, ease.outCubic)) * (1 - 0.7 * recede);
       spot.target.position.set(lerp(-0.45, 0, lift), lerp(0.5, -0.2, lift), lerp(0, C3.z, lift));
-      key.intensity = 2.3 * lift;
+      key.intensity = 2.4 * lift;
       canvasMat.color.setRGB(0.95, 0.92, 0.87).multiplyScalar(1 - 0.72 * recede);
-      rim.intensity = 2.2 * lift;
-      kick.intensity = 0.7 * lift;
+      rim.intensity = 2.8 * lift;
+      kick.intensity = 1.2 * lift;
       beam.material.uniforms.uIntensity.value = 0.08 + 0.05 * ramp(t, 0.1, cC);
       beam.material.uniforms.uTime.value = t;
 
@@ -337,22 +504,21 @@ export function create(ctx, segment) {
       strokesC.progress = seqProg(t, s0 + 0.12 * span, s0 + 0.6 * span);
       strokesB.progress = seqProg(t, s0 + 0.25 * span, s0 + 0.82 * span);
       strokesP.progress = seqProg(t, s0 + 0.45 * span, s0 + 0.92 * span);
-      strokesI.progress = seqProg(t, s0 + 0.3 * span, s0 + 0.9 * span);
       strokesH.progress = seqProg(t, s0 + 0.35 * span, s0 + span);
       strokesT.progress = seqProg(t, s0 + 0.7 * span, s0 + span);
       const inkOut = 1 - ramp(t, m3 + 0.25, m3 + 0.75);
       sq1.opacity = 0.85 * inkOut * (1 - lift); sq2.opacity = 0.4 * inkOut * (1 - lift);
       ci1.opacity = 0.85 * inkOut * (1 - lift); ci2.opacity = 0.4 * inkOut * (1 - lift);
       strokesA.opacity = 0.42 * inkOut; strokesB.opacity = 0.9 * inkOut; strokesC.opacity = 0.32 * inkOut;
-      strokesP.opacity = 0.4 * inkOut; strokesH.opacity = 0.7 * inkOut; strokesT.opacity = 0.55 * inkOut; strokesI.opacity = 0.75 * inkOut;
+      strokesP.opacity = 0.4 * inkOut; strokesH.opacity = 0.7 * inkOut; strokesT.opacity = 0.55 * inkOut;
       // strokes lift off the canvas plane and glow as they go
       const lineLift = ramp(t, m3 - 0.05, m3 + 0.7, ease.inOutCubic);
       sketch.position.set(lerp(canvasRig.position.x, 0, lineLift), lerp(canvasRig.position.y, 0, lineLift), lerp(canvasRig.position.z + SURF + 0.004, C3.z + 0.02, lineLift));
       sketch.rotation.set(canvasRig.rotation.x * (1 - lineLift), canvasRig.rotation.y * (1 - lineLift), canvasRig.rotation.z * (1 - lineLift));
       const glowIn = envelope(t, m3 - 0.1, m3 + 0.8, 0.2, 0.4);
-      for (const s of [strokesA, strokesB, strokesC, strokesI, strokesP, strokesH, strokesT]) {
+      for (const s of [strokesA, strokesB, strokesC, strokesP, strokesH, strokesT]) {
         s.material.uniforms.uColor.value.copy(cSepia).lerp(cGold, glowIn);
-        s.intensity = 1 + glowIn * 0.9;
+        s.intensity = 1 + glowIn * 1.4;
       }
       for (let i = 0; i < hand.length; i++) {
         hand[i].reveal = ramp(t, s0 + (0.55 + i * 0.12) * span, s0 + (0.85 + i * 0.12) * span, ease.inOutSine);
