@@ -71,8 +71,8 @@ export const CUES = {
   parchment: 12.3,
   wordCivic: 13.0,
   wordLaw: 13.9,
-  wordRepresentation: 14.8,
-  lettersToGeometry: 15.3,
+  wordRepresentation: 14.35,
+  lettersToGeometry: 14.75,   // earlier + slower: the letters take their time to become columns
   // renaissance
   canvas: 16.0,
   goldenRatio: 16.3,

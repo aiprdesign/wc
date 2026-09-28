@@ -12,11 +12,14 @@ import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { letters3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
+import { MorphParticles, sampleGeometry } from '../lib/particles.js';
+import { rng } from '../lib/math.js';
 import { ease, sat, lerp, ramp } from '../lib/math.js';
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
 const WORDS = {
-  classical: 'ORDER', civic: 'LAW', renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
+  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 14.1 },   // LAW clears before REPRESENTATION
+  renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
   moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: 'INTELLIGENCE', knowledge: 'KNOWLEDGE',
@@ -136,6 +139,28 @@ export class Words3D {
       transparent: true, depthWrite: false, fog: false,
     }));
     back.position.z = -0.45;
+    // FORMATION: gold particles sampled on the letter surfaces, starting as a loose swirling
+    // cloud around the word; they converge onto the glyphs and the solid letters materialise
+    const N = swap ? 900 : 1800, per = Math.max(40, Math.floor(N / glyphs.length));
+    const target = new Float32Array(per * glyphs.length * 3), start = new Float32Array(target.length);
+    const r = rng(text.length * 97 + Math.round(t0 * 10));
+    glyphs.forEach((g, gi) => {
+      const pts = sampleGeometry(g.geometry, per, { seed: gi + 3 });
+      for (let j = 0; j < per; j++) {
+        const o = (gi * per + j) * 3;
+        const x = pts[j * 3] + g.x, y = pts[j * 3 + 1], z = pts[j * 3 + 2];
+        target[o] = x; target[o + 1] = y; target[o + 2] = z;
+        // start: pushed out from the word centre, with depth toward camera and a spiral bias
+        const a = r() * Math.PI * 2, rad = 0.8 + r() * 2.6;
+        start[o] = x * 0.35 + Math.cos(a) * rad * 1.3;
+        start[o + 1] = y * 0.35 + Math.sin(a) * rad * 0.7;
+        start[o + 2] = z + 0.6 + r() * 2.2;
+      }
+    });
+    const dust = new MorphParticles({ count: per * glyphs.length, positions: start, targets: target, size: 0.03, color: '#ffd98f', intensity: 1.25, opacity: 0, stagger: 0.55, seed: text.length + 5 });
+    dust.u.noise = 0.05; dust.u.noiseFreq = 1.4; dust.u.swirl = 0; dust.u.twinkle = 0.5;
+    dust.renderOrder = 6;
+    group.add(dust);
     // star glint that rides the leading edge of the shine
     const glint = glowSprite({ color: '#fff4d6', intensity: 1.7, scale: 0.6 });
     glint.material.depthTest = false;
@@ -163,7 +188,7 @@ export class Words3D {
     const d = focus * (swap ? 0.55 : 0.62);
     const lockPos = new THREE.Vector3(), lockQuat = new THREE.Quaternion();
     cam.matrixWorld.decompose(lockPos, lockQuat, new THREE.Vector3());
-    return { text, inst, group, letters, plinth, light, shared, back, glint, capH, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
+    return { text, inst, group, letters, plinth, light, shared, back, glint, dust, capH, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
   }
 
   // Called by the engine after a sequence's update and before it is rendered.
@@ -193,7 +218,7 @@ export class Words3D {
       cam.matrixWorld.decompose(camPos, camQuat, fwd);
       pos.copy(camPos);          // locked dead-centre in the frame
       quat.copy(camQuat);
-      fwd.set(ax, (it.yOff ?? 0) * H, -it.d * (1 - 0.07 * ease.inOutSine(drift))).applyQuaternion(quat);   // slow dolly-in
+      fwd.set(ax, (it.yOff ?? 0) * H, -it.d * (0.93 + 0.13 * ease.inOutSine(drift))).applyQuaternion(quat);   // slow zoom-out through the whole hold
       it.group.position.copy(pos).add(fwd);
       it.group.quaternion.copy(quat);
       const turn = it.align === 'left' ? -0.12 : it.align === 'right' ? 0.12 : 0;   // side words angle toward the centre
@@ -221,16 +246,26 @@ export class Words3D {
         const kout = ease.inCubic(sat((T - outStart - (1 - c) * st * n * 0.3) / outDur));
         // ENTRANCE: every letter emerges from the centre point, spreading outward to its place
         //           while hinging up from lying flat; EXIT: they fold back into the centre
-        l.pivot.position.x = anchorX + (l.x - anchorX) * kc * (1 - kout * 0.85);
-        l.pivot.position.z = (1 - kc) * 0.35;
-        l.pivot.rotation.x = (1 - kin) * -Math.PI / 2 + kout * -0.5;
+        // letters materialise inside the converging particle cloud: a small settle forward and a
+        // slight tilt-up, no big hinge — the particles do the forming
+        l.pivot.position.x = anchorX + (l.x - anchorX) * (0.96 + 0.04 * kc) * (1 - kout * 0.85);
+        l.pivot.position.z = (1 - kc) * 0.18;
+        l.pivot.rotation.x = (1 - kin) * -0.35 + kout * -0.5;
         l.mesh.position.y = (l.mesh.userData.h ?? (l.mesh.userData.h = l.mesh.position.y));
         l.mesh.scale.setScalar((0.8 + 0.2 * kc) * (1 - kout * 0.4));
         // landing flash as each letter reaches its place
         const land = t - d0 - inDur * 0.62;
         l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.9 : 0;
-        l.mat.opacity = fade * sat(u * 3) * (1 - kout);
+        l.mat.opacity = fade * ease.inOutSine(sat((u - 0.25) / 0.6)) * (1 - kout);
       });
+      // formation particles: converge over the entrance, then dissolve into the solid letters
+      const formEnd = inDur + st * n * 0.55 + 0.1;
+      it.dust.tick(t, { height: this.engine.height });
+      it.dust.u.mix = ease.outCubic(sat(t / formEnd));
+      it.dust.u.swirl = (1 - ease.outCubic(sat(t / formEnd))) * 1.2;
+      it.dust.u.size = 0.028;
+      it.dust.u.opacity = sat(t / 0.12) * (1 - ramp(t, formEnd * 0.8, formEnd + 0.35)) + 0.25 * ramp(T, outStart - 0.05, outStart + 0.1) * (1 - ramp(T, outStart + 0.1, outStart + outDur + 0.2));
+      it.dust.visible = it.dust.u.opacity > 0.01;
       // light sweep crosses the word once, after the letters stand
       const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);

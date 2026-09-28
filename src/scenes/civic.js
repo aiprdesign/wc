@@ -528,26 +528,27 @@ export function create(ctx, segment) {
         const L = repWord.letters[i];
         const d = Math.abs(L.u - 0.5) * 0.3;
         const k = ramp(t, wR + d, wR + d + 0.35, ease.outCubic);
-        const fd = lg - 0.08 + L.index * 0.011;
-        const f = ramp(t, fd, fd + 0.3, ease.inOutCubic);
+        // slowed down: a longer, staggered flight so each glyph visibly becomes a column
+        const fd = lg - 0.05 + L.index * 0.032;
+        const f = ramp(t, fd, fd + 0.7, ease.inOutCubic);
         const tg = repTargets[i].local;
         const arc = Math.sin(Math.PI * f) * 0.35;
         L.mesh.position.set(lerp(L.base.x, tg.x, f), lerp(L.base.y - (1 - k) * 0.2, tg.y, f) + arc, lerp(L.base.z, tg.z, f));
         L.mesh.scale.set(lerp(1, 0.28, f), lerp(1, 3.2, f), 1);
         L.mesh.rotation.z = (1 - k) * (L.u - 0.5) * 0.4;
-        const fade = 1 - ramp(t, fd + 0.27, fd + 0.45);
+        const fade = 1 - ramp(t, fd + 0.62, fd + 0.85);
         L.mesh.opacity = k * fade;
         L.mesh.intensity = 1.7 + (1 - k) * 2 + f * 2.5;
       }
       // drum columns grow from the landing glyphs (others grow on their own)
       for (let i = 0; i < drumCols.length; i++) {
         const c = drumCols[i];
-        const ti = lg + 0.1 + (c.fed ? 0 : 0.08) + Math.abs(Math.sin(c.a - viewAng)) * 0.12;
-        const g = ramp(t, ti, ti + 0.25, ease.outCubic);
+        const ti = lg + 0.35 + (c.fed ? 0 : 0.2) + Math.abs(Math.sin(c.a - viewAng)) * 0.3;
+        const g = ramp(t, ti, ti + 0.55, ease.outCubic);
         c.m.scale.set(1, Math.max(0.001, g), 1);
         c.m.visible = g > 0.001;
       }
-      drumColMat.emissiveIntensity = 1.4 * (1 - ramp(t, lg + 0.35, lg + 0.7)) * (t > lg ? 1 : 0) + 0.15;
+      drumColMat.emissiveIntensity = 1.4 * (1 - ramp(t, lg + 0.9, lg + 1.3)) * (t > lg ? 1 : 0) + 0.15;
 
       // callouts
       callGreek.reveal(ramp(t, 0.45, 0.95, ease.outCubic), 1 - ramp(t, 1.05, 1.3));
