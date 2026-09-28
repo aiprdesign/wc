@@ -148,7 +148,7 @@ void main(){
   float a1 = 0.06, a2 = 0.0045;
   float d1 = a1 / (3.1416 * pow(nh * nh * (a1 - 1.0) + 1.0, 2.0));
   float d2 = a2 / (3.1416 * pow(nh * nh * (a2 - 1.0) + 1.0, 2.0));
-  float spec = water * (1.0 - cloud) * (1.0 - 0.6 * cshadow) * (d1 * 0.5 + d2 * 0.16) * min(F, 0.12) / (4.0 * max(mu, 0.2)) * smoothstep(0.0, 0.08, ndl) * smoothstep(0.08, 0.4, mu);
+  float spec = water * (1.0 - cloud) * (1.0 - 0.6 * cshadow) * (d1 * 0.5 + d2 * 0.3) * min(F, 0.12) / (4.0 * max(mu, 0.2)) * smoothstep(0.0, 0.08, ndl) * smoothstep(0.08, 0.4, mu);
   // cloud depth: the lee side of a thick deck (thicker towards the sun) falls into its own shade,
   // thin veils stay a touch blue from the ocean beneath
   float relief = clamp(1.0 + (cloud - cshadow) * 1.3, 0.6, 1.2);

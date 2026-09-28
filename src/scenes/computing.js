@@ -145,10 +145,10 @@ export function create(ctx, segment) {
   const copperM = new THREE.MeshStandardMaterial({ color: '#c47a42', metalness: 1, roughness: 0.48 });
   const bakelite = new THREE.MeshStandardMaterial({ color: '#17140f', metalness: 0.1, roughness: 0.5 });
   const epoxy = new THREE.MeshStandardMaterial({ color: '#0e0f11', metalness: 0.2, roughness: 0.38 });
-  const goldM = new THREE.MeshStandardMaterial({ color: '#f0c46a', metalness: 1, roughness: 0.22 });
+  const goldM = new THREE.MeshStandardMaterial({ color: '#e2b562', metalness: 1, roughness: 0.34 });   // satin: the key's reflection no longer burns the pin row
   // clear glass: near-black body drawn additively, so only its reflections (env + key highlight) add light
   // over the plate and filament inside — no milky diffuse shell
-  const glassM = new THREE.MeshStandardMaterial({ color: '#06080b', metalness: 0, roughness: 0.1, transparent: true, opacity: 0.85, envMapIntensity: 1.1, depthWrite: false, blending: THREE.AdditiveBlending });
+  const glassM = new THREE.MeshStandardMaterial({ color: '#06080b', metalness: 0, roughness: 0.16, transparent: true, opacity: 0.85, envMapIntensity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
   const filM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff8a3a').multiplyScalar(4), toneMapped: false });
   const haloM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff9a50').multiplyScalar(0.5), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const sparkM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe8ff').multiplyScalar(1.6), transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });

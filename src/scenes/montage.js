@@ -223,8 +223,9 @@ export function create(ctx, segment) {
   orrery.add(nucleus);
 
   // ---- S4: lattice of atoms → circuit -------------------------------------
-  const SP = 1.15, nodes = [];
-  for (let j = -3; j <= 3; j++) for (let i = -7; i <= 7; i++) {
+  // the 1:1 frame sees much further across the plan: more lattice rows so the circuit fills it edge to edge
+  const SP = 1.15, nodes = [], JR = OUTPUT_ASPECT < 1.5 ? 5 : 3;
+  for (let j = -JR; j <= JR; j++) for (let i = -7; i <= 7; i++) {
     if (i === 0 && j === 0) { nodes.push({ i, j, x: 0, z: 0, center: true }); continue; }
     if (r() < 0.3) continue;
     nodes.push({ i, j, x: i * SP, z: j * SP });
@@ -282,7 +283,7 @@ export function create(ctx, segment) {
   }
   // bus lines running off-frame
   for (let b = 0; b < 6; b++) {
-    const zz = (b < 3 ? -3.9 : 3.9) + (b % 3) * 0.16 * (b < 3 ? 1 : -1);
+    const zb = JR * SP + 0.45, zz = (b < 3 ? -zb : zb) + (b % 3) * 0.16 * (b < 3 ? 1 : -1);
     traceSegs.push([V3(-12, 0.005, zz), V3(12, 0.005, zz)]);
   }
   const traces = segmentsLine(traceSegs, {

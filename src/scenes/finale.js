@@ -272,8 +272,9 @@ export function create(ctx, segment) {
   const NM = 6500, NS = 2200;
   const aStart = new Float32Array(NM * 3), aOrb = new Float32Array(NM * 4), aSeed = new Float32Array(NM * 4), aColor = new Float32Array(NM * 3);
   const p0 = new THREE.Vector3(), q0 = new THREE.Quaternion(), p1 = new THREE.Vector3(), q1 = new THREE.Quaternion();
-  rig.pose(54.0, p0, q0); rig.pose(54.6, p1, q1);
-  const flow = new THREE.Vector3(0, 0, -1).applyQuaternion(q0);          // camera forward at 54.0: stars recede along it
+  rig.pose(54.0, p0, q0); rig.pose(55.5, p1, q1);
+  const RUSH = p0.distanceTo(p1);
+  const flow = p1.clone().sub(p0).normalize();                           // the camera rushes forward along it, through the stars
   const camR = new THREE.Vector3(1, 0, 0).applyQuaternion(q0), camU = new THREE.Vector3(0, 1, 0).applyQuaternion(q0);
   const gold = new THREE.Color(1.0, 0.7, 0.36), pale = new THREE.Color(1.0, 0.88, 0.68), cool = new THREE.Color(0.8, 0.88, 1.0);
   const col = new THREE.Color(), tv = new THREE.Vector3();
@@ -284,9 +285,13 @@ export function create(ctx, segment) {
     else { rad = R * (1.08 + Math.pow(r(), 1.6) * 0.85); inc = Math.acos(r() * 2 - 1) - Math.PI / 2; node = r() * TAU; }
     aOrb.set([rad, inc, node, r() * TAU], i * 4);
     aSeed.set([r(), r(), r(), r()], i * 4);
-    // streaming start: a tube of stars around the camera's line of sight, from behind it to far ahead
-    const along = -1.5 + r() * 7.0, ang = r() * TAU, rr = 0.25 + Math.pow(r(), 0.7) * 3.2;
-    tv.copy(p0).addScaledVector(flow, along).addScaledVector(camR, Math.cos(ang) * rr * 1.2).addScaledVector(camU, Math.sin(ang) * rr);
+    // start: a tube of stars around the rush path (static in world space — the lens flies through them),
+    // thinning towards Earth so the planet reads clearly as it grows
+    let along, ang, rr;
+    do {
+      along = 0.6 + Math.pow(r(), 1.35) * (RUSH + 1.0); ang = r() * TAU; rr = 0.3 + Math.pow(r(), 0.7) * 3.4;
+      tv.copy(p0).addScaledVector(flow, along).addScaledVector(camR, Math.cos(ang) * rr * 1.2).addScaledVector(camU, Math.sin(ang) * rr);
+    } while (tv.length() < R * 1.35);
     aStart.set([tv.x, tv.y, tv.z], i * 3);
     const k = (rad / R - 1.08) / 0.85;
     col.copy(gold).lerp(pale, sat(k * 1.6 + (r() - 0.5) * 0.5)).lerp(cool, sat(k * 1.4 - 0.4 + (r() - 0.5) * 0.4));
@@ -386,7 +391,7 @@ export function create(ctx, segment) {
   // ---- per-frame scratch ----------------------------------------------------------------------
   const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), qa = new THREE.Quaternion();
   const ndc = new THREE.Vector3(), cdir = new THREE.Vector3(), inv = new THREE.Quaternion();
-  const travelKeys = [[53.9, -0.5], [54.0, 0], [54.5, 2.3], [55.1, 3.05], [55.8, 3.25], [57, 3.3]];
+  const sPos = new THREE.Vector3(), sQuat = new THREE.Quaternion();
 
   function update(t, info) {
     const T = segment.start + t - SHIFT;
@@ -415,11 +420,11 @@ export function create(ctx, segment) {
     const eu = earthMat.uniforms;
     const fadeK = smoothstep(C_FADE, END, T);                     // 0 → 1 over the last two seconds
     const fade = 1 - fadeK;
-    const reveal = smoothstep(54.3, 55.9, T);
+    const reveal = smoothstep(54.0, 55.4, T);
     const swell = smoothstep(C_SUN, C_SUN + 1.4, T);                // the sunrise
     eu.uCloudOff.value = (T - 54) * 0.0022;
     eu.uTime.value = T - 54;
-    eu.uBright.value = lerp(0.55, 1, reveal) * lerp(1, 0.55, fadeK);
+    eu.uBright.value = lerp(0.8, 1, reveal) * lerp(1, 0.55, fadeK);
     const tension = smoothstep(C_S2 + 1.5, C_OUT, T) * (1 - smoothstep(C_SUN - 0.05, C_SUN + 0.5, T));
     eu.uCity.value = lerp(0.5, 1, reveal) * fade * (1 + 0.9 * tension);   // the cities creep up out of the dark
     eu.uWarm.value = swell * 0.35;
@@ -469,19 +474,20 @@ export function create(ctx, segment) {
     }
 
     // motes: stream away, fall into orbit, drift; shockwave on the title hit
-    const travel = timeWarp(T, travelKeys);
+    const travel = 0;                                               // stars hold still: the camera moves
     for (const m of [moteMat, streakMat]) {
       const u = m.uniforms;
       u.uT.value = T - 54;
-      u.uForm.value = ease.inOutSine(sat((T - 54.35) / 2.5));
+      u.uForm.value = ease.inOutSine(sat((T - 54.75) / 2.4));
       u.uTravel.value = travel;
       u.uWaveR.value = kt > 0 ? R * 1.02 + kt * 1.8 : -10;
       u.uWaveAmp.value = wave;
     }
-    const speed = (timeWarp(T + 0.02, travelKeys) - timeWarp(T - 0.02, travelKeys)) / 0.04;
-    streakMat.uniforms.uStreakLen.value = speed * 0.045;
-    streakMat.uniforms.uOpacity.value = sat(speed / 1.5) * 0.55;
-    streaks.visible = T < 55.6;
+    // motion streaks from the camera's own speed (stars smear forward along the rush, easing out)
+    const speed = Math.abs(rig.pose(T + 0.02, sPos, sQuat) - rig.pose(T - 0.02, sPos, sQuat)) / 0.04;
+    streakMat.uniforms.uStreakLen.value = -Math.min(0.55, speed * 0.014);
+    streakMat.uniforms.uOpacity.value = sat(speed / 8) * 0.5;
+    streaks.visible = T < 55.8 && speed > 0.3;
     const mu = moteMat.uniforms;
     mu.uViewport.value = info.height;
     mu.uMaxPx.value = Math.max(2, 5 * info.width / 1920 * (OUTPUT_ASPECT < 1.5 ? 1.4 : 1));

@@ -540,7 +540,9 @@ export function create(ctx, segment) {
   const stSteel = new THREE.MeshStandardMaterial({ color: '#c9d0d8', metalness: 1, roughness: 0.3, map: brushedMetalTexture(), envMapIntensity: 0.6 });
   const stGold = new THREE.MeshStandardMaterial({ color: '#e0b25a', metalness: 1, roughness: 0.45, envMapIntensity: 0.6 });
   const cellCanvas = mkCanvas(256); { const g = cellCanvas.getContext('2d'); g.fillStyle = '#0c1a33'; g.fillRect(0, 0, 256, 256); g.strokeStyle = '#6f86a8'; g.lineWidth = 2; for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * 32, 0); g.lineTo(i * 32, 256); g.stroke(); g.beginPath(); g.moveTo(0, i * 32); g.lineTo(256, i * 32); g.stroke(); } }
-  const panelMat = new THREE.MeshStandardMaterial({ map: toTexture(cellCanvas), color: '#8aa0c8', metalness: 0.8, roughness: 0.25, envMapIntensity: 1.2, side: THREE.DoubleSide });
+  const cellTex = toTexture(cellCanvas);
+  // a faint emissive keeps the cells reading as solar panels even edge-on / from the unlit side (no black cut-outs over Earth)
+  const panelMat = new THREE.MeshStandardMaterial({ map: cellTex, color: '#8aa0c8', metalness: 0.8, roughness: 0.25, envMapIntensity: 1.2, side: THREE.DoubleSide, emissive: '#6f8fc4', emissiveMap: cellTex, emissiveIntensity: 0.35 });
   const parts = [];
   const part = (obj, from, dock, rot) => { station.add(obj); parts.push({ obj, home: obj.position.clone(), homeQ: obj.quaternion.clone(), from: V3(...from), dock, rot: V3(...rot) }); return obj; };
   const truss = new THREE.Group();
