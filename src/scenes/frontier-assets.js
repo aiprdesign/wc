@@ -209,7 +209,7 @@ export function buildShuttle() {
     else if (Math.abs(nx) > 0.5 && z < -0.06 && z > -0.2 && Math.abs(x) < 0.27 && y > 0.5 && y < 3.4) c.copy(K);          // chine line along the sides
     else c.copy(W).multiplyScalar(0.93 + 0.07 * hash3(Math.floor(x * 30), Math.floor(y * 30), Math.floor(z * 30)));
   });
-  const orbMat = addTiles(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.04 }), 'frontier-orbiter-tiles');
+  const orbMat = addTiles(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.04 }), 'frontier-orbiter-tiles', { cellLight: 0.05, seam: 0.22 });
   const orbiter = new THREE.Group();
   const orbMesh = new THREE.Mesh(orbGeo, orbMat); orbiter.add(orbMesh);
   // payload-bay door seams, elevon hinge lines, RCC leading edges (one dark merged mesh)
@@ -323,7 +323,7 @@ export function buildShuttle() {
     c.copy(W).multiplyScalar(joint ? 0.82 : 0.94 + 0.06 * hash3(Math.floor(x * 30), Math.floor(y * 12), Math.floor(z * 30)));
     if (y < 0.28) c.multiplyScalar(0.8 + 0.2 * y / 0.28);
   });
-  const srbMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.06 });
+  const srbMat = new THREE.MeshStandardMaterial({ vertexColors: true, color: '#c9c8c4', roughness: 0.62, metalness: 0.06 });
   const nozMat = bellMaterial({ color: '#4a4744', tubes: false, rough: 0.5 });
   const nozGeo = bellGeo(0.1, 0.165, 0.3, 32, 0.8);
   const srbs = [-1, 1].map((sx) => {
@@ -593,7 +593,7 @@ export function buildWebb(env, goldEnv = env) {
   kap.map.repeat.set(1.5, 1.5); kap.bump.repeat.set(3, 3);
   const layers = [];
   for (let i = 0; i < 5; i++) {
-    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#eadcf0' : i === 4 ? '#dcb9d8' : '#d9c3dc', map: kap.map, bumpMap: kap.bump, bumpScale: 0.35, metalness: 0.45, roughness: 0.3 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 2.2 });
+    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#d8bfe2' : i === 4 ? '#cfa6cc' : '#cdb2d4', map: kap.map, bumpMap: kap.bump, bumpScale: 0.9, metalness: 0.62, roughness: 0.3 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 2.6 });
     const L = new THREE.Mesh(layerGeo(i), m); L.receiveShadow = true; L.castShadow = i === 0;
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.map(([x, z]) => V3(x, -(0.12 + i * 0.1), z))), new THREE.LineBasicMaterial({ color: new THREE.Color('#f1e6f4').multiplyScalar(0.8), transparent: true, opacity: 0.8 }));
     L.add(edge);
@@ -622,7 +622,7 @@ export function buildWebb(env, goldEnv = env) {
 // the differential bar across the deck, six machined wheels with curved spokes and chevron grousers
 export function buildRover() {
   const g = new THREE.Group();
-  const seams = hullSeams(41); seams.repeat.set(2, 1);
+  const seams = hullSeams(41); seams.repeat.set(0.5, 0.5);
   const white = new THREE.MeshStandardMaterial({ color: '#d6cebf', map: seams, roughness: 0.6, metalness: 0.08 });
   const grey = new THREE.MeshStandardMaterial({ color: '#8a8c90', roughness: 0.4, metalness: 0.7 });
   const dark = new THREE.MeshStandardMaterial({ color: '#27282b', roughness: 0.5, metalness: 0.5 });
@@ -668,7 +668,8 @@ export function buildRover() {
   const treadC = mkCanvas(256, 64), tg = treadC.getContext('2d');
   tg.fillStyle = '#9a9b9e'; tg.fillRect(0, 0, 256, 64); tg.strokeStyle = '#4a4b4e'; tg.lineWidth = 3;
   for (let i = 0; i < 48; i++) { const x = i * 256 / 48; tg.beginPath(); tg.moveTo(x, 0); tg.lineTo(x + 6, 32); tg.lineTo(x, 64); tg.stroke(); }
-  const wheelM = new THREE.MeshStandardMaterial({ map: toTexture(treadC), roughness: 0.45, metalness: 0.75, bumpMap: toTexture(treadC, { srgb: false }), bumpScale: 2 });
+  const wheelM = new THREE.MeshStandardMaterial({ map: toTexture(treadC), roughness: 0.45, metalness: 0.75, bumpMap: toTexture(treadC, { srgb: false }), bumpScale: 2, side: THREE.DoubleSide });
+  const hubM = dark.clone(); hubM.side = THREE.DoubleSide;
   const spokeParts = [];
   for (let k = 0; k < 6; k++) {
     const a0 = k / 6 * TAU, pts = [];
@@ -683,7 +684,7 @@ export function buildRover() {
   const wheels = [];
   for (const sx of [-1, 1]) for (const z of [1.05, 0.08, -0.92]) {
     const w = new THREE.Group(); w.position.set(sx * 1.2, 0.26, z); w.rotation.set(0, 0, -sx * Math.PI / 2); g.add(w);
-    add(wheelGeo, wheelM, [0, 0, 0], [0, 0, 0], w); add(spokeGeo, grey, [0, 0, 0], [0, 0, 0], w); add(innerGeo, dark, [0, 0, 0], [0, 0, 0], w);
+    add(wheelGeo, wheelM, [0, 0, 0], [0, 0, 0], w); add(spokeGeo, grey, [0, 0, 0], [0, 0, 0], w); add(innerGeo, hubM, [0, 0, 0], [0, 0, 0], w);
     wheels.push(w);
     add(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 12), dark, [0, -0.2, 0], [0, 0, 0], w);
   }
