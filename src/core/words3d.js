@@ -24,13 +24,7 @@ const WORDS = {
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
 // 'invert' flips contrast for bright plates — dark lacquered letters over a light halo.
-export const LAYOUT = {
-  classical: { align: 'left' }, civic: { align: 'center' }, renaissance: { align: 'right', invert: true },
-  science: { align: 'left' }, industrial: { align: 'center' }, electricity: { align: 'right' },
-  medicine: { align: 'center', invert: true }, flight: { align: 'left', invert: true }, moonshot: { align: 'center' },
-  computing: { align: 'right' }, knowledge: { align: 'left', invert: true }, frontier: { align: 'center' },
-  montage: { align: 'center' },
-};
+export const LAYOUT = {};   // every heading is centred and gold (user direction); kept as a hook for per-chapter layout
 const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'], ['mAtoms', 'ATOMS'], ['mCircuit', 'CIRCUITS'], ['mStars', 'STARS']];
 
 // Material per era: satin gold → bronze → brushed steel → satin chrome.
@@ -130,8 +124,8 @@ export class Words3D {
     // contrast backing: a soft, near-opaque dark glow behind gold letters (bright scene plates
     // are HDR, so only a nearly solid core keeps the word legible) — or a warm light halo behind
     // inverted dark letters
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(glyphs.width + 2.2, capH * 3.2), new THREE.ShaderMaterial({
-      uniforms: { uO: { value: 0 }, uCol: { value: new THREE.Color(invert ? '#f3ead9' : '#000000') }, uA: { value: invert ? 0.9 : 0.93 } },
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(glyphs.width + 2.8, capH * 3.6), new THREE.ShaderMaterial({
+      uniforms: { uO: { value: 0 }, uCol: { value: new THREE.Color(invert ? '#f3ead9' : '#000000') }, uA: { value: invert ? 0.9 : 0.97 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `uniform float uO, uA; uniform vec3 uCol; varying vec2 vUv;
         void main(){ vec2 d = (vUv - 0.5) * 2.0; float r = length(d * vec2(1.0, 1.0)); float e = pow(max(abs(d.x), 0.0), 6.0);

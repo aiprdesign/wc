@@ -59,7 +59,7 @@ const INTERLUDES = [
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
 // 60-30-10: the signature accent (10%) for every graphic element; reading text stays neutral.
-const ACCENT = new THREE.Color('#f0b445');
+const ACCENT = new THREE.Color('#d8d2c6');   // gold is reserved for the 3D headings; supporting graphics stay neutral
 const INK = new THREE.Color('#efe8dc');
 
 // Small text that can change every frame (timecode, counters); redraws only when the string changes.
