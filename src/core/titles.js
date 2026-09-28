@@ -84,6 +84,38 @@ class LiveText extends THREE.Mesh {
   }
 }
 
+// A line of text split into words, each its own plane, so words can rise in one after another.
+class WordLine extends THREE.Group {
+  constructor(text, { height = 0.05, font = FONTS.serif, italic = true, weight = 500, color = '#fff', intensity = 1 } = {}) {
+    super();
+    const size = 160, k = height / size;
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px "${font}"`;
+    const space = ctx.measureText(' ').width * k;
+    const parts = text.split(' ');
+    const widths = parts.map((w) => ctx.measureText(w).width * k);
+    this.width = widths.reduce((a, b) => a + b, 0) + space * (parts.length - 1);
+    let x = -this.width / 2;
+    this.words = parts.map((w, i) => {
+      const plane = new TextPlane(w, { font, italic, weight, height, size, color, intensity, padding: 0.12 });
+      plane.material.depthTest = false;
+      const base = x + widths[i] / 2;
+      plane.position.x = base;
+      x += widths[i] + space;
+      this.add(plane);
+      return { plane, base, i };
+    });
+  }
+}
+
+// Era strings with numbers that count up into place ("1543 — 1704").
+function countUp(str, p) {
+  return str.replace(/\d+/g, (m) => {
+    const v = +m, from = Math.max(0, Math.round(v * 0.86));
+    return String(Math.round(from + (v - from) * p));
+  });
+}
+
 const tc = (T) => { const s = Math.floor(T), f = Math.floor((T - s) * 30); return `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}:${String(f).padStart(2, '0')}`; };
 
 export class TitleLayer {
@@ -257,15 +289,17 @@ export class TitleLayer {
     g.position.y = this.y;
     g.scale.setScalar(this.scale);
     const color = new THREE.Color().copy(WARM).lerp(COOL, sat((1 - warmthAt(seg.start + 1)) / 2));
-    const era = new TextPlane(`${c.n}   ·   ${c.era}`, { font: FONTS.mono, weight: 400, height: 0.034, letterSpacing: 0.42, color, intensity: 1.1 });
-    era.position.y = 0.06;
-    const heading = new KineticText(c.heading, { font: FONTS.display, weight: 600, height: 0.092, letterSpacing: 0.2, color, intensity: 1.35 });
-    const half = Math.min(0.9, heading.letters.length * 0.05 + 0.25);
+    // era line: mono, widely tracked, numbers count up (drawn live)
+    const era = new LiveText({ height: 0.034, chars: 40, align: 'center', spacing: 0.42 });
+    era.position.y = 0.062;
+    const eraText = `${c.n}   ·   ${c.era}`;
+    // story: italic serif, word by word
+    const story = new WordLine(c.story, { height: 0.056, color, intensity: 1.05 });
+    story.position.y = -0.032;
+    const half = Math.min(1.05, story.width / 2 + 0.06);
     const ruleL = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
     const ruleR = progressLine([new THREE.Vector3(0, 0, 0), new THREE.Vector3(half, 0, 0)], { color, intensity: 1.2, head: 0.1 });
     ruleL.position.y = ruleR.position.y = 0.022;
-    const story = new TextPlane(c.story, { font: FONTS.serif, italic: true, weight: 500, height: 0.052, color, intensity: 1.05 });
-    story.position.y = -0.03;
     // soft scrim so type reads over bright plates
     const scrim = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), new THREE.ShaderMaterial({
       uniforms: { uO: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false,
@@ -274,12 +308,11 @@ export class TitleLayer {
     }));
     scrim.renderOrder = -1;
     g.add(scrim, era, ruleL, ruleR, story);   // the chapter word itself is 3D, in the scene (words3d.js)
-    [era, story, ...heading.letters.map((l) => l.mesh)].forEach((m) => { m.material.depthTest = false; });
     this.scene.add(g);
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
     const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
-    return { g, era, heading, ruleL, ruleR, story, scrim, t0, t1 };
+    return { g, era, eraText, color, ruleL, ruleR, story, scrim, t0, t1 };
   }
 
   makeInterlude(d) {
@@ -304,34 +337,29 @@ export class TitleLayer {
     let any = this.updateReel(T);
     any = this.updateWords(T) || any;
     for (const c of this.cards) {
-      const on = T > c.t0 - 0.05 && T < c.t1 + 0.7;
+      const on = T > c.t0 - 0.05 && T < c.t1 + 0.75;
       c.g.visible = on;
       if (!on) continue;
       any = true;
-      const t = T - c.t0, out = ramp(T, c.t1 - 0.1, c.t1 + 0.55, ease.inCubic);
-      const life = T - c.t0, span = c.t1 - c.t0;
+      const t = T - c.t0, to = T - (c.t1 - 0.1);            // time into the entrance / the exit
+      const out = ramp(to, 0, 0.6, ease.inOutCubic);
       c.scrim.material.uniforms.uO.value = ramp(t, 0, 0.5) * (1 - out);
-      // era line: tracking reveal
-      c.era.reveal = ramp(t, 0.0, 0.45, ease.outCubic);
-      c.era.opacity = ramp(t, 0, 0.2) * (1 - out) * 0.85;
-      // rule draws outward from the centre, retracts on exit
-      const rp = ramp(t, 0.1, 0.65, ease.outExpo) * (1 - ramp(T, c.t1 - 0.2, c.t1 + 0.4, ease.inOutCubic));
+      // rule: shoots out from the centre, retracts to it on exit
+      const rp = ramp(t, 0.0, 0.55, ease.outExpo) * (1 - ramp(to, 0.15, 0.6, ease.inOutCubic));
       c.ruleL.progress = c.ruleR.progress = Math.max(0.0001, rp);
-      c.ruleL.opacity = c.ruleR.opacity = rp > 0.001 ? 0.9 : 0;
-      // heading: letters rise into place from the centre outwards, then a slow tracking push
-      const n = c.heading.letters.length;
-      const push = 1 + 0.035 * sat(life / span);
-      c.heading.letters.forEach((l, i) => {
-        const fromC = Math.abs(i - (n - 1) / 2) / Math.max(1, n / 2);
-        const k = ramp(t, 0.12 + fromC * 0.28, 0.62 + fromC * 0.28, ease.outCubic);
-        const ko = ramp(T, c.t1 - 0.15 + fromC * 0.2, c.t1 + 0.3 + fromC * 0.2, ease.inCubic);
-        l.mesh.position.set(l.base.x * push, l.base.y + (1 - k) * -0.05 + ko * 0.05, 0);
-        l.mesh.opacity = k * (1 - ko);
-        l.mesh.intensity = 1.35 + (1 - k) * 2.5 * (k > 0 ? 1 : 0);
+      c.ruleL.opacity = c.ruleR.opacity = rp > 0.001 ? 0.85 : 0;
+      // era: drops onto the rule, numbers count up, then lifts away
+      const eIn = ramp(t, 0.1, 0.55, ease.outCubic), eOut = ramp(to, 0.05, 0.4, ease.inCubic);
+      c.era.position.y = 0.062 + (1 - eIn) * 0.02 + eOut * 0.02;
+      c.era.set(countUp(c.eraText, ramp(t, 0.1, 0.95, ease.outCubic)), c.color, 0.85 * eIn * (1 - eOut), 1.1);
+      // story: words rise in one after another, leave in the same order
+      c.story.words.forEach((w) => {
+        const kin = ramp(t, 0.35 + w.i * 0.055, 0.85 + w.i * 0.055, ease.outCubic);
+        const kout = ramp(to, w.i * 0.025, 0.3 + w.i * 0.025, ease.inCubic);
+        w.plane.position.y = (1 - kin) * -0.028 + kout * 0.022;
+        w.plane.opacity = kin * (1 - kout) * 0.94;
+        w.plane.intensity = 1.05 + (1 - kin) * 1.2 * (kin > 0 ? 1 : 0);
       });
-      // story line wipes in after the heading
-      c.story.reveal = ramp(t, 0.6, 1.35, ease.inOutSine);
-      c.story.opacity = ramp(t, 0.6, 0.8) * (1 - out) * 0.92;
     }
     for (const d of this.interludes) {
       const on = T > d.t0 && T < d.t1;

@@ -92,13 +92,15 @@ export class Words3D {
       mesh.castShadow = true;
       pivot.add(mesh);
       group.add(pivot);
-      return { pivot, mesh, mat, i };
+      return { pivot, mesh, mat, i, x: g.x };
     });
     // glowing plinth line under the word
     const half = glyphs.width / 2 + 0.25;
-    const plinth = progressLine([new THREE.Vector3(-half, 0, 0.2), new THREE.Vector3(half, 0, 0.2)], { color: era.light, intensity: 2.2, head: 0.08 });
-    plinth.position.y = -capH / 2 - 0.12;
-    group.add(plinth);
+    const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 2.2, head: 0.08 });
+    const plinthR = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(half, 0, 0.2)], { color: era.light, intensity: 2.2, head: 0.08 });
+    plinthL.position.y = plinthR.position.y = -capH / 2 - 0.12;
+    group.add(plinthL, plinthR);
+    const plinth = [plinthL, plinthR];
     // a real light that rides the sweep and spills onto the scene around the word
     // (swap words in the montage skip it — six extra lights in one scene would cost too much)
     const light = swap ? { intensity: 0, position: new THREE.Vector3() } : new THREE.PointLight(era.light, 0, 0, 2);
@@ -126,7 +128,7 @@ export class Words3D {
     const [pos, camPos, fwd] = this._v, [quat, camQuat] = this._q;
     for (const it of this.items) {
       if (it.inst !== inst) continue;
-      const on = T > it.t0 && T < it.t1 + (it.swap ? 0.06 : 0.5);
+      const on = T > it.t0 && T < it.t1 + (it.swap ? 0.12 : 0.5);
       it.group.visible = on;
       it.light.intensity = 0;
       if (!on) continue;
@@ -134,14 +136,17 @@ export class Words3D {
       cam.updateMatrixWorld();
       const t = T - it.t0, span = it.t1 - it.t0, drift = sat(t / Math.max(0.1, span));
       // size: the word spans ~62% of the visible width (square) / ~48% (anamorphic); capped in height
-      const H = 2 * it.d * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
-      const visW = H * FILM_ASPECT * (OUTPUT_ASPECT < FILM_ASPECT ? Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.85) * OUTPUT_ASPECT / FILM_ASPECT : 1);
-      const k = Math.min((visW * (OUTPUT_ASPECT < 1.9 ? 0.62 : 0.48)) / it.width, H * 0.165);
+      // frame size at the word's distance, using the lens actually rendered (open matte widens it)
+      const matte = OUTPUT_ASPECT < FILM_ASPECT ? Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.85) : 1;
+      const H = 2 * it.d * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * matte;
+      const visW = H * OUTPUT_ASPECT;
+      // word spans ~64% (square) / ~46% (anamorphic) of the width; cap height ≤ 12% of the frame
+      const k = Math.min((visW * (OUTPUT_ASPECT < 1.9 ? 0.64 : 0.46)) / it.width, (H * 0.12) / 0.7);
       // place: world-locked at the lock pose, blended 65% towards the live camera so it stays framed
       cam.matrixWorld.decompose(camPos, camQuat, fwd);
-      pos.copy(it.lockPos).lerp(camPos, 0.65);
-      quat.copy(it.lockQuat).slerp(camQuat, 0.65);
-      fwd.set(0, 0.02 * H, -it.d * (1 - 0.07 * ease.inOutSine(drift))).applyQuaternion(quat);   // slow dolly-in
+      pos.copy(it.lockPos).lerp(camPos, 0.8);
+      quat.copy(it.lockQuat).slerp(camQuat, 0.8);
+      fwd.set(0, 0.0, -it.d * (1 - 0.07 * ease.inOutSine(drift))).applyQuaternion(quat);   // slow dolly-in
       it.group.position.copy(pos).add(fwd);
       it.group.quaternion.copy(quat);
       it.group.rotateY(lerp(0.16, -0.08, ease.inOutSine(drift)));   // three-quarter turn reveals the extrusion
@@ -151,31 +156,34 @@ export class Words3D {
       it.shared.uWordInv.value.copy(it.group.matrixWorld).invert();
 
       const n = it.letters.length;
-      const inDur = it.swap ? 0.3 : 0.7, st = it.swap ? 0.022 : 0.075;
-      const outStart = it.t1 - (it.swap ? 0.05 : 0.15);
-      const outDur = it.swap ? 0.14 : 0.42;
-      const fade = sat(t / 0.1) * (1 - (it.swap ? ramp(T, outStart, it.t1 + 0.05) : ramp(T, outStart + 0.2, it.t1 + 0.5)));
+      const inDur = it.swap ? 0.32 : 0.75, st = it.swap ? 0.022 : 0.07;
+      const outStart = it.t1 - (it.swap ? 0.06 : 0.2);
+      const outDur = it.swap ? 0.16 : 0.45;
+      const fade = sat(t / 0.1);
       it.letters.forEach((l) => {
         const u = sat((t - l.i * st) / inDur);
-        const kin = ease.outBack(u);
-        const kout = ease.inCubic(sat((T - outStart - l.i * st * 0.45) / outDur));
-        // rise from lying flat (hinged at the baseline), overshoot, settle; exit falls back like dominoes
-        l.pivot.rotation.x = (1 - kin) * -Math.PI / 2 + kout * (Math.PI / 2.1);
-        l.pivot.position.z = (1 - ease.outCubic(u)) * 0.5 - kout * 0.2;
-        l.mesh.scale.setScalar(0.85 + 0.15 * ease.outCubic(u));
+        const kin = ease.outBack(u), kc = ease.outCubic(u);
+        const kout = ease.inCubic(sat((T - outStart - l.i * st * 0.4) / outDur));
+        // ENTRANCE: hinge up from lying flat while the tracking tightens from wide to set
+        // EXIT: lift, tip back a touch and spread apart as they dissolve (first in, first out)
+        l.pivot.position.x = l.x * (1 + 0.45 * (1 - kc) + 0.22 * kout);
+        l.pivot.position.z = (1 - kc) * 0.45 + kout * 0.25;
+        l.pivot.rotation.x = (1 - kin) * -Math.PI / 2 - kout * 0.35;
+        l.mesh.position.y = l.mesh.position.y * 0 + (l.mesh.userData.h ?? (l.mesh.userData.h = l.mesh.position.y)) + kout * 0.3;
+        l.mesh.scale.setScalar(0.86 + 0.14 * kc);
         // landing flash: a quick pulse as each letter reaches upright
         const land = t - l.i * st - inDur * 0.62;
         l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.9 : 0;
-        l.mat.opacity = fade * sat(u * 3);
+        l.mat.opacity = fade * sat(u * 3) * (1 - kout);
       });
       // light sweep crosses the word once, after the letters stand
       const sweepP = ramp(t, inDur + n * st * 0.6, inDur + n * st * 0.6 + (it.swap ? 0.4 : 1.1), ease.inOutSine);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
       it.light.position.x = it.shared.uSweep.value;
       it.light.intensity = Math.sin(Math.PI * sweepP) * 6 * k * k * fade;
-      // plinth line draws out from the centre as the letters rise
-      it.plinth.progress = Math.max(0.0001, ramp(t, 0.1, inDur + n * st, ease.outExpo) * (1 - ramp(T, outStart, outStart + outDur)));
-      it.plinth.opacity = 0.8 * fade;
+      // plinth shoots out from the centre with the letters, retracts into it as they leave
+      const pp = Math.max(0.0001, ramp(t, 0.05, inDur + n * st * 0.8, ease.outExpo) * (1 - ramp(T, outStart - 0.05, outStart + outDur * 0.8, ease.inOutCubic)));
+      it.plinth.forEach((p) => { p.progress = pp; p.opacity = 0.8 * fade; });
       // rack focus onto the lettering while it is up
       if (inst.dof) {
         const w = sat(t / 0.3) * (1 - sat((T - outStart) / 0.35));
