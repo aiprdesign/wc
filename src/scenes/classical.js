@@ -55,7 +55,9 @@ function columnGeometry(detail = 1) {
   for (let i = 0; i <= 12; i++) { const u = i / 12; echProfile.push(new THREE.Vector2(R * (0.82 + 0.5 * Math.pow(u, 0.7)), 5.52 + u * 0.26)); }
   const echinus = new THREE.LatheGeometry(echProfile, 64);
   const abacus = new THREE.BoxGeometry(R * 2.8, 0.2, R * 2.8); abacus.translate(0, 5.9, 0);
-  const parts = [shaft, plinth, torus, ring, neck, echinus, abacus].map((g) => {
+  // annulets: the three fine rings where the shaft meets the echinus
+  const annulets = [5.53, 5.555, 5.58].map((y, i) => { const a = new THREE.TorusGeometry(R * (0.835 + i * 0.03), 0.009, 6, 64); a.rotateX(Math.PI / 2); a.translate(0, y, 0); return a; });
+  const parts = [shaft, plinth, torus, ring, neck, echinus, abacus, ...annulets].map((g) => {
     const n = g.toNonIndexed();
     n.deleteAttribute('uv');
     return n;
@@ -219,6 +221,89 @@ export function create(ctx, segment) {
   const tymp = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-7.1, 0.12), new THREE.Vector2(7.1, 0.12), new THREE.Vector2(0, 1.66)])), withBuild(new THREE.MeshStandardMaterial({ color: '#6d665d', roughness: 0.8 })));
   tymp.position.set(0, 7.48, 6.26);
   temple.add(tymp);
+  // (the same recess on the rear pediment, so the temple is finished all the way round)
+  const tympBack = new THREE.Mesh(tymp.geometry, tymp.material);
+  tympBack.position.set(0, 7.48, -6.26); tympBack.rotation.y = Math.PI;
+  temple.add(tympBack);
+
+  // ---- finishing detail: tiled roof, raking cornices, side triglyphs, mutules, antefixes, acroteria
+  const roofMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 9 }), color: '#cdbfa9', roughness: 0.55, clearcoat: 0.1 }), '#ffc680');
+  {
+    // corrugated marble tiling on both slopes: cover-tile ridges across z, stepped courses up the slope
+    const RISE = 1.95, RUN = 7.95, th = Math.atan2(RISE, RUN), slopeLen = Math.hypot(RISE, RUN) + 0.2;
+    const TILE = 0.39, NZ = 34 * 6, COURSES = 13, NU = COURSES * 3, Z0 = -6.4, ZL = 12.8;
+    const parts = [];
+    for (const sgn of [-1, 1]) {
+      const g = new THREE.PlaneGeometry(1, 1, NZ, NU);
+      const p = g.attributes.position, uv = g.attributes.uv;
+      const nx = sgn * Math.sin(th), ny = Math.cos(th);
+      for (let i = 0; i < p.count; i++) {
+        const v = p.getX(i) + 0.5, u = p.getY(i) + 0.5;               // v along z, u from eave (0) to ridge (1)
+        const z = Z0 + v * ZL;
+        const d = u * slopeLen - 0.2;                                  // distance up the slope from the eave line
+        const c = Math.cos((z / TILE) * Math.PI * 2);
+        const ridge = Math.pow(Math.max(0, c), 3) * 0.075;
+        const course = (1 - ((u * COURSES) % 1)) * 0.022;               // each course laps over the next
+        const off = 0.035 + ridge + course;
+        const x = sgn * (RUN - d * Math.cos(th)), y = 7.48 + d * Math.sin(th);
+        p.setXYZ(i, x + nx * off, y + ny * off, z);
+        uv.setXY(i, v * 3, u * 0.7);
+      }
+      if (sgn > 0) g.index.array.reverse();                            // keep the faces pointing outward
+      g.computeVertexNormals();
+      parts.push(g);
+    }
+    const roof = new THREE.Mesh(mergeGeometries(parts), roofMat);
+    roof.castShadow = roof.receiveShadow = true;
+    temple.add(roof);
+    // ridge cap
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 12.8, 10), roofMat);
+    cap.rotation.x = Math.PI / 2; cap.position.set(0, 9.5, 0); temple.add(cap);
+    // raking cornices framing both pediments
+    for (const z of [6.28, -6.28]) for (const sgn of [-1, 1]) {
+      const len = Math.hypot(RISE, RUN) + 0.25;
+      const rc = new THREE.Mesh(new THREE.BoxGeometry(len, 0.2, 0.34), stoneMat);
+      rc.position.set(sgn * RUN / 2, 7.48 + RISE / 2 + 0.08, z);
+      rc.rotation.z = -sgn * th; rc.castShadow = true; temple.add(rc);
+    }
+    // antefixes along both eaves (one per cover-tile row) and acroteria on the apex and corners
+    const palm = new THREE.Shape();
+    palm.moveTo(-0.11, 0);
+    for (let i = 0; i <= 8; i++) { const a = Math.PI * (0.92 - i * 0.105), r = i % 2 ? 0.2 : 0.27; palm.lineTo(Math.cos(a) * r, 0.05 + Math.sin(a) * r); }
+    palm.lineTo(0.11, 0); palm.closePath();
+    const palmGeo = new THREE.ExtrudeGeometry(palm, { depth: 0.04, bevelEnabled: false }); palmGeo.translate(0, 0, -0.02);
+    const nAnte = Math.floor(ZL / TILE);
+    const ante = new THREE.InstancedMesh(palmGeo, stoneMat, nAnte * 2);
+    let ai = 0;
+    for (const sgn of [-1, 1]) for (let k = 0; k < nAnte; k++) {
+      const z = Z0 + (k + 0.5) * TILE + 0.0;
+      m4.makeRotationY(sgn * Math.PI / 2).setPosition(sgn * (RUN + 0.12), 7.5, z);
+      ante.setMatrixAt(ai++, m4);
+    }
+    ante.castShadow = true; temple.add(ante);
+    const acroGeo = palmGeo.clone(); acroGeo.scale(2.6, 2.6, 2.2);
+    for (const z of [6.28, -6.28]) {
+      const apex = new THREE.Mesh(acroGeo, stoneMat); apex.position.set(0, 9.55, z); temple.add(apex);
+      for (const sgn of [-1, 1]) { const a = new THREE.Mesh(acroGeo, stoneMat); a.scale.setScalar(0.7); a.position.set(sgn * (RUN + 0.05), 7.62, z); temple.add(a); }
+    }
+  }
+  // triglyphs down the long sides + mutules under the cornice soffit all round
+  {
+    const sideTri = new THREE.InstancedMesh(tri.geometry, stoneMat, 26);
+    let k = 0;
+    for (let i = 0; i < 13; i++) {
+      const z = -5.6 + i * (11.2 / 12);
+      for (const x of [7.69, -7.69]) { m4.makeRotationY(Math.PI / 2).setPosition(x, 6.93, z); sideTri.setMatrixAt(k++, m4); }
+    }
+    sideTri.castShadow = true; temple.add(sideTri);
+    const mutG = new THREE.BoxGeometry(0.34, 0.05, 0.3);
+    const mut = new THREE.InstancedMesh(mutG, stoneMat, 32 + 30 + 26);
+    let mi = 0;
+    for (let i = 0; i < 31; i++) { const x = -7.4 + i * (14.8 / 30); for (const z of [6.08, -6.08]) { if (mi >= 62) break; m4.makeTranslation(x, 7.215, z); mut.setMatrixAt(mi++, m4); } }
+    for (let i = 0; i < 13; i++) { const z = -5.6 + i * (11.2 / 12); for (const x of [7.8, -7.8]) { m4.makeRotationY(Math.PI / 2).setPosition(x, 7.215, z); mut.setMatrixAt(mi++, m4); } }
+    mut.count = mi; temple.add(mut);
+  }
+
   const cella = new THREE.Mesh(new THREE.BoxGeometry(9.5, 6, 7.4), withBuild(new THREE.MeshStandardMaterial({ color: '#3b342d', roughness: 0.9 })));
   cella.position.set(0, 3, -0.6);
   cella.receiveShadow = true;
@@ -411,7 +496,8 @@ export function create(ctx, segment) {
 
     // --- the rest of the temple materialises from the ground up when the lights come on
     const templeY = lerp(-1.3, 10, ramp(t, tLit - 0.1, tOver + 0.2, ease.inOutSine));
-    for (const m of [marbleMat, stoneMat, cella.material, tymp.material]) m.userData.build.uBuild.value = templeY;
+    for (const m of [marbleMat, stoneMat, roofMat, cella.material, tymp.material]) m.userData.build.uBuild.value = templeY;
+    lastTempleY = templeY;
     templeCols.visible = temple.visible = templeY > -1.25;
     cellaDoor.visible = templeY > 2;
 
@@ -487,6 +573,16 @@ export function create(ctx, segment) {
     api.exposure = lerp(1.0, 1.1, lit);
   }
 
-  const api = { scene, camera, hud, update, dof, bloom, exposure: 1 };
+  // Explore 3D: while the lone column is still being modelled it would float a metre above the ground —
+  // stand it on its (not yet dressed) crepidoma, which the build front raises in the film a moment later.
+  let lastTempleY = -2;
+  function explore() {
+    if (lastTempleY < 0.3) {
+      stoneMat.userData.build.uBuild.value = 0.3;                  // steps only: every other stone part starts above y = 6
+      temple.visible = true;
+      templeCols.visible = false;
+    }
+  }
+  const api = { scene, camera, hud, update, explore, dof, bloom, exposure: 1, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 3.0 } };
   return api;
 }

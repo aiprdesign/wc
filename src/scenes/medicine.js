@@ -6,6 +6,7 @@
 // wrapped in a holographic HUD (ring gauges, beat-locked ECG, MRI-style scan slice and
 // rapid-fire callouts: anatomy → sanitation → vaccination → imaging → medical technology).
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../timeline.js';
 import { sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
@@ -309,10 +310,12 @@ export function create(ctx, segment) {
   const BP = 132, HR = 0.42, RISE = 0.155;
   const dna = new THREE.Group(); dna.position.set(0.4, -1.05, -14); dna.rotation.set(0.0, Math.PI / 2 + 0.25, 0.12); dna.scale.setScalar(1.3); micro.add(dna);
   const dnaSpin = new THREE.Group(); dnaSpin.position.z = BP * RISE / 2 - 1.5; dna.add(dnaSpin);
-  const nucGeo = new THREE.IcosahedronGeometry(0.085, 2);
+  const nucGeo = new THREE.IcosahedronGeometry(0.085, 3);
   const dnaMat = new THREE.MeshPhysicalMaterial({ color: '#cfe9e6', roughness: 0.25, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, sheen: 0.5, sheenColor: new THREE.Color('#9ff0e2'), envMapIntensity: 0.6 });
   const backbone = new THREE.InstancedMesh(nucGeo, dnaMat, BP * 2);
-  const bondGeo = new THREE.CylinderGeometry(0.032, 0.032, 1, 10, 1); bondGeo.rotateZ(Math.PI / 2); bondGeo.translate(0.5, 0, 0);
+  // base pairs as flat, stacked slabs (thin along the helix axis) with a hairline hydrogen-bond gap in the
+  // middle — reads as real stacked bases instead of thin rungs
+  const bondGeo = new RoundedBoxGeometry(1, 0.1, 0.042, 2, 0.014); bondGeo.translate(0.5, 0, 0);
   const bondMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.3, clearcoat: 0.8, emissive: new THREE.Color('#081818') });
   const bonds = new THREE.InstancedMesh(bondGeo, bondMat, BP * 2);
   const baseCols = [new THREE.Color('#7fe0cf'), new THREE.Color(CORAL), new THREE.Color('#f4d9a6'), new THREE.Color('#a9c9ff')];
@@ -330,7 +333,7 @@ export function create(ctx, segment) {
       const from = s === 0 ? A : B;
       v2.copy(mid).sub(from).normalize();
       q.setFromUnitVectors(new THREE.Vector3(1, 0, 0), v2);
-      m4.compose(from, q, sc.set(len, 1, 1));
+      m4.compose(from, q, sc.set(len * 0.93, 1, 1));
       bonds.setMatrixAt(i * 2 + s, m4);
       const k = Math.floor(R() * 4);
       bonds.setColorAt(i * 2 + s, baseCols[s === 0 ? k : 3 - k]);
@@ -338,7 +341,7 @@ export function create(ctx, segment) {
   }
   dnaSpin.add(backbone, bonds);
   for (const pts of [strandA, strandB]) {
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), BP * 4, 0.035, 6, false), dnaMat);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), BP * 5, 0.046, 10, false), dnaMat);
     dnaSpin.add(tube);
   }
   // Red blood cells — smooth biconcave discs, soft coral.
@@ -508,6 +511,9 @@ export function create(ctx, segment) {
     bloom: { strength: 0.75 },
     exposure: 1.0,
     background: 0x010608,
+    // explore: the micro world and the anatomy stage are finite islands in the dark — keep the pull-back
+    // short enough that they stay the subject instead of a speck
+    exploreLimits: { zoomOut: 2.2, fly: 1.8 },
     update(t, info) {
       const T = info.T;
       const beat = pulse(T, { decay: 10 }), beat2 = pulse(T, { decay: 12, offset: 0.13 });

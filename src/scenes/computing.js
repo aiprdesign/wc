@@ -177,6 +177,26 @@ export function create(ctx, segment) {
   for (const x of [-0.9, 0.9]) for (const z of [-0.28, 0.28]) addFrame(new THREE.CylinderGeometry(0.025, 0.025, 1.38, 16), brass, x, 0.73, z);
   for (let c = 0; c < 3; c++) addFrame(new THREE.CylinderGeometry(0.018, 0.018, 1.4, 12), steelM, (c - 1) * 0.62, 0.73, 0);
   for (const x of [-0.31, 0.31]) addFrame(new THREE.CylinderGeometry(0.012, 0.012, 1.3, 10), steelM, x, 0.73, 0.19);
+  // Babbage-style dressing: cast-iron end frames with arched openings, turned finials, a crank with its
+  // bevel drive at the right end, bearing blocks on the plates, and a moulded plinth rim
+  {
+    const castIron = new THREE.MeshStandardMaterial({ color: '#23262b', metalness: 0.85, roughness: 0.55 });
+    const endShape = new THREE.Shape([new THREE.Vector2(-0.33, 0), new THREE.Vector2(0.33, 0), new THREE.Vector2(0.33, 1.4), new THREE.Vector2(-0.33, 1.4)]);
+    const arch = new THREE.Path(); arch.moveTo(-0.2, 0.12); arch.lineTo(0.2, 0.12); arch.lineTo(0.2, 1.0); arch.absarc(0, 1.0, 0.2, 0, Math.PI, false); arch.lineTo(-0.2, 0.12); endShape.holes.push(arch);
+    const endGeo = new THREE.ExtrudeGeometry(endShape, { depth: 0.03, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 1 });
+    endGeo.rotateY(Math.PI / 2); endGeo.translate(-0.015, 0.035, 0);
+    for (const x of [-0.965, 0.965]) addFrame(endGeo, castIron, x, 0, 0);
+    const finG = new THREE.LatheGeometry([[0.001, 0], [0.035, 0], [0.035, 0.015], [0.022, 0.03], [0.03, 0.06], [0.012, 0.09], [0.018, 0.1], [0.001, 0.12]].map(([r, y]) => new THREE.Vector2(r, y)), 20);
+    for (const x of [-0.9, 0.9]) for (const z of [-0.28, 0.28]) addFrame(finG, brass, x, 1.455, z);
+    const bearing = new THREE.BoxGeometry(0.09, 0.05, 0.12);
+    for (let c = 0; c < 3; c++) { addFrame(bearing, brass, (c - 1) * 0.62, 1.48, 0); addFrame(bearing, brass, (c - 1) * 0.62, 0.095, 0); }
+    addFrame(new THREE.BoxGeometry(1.98, 0.02, 0.72), brass, 0, 0.005, 0);
+    const axle = addFrame(new THREE.CylinderGeometry(0.016, 0.016, 0.34, 12), steelM, 1.08, 1.2, 0); axle.rotation.z = Math.PI / 2;
+    const bevel = addFrame(new THREE.CylinderGeometry(0.07, 0.05, 0.035, 24), brass, 0.99, 1.2, 0); bevel.rotation.z = Math.PI / 2;
+    const crankArm = addFrame(new THREE.BoxGeometry(0.025, 0.22, 0.04), castIron, 1.25, 1.13, 0);
+    const grip = addFrame(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 12), new THREE.MeshStandardMaterial({ color: '#3a2414', roughness: 0.5 }), 1.28, 1.03, 0); grip.rotation.z = Math.PI / 2;
+    void crankArm;
+  }
   // wheel counters with carry (pure function of time)
   const wheelAngle = (c, r, t) => {
     const s = Math.max(0, t - 0.05) * 9 + c * 37 + 3;
@@ -193,6 +213,15 @@ export function create(ctx, segment) {
     { mesh: inst(new THREE.CylinderGeometry(0.058, 0.058, 0.16, 24), copperM, 18), L: local(-0.06, 0.115, 0) },
     { mesh: inst(new THREE.BoxGeometry(0.03, 0.2, 0.12), steelR, 18), L: local(0.035, 0.135, 0) },
     { mesh: inst(new THREE.BoxGeometry(0.02, 0.07, 0.05), steelR, 18), L: local(0.12, 0.07, 0) },
+    // bobbin flanges, the yoke's top plate, contact spring, and brass terminal screws on the base
+    { mesh: inst(new THREE.CylinderGeometry(0.068, 0.068, 0.012, 24), bakelite, 18), L: local(-0.06, 0.041, 0) },
+    { mesh: inst(new THREE.CylinderGeometry(0.068, 0.068, 0.012, 24), bakelite, 18), L: local(-0.06, 0.189, 0) },
+    { mesh: inst(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 16), steelR, 18), L: local(-0.06, 0.2, 0) },
+    { mesh: inst(new THREE.BoxGeometry(0.12, 0.012, 0.06), steelR, 18), L: local(-0.02, 0.233, 0) },
+    { mesh: inst(new THREE.BoxGeometry(0.006, 0.12, 0.04), goldM, 18), L: local(0.14, 0.12, 0) },
+    { mesh: inst(new THREE.CylinderGeometry(0.014, 0.014, 0.014, 12), brass, 18), L: local(-0.13, 0.042, 0.08) },
+    { mesh: inst(new THREE.CylinderGeometry(0.014, 0.014, 0.014, 12), brass, 18), L: local(-0.13, 0.042, -0.08) },
+    { mesh: inst(new THREE.CylinderGeometry(0.014, 0.014, 0.014, 12), brass, 18), L: local(0.13, 0.042, 0.08) },
   ];
   const armGeo = new THREE.BoxGeometry(0.17, 0.012, 0.1); armGeo.translate(-0.085, 0, 0);
   const armature = inst(armGeo, steelR, 18);
@@ -206,6 +235,13 @@ export function create(ctx, segment) {
     { mesh: inst(new THREE.CylinderGeometry(0.038, 0.038, 0.17, 16, 1, true), darkSteel, 24), L: local(0, 0.22, 0) },
     { mesh: inst(new THREE.CylinderGeometry(0.045, 0.045, 0.008, 16), steelM, 24), L: local(0, 0.38, 0) },
     { mesh: inst(new THREE.LatheGeometry(bulbProfile, 32), glassM, 24), L: local(0, 0, 0) },
+    // inside the envelope: two support rods, the lower mica, the silvered getter flash under the dome;
+    // outside: a brass band round the base
+    { mesh: inst(new THREE.CylinderGeometry(0.0035, 0.0035, 0.3, 6), steelM, 24), L: local(0.052, 0.23, 0) },
+    { mesh: inst(new THREE.CylinderGeometry(0.0035, 0.0035, 0.3, 6), steelM, 24), L: local(-0.052, 0.23, 0) },
+    { mesh: inst(new THREE.CylinderGeometry(0.058, 0.058, 0.006, 20), steelM, 24), L: local(0, 0.125, 0) },
+    { mesh: inst(new THREE.SphereGeometry(0.06, 20, 8, 0, TAU, 0, 0.9), new THREE.MeshStandardMaterial({ color: '#b8bcc4', metalness: 1, roughness: 0.12, transparent: true, opacity: 0.55, depthWrite: false }), 24), L: local(0, 0.36, 0, 0, 0, 0, 1, 0.9, 1) },
+    { mesh: inst(new THREE.CylinderGeometry(0.077, 0.077, 0.014, 24), brass, 24), L: local(0, 0.055, 0) },
   ];
   tubeParts[3].mesh.castShadow = false; tubeParts[3].mesh.renderOrder = 2;
   const filament = inst(new THREE.CylinderGeometry(0.007, 0.007, 0.13, 6), filM, 24); filament.castShadow = false;
@@ -242,6 +278,21 @@ export function create(ctx, segment) {
     pins.setMatrixAt(s * 20 + i, M);
   }
   chip.add(pins);
+  // decoupling capacitors and resistors around the lid, fiducials on the substrate corners
+  {
+    const cap = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.022, 0.028), new THREE.MeshStandardMaterial({ color: '#8a6a44', metalness: 0.2, roughness: 0.5 }), 24);
+    const ends = new THREE.InstancedMesh(new THREE.BoxGeometry(0.012, 0.024, 0.03), steelM, 48);
+    let ci = 0, ei = 0;
+    for (let s = 0; s < 4; s++) for (let i = 0; i < 6; i++) {
+      const t = -0.33 + i * 0.132, rot = s * Math.PI / 2, rr = 0.535;
+      const x = Math.sin(rot) * rr + Math.cos(rot) * t, z = Math.cos(rot) * rr - Math.sin(rot) * t;
+      qv.setFromAxisAngle(V3(0, 1, 0), rot + Math.PI / 2);
+      M.compose(V3(x, 0.071, z), qv, sv.set(1, 1, 1)); cap.setMatrixAt(ci++, M);
+      for (const e of [-1, 1]) { pv.set(e * 0.025, 0, 0).applyQuaternion(qv); M.compose(V3(x + pv.x, 0.072, z + pv.z), qv, sv.set(1, 1, 1)); ends.setMatrixAt(ei++, M); }
+    }
+    chip.add(cap, ends);
+    for (const [x, z] of [[-0.6, -0.6], [0.6, 0.6]]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.004, 16), goldM); f.position.set(x, 0.061, z); chip.add(f); }
+  }
   const chipGlow = glowSprite({ color: '#9cc8ff', intensity: 2, scale: 3 }); chipGlow.position.y = 0.2; chip.add(chipGlow);
 
   // ---- carried-over particles for each transformation
@@ -342,13 +393,21 @@ export function create(ctx, segment) {
   // per-element transition progress: a sweep across X
   const sweep = (t, t0, x, span = 2.4, len = 0.34) => ramp(t, t0 + ((x + span / 2) / span) * 0.22, t0 + ((x + span / 2) / span) * 0.22 + len, ease.inOutCubic);
 
+  let lastT = 0;
+  const LIM_BENCH = { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.8, zoomIn: 0.3, zoomOut: 2.3 };      // fog closes the bench beyond that
+  const LIM_DIE = { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.9, zoomOut: 2.5 };
+  const LIM_CARDS = { yaw: 0.75, pitchDown: 0.3, pitchUp: 0.45, zoomIn: 0.4, zoomOut: 1.8, fly: 1.0 };   // a composed 2.5D wall of UI panels
   const api = {
     scene, camera, hud,
+    get exploreLimits() { return lastT < tSwitch ? LIM_BENCH : lastT < tBin + 0.05 ? LIM_DIE : LIM_CARDS; },
+    // Explore 3D: the AI cards gain their glass backing slabs (so they read as panels, not decals, off-axis)
+    explore(t) { if (t >= tSwitch) ai.showBacks(); },
     dof: { focus: 3, range: 1.5, amount: 0 },
     bloom: { strength: 0.72 },
     exposure: 1.0,
     background: 0x000000,
     update(t, info) {
+      lastT = t;
       const inA = t < tSwitch;
       worldA.visible = inA; worldB.visible = !inA; lightB.visible = !inA;
       scene.fog.near = inA ? 5.5 : 900; scene.fog.far = inA ? 12 : 1000;
@@ -524,6 +583,9 @@ export function create(ctx, segment) {
 
       ai.update(t, T, zoom, ramp(t, tSwitch + 0.05, tBin + 0.05, ease.outCubic));
       api.dof.amount = 0;
+      // (no blur in this world: the focus distance only tells Explore 3D what to orbit — the die floor under
+      // the looking-down camera, then the wall of cards once the camera has levelled out)
+      api.dof.focus = pitch < 0.5 ? Math.max(0.5, camPos.y - B0.y) : Math.max(1, Math.abs(camPos.z - B0.z - AI_ZC));
       const flash = 1 - ramp(t, tSwitch, tSwitch + 0.25);
       api.exposure = 1.0 + flash * 0.25;
       api.bloom.strength = 0.72;

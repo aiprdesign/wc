@@ -507,6 +507,30 @@ export function buildBranches({ Y0, Zc, D_REF, tStart }) {
     return { mesh, mat, w, h, port, out, bottom, i, sp: 0, ph: 0, t0: tStart + i * 0.045 };
   });
 
+  // ---- Explore 3D only: a smoked-glass backing slab with a lit rim behind every card, so seen off-axis or
+  // from behind the cards are physical panels (the film always faces them square-on, where it is invisible)
+  const slabMat = new THREE.MeshStandardMaterial({ color: '#0a0f17', metalness: 0.55, roughness: 0.28, envMapIntensity: 0.8 });
+  const rimMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#9cc8ff').multiplyScalar(0.9), toneMapped: false });
+  const backs = cards.map((c) => {
+    const W = c.w, H = c.h, r = Math.min(W, H) * 0.035, D = 0.045 * unit;
+    const sh = new THREE.Shape();
+    sh.moveTo(-W / 2 + r, -H / 2); sh.lineTo(W / 2 - r, -H / 2); sh.quadraticCurveTo(W / 2, -H / 2, W / 2, -H / 2 + r);
+    sh.lineTo(W / 2, H / 2 - r); sh.quadraticCurveTo(W / 2, H / 2, W / 2 - r, H / 2); sh.lineTo(-W / 2 + r, H / 2);
+    sh.quadraticCurveTo(-W / 2, H / 2, -W / 2, H / 2 - r); sh.lineTo(-W / 2, -H / 2 + r); sh.quadraticCurveTo(-W / 2, -H / 2, -W / 2 + r, -H / 2);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: D, bevelEnabled: false, curveSegments: 6 });
+    g.translate(0, 0, -D - 0.004 * unit);
+    const slab = new THREE.Mesh(g, slabMat);
+    const rimPts = sh.getSpacedPoints(96).map((p) => V3(p.x, p.y, -D - 0.004 * unit));
+    const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(rimPts), rimMat);
+    const grp = new THREE.Group(); grp.add(slab, rim);
+    grp.position.copy(c.mesh.position); grp.rotation.copy(c.mesh.rotation);
+    grp.visible = false; group.add(grp);
+    return grp;
+  });
+  function showBacks() {
+    for (let i = 0; i < cards.length; i++) { const c = cards[i]; backs[i].visible = c.mesh.visible; backs[i].scale.copy(c.mesh.scale); }
+  }
+
   // ---- branches (+ twigs) as one ribbon mesh
   const pos = [], aS = [], aV = [], aB = [], idx = [], dotsP = [];
   const ribbon = (curve, width, taper, start, dur, h, kind) => {
@@ -628,6 +652,7 @@ export function buildBranches({ Y0, Zc, D_REF, tStart }) {
   // ---- update
   const M = new THREE.Matrix4();
   function update(t, T, zoom, coreIn) {
+    for (const b of backs) b.visible = false;
     // core
     coreG.rotation.set(0.35 + Math.sin(t * 0.6) * 0.1, t * 0.45, 0);
     const cIn = coreIn;
@@ -671,5 +696,5 @@ export function buildBranches({ Y0, Zc, D_REF, tStart }) {
     robot.scale.setScalar(rs * ease.outBack(sat((rrv - 0.3) / 0.7)) + 1e-4);
     robotApply(cards[4].mat.uniforms.uP.value);
   }
-  return { group, update, core, cards, coreG };
+  return { group, update, showBacks, core, cards, coreG };
 }

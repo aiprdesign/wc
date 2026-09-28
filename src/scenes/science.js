@@ -280,9 +280,40 @@ export function create(ctx, segment) {
   const orrery = new THREE.Group(); orrery.position.copy(O); scene.add(orrery);
   const hs = S.y - O.y;
   {
-    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.4, 0.28, 96), bronzeDark); plinth.position.y = -0.14; orrery.add(plinth);
+    // moulded plinth (lathe profile: foot, cavetto, drum, ovolo, top) standing on three bun feet
+    const prof = [[0.001, -0.28], [1.42, -0.28], [1.44, -0.25], [1.4, -0.23], [1.33, -0.2], [1.3, -0.16], [1.3, -0.07], [1.33, -0.05], [1.35, -0.03], [1.31, -0.005], [1.26, 0], [0.001, 0]]
+      .map(([r, y]) => new THREE.Vector2(r, y));
+    const plinth = new THREE.Mesh(new THREE.LatheGeometry(prof, 128), bronzeDark); orrery.add(plinth);
     const plinthRim = new THREE.Mesh(new THREE.TorusGeometry(1.27, 0.03, 12, 128), brassPolish); plinthRim.rotation.x = Math.PI / 2; orrery.add(plinthRim);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.302, 1.302, 0.05, 128, 1, true), brassPolish); band.position.y = -0.115; orrery.add(band);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + 0.5, foot = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 12), brass);
+      foot.scale.set(1, 0.45, 1); foot.position.set(Math.cos(a) * 1.15, -0.31, Math.sin(a) * 1.15); orrery.add(foot);
+    }
+    // engraved calendar dial inlaid in the top: degree ticks, month divisions and a zodiac band
+    const N = 1024, dc = document.createElement('canvas'); dc.width = dc.height = N;
+    const g = dc.getContext('2d'), C = N / 2;
+    g.fillStyle = '#6d5230'; g.fillRect(0, 0, N, N);
+    g.strokeStyle = 'rgba(30,18,6,0.85)'; g.fillStyle = 'rgba(30,18,6,0.85)';
+    const ring = (r, w) => { g.lineWidth = w; g.beginPath(); g.arc(C, C, r, 0, TAU); g.stroke(); };
+    [0.99, 0.93, 0.86, 0.78, 0.7].forEach((k, i) => ring(C * k, i === 0 ? 5 : 2));
+    for (let i = 0; i < 360; i++) { const a = (i / 360) * TAU, l = i % 10 === 0 ? 0.06 : i % 5 === 0 ? 0.04 : 0.025; g.lineWidth = i % 10 === 0 ? 2.2 : 1.2; g.beginPath(); g.moveTo(C + Math.cos(a) * C * 0.93, C + Math.sin(a) * C * 0.93); g.lineTo(C + Math.cos(a) * C * (0.93 - l), C + Math.sin(a) * C * (0.93 - l)); g.stroke(); }
+    const signs = ['ARIES', 'TAVRVS', 'GEMINI', 'CANCER', 'LEO', 'VIRGO', 'LIBRA', 'SCORPIO', 'SAGITTAR', 'CAPRICOR', 'AQVARIVS', 'PISCES'];
+    g.font = `600 ${Math.round(N * 0.026)}px "${FONTS.serif}"`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    signs.forEach((sg, i) => {
+      const a0 = (i / 12) * TAU; g.lineWidth = 2; g.beginPath(); g.moveTo(C + Math.cos(a0) * C * 0.7, C + Math.sin(a0) * C * 0.7); g.lineTo(C + Math.cos(a0) * C * 0.86, C + Math.sin(a0) * C * 0.86); g.stroke();
+      const a = a0 + TAU / 24; g.save(); g.translate(C + Math.cos(a) * C * 0.82, C + Math.sin(a) * C * 0.82); g.rotate(a + Math.PI / 2); g.fillText(sg, 0, 0); g.restore();
+    });
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * TAU + TAU / 24; g.save(); g.translate(C + Math.cos(a) * C * 0.74, C + Math.sin(a) * C * 0.74); g.rotate(a + Math.PI / 2); g.font = `400 ${Math.round(N * 0.018)}px "${FONTS.serif}"`; g.fillText(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][i], 0, 0); g.restore(); }
+    const dialTex = new THREE.CanvasTexture(dc); dialTex.colorSpace = THREE.SRGBColorSpace; dialTex.anisotropy = 8;
+    const dialGeo = new THREE.RingGeometry(0.42, 1.25, 128, 1);
+    { const p = dialGeo.attributes.position, uv = dialGeo.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, 0.5 + p.getX(i) / 2.52, 0.5 + p.getY(i) / 2.52); }
+    const dial = new THREE.Mesh(dialGeo, new THREE.MeshPhysicalMaterial({ map: dialTex, color: '#e2bd7c', metalness: 1, roughness: 0.34, bumpMap: dialTex, bumpScale: -1.2, clearcoat: 0.2 }));
+    dial.rotation.x = -Math.PI / 2; dial.position.y = 0.003; orrery.add(dial);
     const column = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, hs, 24), brassPolish); column.position.y = hs / 2; orrery.add(column);
+    // gilded cup carrying the sun
+    const cupP = []; for (let i = 0; i <= 10; i++) { const u = i / 10; cupP.push(new THREE.Vector2(0.05 + 0.2 * Math.pow(u, 1.6), -0.3 + u * 0.13)); }
+    const cup = new THREE.Mesh(new THREE.LatheGeometry(cupP, 48), brassPolish); cup.position.y = hs; orrery.add(cup);
   }
   // base gearing (flat): crown gear + pinions
   const crown = new THREE.Mesh(gearGeometry({ teeth: 56, module: 0.036, thickness: 0.05, bevel: 0.006, bore: 0.08, spokes: 8 }), brassLathe);
@@ -319,10 +350,25 @@ export function create(ctx, segment) {
     const armY = hs - 0.95 + i * 0.1;
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, p.r, 10), brass); arm.rotation.z = Math.PI / 2; arm.position.set(p.r / 2, armY, 0); grp.add(arm);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, hs - armY, 10), brassPolish); post.position.set(p.r, (hs + armY) / 2, 0); grp.add(post);
-    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 24), brassPolish); collar.position.y = armY; grp.add(collar);
+    // coaxial sleeves: each planet rides its own tube (outermost = lowest arm), capped by a knurled collar
+    const sR = 0.108 - i * 0.0065;
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(sR, sR, armY - 0.07, 32, 1, true), i % 2 ? brass : brassPolish); sleeve.position.y = 0.07 + (armY - 0.07) / 2; orrery.add(sleeve);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(sR + 0.014, sR + 0.014, 0.045, 32), brassPolish); collar.position.y = armY; grp.add(collar);
+    const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 20), bronzeDark); cw.rotation.z = Math.PI / 2; cw.position.set(-0.13 - sR, armY, 0); grp.add(cw);   // counterweight
+    const cwArm = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.13, 8), brass); cwArm.rotation.z = Math.PI / 2; cwArm.position.set(-0.065 - sR, armY, 0); grp.add(cwArm);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.018, 12, 8), brassPolish); elbow.position.set(p.r, armY, 0); grp.add(elbow);
     const planet = new THREE.Mesh(new THREE.SphereGeometry(p.s, 48, 32), new THREE.MeshStandardMaterial({ map: planetTexture(p.k, i + 5), roughness: 0.55, metalness: 0.05 }));
     planet.position.set(p.r, hs, 0); grp.add(planet);
-    if (p.ring) { const rg = new THREE.Mesh(new THREE.RingGeometry(p.s * 1.35, p.s * 2.2, 64), new THREE.MeshStandardMaterial({ color: '#d8c08a', roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); rg.rotation.x = -Math.PI / 2 + 0.45; planet.add(rg); }
+    const pcup = new THREE.Mesh(new THREE.CylinderGeometry(p.s * 0.45, 0.012, p.s * 0.35, 20), brassPolish); pcup.position.set(p.r, hs - p.s * 0.95, 0); grp.add(pcup);
+    if (p.ring) {
+      const rc = document.createElement('canvas'); rc.width = 256; rc.height = 4; const rx = rc.getContext('2d');
+      for (let k = 0; k < 256; k++) { const u = k / 255, a = (0.35 + 0.55 * Math.abs(Math.sin(u * 23.0)) * (u > 0.62 && u < 0.68 ? 0.1 : 1)) * Math.sin(Math.PI * u) ** 0.4; rx.fillStyle = `rgba(${216 - u * 40},${192 - u * 40},${138 - u * 30},${a})`; rx.fillRect(k, 0, 1, 4); }
+      const rt = new THREE.CanvasTexture(rc); rt.colorSpace = THREE.SRGBColorSpace;
+      const rgG = new THREE.RingGeometry(p.s * 1.35, p.s * 2.2, 96, 1);
+      { const q = rgG.attributes.position, uv = rgG.attributes.uv; for (let k = 0; k < q.count; k++) uv.setXY(k, (Math.hypot(q.getX(k), q.getY(k)) - p.s * 1.35) / (p.s * 0.85), 0.5); }
+      const rg = new THREE.Mesh(rgG, new THREE.MeshStandardMaterial({ map: rt, color: '#ffffff', roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide, transparent: true, depthWrite: false }));
+      rg.rotation.x = -Math.PI / 2 + 0.45; planet.add(rg);
+    }
     if (p.moon) { const mg = new THREE.Group(); mg.position.copy(planet.position); grp.add(mg); const mn = new THREE.Mesh(new THREE.SphereGeometry(0.025, 24, 16), new THREE.MeshStandardMaterial({ map: planetTexture('moon', 9), roughness: 0.8 })); mn.position.x = 0.17; mg.add(mn); const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.17, 6), brass); rod.rotation.z = Math.PI / 2; rod.position.x = 0.085; mg.add(rod); p.moonGrp = mg; }
     p.grp = grp; p.phase = pr() * TAU; p.w = 1.25 * Math.pow(p.r, -1.5);
   });
@@ -502,10 +548,35 @@ export function create(ctx, segment) {
   }
   // brass stand (cradle, column, foot) reaching down to the orrery's plinth level
   const baseY = Math.min(tA.y, tB.y);
-  const standLen = P.y - O.y + baseY + 0.15;
+  const BENCH = O.y - 0.365;                          // world y of the surface everything stands on (the orrery's bun feet)
+  const standLen = (P.y + baseY - 0.05) - (BENCH + 0.06);
   const pcradle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.05, 0.05, 32), brassPolish); pcradle.position.y = baseY - 0.028; prism.add(pcradle);
   const pstand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, standLen, 20), brassPolish); pstand.position.y = baseY - 0.05 - standLen / 2; prism.add(pstand);
   const pfoot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.06, 48), brass); pfoot.position.y = baseY - 0.05 - standLen; prism.add(pfoot);
+  // optical-bench fittings: a trunnion yoke holding the prism by its end faces (pivot bosses on the axis
+  // through the centroid), a clamp collar with a thumbscrew on the stand, and a tripod spider on the foot
+  {
+    const cen = tA.clone().add(tB).add(tC).multiplyScalar(1 / 3);
+    const zY = DEPTH / 2 + 0.035, yBar = baseY - 0.06;
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, zY * 2 + 0.05), brassPolish); bar.position.set(cen.x * 0, yBar, 0); prism.add(bar);
+    for (const sz of [-1, 1]) {
+      const h = cen.y - yBar;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.045, h + 0.04, 0.018), brassPolish);
+      arm.position.set(cen.x * 0.5, yBar + h / 2, sz * zY); arm.rotation.z = Math.atan2(cen.x, h) * -1; prism.add(arm);
+      const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 28), brassPolish); boss.rotation.x = Math.PI / 2; boss.position.set(cen.x, cen.y, sz * (zY - 0.005)); prism.add(boss);
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.04, 16), bronzeDark); knob.rotation.x = Math.PI / 2; knob.position.set(cen.x, cen.y, sz * (zY + 0.03)); prism.add(knob);
+    }
+    const collarY = baseY - 0.05 - standLen * 0.42;
+    const pc = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.09, 28), brass); pc.position.y = collarY; prism.add(pc);
+    const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.09, 10), brassPolish); screw.rotation.z = Math.PI / 2; screw.position.set(0.1, collarY, 0); prism.add(screw);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 16), bronzeDark); head.rotation.z = Math.PI / 2; head.position.set(0.15, collarY, 0); prism.add(head);
+    const footY = baseY - 0.05 - standLen;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + 0.3, leg = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.035, 0.05), brass);
+      leg.position.set(Math.cos(a) * 0.3, footY - 0.012, Math.sin(a) * 0.3); leg.rotation.y = -a; prism.add(leg);
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.025, 16), bronzeDark); pad.position.set(Math.cos(a) * 0.46, footY - 0.02, Math.sin(a) * 0.46); prism.add(pad);
+    }
+  }
 
   // incoming beam: thin white-hot core + faint haze sheath (from the sun's surface to the entry point)
   const Ew = E3.clone(); prism.localToWorld(Ew);
@@ -622,8 +693,15 @@ export function create(ctx, segment) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   specBand.position.z = 0.002; cardGrp.add(specBand);
-  const cardPost = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 2.4, 12), brassPolish);
-  cardPost.position.copy(Q).add(V(0, -cardH / 2 - 1.2 + 0.1, -0.05)); prism.add(cardPost);
+  // the card's post reaches right down to the bench (prism-local y of the orrery's standing surface), on a tripod foot
+  const benchY = BENCH - P.y;
+  const postTop = Q.y - cardH / 2 + 0.1, postLen = Math.max(0.5, postTop - benchY);
+  const cardPost = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, postLen, 12), brassPolish);
+  cardPost.position.set(Q.x, postTop - postLen / 2, Q.z - 0.05); prism.add(cardPost);
+  {
+    const cp = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.08, 20), brass); cp.position.set(Q.x, postTop - 0.04, Q.z - 0.05); prism.add(cp);
+    const cf = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.19, 0.05, 36), brass); cf.position.set(Q.x, benchY + 0.025, Q.z - 0.05); prism.add(cf);
+  }
 
   const lamRed = new TextPlane('λ 700 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#ffc2b0', intensity: 1.1 });
   const lamVio = new TextPlane('λ 400 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#d6c8ff', intensity: 1.1 });
@@ -639,6 +717,28 @@ export function create(ctx, segment) {
     lamRed.position.copy(hitR).addScaledVector(across, 0.2).add(V(0, 0.03, 0.004));
     lamVio.position.copy(hitV).addScaledVector(across, 0.2).add(V(0, -0.03, 0.004));
   }
+
+  // ---- Explore 3D only: the walnut bench under the orrery and the prism (the film keeps them in the dark)
+  const bench = (() => {
+    const N = 1024, c = document.createElement('canvas'); c.width = c.height = N;
+    const g = c.getContext('2d'), r = rng(515);
+    for (let i = 0; i < 12; i++) {
+      const l = 0.8 + r() * 0.3, x0 = (i * N) / 12, w = N / 12;
+      g.fillStyle = `rgb(${Math.round(52 * l)},${Math.round(31 * l)},${Math.round(17 * l)})`; g.fillRect(x0, 0, w, N);
+      for (let k = 0; k < 70; k++) { g.strokeStyle = `rgba(${r() < 0.5 ? '15,7,2' : '110,70,38'},${0.1 + r() * 0.15})`; g.lineWidth = 1 + r() * 1.5; const xx = x0 + r() * w; g.beginPath(); g.moveTo(xx, 0); g.bezierCurveTo(xx + (r() - 0.5) * 20, N * 0.3, xx + (r() - 0.5) * 20, N * 0.7, xx + (r() - 0.5) * 14, N); g.stroke(); }
+      g.fillStyle = 'rgba(6,3,1,0.95)'; g.fillRect(x0, 0, 2, N);
+    }
+    g.globalCompositeOperation = 'destination-in';
+    const fade = g.createRadialGradient(N / 2, N / 2, N * 0.3, N / 2, N / 2, N / 2);
+    fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fade; g.fillRect(0, 0, N, N);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const m = new THREE.Mesh(new THREE.CircleGeometry(9, 96), new THREE.MeshStandardMaterial({ map: tex, color: '#8a8a8a', transparent: true, roughness: 0.72, metalness: 0, envMapIntensity: 0.35 }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set((O.x + P.x) / 2 + 0.6, BENCH - 0.001, (O.z + P.z) / 2);
+    m.visible = false; scene.add(m);
+    return m;
+  })();
 
   // ---- HUD: chapter-like experiment captions --------------------------------
   const hud = ctx.makeHUD();
@@ -691,6 +791,7 @@ export function create(ctx, segment) {
 
   function update(t, info) {
     const T = info?.T ?? t + segment.start;
+    bench.visible = false;
     const tau = tauAt(t);
     fallPos(tau, ballPos);
     fallVel(tau, vel);
@@ -860,6 +961,7 @@ export function create(ctx, segment) {
     bloom.strength = 0.55 + 0.2 * smoothstep(tBeam, tSpec, t);
   }
 
-  const out = { scene, camera, update, hud, dof, bloom, exposure: 1, harmony: 1, background: BG };
+  function explore(t) { if (t > 1.8) bench.visible = true; }
+  const out = { scene, camera, update, explore, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
   return out;
 }

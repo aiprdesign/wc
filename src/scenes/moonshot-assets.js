@@ -194,14 +194,124 @@ export function cabinGlowTexture(w = 256, h = 256) {
   return t;
 }
 
-// Service-module skin: polished aluminium with radiator stripes.
-export function smTexture(size = 512) {
-  const c = mkCanvas(size), g = c.getContext('2d');
-  g.fillStyle = '#d7dade'; g.fillRect(0, 0, size, size);
-  for (let i = 0; i < 64; i++) { const x = (i / 64) * size; g.fillStyle = i % 2 ? '#eef0f2' : '#bfc3c8'; g.fillRect(x, 0, size / 64 * 0.6, size); }
-  g.fillStyle = '#9aa0a6'; for (let y = 0; y < 6; y++) g.fillRect(0, y * size / 6, size, 2);
-  g.fillStyle = '#e4e6e8'; g.fillRect(0, size * 0.42, size, size * 0.16);
+// Service-module skin (u around, v aft → forward): polished aluminium in six sectors with access panels and
+// fastener rows, EPS radiator panels (fine white fins) high on two sectors, ECS radiators low, and
+// "UNITED STATES" in black running along one sector, as flown.
+export function smTexture(w = 2048, h = 1024) {
+  const c = mkCanvas(w, h), g = c.getContext('2d'), r = rng(611);
+  g.fillStyle = '#d4d7db'; g.fillRect(0, 0, w, h);
+  // sector panels: subtle tone variation, seams, fastener rows
+  for (let s = 0; s < 6; s++) {
+    const x0 = s * w / 6;
+    for (let k = 0; k < 5; k++) {
+      const y0 = k * h / 5, l = 204 + Math.floor(r() * 26);
+      g.fillStyle = `rgb(${l},${l + 2},${l + 5})`; g.fillRect(x0 + 3, y0 + 3, w / 6 - 6, h / 5 - 6);
+    }
+    g.fillStyle = 'rgba(70,74,80,0.8)'; g.fillRect(x0 - 2, 0, 4, h);
+    g.fillStyle = 'rgba(60,62,66,0.5)';
+    for (let y = 8; y < h; y += 14) { g.fillRect(x0 + 8, y, 3, 3); g.fillRect(x0 + w / 6 - 11, y, 3, 3); }
+  }
+  g.fillStyle = 'rgba(70,74,80,0.7)'; for (let k = 1; k < 5; k++) g.fillRect(0, k * h / 5 - 1, w, 2);
+  // EPS radiators: two sectors, upper third — white paint with fine fins
+  for (const s of [1, 4]) {
+    const x0 = s * w / 6 + 14, x1 = (s + 1) * w / 6 - 14, y0 = h * 0.06, y1 = h * 0.36;
+    g.fillStyle = '#eceeef'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    for (let x = x0; x < x1; x += 6) { g.fillStyle = 'rgba(150,156,162,0.55)'; g.fillRect(x, y0, 1.5, y1 - y0); }
+    g.strokeStyle = 'rgba(80,84,90,0.8)'; g.lineWidth = 3; g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  }
+  // ECS radiators low on two other sectors
+  for (const s of [2, 5]) {
+    const x0 = s * w / 6 + 20, x1 = (s + 1) * w / 6 - 20, y0 = h * 0.7, y1 = h * 0.9;
+    g.fillStyle = '#e6e8ea'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    for (let y = y0; y < y1; y += 8) { g.fillStyle = 'rgba(140,146,152,0.5)'; g.fillRect(x0, y, x1 - x0, 1.5); }
+  }
+  // RCS quad housings: darker mounting panels at the four 45° stations, forward end
+  for (let k = 0; k < 4; k++) {
+    const cx = ((k + 0.5) / 4) * w;
+    g.fillStyle = '#b6babf'; g.fillRect(cx - 44, h * 0.08, 88, h * 0.24);
+    g.strokeStyle = 'rgba(60,62,66,0.8)'; g.lineWidth = 2; g.strokeRect(cx - 44, h * 0.08, 88, h * 0.24);
+  }
+  // lettering: along the length, reading aft → forward
+  g.save(); g.translate(w * 0.335, h * 0.62); g.rotate(-Math.PI / 2);
+  g.fillStyle = '#121316'; g.font = `700 ${Math.round(h * 0.075)}px "${FONTS.sans}"`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  let x = -h * 0.42; const txt = 'UNITED STATES';
+  const widths = [...txt].map((ch) => g.measureText(ch).width + h * 0.012), tot = widths.reduce((a, b) => a + b, 0);
+  x = -tot / 2; [...txt].forEach((ch, i) => { g.fillText(ch, x + widths[i] / 2, 0); x += widths[i]; });
+  g.restore();
+  // soot / heat tint toward the aft end
+  const gr = g.createLinearGradient(0, h, 0, h * 0.8); gr.addColorStop(0, 'rgba(60,55,50,0.35)'); gr.addColorStop(1, 'rgba(60,55,50,0)');
+  g.fillStyle = gr; g.fillRect(0, h * 0.8, w, h * 0.2);
+  return toTexture(c, { anisotropy: 16 });
+}
+
+// Command-module skin (u around, v aft heat-shield rim → apex): Mylar-tape silver strips, the hatch with its
+// window, two forward-facing rendezvous windows, two side windows, RCS engine ports and umbilical fairing.
+export function cmTexture(w = 1024, h = 512) {
+  const c = mkCanvas(w, h), g = c.getContext('2d'), r = rng(1101);
+  g.fillStyle = '#d8dadd'; g.fillRect(0, 0, w, h);
+  // metallised Kapton / Mylar tape strips, running up the cone, each a slightly different sheen
+  for (let i = 0; i < 96; i++) {
+    const l = 196 + Math.floor(r() * 50);
+    g.fillStyle = `rgb(${l},${l + 1},${l + 4})`; g.fillRect(i * w / 96, 0, w / 96 + 1, h);
+  }
+  g.fillStyle = 'rgba(90,92,96,0.35)'; for (let i = 0; i < 96; i++) g.fillRect(i * w / 96, 0, 1, h);
+  g.fillStyle = 'rgba(80,82,86,0.6)'; for (const v of [0.06, 0.34, 0.62, 0.9]) g.fillRect(0, h * (1 - v), w, 2);
+  // (canvas y = 1 − v; u = 0.5 faces the front, where the hatch is)
+  const rr = (x, y, ww, hh, rad, fill, stroke) => {
+    g.beginPath(); g.moveTo(x + rad, y); g.arcTo(x + ww, y, x + ww, y + hh, rad); g.arcTo(x + ww, y + hh, x, y + hh, rad); g.arcTo(x, y + hh, x, y, rad); g.arcTo(x, y, x + ww, y, rad); g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 3; g.stroke(); }
+  };
+  // hatch outline + hatch window
+  rr(w * 0.5 - 62, h * 0.5, 124, h * 0.34, 10, null, 'rgba(60,62,66,0.9)');
+  rr(w * 0.5 - 20, h * 0.56, 40, 40, 8, '#07090b', '#3a3c40');
+  // side windows
+  for (const u of [0.36, 0.64]) rr(w * u - 22, h * 0.58, 44, 44, 9, '#07090b', '#3a3c40');
+  // rendezvous windows (forward-looking, up near the apex)
+  for (const u of [0.44, 0.56]) rr(w * u - 14, h * 0.38, 28, 36, 7, '#07090b', '#3a3c40');
+  // RCS engine ports: pitch/yaw/roll pairs round the cone
+  for (let k = 0; k < 6; k++) {
+    const u = (k + 0.25) / 6; g.fillStyle = '#1a1b1e';
+    g.beginPath(); g.arc(w * u, h * 0.33, 7, 0, TAU); g.fill(); g.beginPath(); g.arc(w * u + 22, h * 0.33, 7, 0, TAU); g.fill();
+  }
+  // umbilical / tension-tie fairing
+  g.fillStyle = '#9ea2a7'; g.fillRect(w * 0.02, h * 0.62, 40, h * 0.36); g.strokeStyle = 'rgba(60,62,66,0.8)'; g.lineWidth = 2; g.strokeRect(w * 0.02, h * 0.62, 40, h * 0.36);
+  const t = toTexture(c, { anisotropy: 16 });
+  return t;
+}
+
+// MLI blanket quilting for the descent stage (tileable, sRGB): gold / amber Kapton patches, taped seams, a few
+// darker creases and bright crinkle glints. Near-white so the material colour sets the gold.
+export function mliTexture(size = 512, seed = 17) {
+  const c = mkCanvas(size), g = c.getContext('2d'), r = rng(seed);
+  g.fillStyle = '#f1e9da'; g.fillRect(0, 0, size, size);
+  const cell = size / 4;
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+    const hue = r(), l = 0.82 + r() * 0.18;
+    const col = hue < 0.2 ? [255, 214, 160] : hue < 0.35 ? [255, 246, 226] : [250, 232, 200];
+    g.fillStyle = `rgb(${Math.round(col[0] * l)},${Math.round(col[1] * l)},${Math.round(col[2] * l)})`;
+    const ox = (r() - 0.5) * 6, oy = (r() - 0.5) * 6;
+    g.fillRect(i * cell + ox, j * cell + oy, cell + 2, cell + 2);
+  }
+  // taped seams (wrapping)
+  g.fillStyle = 'rgba(120,96,60,0.55)';
+  for (let k = 0; k <= 4; k++) { g.fillRect(k * cell - 2, 0, 4, size); g.fillRect(0, k * cell - 2, size, 4); }
+  // creases
+  for (let i = 0; i < 70; i++) {
+    const x = r() * size, y = r() * size, a = r() * TAU, s = 20 + r() * 90;
+    g.strokeStyle = r() > 0.5 ? 'rgba(90,70,40,0.35)' : 'rgba(255,250,235,0.5)'; g.lineWidth = 1 + r() * 2.5;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 0.5) * s * 0.5, y + Math.sin(a + 0.5) * s * 0.5, x + Math.cos(a) * s, y + Math.sin(a) * s); g.stroke();
+  }
   return toTexture(c, { repeat: true });
+}
+
+// SPS nozzle (u around, v exit → throat): light columbium extension with cooling bands, darker toward the throat.
+export function nozzleTexture(h = 256) {
+  const c = mkCanvas(64, h), g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, '#50504e'); gr.addColorStop(0.35, '#8c8a86'); gr.addColorStop(1, '#a9a7a2');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, h);
+  g.fillStyle = 'rgba(40,40,40,0.55)'; for (let k = 1; k < 9; k++) g.fillRect(0, h * k / 9, 64, k < 3 ? 3 : 1.5);
+  g.fillStyle = '#2a2a2a'; g.fillRect(0, h - 10, 64, 10);
+  return toTexture(c);
 }
 
 // The flag of the United States, drawn to the official proportions (Executive Order 10834):
@@ -443,8 +553,9 @@ const strut = (a, b, r, mat, seg = 8) => {
 export function apolloMaterials(envMap = null) {
   const crinkle = crinkleTexture();
   const panel = panelTexture();
+  const mli = mliTexture(); mli.repeat.set(3, 1);
   const M = {
-    gold: new THREE.MeshStandardMaterial({ color: '#b08440', metalness: 1, roughness: 0.46, bumpMap: crinkle, bumpScale: 3, envMapIntensity: 0.55 }),
+    gold: new THREE.MeshStandardMaterial({ color: '#c09048', map: mli, metalness: 1, roughness: 0.46, bumpMap: crinkle, bumpScale: 3, envMapIntensity: 0.55 }),
     goldDark: new THREE.MeshStandardMaterial({ color: '#8e6428', metalness: 1, roughness: 0.4, bumpMap: crinkle, bumpScale: 2.5, envMapIntensity: 0.5 }),
     silverFoil: new THREE.MeshStandardMaterial({ color: '#b9bcc0', metalness: 1, roughness: 0.36, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.6 }),
     blackFoil: new THREE.MeshStandardMaterial({ color: '#1b1b1d', metalness: 0.4, roughness: 0.55, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.4 }),
@@ -452,8 +563,12 @@ export function apolloMaterials(envMap = null) {
     dark: new THREE.MeshStandardMaterial({ color: '#35363a', metalness: 0.85, roughness: 0.35, envMapIntensity: 0.6 }),
     bell: new THREE.MeshStandardMaterial({ color: '#4a4640', metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
     white: new THREE.MeshStandardMaterial({ color: '#9d9d98', metalness: 0.1, roughness: 0.6, envMapIntensity: 0.5 }),
-    sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 0.55, roughness: 0.3, envMapIntensity: 0.9 }),
-    cm: new THREE.MeshStandardMaterial({ color: '#d9dcdf', metalness: 0.7, roughness: 0.3, envMapIntensity: 1.0 }),
+    sm: new THREE.MeshStandardMaterial({ map: smTexture(), metalness: 0.6, roughness: 0.3, envMapIntensity: 0.9 }),
+    cm: new THREE.MeshStandardMaterial({ map: cmTexture(), color: '#e4e6e9', metalness: 0.75, roughness: 0.26, envMapIntensity: 1.0 }),
+    heat: new THREE.MeshStandardMaterial({ color: '#4d3524', metalness: 0.3, roughness: 0.7, envMapIntensity: 0.4 }),
+    nozzle: new THREE.MeshStandardMaterial({ map: nozzleTexture(), metalness: 0.7, roughness: 0.36, side: THREE.DoubleSide, envMapIntensity: 0.7 }),
+    chrome: new THREE.MeshStandardMaterial({ color: '#d4d7db', metalness: 1, roughness: 0.18, envMapIntensity: 0.9 }),
+    paint: new THREE.MeshStandardMaterial({ color: '#141416', metalness: 0.1, roughness: 0.55, envMapIntensity: 0.3 }),
     decal: new THREE.MeshStandardMaterial({ map: lmDecalTexture(), metalness: 0.25, roughness: 0.55, envMapIntensity: 0.4 }),
     window: new THREE.MeshStandardMaterial({ color: '#07090b', metalness: 0.3, roughness: 0.06, emissive: new THREE.Color('#ffffff'), emissiveMap: cabinGlowTexture(), emissiveIntensity: 0.5, envMapIntensity: 1.2 }),
   };
@@ -461,53 +576,107 @@ export function apolloMaterials(envMap = null) {
   return M;
 }
 
-// Lunar Module. Origin at the footpad contact plane; front (windows, hatch, ladder) faces +Z.
+// small parabolic dish (concave side toward +Y), radius r, focal length f
+const dishGeo = (r, f, seg = 28) => {
+  const pts = [];
+  for (let i = 0; i <= 8; i++) { const x = Math.max(0.001, (i / 8) * r); pts.push(new THREE.Vector2(x, x * x / (4 * f))); }
+  for (let i = 8; i >= 0; i--) { const x = Math.max(0.001, (i / 8) * r); pts.push(new THREE.Vector2(x * 0.999, x * x / (4 * f) - 0.012)); }
+  return new THREE.LatheGeometry(pts, seg);
+};
+// rocket nozzle bell (throat at y = 0, exit toward −y)
+const bellGeo = (rt, re, len, seg = 16, k = 1.5) => {
+  const pts = []; for (let i = 0; i <= 8; i++) { const u = i / 8; pts.push(new THREE.Vector2(rt + (re - rt) * Math.pow(u, k), -u * len)); }
+  return new THREE.LatheGeometry(pts, seg);
+};
+
+// Lunar Module. Origin at the footpad contact plane; front (windows, hatch, ladder leg) faces +Z.
+// Descent stage: octagonal MLI-wrapped structure, four legs on the main axes (primary strut with its
+// telescoping piston, two secondary struts, a deployment truss, dished footpads, and 1.5 m surface-contact
+// probes on the three legs without the ladder). Ascent stage: faceted cabin, triangular windows, hatch,
+// docking tunnel, propellant-tank cheeks, four RCS quads on booms, rendezvous-radar and S-band dishes,
+// VHF antennas and the docking target.
 export function buildLM(M, { folded = false } = {}) {
   const lm = new THREE.Group();
-  const add = (m, parent = lm) => { m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  // descent stage: octagonal box, gold foil with black/silver panels
-  const DS_Y = 1.55, DS_H = 1.65, DS_R = 2.15;
+  const add = (m, parent = lm) => { parent.add(m); return m; };
+  const box = (w, h, d, mat, x, y, z, parent = lm) => { const m = add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat), parent); m.position.set(x, y, z); return m; };
+  const DS_Y = 1.55, DS_H = 1.65, DS_R = 2.15, AP = DS_R * Math.cos(Math.PI / 8);
+  // ---------------- descent stage
   const ds = add(new THREE.Mesh(new THREE.CylinderGeometry(DS_R, DS_R, DS_H, 8, 1), M.gold));
   ds.rotation.y = Math.PI / 8; ds.position.y = DS_Y + DS_H / 2;
+  for (const y of [DS_Y + 0.035, DS_Y + DS_H - 0.035]) { const b = add(new THREE.Mesh(new THREE.CylinderGeometry(DS_R + 0.022, DS_R + 0.022, 0.07, 8, 1, true), M.silverFoil)); b.rotation.y = Math.PI / 8; b.position.y = y; }
+  const shield = add(new THREE.Mesh(new THREE.CylinderGeometry(DS_R * 0.98, DS_R * 0.86, 0.14, 8), M.blackFoil)); shield.rotation.y = Math.PI / 8; shield.position.y = DS_Y - 0.07;
+  // quadrant bays (the diagonal faces): silver / black foil blankets, the flag placard on the front-right bay
   for (let k = 0; k < 4; k++) {
-    const a = k * Math.PI / 2, pnl = add(new THREE.Mesh(new THREE.BoxGeometry(1.5, DS_H * 0.82, 0.05), k % 2 ? M.blackFoil : M.silverFoil));
-    const rr = DS_R * Math.cos(Math.PI / 8) + 0.01;
+    const a = Math.PI / 4 + k * Math.PI / 2, rr = AP + 0.012;
+    const pnl = add(new THREE.Mesh(new THREE.BoxGeometry(1.42, DS_H * 0.8, 0.04), k === 2 ? M.blackFoil : M.silverFoil));
     pnl.position.set(Math.sin(a) * rr, DS_Y + DS_H / 2, Math.cos(a) * rr); pnl.rotation.y = a;
+    if (k === 0 && M.decal) {
+      const dc = add(new THREE.Mesh(new THREE.PlaneGeometry(1.38, DS_H * 0.78), M.decal));
+      dc.position.set(Math.sin(a) * (rr + 0.022), DS_Y + DS_H / 2, Math.cos(a) * (rr + 0.022)); dc.rotation.y = a;
+    }
+    // bay stiffeners: two horizontal ribs across each blanket
+    for (const dy of [-0.38, 0.38]) { const rib = add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.035, 0.03), M.dark)); rib.position.set(Math.sin(a) * (rr + 0.03), DS_Y + DS_H / 2 + dy, Math.cos(a) * (rr + 0.03)); rib.rotation.y = a; }
   }
-  // "UNITED STATES" placard with the flag decal on the front-right bay (sunlit side)
-  if (M.decal) {
-    const a = Math.PI / 4, rr = DS_R * Math.cos(Math.PI / 8) + 0.012;
-    const pnl = add(new THREE.Mesh(new THREE.PlaneGeometry(1.45, DS_H * 0.84), M.decal));
-    pnl.position.set(Math.sin(a) * rr, DS_Y + DS_H / 2, Math.cos(a) * rr); pnl.rotation.y = a;
-  }
-  // descent engine
+  // descent engine: bell + skirt
   const bellPts = []; for (let i = 0; i <= 12; i++) { const u = i / 12; bellPts.push(new THREE.Vector2(0.32 + 0.5 * Math.pow(u, 1.4), -u * 1.05)); }
   const bell = add(new THREE.Mesh(new THREE.LatheGeometry(bellPts, 32), M.bell));
   bell.position.y = DS_Y + 0.05;
-  // legs
-  const legs = [];
+  const skirt = add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.95, 0.22, 24, 1, true), M.blackFoil)); skirt.position.y = DS_Y - 0.2;
+  // ---------------- landing gear
+  const legs = [], probes = [];
+  const PROBE_L = 1.5;
   for (let k = 0; k < 4; k++) {
-    const a = Math.PI / 4 + k * Math.PI / 2, s = Math.sin(a), c = Math.cos(a);
-    const top = V3(s * 1.95, DS_Y + DS_H * 0.8, c * 1.95);
+    const a = k * Math.PI / 2, s = Math.sin(a), c = Math.cos(a);
+    const top = V3(s * (AP + 0.14), DS_Y + DS_H * 0.8, c * (AP + 0.14));
     const foot = folded ? V3(s * 2.6, DS_Y + 0.2, c * 2.6) : V3(s * 4.2, 0.28, c * 4.2);
-    const lowA = V3(s * 1.6 + c * 0.9, DS_Y + 0.1, c * 1.6 - s * 0.9), lowB = V3(s * 1.6 - c * 0.9, DS_Y + 0.1, c * 1.6 + s * 0.9);
-    const mid = top.clone().lerp(foot, 0.62);
-    add(strut(top, foot, 0.09, M.gold));
-    add(strut(lowA, mid, 0.04, M.silverFoil));
-    add(strut(lowB, mid, 0.04, M.silverFoil));
-    const pad = add(new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.34, 0.16, 24), M.silverFoil));
-    pad.position.copy(foot).setY(foot.y - 0.2);
+    // strut fittings on the main face
+    const fit = box(0.46, 0.32, 0.28, M.dark, s * (AP + 0.1), top.y, c * (AP + 0.1)); fit.rotation.y = a;
+    // primary strut: foil-wrapped outer cylinder, polished piston below
+    const J = top.clone().lerp(foot, 0.56);
+    add(strut(top, J, 0.1, M.gold, 12));
+    add(strut(J.clone().lerp(top, 0.04), J.clone().lerp(foot, 0.06), 0.118, M.silverFoil, 12));
+    add(strut(J, foot, 0.062, M.chrome, 12));
+    // secondary struts from the lower corners of the stage to the outer cylinder's end, and the deployment truss
+    const lowA = V3(s * AP + c * 0.95, DS_Y + 0.1, c * AP - s * 0.95), lowB = V3(s * AP - c * 0.95, DS_Y + 0.1, c * AP + s * 0.95);
+    const J2 = top.clone().lerp(foot, 0.5);
+    add(strut(lowA, J2, 0.045, M.gold, 8)); add(strut(lowB, J2, 0.045, M.gold, 8));
+    for (const lo of [lowA, lowB]) {
+      const hi = V3(s * (AP + 0.02) + (lo.x - s * AP) * 0.45, DS_Y + DS_H * 0.42, c * (AP + 0.02) + (lo.z - c * AP) * 0.45);
+      add(strut(hi, lo.clone().lerp(J2, 0.5), 0.022, M.silverFoil, 6));
+    }
+    // footpad (a shallow dish), ball joint
+    const padPts = [[0.001, 0], [0.2, 0.006], [0.35, 0.03], [0.44, 0.075], [0.47, 0.13], [0.47, 0.17], [0.43, 0.17], [0.2, 0.135], [0.001, 0.13]].map(([x, y]) => new THREE.Vector2(x, y));
+    const pad = add(new THREE.Mesh(new THREE.LatheGeometry(padPts, 28), M.goldDark));
+    pad.position.set(foot.x, foot.y - 0.28, foot.z);
+    const ball = add(new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 10), M.chrome)); ball.position.set(foot.x, foot.y - 0.06, foot.z);
     legs.push({ top, foot, pad });
+    // surface-contact probe (not on the ladder leg): hangs from the pad, folds outward as it drags on the surface
+    if (!folded && k !== 0) {
+      const pivot = new THREE.Group(); pivot.position.set(foot.x + s * 0.3, foot.y - 0.27, foot.z + c * 0.3); lm.add(pivot);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, PROBE_L, 6), M.chrome); rod.geometry.translate(0, -PROBE_L / 2, 0); pivot.add(rod);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), M.dark); tip.position.y = -PROBE_L; pivot.add(tip);
+      const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 5), M.chrome); brace.geometry.translate(0, -0.18, 0); brace.position.set(-s * 0.3, 0.12, -c * 0.3); brace.rotation.set(c * 0.9, 0, -s * 0.9); pivot.add(brace);
+      probes.push({ pivot, axis: V3(-c, 0, s), y0: foot.y - 0.27 });
+    }
   }
-  // front porch + ladder on the +Z leg
+  // front porch + ladder on the +Z leg's primary strut
   if (!folded) {
-    const porch = add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 0.8), M.silverFoil));
-    porch.position.set(0, DS_Y + DS_H + 0.02, DS_R + 0.3);
-    const lt = V3(0, DS_Y + DS_H, DS_R + 0.55), lb = V3(0, 0.55, 3.35);
-    [-0.25, 0.25].forEach((dx) => add(strut(lt.clone().setX(dx), lb.clone().setX(dx), 0.025, M.gold, 6)));
-    for (let i = 1; i < 9; i++) { const p = lt.clone().lerp(lb, i / 9); add(strut(p.clone().setX(-0.25), p.clone().setX(0.25), 0.018, M.gold, 6)); }
+    const porch = box(1.1, 0.05, 0.8, M.silverFoil, 0, DS_Y + DS_H + 0.02, AP + 0.36);
+    for (const dx of [-0.52, 0.52]) {
+      add(strut(V3(dx, DS_Y + DS_H + 0.04, AP + 0.72), V3(dx, DS_Y + DS_H + 0.62, AP + 0.72), 0.014, M.gold, 6));
+      add(strut(V3(dx, DS_Y + DS_H + 0.62, AP + 0.72), V3(dx * 0.9, DS_Y + DS_H + 0.9, 1.35), 0.014, M.gold, 6));
+    }
+    const L0 = legs[0], d = L0.foot.clone().sub(L0.top).normalize(), n = V3(0, d.z, -d.y);
+    const lt = V3(0, DS_Y + DS_H, AP + 0.62), lb = L0.top.clone().lerp(L0.foot, 0.86).addScaledVector(n, 0.15);
+    [-0.25, 0.25].forEach((dx) => add(strut(lt.clone().setX(dx), lb.clone().setX(dx), 0.022, M.gold, 6)));
+    for (let i = 1; i < 10; i++) { const p = lt.clone().lerp(lb, i / 10); add(strut(p.clone().setX(-0.25), p.clone().setX(0.25), 0.017, M.gold, 6)); }
   }
-  // ascent stage
+  // thruster plume deflectors on the descent stage deck under the RCS quads
+  for (const [x, z] of [[-1.5, 0.55], [1.5, 0.55], [-1.5, -1.2], [1.5, -1.2]]) {
+    const pl = box(0.5, 0.02, 0.5, M.silverFoil, x * 0.98, DS_Y + DS_H + 0.2, z); pl.rotation.set(0, 0, -Math.sign(x) * 0.5);
+    add(strut(V3(x * 0.8, DS_Y + DS_H, z), V3(x * 0.98, DS_Y + DS_H + 0.18, z), 0.015, M.silverFoil, 5));
+  }
+  // ---------------- ascent stage
   const as = new THREE.Group(); as.position.y = DS_Y + DS_H + 0.05; lm.add(as);
   const shape = new THREE.Shape();
   [[-1.35, -0.9], [1.35, -0.9], [1.35, 0.35], [0.8, 1.15], [-0.8, 1.15], [-1.35, 0.35]].forEach(([x, z], i) => (i ? shape.lineTo(x, -z) : shape.moveTo(x, -z)));
@@ -515,7 +684,8 @@ export function buildLM(M, { folded = false } = {}) {
   cabG.rotateX(-Math.PI / 2);
   const cab = add(new THREE.Mesh(cabG, M.skin), as);
   cab.position.y = 0.1;
-  // front face upper: two triangular windows angled like the real LM
+  // black thermal surround + triangular windows (canted like the real LM's) + frames
+  const triPts = (sx) => [V3(0, 0, 0), V3(sx * 0.7, 0, 0), V3(sx * 0.06, 0.66, 0)];
   const tri = (sx) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, sx * 0.7, 0, 0, sx * 0.06, 0.66, 0], 3));
@@ -524,56 +694,137 @@ export function buildLM(M, { folded = false } = {}) {
     const m = new THREE.Mesh(g, M.window); m.position.set(sx * 0.08, 1.14, 1.235); return m;
   };
   const winL = tri(-1), winR = tri(1); as.add(winL, winR);
-  const winFrame = (w) => { const e = new THREE.LineSegments(new THREE.EdgesGeometry(w.geometry), new THREE.LineBasicMaterial({ color: '#16171a' })); w.add(e); };
-  winFrame(winL); winFrame(winR);
-  // hatch
-  const hatch = add(new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.85, 0.06), M.dark), as); hatch.position.set(0, 0.62, 1.2);
-  // docking tunnel + drogue on top
+  for (const [sx, w] of [[-1, winL], [1, winR]]) {
+    const p = triPts(sx), cxy = p[0].clone().add(p[1]).add(p[2]).multiplyScalar(1 / 3);
+    const sur = w.clone(); sur.material = M.blackFoil; sur.scale.setScalar(1.28); sur.position.set(w.position.x + cxy.x * (1 - 1.28), w.position.y + cxy.y * (1 - 1.28), 1.226); as.add(sur);
+    for (let i = 0; i < 3; i++) { const a = p[i].clone().add(w.position), b = p[(i + 1) % 3].clone().add(w.position); a.z = b.z = 1.24; add(strut(a, b, 0.018, M.dark, 6), as); }
+  }
+  // hatch with its frame, handle and the handrails either side
+  const hatch = box(0.85, 0.85, 0.06, M.dark, 0, 0.62, 1.2, as);
+  box(0.95, 0.05, 0.05, M.silverFoil, 0, 1.07, 1.23, as); box(0.95, 0.05, 0.05, M.silverFoil, 0, 0.17, 1.23, as);
+  box(0.12, 0.03, 0.04, M.chrome, 0.28, 0.62, 1.25, as);
+  for (const sx of [-1, 1]) { add(strut(V3(sx * 0.58, 0.2, 1.27), V3(sx * 0.58, 1.02, 1.27), 0.016, M.gold, 6), as); for (const y of [0.2, 1.02]) add(strut(V3(sx * 0.58, y, 1.27), V3(sx * 0.58, y, 1.2), 0.012, M.gold, 5), as); }
+  // docking tunnel, drogue ring, overhead rendezvous window, docking target
   const tun = add(new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.52, 0.45, 32), M.skin), as); tun.position.set(0, 2.35, -0.05);
-  // aft equipment bay
-  const aft = add(new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.3, 1.1), M.blackFoil), as); aft.position.set(0, 1.05, -1.45);
-  // side tanks
-  [-1, 1].forEach((sx) => { const tk = add(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.15, 24), M.skin), as); tk.position.set(sx * 1.45, 0.75, -0.25); });
-  // RCS quads on the four corners
+  const ring = add(new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.035, 8, 32), M.chrome), as); ring.rotation.x = Math.PI / 2; ring.position.set(0, 2.575, -0.05);
+  const ohw = add(new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.26), M.window), as); ohw.rotation.x = -Math.PI / 2; ohw.position.set(-0.45, 2.172, 0.55);
+  {
+    const tg = new THREE.Group(); tg.position.set(-0.85, 2.16, 0.2); as.add(tg);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.34, 6), M.chrome), tg).position.y = 0.17;
+    const disc = add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.015, 24), M.paint), tg); disc.position.y = 0.34;
+    box(0.36, 0.02, 0.04, M.white, 0, 0.35, 0, tg); box(0.04, 0.02, 0.36, M.white, 0, 0.35, 0, tg);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 6), M.white), tg).position.y = 0.45;
+  }
+  // aft equipment bay: black box, radiator fins, gas bottles
+  const aft = box(2.3, 1.3, 1.1, M.blackFoil, 0, 1.05, -1.45, as);
+  for (const x of [-0.7, -0.35, 0, 0.35, 0.7]) box(0.03, 1.1, 0.12, M.silverFoil, x, 1.05, -2.02, as);
+  for (const sx of [-1, 1]) { const b = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.5, 4, 14), M.white), as); b.position.set(sx * 0.95, 1.95, -1.55); }
+  // propellant-tank cheeks
+  [-1, 1].forEach((sx) => { const tk = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 0.55, 6, 24), M.skin), as); tk.position.set(sx * 1.42, 0.82, -0.25); });
+  // RCS quads on booms: housing + four bells (up, down, outboard, fore/aft)
   for (const [x, z] of [[-1.5, 0.55], [1.5, 0.55], [-1.5, -1.2], [1.5, -1.2]]) {
-    const q = new THREE.Group(); q.position.set(x, 1.85, z); as.add(q);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), M.goldDark), q);
-    for (const d of [V3(1, 0, 0), V3(-1, 0, 0), V3(0, 1, 0), V3(0, -1, 0)]) {
-      const n = add(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 10, 1, true), M.bell), q);
-      n.position.copy(d).multiplyScalar(0.22); n.quaternion.setFromUnitVectors(V3(0, -1, 0), d);
+    const q = new THREE.Group(); q.position.set(x * 1.06, 1.85, z); as.add(q);
+    add(strut(V3(x * 0.84, 1.75, z), V3(x * 1.06, 1.85, z), 0.05, M.silverFoil, 8), as);
+    add(strut(V3(x * 0.84, 2.1, z * 0.9), V3(x * 1.06, 1.9, z), 0.02, M.silverFoil, 5), as);
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.3, 0.3, 0.3, 2, 0.04), M.goldDark), q);
+    const nz = bellGeo(0.03, 0.075, 0.2, 14);
+    for (const d of [V3(0, 1, 0), V3(0, -1, 0), V3(Math.sign(x), 0, 0), V3(0, 0, Math.sign(z))]) {
+      const n = add(new THREE.Mesh(nz, M.bell), q);
+      n.position.copy(d).multiplyScalar(0.15); n.quaternion.setFromUnitVectors(V3(0, -1, 0), d);
     }
   }
-  // rendezvous radar (front-top) and S-band steerable dish (top-right)
-  const rr = add(new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 12, 0, TAU, 0, Math.PI * 0.32), M.white), as);
-  rr.position.set(0, 2.45, 0.85); rr.rotation.x = -1.1;
+  // rendezvous radar: dish on a yoke, front-top
+  {
+    const rg = new THREE.Group(); rg.position.set(0, 2.2, 0.82); as.add(rg);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.14, 12), M.dark), rg).position.y = 0.07;
+    for (const sx of [-1, 1]) box(0.03, 0.32, 0.06, M.silverFoil, sx * 0.3, 0.26, 0, rg);
+    box(0.62, 0.04, 0.06, M.silverFoil, 0, 0.12, 0, rg);
+    const dish = add(new THREE.Mesh(dishGeo(0.33, 0.24), M.white), rg); dish.position.y = 0.32; dish.rotation.x = 1.15;
+    add(strut(V3(0, 0.32, 0), V3(0, 0.32 + Math.cos(1.15) * 0.26, Math.sin(1.15) * 0.26), 0.012, M.dark, 5), rg);
+  }
+  // S-band steerable antenna: boom, gimbal, dish
   add(strut(V3(1.0, 2.1, -0.5), V3(1.35, 2.75, -0.7), 0.03, M.silverFoil), as);
-  const dish = add(new THREE.Mesh(new THREE.SphereGeometry(0.4, 24, 12, 0, TAU, 0, Math.PI * 0.3), M.white), as);
-  dish.position.set(1.35, 2.9, -0.7); dish.rotation.set(-0.5, 0, -0.6);
-  [V3(-1.2, 2.1, -1.2), V3(0.6, 2.1, -1.7)].forEach((b) => add(strut(b, b.clone().add(V3(0, 0.7, 0.1)), 0.012, M.silverFoil, 4), as));
-  lm.userData = { ascent: as, bell, windows: [winL, winR], legs, bellY: DS_Y - 1.0, winPos: V3(-0.35, as.position.y + 1.42, 1.3) };
+  add(strut(V3(1.35, 2.75, -0.7), V3(1.35, 2.9, -0.7), 0.05, M.dark, 8), as);
+  const sdish = add(new THREE.Mesh(dishGeo(0.4, 0.28), M.white), as); sdish.position.set(1.35, 2.95, -0.7); sdish.rotation.set(-0.6, 0, -0.7);
+  // VHF antennas (inverted-cone bases, angled whips) and the EVA antenna
+  for (const [b, dir] of [[V3(-1.2, 2.16, -1.2), V3(-0.45, 1, -0.3)], [V3(0.6, 2.16, -1.7), V3(0.3, 1, -0.5)]]) {
+    const cone = add(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 12), M.white), as); cone.position.copy(b).add(V3(0, 0.08, 0)); cone.rotation.x = Math.PI;
+    add(strut(b.clone().add(V3(0, 0.12, 0)), b.clone().add(V3(0, 0.12, 0)).addScaledVector(dir.normalize(), 0.8), 0.009, M.silverFoil, 4), as);
+  }
+  add(strut(V3(0.7, 2.16, 0.7), V3(0.8, 2.6, 0.9), 0.008, M.silverFoil, 4), as);
+  const setProbes = (h) => {
+    for (const p of probes) {
+      const hh = h + p.y0;
+      const th = hh >= PROBE_L ? 0 : Math.min(1.52, Math.acos(Math.max(0, hh) / PROBE_L));
+      p.pivot.quaternion.setFromAxisAngle(p.axis, th);
+    }
+  };
+  lm.userData = { ascent: as, bell, windows: [winL, winR], legs, probes, setProbes, bellY: DS_Y - 1.0, winPos: V3(-0.35, as.position.y + 1.42, 1.3), topZ: as.position.y + 2.575 };
   lm.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return lm;
 }
 
-// Command + service module. Axis along +Z; CM apex (docking probe) at +Z.
+// Command + service module. Axis along +Z; CM apex (docking probe) at +Z. Proportions after the Block II CSM:
+// SM Ø 3.9 m × 4.4 m, SPS nozzle 2.8 m, CM 3.2 m tall. userData: apexZ (CM docking ring), aftZ (nozzle exit).
 export function buildCSM(M) {
   const g = new THREE.Group();
-  const smLen = 7.4, R = 1.96;
-  const sm = new THREE.Mesh(new THREE.CylinderGeometry(R, R, smLen, 48), M.sm); sm.rotation.x = Math.PI / 2; g.add(sm);
-  const bellPts = []; for (let i = 0; i <= 14; i++) { const u = i / 14; bellPts.push(new THREE.Vector2(0.45 + 0.95 * Math.pow(u, 1.5), -u * 2.9)); }
-  const bell = new THREE.Mesh(new THREE.LatheGeometry(bellPts, 40), M.bell); bell.rotation.x = Math.PI / 2; bell.position.z = -smLen / 2 - 0.1; g.add(bell);
-  const aftCap = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.98, R * 0.98, 0.2, 48), M.dark); aftCap.rotation.x = Math.PI / 2; aftCap.position.z = -smLen / 2; g.add(aftCap);
-  const cmPts = [new THREE.Vector2(0.001, 0), new THREE.Vector2(R, 0), new THREE.Vector2(R * 0.98, 0.15), new THREE.Vector2(0.55, 3.25), new THREE.Vector2(0.4, 3.4), new THREE.Vector2(0.001, 3.45)];
-  const cm = new THREE.Mesh(new THREE.LatheGeometry(cmPts, 48), M.cm); cm.rotation.x = Math.PI / 2; cm.position.z = smLen / 2 + 0.02; g.add(cm);
-  // RCS quads + high-gain antenna
+  const add = (m, parent = g) => { parent.add(m); return m; };
+  const R = 1.96, SM_F = 3.7, smLen = 4.4, SM_A = SM_F - smLen;
+  // service module shell, aft bulkhead, forward fairing ring
+  const sm = add(new THREE.Mesh(new THREE.CylinderGeometry(R, R, smLen, 72, 1, true), M.sm)); sm.rotation.x = Math.PI / 2; sm.position.z = (SM_F + SM_A) / 2;
+  const aftCap = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.995, R * 0.995, 0.12, 64), M.dark)); aftCap.rotation.x = Math.PI / 2; aftCap.position.z = SM_A - 0.02;
+  const aftRing = add(new THREE.Mesh(new THREE.TorusGeometry(R, 0.04, 8, 72), M.chrome)); aftRing.position.z = SM_A;
+  const fwdRing = add(new THREE.Mesh(new THREE.TorusGeometry(R + 0.005, 0.03, 8, 72), M.dark)); fwdRing.position.z = SM_F - 0.02;
+  // SPS engine: gimbal housing, throat, banded nozzle extension
+  const eng = add(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.4, 32), M.dark)); eng.rotation.x = Math.PI / 2; eng.position.z = SM_A - 0.25;
+  const nzPts = []; for (let i = 0; i <= 18; i++) { const u = i / 18; nzPts.push(new THREE.Vector2(0.42 + 0.86 * Math.pow(u, 1.35), -u * 2.8)); }
+  const nozzle = add(new THREE.Mesh(new THREE.LatheGeometry(nzPts, 48), M.nozzle)); nozzle.rotation.x = Math.PI / 2; nozzle.position.z = SM_A - 0.4;
+  const lip = add(new THREE.Mesh(new THREE.TorusGeometry(1.28, 0.03, 6, 48), M.dark)); lip.position.z = SM_A - 0.4 - 2.8;
+  // RCS quads at the four 45° stations near the forward end: housing + two axial and two tangential bells
+  const qb = bellGeo(0.04, 0.1, 0.3, 14);
   for (let k = 0; k < 4; k++) {
-    const a = k * Math.PI / 2 + Math.PI / 4, q = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.9), M.silverFoil);
-    q.position.set(Math.cos(a) * (R + 0.15), Math.sin(a) * (R + 0.15), 1.6); q.rotation.z = a; g.add(q);
+    const a = k * Math.PI / 2 + Math.PI / 4, q = new THREE.Group();
+    q.position.set(Math.cos(a) * (R + 0.12), Math.sin(a) * (R + 0.12), SM_F - 0.95); q.rotation.z = a; g.add(q);   // local X = radial
+    add(new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.62, 0.7, 2, 0.05), M.silverFoil), q);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.9, 0.95), M.dark), q).position.x = -0.12;
+    for (const d of [V3(0, 0, 1), V3(0, 0, -1), V3(0, 1, 0), V3(0, -1, 0)]) {
+      const n = add(new THREE.Mesh(qb, M.bell), q);
+      n.position.copy(d).multiplyScalar(d.z ? 0.36 : 0.32); n.position.x = 0.05; n.quaternion.setFromUnitVectors(V3(0, -1, 0), d);
+    }
   }
-  const hga = new THREE.Group(); hga.position.set(0, -R - 1.6, -3.2); g.add(hga);
-  hga.add(strut(V3(0, 1.6, 0), V3(0, 0, 0), 0.05, M.silverFoil));
-  for (let k = 0; k < 4; k++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 8, 0, TAU, 0, Math.PI * 0.3), M.white); d.position.set((k % 2 - 0.5) * 0.9, -0.2, (Math.floor(k / 2) - 0.5) * 0.9); d.rotation.x = Math.PI; hga.add(d); }
-  g.userData.length = smLen + 3.45 + 3;
+  // scimitar VHF antennas (two curved blades, 180° apart)
+  {
+    const sh = new THREE.Shape(); sh.absarc(0, 0, 0.75, 0.15, Math.PI * 0.85, false); sh.absarc(0, 0, 0.66, Math.PI * 0.85, 0.15, true); sh.closePath();
+    const sg = new THREE.ExtrudeGeometry(sh, { depth: 0.025, bevelEnabled: false, curveSegments: 24 }); sg.translate(0, -0.2, -0.0125);
+    const bx = V3(0, 0, 1), m4 = new THREE.Matrix4();
+    for (const sx of [1, -1]) { const b = add(new THREE.Mesh(sg, M.white)); b.position.set(sx * R, 0, SM_A + 1.8); const by = V3(sx, 0, 0); b.quaternion.setFromRotationMatrix(m4.makeBasis(bx, by, V3(0, 0, 0).crossVectors(bx, by))); }
+  }
+  // high-gain antenna: boom off the aft end, four dishes round a central horn
+  const hga = new THREE.Group(); hga.position.set(0, -R - 1.3, SM_A + 0.35); g.add(hga);
+  add(strut(V3(0, 1.3, 0), V3(0, 0, 0), 0.05, M.silverFoil), hga);
+  add(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.34), M.dark), hga).position.y = -0.05;
+  add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 12), M.white), hga).position.y = -0.3;
+  for (let k = 0; k < 4; k++) {
+    const d = add(new THREE.Mesh(dishGeo(0.4, 0.3), M.white), hga);
+    d.position.set((k % 2 - 0.5) * 0.9, -0.2, (Math.floor(k / 2) - 0.5) * 0.9); d.rotation.x = Math.PI;
+    add(strut(V3(0, -0.05, 0), d.position.clone(), 0.018, M.silverFoil, 5), hga);
+  }
+  // command module: heat shield (bronze ablator), Mylar-taped cone, forward tunnel, docking probe
+  const CM_Z = SM_F + 0.02, CH = 3.15;
+  const hs = add(new THREE.Mesh(new THREE.LatheGeometry([[0.001, -0.22], [0.9, -0.17], [1.6, -0.08], [R + 0.01, 0.02], [R + 0.005, 0.1]].map(([x, y]) => new THREE.Vector2(x, y)), 64), M.heat));
+  hs.rotation.x = Math.PI / 2; hs.position.z = CM_Z;
+  const cmPts = [];
+  for (let i = 0; i <= 14; i++) { const u = i / 14; cmPts.push(new THREE.Vector2(R - (R - 0.74) * u, 0.1 + u * 2.35)); }
+  [[0.66, 2.62], [0.55, 2.78], [0.46, 2.88], [0.44, 3.1], [0.001, 3.12]].forEach(([x, y]) => cmPts.push(new THREE.Vector2(x, y)));
+  const cm = add(new THREE.Mesh(new THREE.LatheGeometry(cmPts, 72), M.cm)); cm.rotation.x = Math.PI / 2; cm.position.z = CM_Z;
+  const tunRing = add(new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.03, 8, 36), M.chrome)); tunRing.position.z = CM_Z + CH - 0.04;
+  add(strut(V3(0, 0, CM_Z + CH - 0.05), V3(0, 0, CM_Z + CH + 0.45), 0.07, M.chrome, 12));
+  const probeTip = add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 12), M.chrome)); probeTip.rotation.x = Math.PI / 2; probeTip.position.z = CM_Z + CH + 0.52;
+  for (let k = 0; k < 3; k++) { const a = k * TAU / 3; add(strut(V3(Math.cos(a) * 0.4, Math.sin(a) * 0.4, CM_Z + CH - 0.05), V3(Math.cos(a) * 0.06, Math.sin(a) * 0.06, CM_Z + CH + 0.3), 0.014, M.chrome, 5)); }
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  g.userData.apexZ = CM_Z + CH;
+  g.userData.aftZ = SM_A - 0.4 - 2.8;
+  g.userData.length = g.userData.apexZ - g.userData.aftZ;
   return g;
 }
 
@@ -1203,8 +1454,9 @@ export function buildSuitFigure(M, { modern = false, legs, dust = null, curl = [
     if (!modern) r *= 1 + 0.035 * noise4(R.x * 1.6, R.y * 1.6, R.z * 1.6, s * 5);
     return r;
   };
+  const legSweeps = [];
   legs.forEach((L, li) => {
-    const sx = li === 0 ? 1 : -1;
+    const sx = L.side ?? (li === 0 ? 1 : -1);
     const sweep = new SuitSweep({
       rings: 50, segs: 22, fillet: 0.09, radius: legR,
       color: (c, s, L1, L2, R) => {
@@ -1213,7 +1465,9 @@ export function buildSuitFigure(M, { modern = false, legs, dust = null, curl = [
         if (dust) dustMix(c, Math.min(1, 0.95 * sstep(L2 - 0.55, L2 - 0.05, x) + 0.35 * Math.exp(-(((x + 0.02) / 0.06) ** 2)) * sstep(-0.2, 0.6, R.z)) * mottle(R.x * 3.5 + s * 7, R.z * 3.5 + s * 3), dustC);
       },
     }).pose(L.hip, L.knee, L.ankle, new THREE.Vector3(sx, 0, 0));
-    g.add(meshOf(sweep.geometry, M.fabric));
+    const legMesh = meshOf(sweep.geometry, M.fabric); g.add(legMesh);
+    legSweeps.push(sweep);
+    if (L.free) { legMesh.frustumCulled = false; return; }      // re-posed at runtime (sweep.pose); the caller supplies the boot
     const boot = buildSuitBoot(M, { modern, dust });
     boot.rotation.set(L.pitch ?? 0, Math.PI + (L.yaw ?? 0), 0, 'YXZ');
     boot.updateMatrix();
@@ -1328,7 +1582,7 @@ export function buildSuitFigure(M, { modern = false, legs, dust = null, curl = [
   // neutral pose
   setArm(0, new THREE.Vector3(0.36, 0.98, 0.05), new THREE.Vector3(0.3, 0, -1).normalize());
   setArm(1, new THREE.Vector3(-0.36, 0.98, 0.05), new THREE.Vector3(-0.3, 0, -1).normalize());
-  return { group: g, setArm, helmet, visor: helmet.userData.visor };
+  return { group: g, setArm, helmet, visor: helmet.userData.visor, legSweeps };
 }
 
 // the macro-shot boot: a lunar overshoe and the leg above it (knee convolute, regolith-stained shin)

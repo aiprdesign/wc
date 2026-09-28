@@ -204,6 +204,49 @@ export function create(ctx, segment) {
   bar(CW - 0.2, 0.08, 0, 0); bar(0.08, CH - 0.2, 0, 0);
   const SURF = CD / 2 + 0.003;
 
+  // Explore 3D only (the film frames the canvas alone in the dark): the studio easel that holds it and
+  // the boards it stands on, so from any angle the canvas is a real object rather than a floating card
+  const EASEL_FOOT = -2.75;                          // world y of the studio floor
+  const easel = new THREE.Group();
+  {
+    const easelWood = new THREE.MeshStandardMaterial({ color: '#4a2f19', roughness: 0.62, metalness: 0 });
+    const brassE = new THREE.MeshStandardMaterial({ color: '#b8904e', roughness: 0.35, metalness: 1 });
+    const beam = (a, b, w, d, mat = easelWood) => {
+      const len = a.distanceTo(b), m = new THREE.Mesh(new THREE.BoxGeometry(w, len, d), mat);
+      m.position.copy(a).add(b).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(V(0, 1, 0), b.clone().sub(a).normalize());
+      easel.add(m); return m;
+    };
+    const topY = CH / 2 + 0.55, backZ = -CD / 2 - 0.13;
+    for (const sx of [-1, 1]) beam(V(sx * 0.32, topY, backZ - 0.02), V(sx * 1.05, EASEL_FOOT, -0.03), 0.075, 0.06);  // front legs (behind the canvas down to its ledge)
+    beam(V(0, topY + 0.1, backZ - 0.06), V(0, EASEL_FOOT, -1.7), 0.07, 0.06);                                     // rear leg
+    beam(V(0, -CH / 2 - 0.2, backZ), V(0, topY + 0.18, backZ), 0.1, 0.05);                                        // mast
+    const ledge = new THREE.Mesh(new THREE.BoxGeometry(CW + 0.3, 0.07, 0.24), easelWood); ledge.position.set(0, -CH / 2 - 0.035, 0.04); easel.add(ledge);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(CW + 0.3, 0.09, 0.03), easelWood); lip.position.set(0, -CH / 2 + 0.01, 0.16); easel.add(lip);
+    const topClamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.22), easelWood); topClamp.position.set(0, CH / 2 + 0.04, -0.03); easel.add(topClamp);
+    beam(V(-0.62, -CH / 2 - 0.9, backZ + 0.02), V(0.62, -CH / 2 - 0.9, backZ + 0.02), 0.05, 0.05);             // cross brace
+    for (const y of [CH / 2 + 0.04, -CH / 2 - 0.035]) { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 16), brassE); k.rotation.x = Math.PI / 2; k.position.set(0, y, backZ - 0.07); easel.add(k); }
+    // floorboards, fading into the dark
+    const N = 512, fc = mkCanvas(N, N), g = fc.getContext('2d'), r = rng(88);
+    for (let i = 0; i < 16; i++) {
+      const l = 0.75 + r() * 0.35;
+      g.fillStyle = `rgb(${Math.round(58 * l)},${Math.round(38 * l)},${Math.round(22 * l)})`; g.fillRect(i * 32, 0, 32, N);
+      for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(20,10,4,${0.08 + r() * 0.12})`; g.fillRect(i * 32 + r() * 32, r() * N, 1, 20 + r() * 120); }
+      g.fillStyle = 'rgba(8,4,2,0.9)'; g.fillRect(i * 32, 0, 2, N);
+      g.fillRect(i * 32, r() * N, 32, 2);
+    }
+    g.globalCompositeOperation = 'destination-in';
+    const fade = g.createRadialGradient(N / 2, N / 2, N * 0.18, N / 2, N / 2, N / 2);
+    fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fade; g.fillRect(0, 0, N, N);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(5.5, 64), new THREE.MeshStandardMaterial({ map: toTexture(fc), transparent: true, roughness: 0.7, metalness: 0 }));
+    floor.rotation.x = -Math.PI / 2; floor.userData.worldFloor = true;
+    easel.userData.floor = floor;
+    scene.add(floor);
+    canvasRig.add(easel);
+    easel.visible = floor.visible = false;
+  }
+
   // ---------------------------------------------------------------- golden-ratio geometry on the canvas
   const gH = 3.0, gW = gH / PHI;
   const gc = goldenConstruction(-gW / 2, -gH / 2, gW, gH, 9);
@@ -451,11 +494,24 @@ export function create(ctx, segment) {
   const seqProg = (t, a, b) => sat((t - a) / (b - a));
   const cSepia = new THREE.Color(SEPIA), cGold = new THREE.Color(GOLD);
 
+  let lastT = 0;
+  const LIM_2D = { yaw: 0.8, pitchDown: 0.3, pitchUp: 0.55, zoomIn: 0.35, zoomOut: 2.2, fly: 1.2 };   // the drawing on its canvas
+  const LIM_3D = { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.8, zoomOut: 2.1 };                        // the lifted figure; the grid ends past that
   return {
     scene, camera, dof, bloom, exposure: 1,
     strokeCount,
+    get exploreLimits() { return lastT < m3 ? LIM_2D : LIM_3D; },
+    explore(t) {
+      if (t >= m3) return;                                      // once the canvas recedes the lit figure is the set
+      easel.visible = true;
+      const fl = easel.userData.floor;
+      fl.visible = true;
+      fl.position.set(canvasRig.position.x, EASEL_FOOT, canvasRig.position.z - 0.4);
+    },
     update(t, info) {
       const T = info.T;
+      lastT = t;
+      easel.visible = easel.userData.floor.visible = false;
       // ------------------------------------------------ camera
       const lift = ramp(t, m3, m3 + 0.6, ease.inOutCubic);
       const orb = ramp(t, m3 + 0.05, pB + 0.1, ease.inOutSine);

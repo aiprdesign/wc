@@ -162,6 +162,9 @@ void main(){
   gl_FragColor = vec4(uColor * o, o);
 }`;
 const quadVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+// camera-facing billboard (identical to a camera-aligned quad in the film; still faces the lens when the
+// viewer explores the scene from another angle)
+const billboardVert = `varying vec2 vUv; void main(){ vUv = uv; vec4 c = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0); c.xy += position.xy * length(modelMatrix[0].xyz); gl_Position = projectionMatrix * c; }`;
 
 function sweepOverlay(tp) {
   const m = new THREE.Mesh(tp.geometry, new THREE.ShaderMaterial({
@@ -203,7 +206,10 @@ export function create(ctx, segment) {
   const rig = makeRig(THREE, { outAspect: OUTPUT_ASPECT, filmAspect: FILM_ASPECT });
   const W = rig.wide;                                 // 0 = square layout, 1 = 2.39 layout
   // harmony < 1 keeps Earth's true blues and greens out of the 60-30-10 grade
-  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, harmony: 0.3, update };
+  // dof carries no blur here (amount 0, and no chapter heading racks it): its focus only tells Explore what the
+  // shot looks at — the point of the view ray nearest Earth's centre — so the viewer orbits the planet
+  // rather than an empty point in the sky
+  const self = { scene, camera, background: 0x000000, bloom: { strength: 0.6 }, exposure: 1, harmony: 0.3, update, dof: { focus: 5, range: 3, amount: 0 }, exploreLimits: { zoomOut: 3, fly: 2 } };
 
   // ---- Earth -----------------------------------------------------------------------
   const maps = bakeEarth(ctx.renderer, { width: 4096 });
@@ -336,7 +342,7 @@ export function create(ctx, segment) {
 
   // ---- sun core -------------------------------------------------------------------------
   const sunCore = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
-    uniforms: { uI: { value: 0 } }, vertexShader: quadVert, fragmentShader: sunFrag,
+    uniforms: { uI: { value: 0 } }, vertexShader: billboardVert, fragmentShader: sunFrag,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   sunCore.renderOrder = 6;
@@ -408,6 +414,8 @@ export function create(ctx, segment) {
     camera.fov = 35 - 3.5 * tighten * (1 - open) + 1.2 * open;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
+    cdir.set(0, 0, -1).applyQuaternion(quat);
+    self.dof.focus = Math.min(8, Math.max(1.5, -pos.dot(cdir)));
 
     // sun + Earth
     rig.sun(T, pos, quat, sunDir);

@@ -190,7 +190,7 @@ export function create(ctx, segment) {
   // procedural gear trains (instanced by tooth-count variant)
   const VARS = [10, 14, 18, 24, 32, 40];
   const WM = 0.12;
-  const varGeo = VARS.map((z) => gearGeometry({ teeth: z, module: WM, thickness: 0.26, bevel: 0, bore: WM * 1.4, spokes: z >= 24 ? 5 : 0, curveSegments: 6, flankSteps: 2 }));
+  const varGeo = VARS.map((z) => gearGeometry({ teeth: z, module: WM, thickness: 0.26, bevel: 0.012, bevelSegments: 1, bore: WM * 1.4, spokes: z >= 24 ? 5 : 0, curveSegments: 8, flankSteps: 3 }));
   const wall = []; // { x, y, z, s, v (variant), parent, dir, root, omega, layer }
   const R = rng(4242);
   const layerZ = (l) => WALL.z0 - l * WALL.dz;
@@ -617,6 +617,30 @@ export function create(ctx, segment) {
     const railIron = new THREE.MeshStandardMaterial({ color: '#6a5446', metalness: 0.75, roughness: 0.55, roughnessMap: surfaceTexture('cast', 512, 23), bumpMap: surfaceTexture('cast', 512, 23), bumpScale: 0.3 });
     const band = new THREE.BoxGeometry(0.056, 0.004, 140); band.translate(0, RAIL_Y + 0.172, -30);
     const bandM = steelMat({ roughness: 0.2, color: '#d6dce2', lathe: false }); bandM.envMapIntensity = 4;   // the worn running band mirrors the sky
+    // track hardware: dog spikes gripping the rail foot at every base plate, and bolted fishplates at the
+    // rail joints (every 9 m) on both sides of the web
+    {
+      const spikeG = new THREE.BoxGeometry(0.035, 0.03, 0.05), spikeM = ironMat({ color: '#2e2b29', roughness: 0.6 });
+      const spikes = new THREE.InstancedMesh(spikeG, spikeM, NS * 4);
+      let k = 0;
+      for (let i = 0; i < NS; i++) {
+        const z = 40 - i * 0.66;
+        for (const s of [-1, 1]) for (const o of [-1, 1]) { m4.makeTranslation(RX + s * GAUGE + o * 0.085, RAIL_Y + 0.012, z + o * 0.04); spikes.setMatrixAt(k++, m4); }
+      }
+      rail.add(spikes);
+      const NJ = Math.floor(140 / 9), plateG = new THREE.BoxGeometry(0.014, 0.075, 0.6), boltG = new THREE.CylinderGeometry(0.014, 0.014, 0.022, 6).rotateZ(Math.PI / 2);
+      const fish = new THREE.InstancedMesh(plateG, railIron, NJ * 4), bolts = new THREE.InstancedMesh(boltG, spikeM, NJ * 16);
+      let f = 0, b = 0;
+      for (let j = 0; j < NJ; j++) {
+        const z = 36 - j * 9;
+        for (const s of [-1, 1]) for (const o of [-1, 1]) {
+          const x = RX + s * GAUGE + o * 0.024;
+          m4.makeTranslation(x, RAIL_Y + 0.078, z); fish.setMatrixAt(f++, m4);
+          for (const dz of [-0.21, -0.07, 0.07, 0.21]) { m4.makeTranslation(x + o * 0.012, RAIL_Y + 0.078, z + dz); bolts.setMatrixAt(b++, m4); }
+        }
+      }
+      rail.add(fish, bolts);
+    }
     [-1, 1].forEach((s) => {
       const m = new THREE.Mesh(rg, railIron); m.position.x = RX + s * GAUGE; rail.add(m);
       const h = new THREE.Mesh(band, bandM); h.position.x = RX + s * GAUGE; rail.add(h);
@@ -715,12 +739,15 @@ export function create(ctx, segment) {
   const cp = V(0, 0, 0), ct = V(0, 0, 0), m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), zAxis = V(0, 0, 1), s3 = V(1, 1, 1), p3 = V(0, 0, 0);
   const dof = { focus: 1.2, range: 0.5, amount: 0.8 };
   const bloom = { strength: 0.6 };
-  const out = { scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update };
+  // explore: complete the sets (see explore() below)
+  let exMode = false, lastInfo = null;
+  const out = { scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update, explore, exploreEnd };
 
   // clockwork tick: advance one step per beat with an eased, slightly overshooting snap
   const tick = (T, len = 0.22) => { const n = Math.floor(T / BEAT), ph = sat((T - n * BEAT) / len); return n + ease.outBack(ph); };
 
   function update(t, info) {
+    lastInfo = info;
     const T = info?.T ?? t + segment.start;
     const shotA = t < tPist;
 
@@ -741,7 +768,8 @@ export function create(ctx, segment) {
       for (let i = 0; i < list.length; i++) {
         const g = list[i];
         const near = g.dist < 3.4 && g.layer > 0 ? 1 : 0;
-        const wave = ease.outBack(sat((many - g.dist * 0.018 - g.layer * 0.05) / 0.28));
+        // (explore: the whole wall is built, not only the gears that have popped in so far)
+        const wave = exMode ? 1 : ease.outBack(sat((many - g.dist * 0.018 - g.layer * 0.05) / 0.28));
         const sc = Math.max(near, wave) * g.s;
         p3.set(g.x, g.y, layerZ(g.layer));
         q4.setFromAxisAngle(zAxis, g.angle);
@@ -849,6 +877,15 @@ export function create(ctx, segment) {
     hudT.opacity = he; hudT.reveal = ramp(t, 3.35, 3.8, ease.outCubic);
     hudS.opacity = he * 0.9; hudS.reveal = ramp(t, 3.5, 3.95, ease.outCubic);
   }
+
+  // Explore: the gear wall is shown whole (in the film most of it pops in at 26.0 as the camera pulls back),
+  // and the set is given a room around it.
+  function explore(t) {
+    if (!exMode) { exMode = true; update(t, lastInfo); }
+    // the whole wall, seen off-axis, would mirror the key into the lens as a white wash: broaden its highlights
+    if (t < tPist) wallMat.roughness = Math.max(wallMat.roughness, 0.55);
+  }
+  function exploreEnd() { exMode = false; }
 
   return out;
 }

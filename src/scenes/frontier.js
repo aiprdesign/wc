@@ -182,6 +182,14 @@ export function create(ctx, segment) {
   reg.albedo.repeat.set(1, 1);
   const terrain = new THREE.Mesh(terrainGeometry(mf, { size: 260, segs: 200, k: 1.7, uvScale: 1 / 3 }), marsMat);
   terrain.receiveShadow = true; wM.add(terrain);
+  // explore only: a coarse fogged skirt beyond the 260 m plain, so a pulled-back camera never finds its edge
+  const skirt = (() => {
+    const geo = new THREE.RingGeometry(122, 420, 96, 14); geo.rotateX(-Math.PI / 2);
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setY(i, mf(p.getX(i), p.getZ(i)) - 0.35);
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, marsMat); m.receiveShadow = true; m.visible = false; wM.add(m); return m;
+  })();
   const MARS_ENV = makeEnv(ctx.renderer, { ground: [0.35, 0.17, 0.08], glowDir: V3(0, 1, 0), glow: [0.35, 0.25, 0.18] });
   // the outpost is laid out for its closing crane shot: BF = view direction from BCAM, BR = screen right
   const BF = V3(-0.76, 0, -0.65).normalize(), BR = V3(-BF.z, 0, BF.x), BCAM = V3(24, 0, -2);
@@ -415,7 +423,7 @@ export function create(ctx, segment) {
   hud.scene.add(callHeli, callRover, callEarth);
 
   // ================================================================ animation
-  const camPos = V3(), look = V3(), tmp = V3(), tmp2 = V3(), tmp3 = V3(), tmp4 = V3();
+  const camPos = V3(), look = V3(), tmp = V3(), tmp2 = V3(), tmp3 = V3(), tmp4 = V3(), UPV = V3(0, 1, 0);
   const heliPos = V3();
   const projHud = (world, out) => {
     tmp3.copy(world).applyMatrix4(camera.matrixWorldInverse);
@@ -446,8 +454,28 @@ export function create(ctx, segment) {
     return RES;
   };
 
+  // EXPLORE: the backdrop and stars follow the viewer's camera, and on Mars the camera is kept above the ground
+  let exploring = false;
+  scene.onBeforeRender = (renderer, sc, cam) => {
+    if (!exploring) return;
+    if (wM.visible) {
+      const gy = mf(cam.position.x, cam.position.z) + 0.5;
+      if (cam.position.y < gy) { cam.position.y = gy; cam.updateMatrixWorld(); }
+    }
+    sky.position.copy(cam.position); sky.updateMatrixWorld();
+    stars.position.copy(cam.position); stars.updateMatrixWorld();
+  };
+  let shotNow = 0;
+  const EX_LIM = { 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
+
   const api = {
     scene, camera, hud,
+    get exploreLimits() { return EX_LIM[shotNow] ?? {}; },
+    explore(t) {
+      exploring = true;
+      skirt.visible = wM.visible;
+    },
+    exploreEnd() { exploring = false; skirt.visible = false; },
     dof: { focus: 6, range: 3, amount: 0 },
     bloom: { strength: 0.7 },
     exposure: 1,
@@ -456,6 +484,7 @@ export function create(ctx, segment) {
     update(t, info) {
       const T = info.T;
       const shot = shotOf(t);
+      shotNow = shot; exploring = false; skirt.visible = false;
       for (let i = 0; i < WORLD_LIST.length; i++) WORLD_LIST[i].visible = false;
       WORLD_OF[shot].visible = true;
       roverSet.visible = shot === 4; visionSet.visible = shot >= 7;
@@ -599,6 +628,16 @@ export function create(ctx, segment) {
         const ki = sat(k * 1.15 - i * 0.04);
         L.position.y = -i * 0.32 * ki - 0.02 * i;
         L.scale.set(0.55 + 0.45 * ki, 0.2 + 0.8 * ki, 0.4 + 0.6 * ki);
+      }
+      // spreader bars ride the corners of the top and bottom membranes
+      const L0 = webb.layers[0], L4 = webb.layers[4];
+      for (let i = 0; i < webb.spreaders.length; i++) {
+        const b = webb.spreaders[i], [cx, cz] = b.userData.c;
+        tmp.set(cx * L0.scale.x, L0.position.y - 0.12 * L0.scale.y, cz * L0.scale.z);
+        tmp2.set(cx * L4.scale.x, L4.position.y - 0.52 * L4.scale.y, cz * L4.scale.z);
+        b.position.copy(tmp); tmp3.subVectors(tmp, tmp2);
+        const len = Math.max(0.01, tmp3.length()); b.scale.set(1, len, 1);
+        b.quaternion.setFromUnitVectors(UPV, tmp3.divideScalar(len));
       }
       const sw = ramp(t, tWebb + 0.36, tRov - 0.02, ease.inOutSine);
       webb.sweep.uSweep.value = lerp(-6, 7, sw); webb.sweep.uSweepK.value = 0.45 * Math.sin(Math.PI * sw);

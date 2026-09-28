@@ -20,7 +20,7 @@ import { BracketFrame } from '../lib/hud.js';
 import {
   V3, earthMesh, moonMesh, makeEnv, apolloMaterials, buildLM, buildCSM, buildFlag, buildDSKY,
   regolithTextures, bootprintTexture, makeTerrainField, terrainGeometry, segAtlas, SegDigits, SEG,
-  suitMaterials, suitEnv, buildBootLeg, buildSuitFigure,
+  suitMaterials, suitEnv, buildBootLeg, buildSuitFigure, buildSuitBoot,
 } from './moonshot-assets.js';
 
 const GREEN = '#a8f0bf';
@@ -80,13 +80,13 @@ export function create(ctx, segment) {
   const stackInner = new THREE.Group(); stack.add(stackInner);
   const csm = buildCSM(MAT); stackInner.add(csm);
   const lmStack = buildLM(MAT, { folded: true });
-  lmStack.rotation.x = -Math.PI / 2;             // LM top (docking tunnel) mates with the CM apex
-  lmStack.position.z = 3.7 + 3.45 + 6.2 + 0.15;
+  lmStack.rotation.x = -Math.PI / 2;             // LM top (docking tunnel) mates with the CM apex (probe in the drogue)
+  lmStack.position.z = csm.userData.apexZ + 0.04 + lmStack.userData.topZ;
   stackInner.add(lmStack);
-  stackInner.position.z = -3.5;
-  stack.scale.setScalar(0.085);
-  const rcs = [0, 1].map(() => { const g = glowSprite({ color: '#ffffff', intensity: 1.3, scale: 2.6 }); stackInner.add(g); return g; });
-  rcs[0].position.set(2.4, 0.3, 1.6); rcs[1].position.set(-2.4, -0.3, 1.6);
+  stackInner.position.z = -(csm.userData.aftZ + lmStack.position.z) / 2;   // the stack's middle on the pivot
+  stack.scale.setScalar(0.098);
+  const rcs = [0, 1].map(() => { const g = glowSprite({ color: '#ffffff', intensity: 1.3, scale: 2.2 }); stackInner.add(g); return g; });
+  rcs[0].position.set(1.55, 1.55, 3.2); rcs[1].position.set(-1.55, -1.55, 2.3);   // SM RCS quads, fore / aft bells
 
   // ================================================================ WORLD L — lunar surface
   const L0 = V3(0, -6000, 0);
@@ -189,7 +189,7 @@ export function create(ctx, segment) {
   MATL.skin.color.setScalar(0.45); MATL.skin.roughness = 0.56;
   MATL.silverFoil.color.multiplyScalar(0.6); MATL.silverFoil.roughness = 0.44;
   MATL.white.color.multiplyScalar(0.72); MATL.gold.color.multiplyScalar(0.74); MATL.gold.roughness = 0.6; MATL.gold.bumpScale = 2; MATL.goldDark.color.multiplyScalar(0.8);
-  MATL.decal.color.setScalar(0.5);
+  MATL.decal.color.setScalar(0.5); MATL.chrome.color.multiplyScalar(0.62); MATL.chrome.roughness = 0.28;
   const lm = buildLM(MATL); worldL.add(lm);
   const lmd = lm.userData;
   const plume = (() => {
@@ -241,6 +241,44 @@ export function create(ctx, segment) {
     salute.group.rotation.y = Math.atan2(f.x, f.z);
   }
   worldL.add(salute.group);
+  // EXPLORE: the footprint macro only has a boot and a leg. From other angles the whole moonwalker is there:
+  // a suited figure mid-stride whose free forward leg follows the animated boot (two-bone IK each frame).
+  const bootLegMesh = boot.children[1], bootAnk = boot.children[0].userData.ankle.clone();
+  const STRIDE = V3(-Math.sin(PRINT_ANG), 0, -Math.cos(PRINT_ANG));
+  const STEP_Y = 0.06;                                                   // hips a little low: a long stride
+  const PLANT = V3(0, 0.24, 0.05).applyAxisAngle(V3(0, 1, 0), PRINT_ANG).add(PRINT);   // boot ankle when planted
+  const STEP_YAW = PRINT_ANG + Math.PI, STEP_HIP = V3(-0.1, 1.0, 0);
+  const stepO = PLANT.clone().addScaledVector(STRIDE, -0.3).sub(V3(-0.1, 0, 0).applyAxisAngle(V3(0, 1, 0), STEP_YAW));
+  stepO.y = field(stepO.x, stepO.z) - STEP_Y;
+  const stepMat = new THREE.Matrix4().compose(stepO, new THREE.Quaternion().setFromAxisAngle(V3(0, 1, 0), STEP_YAW), V3(1, 1, 1));
+  const stepInv = stepMat.clone().invert();
+  const backW = V3(0.12, 0, -0.36).applyMatrix4(stepMat), backG = field(backW.x, backW.z) - stepO.y;
+  const stepper = buildSuitFigure(SUIT, {
+    dust: REG_DUST, curl: [0.4, 0.35],
+    legs: [
+      { hip: V3(0.1, 1.0, 0.0), knee: V3(0.115, 0.63, -0.13), ankle: V3(0.12, backG + 0.23, -0.36), yaw: 0.06, ground: backG },
+      { hip: STEP_HIP.clone(), knee: V3(-0.1, 0.62, 0.15), ankle: V3(-0.1, 0.26, 0.3), free: true, side: -1 },
+    ],
+  });
+  stepper.group.position.copy(stepO); stepper.group.rotation.y = STEP_YAW; stepper.group.visible = false;
+  stepper.setArm(0, V3(0.3, 1.02, 0.2), V3(0.25, -0.1, -1).normalize());          // arms swing against the legs
+  stepper.setArm(1, V3(-0.32, 0.98, -0.2), V3(-0.25, 0, -1).normalize());
+  stepper.helmet.rotation.x = 0.28;                                               // eyes on the step
+  worldL.add(stepper.group);
+  const stepLeg = stepper.legSweeps[1];
+  const sA = new THREE.Vector3(), sK = new THREE.Vector3(), sD = new THREE.Vector3(), sQ = new THREE.Vector3(), sHint = V3(0, 0.35, 1).normalize(), sSide = V3(-1, 0, 0);
+  const poseStepLeg = () => {
+    boot.updateMatrix();
+    sA.copy(bootAnk).applyMatrix4(boot.matrix); sA.y += 0.01; sA.applyMatrix4(stepInv);
+    const T1 = 0.4, T2 = 0.385;
+    sD.subVectors(sA, STEP_HIP); let dist = sD.length(); sD.normalize();
+    dist = Math.min(dist, T1 + T2 - 0.004);
+    const a = (T1 * T1 - T2 * T2 + dist * dist) / (2 * dist), k = Math.sqrt(Math.max(0, T1 * T1 - a * a));
+    sQ.copy(sHint).addScaledVector(sD, -sHint.dot(sD)).normalize();
+    sK.copy(STEP_HIP).addScaledVector(sD, a).addScaledVector(sQ, k);
+    sA.copy(STEP_HIP).addScaledVector(sD, dist);
+    stepLeg.pose(STEP_HIP, sK, sA, sSide);
+  };
   // the Earth in the lunar sky
   const earthL = earthMesh(48, SUN_L, { segs: 128, city: 0.04 }); earthL.rotation.z = 0.41; worldL.add(earthL);
   const CAM_E = V3(0.6, 0, 62); CAM_E.y = field(CAM_E.x, CAM_E.z) + 1.35;   // low: flag and LM stand against the sky
@@ -347,10 +385,11 @@ export function create(ctx, segment) {
   const atlas = segAtlas();
   const dsky = buildDSKY(atlas); worldD.add(dsky);
   const dsk = dsky.userData;
+  let dPlate = null;
   {
     // surrounding LM panel: dark anodised plate with toggle switches and round gauges (context, soft in DOF)
     const plateM = new THREE.MeshStandardMaterial({ color: '#2a2d31', metalness: 0.6, roughness: 0.55, envMapIntensity: 0.5 });
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(9, 7, 0.1), plateM); plate.position.z = -0.45; worldD.add(plate);
+    dPlate = new THREE.Mesh(new THREE.BoxGeometry(9, 7, 0.1), plateM); dPlate.position.z = -0.45; worldD.add(dPlate);
     const swBase = new THREE.CylinderGeometry(0.05, 0.05, 0.04, 12), swLever = new THREE.CylinderGeometry(0.012, 0.016, 0.16, 8);
     const chrome = new THREE.MeshStandardMaterial({ color: '#dfe3e8', metalness: 1, roughness: 0.2, envMapIntensity: 1 });
     const rr = rng(4);
@@ -492,11 +531,36 @@ export function create(ctx, segment) {
       const T = info.T;
       const inS = t < tS1, inD = t >= tS2, inL = !inS && !inD;
       worldS.visible = inS; worldL.visible = inL; sunL.visible = inL; worldD.visible = inD;
+      stepper.group.visible = false; bootLegMesh.visible = true; dPlate.scale.set(1, 1, 1);   // explore-only swaps, undone every frame
       // r186: scene.environment ignores material.envMapIntensity — hero materials carry an explicit envMap
       scene.environmentIntensity = inS ? 0.5 : inL ? 0.015 : 0.22;
       setHardwareEnv(inS ? SPACE_ENV : LUNAR_ENV);
       if (inS) this._space(t, info); else if (inL) this._moon(t, info); else this._dsky(t, info);
       this._hud(t, T);
+    },
+
+    // EXPLORE (see core/explore.js): complete the set for free-flying views. update() undoes all of it next frame.
+    explore(t) {
+      if (t >= tS1 && t < tS2) {
+        if (t > tFoot - 0.4 && t < tRise) {
+          // the footprint: the whole moonwalker, forward boot on the print (held planted once it has pressed)
+          const down = ramp(t, tFoot - 0.2, tFoot, ease.outCubic), fw = -(1 - down) * 0.1;
+          boot.visible = true; bootLegMesh.visible = false;
+          boot.position.set(PRINT.x + STRIDE.x * fw, PRINT.y + (1 - down) * 0.45 - pressU.value * 0.02, PRINT.z + STRIDE.z * fw);
+          boot.rotation.set(0.3 * (1 - down), PRINT_ANG, 0, 'YXZ');
+          stepper.group.visible = true;
+          poseStepLeg();
+        }
+        // the crash zoom's extreme telephoto makes no sense off-axis: hand the explorer a normal lens
+        if (camera.fov < 30) { camera.fov = 30; camera.updateProjectionMatrix(); }
+      }
+      if (t >= tS2) dPlate.scale.set(3, 3, 1);                           // the LM panel reaches past any explore view
+    },
+    get exploreLimits() {
+      if (tNow > tFoot - 0.4 && tNow < tFoot + 0.3) return { zoomOut: 9, fly: 5, pitchDown: 0.3 };   // macro: pull back to see him
+      if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.9, pitchDown: 0.12 };                  // low lens over the site
+      if (tNow >= tS2) return { yaw: 0.95, zoomOut: 2.5 };
+      return undefined;
     },
 
     _space(t) {
@@ -526,8 +590,8 @@ export function create(ctx, segment) {
       stackInner.rotation.z = 0.8 + t * 0.35;
       stack.visible = pass < 0.995;
       rcs[0].material.opacity = envelope(t, 0.52, 0.6, 0.01, 0.06); rcs[1].material.opacity = envelope(t, 0.54, 0.62, 0.01, 0.06);
-      // lens
-      api.dof.amount = 0;
+      // lens (DOF off: the focus distance only centres an explore orbit on the stack)
+      api.dof.amount = 0; api.dof.focus = dist;
       api.exposure = 1 + envelope(t, tS1 - 0.12, tS1 + 0.2, 0.12, 0.2, ease.inQuad) * 0.9;
       api.bloom.strength = 0.72;
 
@@ -539,6 +603,7 @@ export function create(ctx, segment) {
       const alt = lmAlt(t);
       lmXZ(t, lmP); lmP.y = alt - (t > tLand ? 0.05 * envelope(t, tLand, tLand + 0.4, 0.08, 0.3) : 0);
       lm.position.copy(lmP);
+      lmd.setProbes(lmP.y);
       const brake = sat(alt / 23);
       lm.rotation.set(-0.16 * brake, 0, 0.06 * brake);
       const burning = t < tLand ? 1 : 0;
@@ -623,7 +688,9 @@ export function create(ctx, segment) {
       camera.updateMatrixWorld();
       flagU.uSunV.value.copy(SUN_L).transformDirection(camera.matrixWorldInverse);
       camera.fov = fov; camera.near = t < tFoot + 0.4 && t > tFoot - 0.35 ? 0.02 : 0.1; camera.far = 4000; camera.updateProjectionMatrix();
-      api.dof.amount = dofAmt; api.dof.focus = dofFocus; api.dof.range = dofRange;
+      // with DOF off the focus distance is free: it sets where an explore orbit is centred (near, so the rig
+      // stays over the flat site instead of swinging out into the crater field)
+      api.dof.amount = dofAmt; api.dof.focus = dofAmt > 0.01 ? dofFocus : Math.min(dofFocus, 14); api.dof.range = dofRange;
       const inFlash = envelope(t, tS1 - 0.02, tS1 + 0.22, 0.02, 0.2, ease.outQuad);
       api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.1, tS2) * 0.15;
       api.bloom.strength = 0.34 + ramp(t, tS2 - 0.15, tS2) * 0.3;

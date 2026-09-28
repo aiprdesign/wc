@@ -268,9 +268,23 @@ export function create(ctx, segment) {
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
   const dof = { focus: 10, range: 3, amount: 0 };
   const bloom = { strength: 0.75 };
+  let lastT = 0;
+  // Explore 3D windows per phase (read on entering explore, right after update(t))
+  const LIM_GRID = { yaw: 0.5, pitchDown: 0.3, pitchUp: 0.4, zoomIn: 0.45, zoomOut: 2.2, fly: 1.2 };   // flat compass-and-straightedge linework
+  const LIM_PAGES = { yaw: 0.8, pitchDown: 0.35, pitchUp: 0.5, zoomOut: 2.4, fly: 1.5 };                // 2.5D manuscript planes along the flight
+  const LIM_TITLE = { yaw: 1.1, pitchDown: 0.35, pitchUp: 0.7, zoomOut: 2.6 };
 
   return {
     scene, camera, dof, bloom, exposure: 1,
+    get exploreLimits() { return lastT < 3.1 ? LIM_GRID : lastT < 4.6 ? LIM_PAGES : LIM_TITLE; },
+    // Explore: the flat title (between the particle lock and the extrusion) is paper-thin edge-on — give
+    // the glyphs real depth (update() rebuilds the scale every frame, so this is idempotent)
+    explore(t) {
+      const l3 = cue('letters3D');
+      if (t > cue('titleLocked') - 0.3 && t < l3 + 0.6) {
+        for (const g of glyphs) if (g.mesh.visible) g.mesh.scale.z = Math.max(g.mesh.scale.z, g.s * 0.35);
+      }
+    },
     update(t, info) {
       const T = info.T;
       // ---------------------------------------------------------------- camera
@@ -417,9 +431,13 @@ export function create(ctx, segment) {
       shaft.material.uniforms.uTime.value = t;
 
       // ---------------------------------------------------------------- post
-      dof.focus = Math.max(1, camPos.z - Z_TITLE);
       dof.range = 4.5;
       dof.amount = 0.35 * envelope(t, l3 - 0.2, 7.55, 0.4, 0.3);
+      // while the lens is sharp the focus distance is unused by the film; it is where Explore 3D pivots,
+      // so point it at what the shot is about: the construction plane, then the manuscripts, then the title
+      dof.focus = Math.max(1, camPos.z - Z_TITLE);
+      if (dof.amount <= 0.01 && t < 4.6) dof.focus = t < 3.1 ? Math.max(1, camPos.z) : 7;
+      lastT = t;
       bloom.strength = 0.75 + 0.25 * envelope(t, pA, pA + 0.6, 0.05, 0.5) + 0.15 * ramp(t, 7.0, 8.0);
     },
   };

@@ -64,7 +64,9 @@ void main(){
     float bands = 0.75 + 0.45 * exp(-pow(alat / 0.12, 2.0)) + 0.35 * exp(-pow((alat - 0.55) / 0.12, 2.0)) - 0.45 * belt;
     float cloud = smoothstep(0.06, 0.62, cl * bands + 0.05);
     cloud *= 0.85 + 0.15 * snoise(p * 60.0);
-    gl_FragColor = vec4(clamp(lights, 0.0, 1.0), clamp(cloud, 0.0, 1.0), 0.0, 1.0);
+    // relief height (b): coastal plains → ridged ranges, for the per-pixel terrain shading
+    float relief = land * clamp(smoothstep(0.0, 0.3, elev) * 0.35 + smoothstep(0.35, 0.95, mtn) * smoothstep(0.02, 0.2, elev) * 0.65, 0.0, 1.0);
+    gl_FragColor = vec4(clamp(lights, 0.0, 1.0), clamp(cloud, 0.0, 1.0), relief, 1.0);
   }
 }`;
 
@@ -140,6 +142,14 @@ void main(){
   float E = 2.55;
   float diff = max(ndl, 0.0);
   float cdiff = smoothstep(-0.08, 1.0, ndl);
+  // terrain relief: the baked height field tilts the ground normal (object space), so ranges and
+  // escarpments catch the low sun near the terminator; oceans and flat plains are untouched
+  vec2 dt = vec2(1.5 / 4096.0, 1.5 / 2048.0);
+  float gx = texture2D(uAux, vUv + vec2(dt.x, 0.0)).b - texture2D(uAux, vUv - vec2(dt.x, 0.0)).b;
+  float gy = texture2D(uAux, vUv + vec2(0.0, dt.y)).b - texture2D(uAux, vUv - vec2(0.0, dt.y)).b;
+  vec3 nP = normalize(n - (gx * east + gy * north) * 2.4);
+  float rdiff = max(dot(nP, uSunObj), 0.0);
+  diff = mix(diff, rdiff, 0.75 * (1.0 - water) * smoothstep(-0.05, 0.05, ndl));
   vec3 ground = alb * diff * (1.0 - 0.38 * cshadow * (1.0 - cloud));
   // ocean: two-lobe GGX glint with Schlick fresnel
   vec3 H = normalize(L + V);

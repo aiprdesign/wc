@@ -265,14 +265,26 @@ void main(){
   size = mix(size, vec3(uCell * 0.5), px);
   float gone = smoothstep(aSeed.z * 0.5, aSeed.z * 0.5 + 0.5, uGone);
   float sc = mix(appear, 0.82 + 0.18 * bk, m) * (1.0 - gone);
-  vec3 lp = position * size;
+  // bound volume: a rounded spine and a text block set in behind the boards (covers overhang the page edges)
+  vec3 pos = position;
+  vec3 n = normal;
+  float vol = bk * (1.0 - px);
+  if (vol > 0.0) {
+    float zc = clamp(pos.z * 2.0, -1.0, 1.0);
+    float inner = step(abs(pos.z), 0.49);
+    if (pos.x < -0.49) pos.x -= 0.1 * (1.0 - zc * zc) * vol;                 // spine (and the head/tail edges along it)
+    if (normal.x < -0.5) n = normalize(vec3(-1.0, 0.0, 0.8 * zc * vol));
+    float blk = inner * vol * step(-0.45, pos.x);                              // text block: neither spine nor boards
+    pos.x -= 0.07 * blk * smoothstep(-0.45, 0.5, pos.x);
+    pos.y -= sign(pos.y) * 0.035 * blk * step(0.49, abs(pos.y));
+  }
+  vec3 lp = pos * size;
 
   // paper bend: a curl plus a travelling flutter, both vanishing as the page binds into a book
   float flatK = (1.0 - bk) * (1.0 - px);
   float curl = mix(0.6 + aSeed.x * 2.2, 0.9, m) * (aSeed.y > 0.5 ? 1.0 : -1.0);
   float fl = sin(position.x * 5.0 + uT * (6.0 + aSeed.z * 5.0) + aSeed.w * 20.0) * mix(0.025, 0.004, m);
   lp.z += (curl * lp.x * lp.x + fl) * flatK;
-  vec3 n = normal;
   if (abs(n.z) > 0.5) { n.x -= 2.0 * curl * lp.x * flatK * n.z; n = normalize(n); }
 
   vec3 wp = c + qRot(q, lp * sc);
@@ -448,7 +460,7 @@ export function create(ctx, segment) {
   const r = rng(4242);
 
   // ---- instanced pages ---------------------------------------------------
-  const box = new THREE.BoxGeometry(1, 1, 1, 8, 2, 1);
+  const box = new THREE.BoxGeometry(1, 1, 1, 6, 2, 3);   // z segments: the rounded spine / inset page block of the bound volumes
   const dirs = new Float32Array(N_PAGES * 3);
   const seeds = new Float32Array(N_PAGES * 4), fly = new Float32Array(N_PAGES * 4), misc = new Float32Array(N_PAGES * 4);
   const g = Math.PI * (3 - Math.sqrt(5));
@@ -637,8 +649,11 @@ export function create(ctx, segment) {
   const tick = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.0028), new THREE.MeshBasicMaterial({ color: new THREE.Color('#e8eef7').multiplyScalar(0.9), transparent: true, depthWrite: false }));
   hud.scene.add(tick);
 
+  let lastT = 0;
   const self = {
     scene, camera, hud: null, background: 0x000000,
+    // the page stream / globe library is a real 3D volume; the network flight is a speed-ramped corridor
+    get exploreLimits() { return lastT < C_NET ? { yaw: 1.2, pitchDown: 0.5, pitchUp: 0.9, zoomOut: 2.4 } : { yaw: 0.9, pitchDown: 0.35, pitchUp: 0.6, zoomOut: 2.0 }; },
     dof: { focus: 8, range: 3, amount: 0 },
     bloom: { strength: 0.75 },
     exposure: 1,
@@ -714,6 +729,8 @@ export function create(ctx, segment) {
     const dofOn = t < C_SPH - 0.05;
     self.dof.amount = dofOn ? 0.55 * (1 - sat((t - (C_SPH - 0.4)) / 0.35)) : 0;
     self.dof.focus = Math.max(4, cz - CORE.z - 6);
+    if (self.dof.amount <= 0.01) self.dof.focus = camera.position.distanceTo(t < C_NET ? CORE : look);   // unused by the film: Explore 3D orbits the sphere
+    lastT = t;
     self.dof.range = 5;
     self.bloom.strength = 0.7 + sat((t - C_NET) / 0.4) * 0.3;
     self.exposure = 1;

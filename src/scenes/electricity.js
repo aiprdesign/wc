@@ -224,11 +224,15 @@ export function create(ctx, segment) {
     const plunger = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 12), chrome); plunger.position.set(0.11, 0.245, -0.02); phone.add(plunger);
     // handset
     const hs = new THREE.Group(); hs.position.copy(HANDSET_C).sub(PH); phone.add(hs);
-    const grip = new THREE.Mesh(new THREE.CapsuleGeometry(0.026, 0.44, 8, 24).rotateZ(Math.PI / 2), bakelite); hs.add(grip);
+    // arched bakelite handle (oval section) into flared, lathe-turned ear / mouth cups with perforated grilles
+    const gripG = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(-0.262, -0.05, 0), V(-0.235, -0.012, 0), V(-0.16, 0.008, 0), V(0, 0.014, 0), V(0.16, 0.008, 0), V(0.235, -0.012, 0), V(0.262, -0.05, 0)]), 96, 0.025, 20, false);
+    const grip = new THREE.Mesh(gripG, bakelite); grip.scale.z = 1.2; hs.add(grip);
+    const cupG = new THREE.LatheGeometry([[0.0, 0.034], [0.028, 0.034], [0.036, 0.02], [0.05, 0.006], [0.062, -0.006], [0.0685, -0.016], [0.068, -0.023], [0.062, -0.026], [0.054, -0.022], [0.0, -0.02]].reverse().map(([x, y]) => new THREE.Vector2(x, y)), 64);
+    const holeTex = canvasTex(256, 256, (x, w) => { x.fillStyle = '#2a2826'; x.fillRect(0, 0, w, w); x.fillStyle = '#050505'; for (let r = 0; r < 4; r++) { const n = r ? r * 7 : 1; for (let k = 0; k < n; k++) { const a = (k / n) * TAU; x.beginPath(); x.arc(128 + Math.cos(a) * r * 26, 128 + Math.sin(a) * r * 26, 7, 0, TAU); x.fill(); } } });
+    const grillM = new THREE.MeshStandardMaterial({ map: holeTex, roughness: 0.55, metalness: 0.2 });
     [-1, 1].forEach((s) => {
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.05, 24), bakelite); neck.position.set(s * 0.25, -0.03, 0); neck.rotation.z = s * 0.25; hs.add(neck);
-      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.066, 0.06, 0.045, 48), bakelite); cup.position.set(s * 0.265, -0.065, 0); hs.add(cup);
-      const grill = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32), new THREE.MeshStandardMaterial({ color: '#1c1c1c', roughness: 0.7, side: THREE.DoubleSide })); grill.rotation.x = Math.PI / 2; grill.position.set(s * 0.265, -0.088, 0); hs.add(grill);
+      const cup = new THREE.Mesh(cupG, bakelite); cup.position.set(s * 0.265, -0.065, 0); cup.rotation.z = s * 0.12; hs.add(cup);
+      const grill = new THREE.Mesh(new THREE.CircleGeometry(0.053, 48), grillM); grill.rotation.x = Math.PI / 2; grill.position.set(0, -0.0205, 0); cup.add(grill);
     });
     // coiled cord
     const cc = []; for (let i = 0; i <= 400; i++) { const f = i / 400, a = f * 28 * TAU; const base = V(-0.29 + f * -0.06, 0.18 - f * 0.17, -0.02 - f * 0.14); cc.push(base.add(V(Math.cos(a) * 0.012, Math.sin(a) * 0.012, Math.sin(a + 1) * 0.004))); }
@@ -610,5 +614,43 @@ export function create(ctx, segment) {
     hudRule.position.set(HX(0.16) + hudRule.scale.x / 2, HY(-0.76), 0);
   }
 
-  return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG };
+  // =====================================================================================
+  // EXPLORE: the props sit on a walnut desk that fades into the dark (in the film they float in a black
+  // limbo — fine through the lens, unfinished from any other angle); the telegraph's return wire runs on
+  // off the desk instead of ending in mid-air; the spark's halo is kept to a lens-independent size.
+  const deskTex = canvasTex(1024, 1024, (x, w, h) => {
+    const src = walnutTex.image;
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) x.drawImage(src, i * 256, j * 256, 256, 256);
+    x.fillStyle = 'rgba(20,10,5,0.25)'; for (let i = 1; i < 8; i++) x.fillRect(0, i * 128 - 1, w, 2);       // plank seams
+    const g = x.createRadialGradient(w / 2, h / 2, w * 0.12, w / 2, h / 2, w * 0.5);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.45, 'rgba(0,0,0,0.5)'); g.addColorStop(0.85, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+  });
+  // (the fade to the dark lives in alpha too, so specular highlights and reflections fade out with it)
+  const deskFade = canvasTex(256, 256, (x, w, h) => {
+    const g = x.createRadialGradient(w / 2, h / 2, w * 0.1, w / 2, h / 2, w * 0.5);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#9a9a9a'); g.addColorStop(1, '#000000');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+  }, { srgb: false });
+  const desk = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshStandardMaterial({ map: deskTex, alphaMap: deskFade, transparent: true, color: '#a08672', roughness: 0.72, metalness: 0, envMapIntensity: 0.12 }));
+  desk.rotation.x = -Math.PI / 2; desk.visible = false; scene.add(desk);
+  const backRun = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(-2.5, 0.6, -2.4), V(-3.4, 0.95, -3.3), V(-5.5, 1.5, -5.4), V(-9, 2.2, -9)]), 80, 0.013, 8), wireMat);
+  backRun.visible = false; tele.add(backRun);
+  function explore(t) {
+    const shot = t < tTel ? 1 : t < tPhone ? 2 : t < tRadio ? 3 : t < tElec ? 4 : 5;
+    desk.visible = shot >= 2 && shot <= 4;
+    if (shot === 2) desk.position.set(TG.x + 0.2, TG.y - 0.0008, TG.z - 0.3);
+    else if (shot === 3) desk.position.set(PH.x, PH.y - 0.0128, PH.z - 0.3);
+    else if (shot === 4) desk.position.set(RD.x, RD.y - 0.0258, RD.z - 0.3);
+    backRun.visible = shot <= 2;
+    if (headGlow.visible) { headGlow.scale.setScalar(0.05 + ignite(t) * 0.05); headGlow2.scale.setScalar(0.14); }
+    // the chase-camera effects (bloomed pulse head, warp-speed streaks) read as a white blob and a spray of
+    // sticks in a frozen frame seen from the side: calm them for a look at the wire and coil themselves
+    pulseMat.uniforms.uI.value *= 0.35;
+    streaks.opacity = 0;
+  }
+  function exploreEnd() { desk.visible = false; backRun.visible = false; }
+  const ignite = (t) => Math.exp(-Math.max(0, t - 0.25) * 10) * (t > 0.2 ? 1 : 0);
+
+  return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG, explore, exploreEnd, exploreLimits: { zoomOut: 3 } };
 }

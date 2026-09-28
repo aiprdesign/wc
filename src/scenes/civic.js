@@ -259,6 +259,22 @@ export function create(ctx, segment) {
   greekParts.push([new THREE.BoxGeometry(8.1, 0.2, 0.3), 0, 1.61, -3.75]);             // architrave
   greekParts.push([new THREE.BoxGeometry(8.3, 0.1, 1.4), 0, 1.76, -4.1]);              // roof slab
   greekParts.push([new THREE.BoxGeometry(8.2, 1.6, 0.12), 0, 0.96, -4.72]);             // back wall
+  // dressing: capitals + bases on the colonnade, a second step, frieze blocks, a lean-to tiled roof,
+  // end walls, and the speakers' steps up to the bema
+  {
+    const capG = new THREE.BoxGeometry(0.21, 0.05, 0.21), echG = new THREE.CylinderGeometry(0.105, 0.078, 0.05, 16), baseG = new THREE.CylinderGeometry(0.11, 0.115, 0.05, 16);
+    for (let i = 0; i < 15; i++) {
+      const x = -3.85 + i * 0.55;
+      greekParts.push([capG, x, 1.485, -3.75], [echG, x, 1.44, -3.75], [baseG, x, 0.185, -3.75]);
+    }
+    greekParts.push([new THREE.BoxGeometry(8.6, 0.08, 1.7), 0, 0.04, -4.05]);            // euthynteria step
+    const triG = new THREE.BoxGeometry(0.12, 0.16, 0.04);
+    for (let i = 0; i < 29; i++) greekParts.push([triG, -3.85 + i * 0.275, 1.61, -3.585]);
+    const roof = new THREE.BoxGeometry(8.5, 0.06, 1.62); roof.rotateX(0.2);
+    greekParts.push([roof, 0, 1.97, -4.12], [new THREE.BoxGeometry(8.2, 0.42, 0.12), 0, 1.96, -4.72]);
+    for (const x of [-4.06, 4.06]) greekParts.push([new THREE.BoxGeometry(0.12, 1.6, 1.1), x, 0.96, -4.2]);
+    for (let k = 0; k < 3; k++) greekParts.push([new THREE.BoxGeometry(0.5 - k * 0.1, 0.12, 0.14), 0, 0.06 + k * 0.12, 0.72 - k * 0.1]);
+  }
   const greekGeo = bakeParts(greekParts);
   greekGeo.computeVertexNormals();
   const greek = new THREE.Mesh(greekGeo, greekMat);
@@ -313,11 +329,42 @@ export function create(ctx, segment) {
   for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) parlParts.push([new THREE.BoxGeometry(0.16, 0.26, 0.04), sx * (0.55 + i * 0.28), 0.62, -0.58]);
   const ped = new THREE.CylinderGeometry(0.62, 0.62, 2.3, 3, 1); ped.rotateZ(Math.PI / 2); ped.scale(1, 0.42, 0.75);
   parlParts.push([ped, 0, 1.22, -0.25]);
+  // dressing: portico capitals + bases, cornices and parapets on the blocks, wing end pavilions,
+  // a balustrade rhythm along the main roof, and a lantern colonnade on top of the dome
+  {
+    const capG = new THREE.BoxGeometry(0.15, 0.04, 0.15), baseG = new THREE.CylinderGeometry(0.08, 0.085, 0.04, 14);
+    for (let i = 0; i < 6; i++) { const x = -0.9 + i * 0.36; parlParts.push([capG, x, 0.95, 0.1], [baseG, x, 0.37, 0.1]); }
+    parlParts.push([new THREE.BoxGeometry(3.7, 0.06, 2.9), 0, 0.935, -1.9]);                // main cornice
+    for (const z of [-0.53, -3.27]) parlParts.push([new THREE.BoxGeometry(3.5, 0.04, 0.07), 0, 1.05, z], [new THREE.BoxGeometry(3.5, 0.03, 0.08), 0, 1.155, z]);   // balustrade plinth + rail
+    for (const sx of [-1, 1]) {
+      parlParts.push([new THREE.BoxGeometry(2.1, 0.05, 2.15), sx * 2.6, 0.66, -2.0]);        // wing cornice
+      parlParts.push([new THREE.BoxGeometry(0.55, 0.9, 2.2), sx * 3.45, 0.45, -2.0]);        // end pavilions
+      parlParts.push([new THREE.BoxGeometry(0.62, 0.06, 2.28), sx * 3.45, 0.93, -2.0]);
+      parlParts.push([new THREE.BoxGeometry(0.62, 0.16, 0.08), sx * 3.45, 1.02, -0.9]);      // pavilion pediment block
+      for (let i = 0; i < 4; i++) parlParts.push([new THREE.BoxGeometry(0.07, 0.62, 0.06), sx * (3.25 + i * 0.13), 0.42, -0.88]);
+    }
+    const postG = new THREE.CylinderGeometry(0.016, 0.022, 0.075, 6);
+    for (let i = 0; i < 24; i++) for (const z of [-0.53, -3.27]) parlParts.push([postG, -1.62 + i * (3.24 / 23), 1.105, z]);
+    const lanCol = new THREE.CylinderGeometry(0.016, 0.018, 0.2, 6);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; parlParts.push([lanCol, Math.sin(a) * 0.2, 4.0, -1.9 + Math.cos(a) * 0.2]); }
+  }
   parlParts.push([hemicycleGeometry(0.7, 5, 0.22, 0.09), 0, 0, 2.55, 0]);
   const parlGeo = bakeParts(parlParts);
   parlGeo.computeVertexNormals();
   const parl = new THREE.Mesh(parlGeo, parlMat);
   scene.add(parl);
+  // windows: warm-lit glazing set into the facades (dissolves with the building)
+  const winMat = withDissolve(new THREE.MeshStandardMaterial({ color: '#1a120b', roughness: 0.25, metalness: 0.2, emissive: new THREE.Color('#ffb45a'), emissiveIntensity: 0.55 }), '#ffd08a', 'win');
+  winMat.userData.dissolve.uDissolve = parlMat.userData.dissolve.uDissolve;   // one dissolve front for the whole building
+  {
+    const wins = [], wG = new THREE.BoxGeometry(0.13, 0.22, 0.02), wS = new THREE.BoxGeometry(0.11, 0.16, 0.02);
+    for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) wins.push([wG, sx * (0.55 + i * 0.28), 0.62, -0.555], [wS, sx * (0.55 + i * 0.28), 0.25, -0.59]);
+    for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) wins.push([wS, sx * (1.93 + i * 0.26), 0.4, -0.99]);
+    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) wins.push([wS, sx * (3.31 + i * 0.13), 0.45, -0.885]);
+    const d = new THREE.BoxGeometry(0.32, 0.5, 0.02); wins.push([d, 0, 0.6, -0.585]);    // great door behind the portico
+    const winGeo = bakeParts(wins); winGeo.computeVertexNormals();
+    parl.add(new THREE.Mesh(winGeo, winMat));
+  }
   const domeParts = [];
   const domeG = new THREE.SphereGeometry(1.3, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2);
   domeParts.push([domeG, 0, 2.62, -1.9]);
@@ -422,16 +469,52 @@ export function create(ctx, segment) {
   callParl.position.set(-1.0, 0.45, 2.1);
   scene.add(callGreek, callParl);
 
-  for (const w of [civicWord, lawWord, repWord]) for (const L of w.letters) L.mesh.material.depthTest = false;
-  civicSub.material.depthTest = false; lawSub.material.depthTest = false;
+  // Explore 3D only: the assembly, the documents and the parliament otherwise float in a void — give them
+  // a paved civic floor (concentric courses + radial joints) that melts into the dark at its rim
+  const stageFloor = (() => {
+    const N = 1024, c = mkCanvas(N, N), g = c.getContext('2d'), rr = rng(77), C = N / 2;
+    g.fillStyle = '#20170f'; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${rr() < 0.5 ? '255,230,190' : '0,0,0'},${0.02 + rr() * 0.04})`; g.fillRect(rr() * N, rr() * N, 2 + rr() * 6, 2 + rr() * 6); }
+    g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 2;
+    const ringR = [];
+    for (let r = 40; r < C; r += 26 + r * 0.05) ringR.push(r);
+    ringR.forEach((r, k) => {
+      g.beginPath(); g.arc(C, C, r, 0, Math.PI * 2); g.stroke();
+      const n = Math.max(8, Math.round(r * 0.09)), off = (k % 2) * 0.5;
+      for (let j = 0; j < n; j++) { const a = ((j + off) / n) * Math.PI * 2, r0 = ringR[k - 1] ?? 0; g.beginPath(); g.moveTo(C + Math.cos(a) * r0, C + Math.sin(a) * r0); g.lineTo(C + Math.cos(a) * r, C + Math.sin(a) * r); g.stroke(); }
+    });
+    g.strokeStyle = 'rgba(240,199,126,0.18)'; g.lineWidth = 4;
+    for (const r of [ringR[3], ringR[9], ringR[10]]) if (r) { g.beginPath(); g.arc(C, C, r, 0, Math.PI * 2); g.stroke(); }
+    // fade to transparent at the rim
+    g.globalCompositeOperation = 'destination-in';
+    const fade = g.createRadialGradient(C, C, C * 0.45, C, C, C);
+    fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fade; g.fillRect(0, 0, N, N);
+    const m = new THREE.Mesh(new THREE.CircleGeometry(15, 96), new THREE.MeshStandardMaterial({ map: toTexture(c), transparent: true, roughness: 0.55, metalness: 0.05, envMapIntensity: 0.3 }));
+    m.rotation.x = -Math.PI / 2; m.position.set(0, -0.004, -0.8); m.renderOrder = -1; m.visible = false;
+    scene.add(m);
+    return m;
+  })();
+
+  const wordMats = [...[civicWord, lawWord, repWord].flatMap((w) => w.letters.map((L) => L.mesh.material)), civicSub.material, lawSub.material];
+  const setWordDepth = (on) => { for (const m of wordMats) m.depthTest = on; };
+  setWordDepth(false);
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), sv = new THREE.Vector3();
   const bloom = { strength: 0.8 };
+  const dof = { focus: 10, range: 3, amount: 0 };     // never blurs; its focus is the Explore 3D pivot (the stage)
 
   return {
-    scene, camera, bloom, exposure: 1,
+    scene, camera, bloom, dof, exposure: 1,
+    exploreLimits: { yaw: 1.15, pitchDown: 0.3, pitchUp: 0.75, zoomIn: 0.35, zoomOut: 2.4, fly: 1.4 },
+    // (the kinetic words ignore depth so they read over the set in the film's framing; orbiting, they must not
+    // show through the buildings)
+    explore() { stageFloor.visible = true; setWordDepth(true); },
+    exploreEnd() { setWordDepth(false); },
     update(t, info) {
       const T = info.T;
       camAt(t, pos, look);
+      dof.focus = pos.distanceTo(look);
+      stageFloor.visible = false;
       // tiny impact shake on LAW
       const shake = Math.exp(-Math.max(0, t - wL - 0.12) * 9) * (t > wL + 0.12 ? 1 : 0) * 0.03;
       camera.position.set(pos.x + Math.sin(t * 73) * shake, pos.y + Math.cos(t * 61) * shake, pos.z);

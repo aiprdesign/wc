@@ -17,6 +17,7 @@
 // chip, aircraft, rocket, network), dimming the plate beneath them. Beat punches get
 // denser (1/4 → 1/8 → 1/16 notes) as the sequence accelerates.
 import * as THREE from 'three';
+import { mergeGeometries as mergeGeos } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, sampleRing, Dust } from '../lib/particles.js';
@@ -123,18 +124,26 @@ export function create(ctx, segment) {
   const marbleMat = marble({ seed: 3, repeat: 1, color: '#f0e9de', roughness: 0.32 });
   const MARBLE_BASE = marbleMat.color.clone();
   const shaftGeo = flutedShaft(0.22, 2.6);
-  const echinusGeo = new THREE.CylinderGeometry(0.31, 0.2, 0.16, 48); echinusGeo.translate(0, 2.68, 0);
+  // Doric capital: a cushion-curved echinus (lathe) over three annulets and the necking groove
+  const echinusGeo = new THREE.LatheGeometry([[0.0, -0.08], [0.2, -0.08], [0.212, -0.07], [0.24, -0.045], [0.275, -0.01], [0.3, 0.03], [0.31, 0.06], [0.31, 0.08], [0.0, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 48);
+  echinusGeo.translate(0, 2.68, 0);
+  const annuletGeo = (() => {
+    const parts = [0, 1, 2].map((k) => new THREE.TorusGeometry(0.2 - k * 0.002, 0.009, 6, 48).rotateX(Math.PI / 2).translate(0, 2.585 - k * 0.022, 0));
+    const neck = new THREE.CylinderGeometry(0.188, 0.188, 0.012, 48, 1, true).translate(0, 2.47, 0);
+    return mergeGeos([...parts, neck]);
+  })();
   const abacusGeo = new THREE.BoxGeometry(0.6, 0.12, 0.6); abacusGeo.translate(0, 2.82, 0);
   const shafts = new THREE.InstancedMesh(shaftGeo, marbleMat, NCOL);
   const echini = new THREE.InstancedMesh(echinusGeo, marbleMat, NCOL);
   const abaci = new THREE.InstancedMesh(abacusGeo, marbleMat, NCOL);
+  const annulets = new THREE.InstancedMesh(annuletGeo, marbleMat, NCOL);
   const colGroup = new THREE.Group();
-  colGroup.add(shafts, echini, abaci);
+  colGroup.add(shafts, echini, abaci, annulets);   // (Doric: no base — the shafts stand on the stylobate)
   const m4 = new THREE.Matrix4();
   for (let k = 0; k < NCOL; k++) {
     const a = (k / NCOL) * TAU;
     m4.makeRotationY(a).setPosition(Math.cos(a) * RING, 0, -Math.sin(a) * RING);
-    shafts.setMatrixAt(k, m4); echini.setMatrixAt(k, m4); abaci.setMatrixAt(k, m4);
+    shafts.setMatrixAt(k, m4); echini.setMatrixAt(k, m4); abaci.setMatrixAt(k, m4); annulets.setMatrixAt(k, m4);
   }
   const stepMat = marble({ seed: 5, repeat: 2, color: '#6a645b', roughness: 0.45 });
   const steps = new THREE.Group();
@@ -165,6 +174,19 @@ export function create(ctx, segment) {
   const sideR = new THREE.Mesh(sideGeo, steelMat), sideL = new THREE.Mesh(sideGeo, steelMat);
   sideR.position.x = CD; sideL.position.x = -CD;
   scene.add(mainGear, sideR, sideL);
+  // hub detail: a raised boss, bolt circle and a keyed shaft end proud of the top face (they spin and fade
+  // with their gear)
+  const hubDetail = (gear, mat, bossR, bolts, boltR) => {
+    const top = GEAR_D + 0.03;
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(bossR, bossR * 1.04, 0.08, 64), mat); boss.position.y = top + 0.04; gear.add(boss);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.2, 40), mat); shaft.position.y = top + 0.1; gear.add(shaft);
+    const key = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.05), mat); key.position.set(0.15, top + 0.1, 0); gear.add(key);
+    const bg = new THREE.CylinderGeometry(0.042, 0.042, 0.045, 6);
+    for (let i = 0; i < bolts; i++) { const a = (i / bolts) * TAU + 0.3; const b = new THREE.Mesh(bg, mat); b.position.set(Math.cos(a) * boltR, top + 0.1, Math.sin(a) * boltR); gear.add(b); }
+    const bead = new THREE.Mesh(new THREE.TorusGeometry(bossR * 0.62, 0.012, 6, 64).rotateX(Math.PI / 2), mat); bead.position.y = top + 0.082; gear.add(bead);
+  };
+  hubDetail(mainGear, bronzeMat, 0.54, 6, 0.4);
+  hubDetail(sideR, steelMat, 0.3, 4, 0.225); hubDetail(sideL, steelMat, 0.3, 4, 0.225);
 
   // ---- S2/S3: orbit rings → orbitals --------------------------------------
   const orrery = new THREE.Group();
@@ -333,7 +355,7 @@ export function create(ctx, segment) {
       }`,
     transparent: true, depthWrite: false,
   });
-  const pcb = new THREE.Mesh(new THREE.PlaneGeometry(34, 20), pcbMat);
+  const pcb = new THREE.Mesh(new THREE.PlaneGeometry(48, 30), pcbMat);   // holds the whole radial fade: no hard edge from any angle
   pcb.rotation.x = -Math.PI / 2; pcb.position.y = -0.03;
   scene.add(pcb);
 
@@ -543,7 +565,11 @@ export function create(ctx, segment) {
     return tp;
   });
 
-  const self = { scene, camera, hud, background: 0x000000, bloom: { strength: 0.8 }, exposure: 1, update };
+  // explore: the floor disc (r 40) shows its rim as a false horizon from low angles — spread it out to the
+  // far distance while exploring; everything else here is a plan-view motif that holds up from any angle
+  const explore = () => { floor.scale.setScalar(6); };
+  const exploreEnd = () => { floor.scale.setScalar(1); };
+  const self = { scene, camera, hud, background: 0x000000, bloom: { strength: 0.8 }, exposure: 1, update, explore, exploreEnd, exploreLimits: { zoomOut: 2.8 } };
 
   // ---- camera --------------------------------------------------------------
   const target = new THREE.Vector3();
