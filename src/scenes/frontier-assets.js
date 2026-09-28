@@ -272,7 +272,7 @@ export function buildShuttle() {
     bake(new THREE.CylinderGeometry(0.014, 0.03, 0.09, 12), [0, 4.72, 0]),
     bake(new THREE.CylinderGeometry(0.03, 0.03, 3.0, 12), [0.325, 1.95, 0.325]),             // LO2 feedline
     bake(new THREE.CylinderGeometry(0.022, 0.022, 3.2, 10), [-0.35, 2.0, 0.285]),            // LH2 repressurisation line
-    bake(new THREE.BoxGeometry(0.035, 3.9, 0.05), [Math.cos(-0.5) * 0.43, 2.35, Math.sin(-0.5) * 0.43], [0, 0.5, 0]),   // cable tray (PAL ramp)
+    bake(new THREE.BoxGeometry(0.035, 3.35, 0.05), [Math.cos(-0.5) * 0.43, 2.12, Math.sin(-0.5) * 0.43], [0, 0.5, 0]),   // cable tray (PAL ramp)
   ];
   for (let k = 0; k < 72; k++) { const a = k / 72 * TAU; etParts.push(bake(new THREE.BoxGeometry(0.014, 0.36, 0.012), [Math.cos(a) * 0.424, 2.71, Math.sin(a) * 0.424], [0, -a, 0])); }
   for (const y of [0.6, 1.1, 1.6, 2.1]) { etParts.push(bake(new THREE.BoxGeometry(0.03, 0.03, 0.1), [0.3, y, 0.3], [0, -Math.PI / 4, 0])); etParts.push(bake(new THREE.BoxGeometry(0.03, 0.03, 0.1), [-0.33, y + 0.2, 0.265], [0, Math.PI / 4.5, 0])); }
@@ -323,7 +323,7 @@ export function buildShuttle() {
     c.copy(W).multiplyScalar(joint ? 0.82 : 0.94 + 0.06 * hash3(Math.floor(x * 30), Math.floor(y * 12), Math.floor(z * 30)));
     if (y < 0.28) c.multiplyScalar(0.8 + 0.2 * y / 0.28);
   });
-  const srbMat = new THREE.MeshStandardMaterial({ vertexColors: true, color: '#c9c8c4', roughness: 0.62, metalness: 0.06 });
+  const srbMat = new THREE.MeshStandardMaterial({ vertexColors: true, color: '#d6d5d1', roughness: 0.62, metalness: 0.06 });
   const nozMat = bellMaterial({ color: '#4a4744', tubes: false, rough: 0.5 });
   const nozGeo = bellGeo(0.1, 0.165, 0.3, 32, 0.8);
   const srbs = [-1, 1].map((sx) => {
@@ -461,11 +461,11 @@ function kaptonTextures(seed = 23) {
     const x = r() * S, y = r() * S, w = 40 + r() * 220, h = 20 + r() * 120, l = Math.floor(190 + r() * 65);
     g.fillStyle = `rgba(${l},${l},${l},0.18)`; g.save(); g.translate(x, y); g.rotate((r() - 0.5) * 0.8); g.fillRect(-w / 2, -h / 2, w, h); g.restore();
   }
-  g.strokeStyle = 'rgba(150,150,150,0.35)'; g.lineWidth = 1;          // ripstop
+  g.strokeStyle = 'rgba(150,150,150,0.18)'; g.lineWidth = 1;          // ripstop
   for (let i = 0; i <= 64; i++) { g.beginPath(); g.moveTo(i * S / 64, 0); g.lineTo(i * S / 64, S); g.stroke(); g.beginPath(); g.moveTo(0, i * S / 64); g.lineTo(S, i * S / 64); g.stroke(); }
-  g.strokeStyle = 'rgba(95,95,100,0.8)'; g.lineWidth = 3;            // bonded seams
+  g.strokeStyle = 'rgba(110,110,116,0.45)'; g.lineWidth = 3;          // bonded seams
   for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * S / 8, 0); g.lineTo(i * S / 8, S); g.stroke(); }
-  g.fillStyle = 'rgba(80,80,84,0.6)';                                 // thermal spot bonds
+  g.fillStyle = 'rgba(80,80,84,0.35)';                                // thermal spot bonds
   for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) { g.beginPath(); g.arc(i * S / 16, j * S / 16, 2.2, 0, TAU); g.fill(); }
   const b = crinkleTexture(seed + 1, 512);
   return { map: toTexture(c, { repeat: true }), bump: b };
@@ -481,12 +481,13 @@ export function buildWebb(env, goldEnv = env) {
     ...Array.from({ length: 3 }, (_, k) => bake(new THREE.BoxGeometry(2 * (s - 0.05), 0.03, 0.1), [0, 0, -0.37], [0, 0, k * Math.PI / 3])),   // stiffening ribs
     bake(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 12), [0, 0, -0.4], [Math.PI / 2, 0, 0]),                                           // actuator hub
   ]);
-  const sweep = { uSweep: { value: -99 }, uSweepDir: { value: new THREE.Vector3(1, 0.35, 0).normalize() }, uSweepK: { value: 0 } };
+  const sweep = { uSweep: { value: -99 }, uSweepDir: { value: new THREE.Vector3(1, 0.35, 0).normalize() }, uSweepK: { value: 0 }, uSpecMax: { value: 1e4 } };
   const goldM = new THREE.MeshStandardMaterial({ color: '#f0c060', metalness: 1, roughness: 0.2, envMap: goldEnv, envMapIntensity: 0.4 });
   goldM.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, sweep);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying float vOz;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed, 1.0)).xyz; vOz = objectNormal.z;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying float vOz; uniform float uSweep, uSweepK; uniform vec3 uSweepDir;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp; varying float vOz; uniform float uSweep, uSweepK, uSpecMax; uniform vec3 uSweepDir;')
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n reflectedLight.directSpecular = min(reflectedLight.directSpecular, vec3(uSpecMax));')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         float band = exp(-pow((dot(vWp, uSweepDir) - uSweep) / 0.45, 2.0));
         totalEmissiveRadiance += vec3(1.0, 0.78, 0.42) * band * uSweepK * smoothstep(0.5, 0.9, vOz);`);
@@ -593,7 +594,7 @@ export function buildWebb(env, goldEnv = env) {
   kap.map.repeat.set(1.5, 1.5); kap.bump.repeat.set(3, 3);
   const layers = [];
   for (let i = 0; i < 5; i++) {
-    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#d8bfe2' : i === 4 ? '#cfa6cc' : '#cdb2d4', map: kap.map, bumpMap: kap.bump, bumpScale: 0.9, metalness: 0.62, roughness: 0.3 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 2.6 });
+    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? '#d7b6e6' : i === 4 ? '#d2a0cf' : '#caa6d6', map: kap.map, bumpMap: kap.bump, bumpScale: 0.9, metalness: 0.62, roughness: 0.3 + i * 0.03, side: THREE.DoubleSide, envMap: env, envMapIntensity: 2.6 });
     const L = new THREE.Mesh(layerGeo(i), m); L.receiveShadow = true; L.castShadow = i === 0;
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.map(([x, z]) => V3(x, -(0.12 + i * 0.1), z))), new THREE.LineBasicMaterial({ color: new THREE.Color('#f1e6f4').multiplyScalar(0.8), transparent: true, opacity: 0.8 }));
     L.add(edge);

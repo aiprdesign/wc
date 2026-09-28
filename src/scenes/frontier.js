@@ -468,7 +468,7 @@ export function create(ctx, segment) {
     sky.position.copy(cam.position); stars.position.copy(cam.position);
   };
   let shotNow = 0;
-  const EX_LIM = { 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
+  const EX_LIM = { 2: { zoomIn: 0.6, fly: 1.2 }, 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
 
   const api = {
     scene, camera, hud,
@@ -477,7 +477,7 @@ export function create(ctx, segment) {
       exploring = true;
       skirt.visible = wM.visible;
       webb.sweep.uSweepK.value = 0;              // the light sweep is a film accent: off while the set is explored
-      webb.goldM.roughness = 0.36;               // … and the gold is a touch less mirror-like, so a sun glint from a free angle can't flood the frame
+      webb.sweep.uSpecMax.value = 1.4;           // … and a sun glint off the gold from a free angle is capped, so it can't flood the frame
     },
     explorePosed,
     exploreEnd() { exploring = false; skirt.visible = false; },
@@ -624,7 +624,7 @@ export function create(ctx, segment) {
       setKey(SUN_W, '#fff0d8', 3.4, tmp2.set(0, 2, 0), 12, 80);
       setRim(tmp.set(-0.8, -0.25, -0.5), '#9fc0ff', 1.0);
       hemi.color.set('#232a38'); hemi.groundColor.set('#0a0a0c'); hemi.intensity = 0.35;
-      webb.goldM.roughness = 0.2;
+      webb.sweep.uSpecMax.value = 1e4;
       const unfold = ramp(t, tWebb + 0.02, tWebb + 0.34, ease.inOutCubic);
       webb.wings['-1'].rotation.y = -(1 - unfold) * Math.PI / 2;
       webb.wings['1'].rotation.y = (1 - unfold) * Math.PI / 2;
