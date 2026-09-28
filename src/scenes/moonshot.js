@@ -215,7 +215,7 @@ export function create(ctx, segment) {
   FC.y += flag.userData.top - flag.userData.height / 2 - 0.02;
   // A7L suits: a dedicated environment (sunlit regolith below, black sky, the low sun) so the Beta cloth
   // gets its bounce fill from the ground and the gold visor mirrors the horizon
-  const SUIT_ENV = suitEnv(ctx.renderer, { sun: SUN_L, ground: [0.4, 0.38, 0.35] });
+  const SUIT_ENV = suitEnv(ctx.renderer, { sun: SUN_L, ground: [0.4, 0.38, 0.35], sunCol: [14, 13, 11.5] });
   const SUIT = suitMaterials({ envMap: SUIT_ENV });
   const REG_DUST = new THREE.Color(0.5, 0.48, 0.45);
   // boot: a lunar overshoe (its sole's 16 tread bars are the print's ribs) and the leg above it
@@ -232,7 +232,7 @@ export function create(ctx, segment) {
   salute.setArm(1, V3(-0.15, 1.82, 0.2), V3(-1, -0.15, 0.35).normalize(), V3(-0.2, -0.55, 0.8).normalize());
   // left of the hoist and a step behind it: clear of the cloth from the print, the hero and the wide angles;
   // from the footprint macro he stands exactly behind the (defocused) foreground leg, which hides his switch-on
-  const SALUTE_P = FLAG_P.clone().addScaledVector(FLAG_F, -0.5).addScaledVector(FLAG_N, -0.45); SALUTE_P.y = field(SALUTE_P.x, SALUTE_P.z) - 0.01;
+  const SALUTE_P = FLAG_P.clone().addScaledVector(FLAG_F, -0.85).addScaledVector(FLAG_N, -0.09); SALUTE_P.y = field(SALUTE_P.x, SALUTE_P.z) - 0.01;
   salute.group.position.copy(SALUTE_P);
   {
     // faces the flag, turned a little toward the wide lens (the salute reads three-quarter on)

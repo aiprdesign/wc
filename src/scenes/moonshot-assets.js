@@ -879,7 +879,7 @@ export function suitMaterials({ envMap = null, modern = false } = {}) {
     red: phys({ color: '#b01e22', metalness: 0.6, roughness: 0.32, envMapIntensity: 0.8 }),
     blue: phys({ color: '#1e4fb0', metalness: 0.6, roughness: 0.32, envMapIntensity: 0.8 }),
     dark: phys({ color: '#141518', metalness: 0.3, roughness: 0.35, envMapIntensity: 0.6 }),
-    visor: phys({ color: '#e8b35a', metalness: 1, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.6 }),
+    visor: phys({ color: '#e8b35a', metalness: 1, roughness: 0.09, clearcoat: 0.35, clearcoatRoughness: 0.04, envMapIntensity: 1.6 }),
     patch: phys({ map: T.patch, roughness: 0.8, sheen: 0.5, sheenColor: new THREE.Color('#888888'), envMapIntensity: 0.4 }),
     lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color('#dfe9ff').multiplyScalar(1.5), toneMapped: false }),
   };
