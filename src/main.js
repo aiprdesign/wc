@@ -2,6 +2,7 @@
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
+import { LiveCam } from './core/live.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
 import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE, OUTPUT_ASPECT } from './timeline.js';
@@ -71,6 +72,13 @@ async function boot() {
 
   const player = new Player(engine, score?.buffer ?? null);
   const explorer = new Explorer(engine, $('film'));
+  // live camera: drag / scroll / pinch to look around while the film plays (not while exploring)
+  const live = new LiveCam(engine, $('film'), {
+    isBlocked: () => explorer.active,
+    isPlaying: () => player.playing,
+    onChange: () => engine.render(player.time, 0),
+  });
+  engine.live = live;
   // If the GPU driver resets (context lost), reload at the same moment at a lighter quality.
   $('film').addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
@@ -208,7 +216,13 @@ function setupUI(player, score, explorer) {
     else if (k === 'escape' && explorer.active) setExplore(false);
   });
   const origPlay = player.play.bind(player);
-  player.play = async (...a) => { if (explorer.active) setExplore(false); await origPlay(...a); syncPlaying(); showControls(); };
+  let hintShown = false;
+  player.play = async (...a) => {
+    if (explorer.active) setExplore(false);
+    await origPlay(...a); syncPlaying(); showControls();
+    // first play: tell the viewer the film is interactive
+    if (!hintShown) { hintShown = true; body.classList.add('live-hint-on'); setTimeout(() => body.classList.remove('live-hint-on'), 6500); }
+  };
   const origSeek = player.seek.bind(player);
   player.seek = (t) => { origSeek(t); if (explorer.active) explorer.enter(player.time); };   // scrubbing re-poses the world
 }

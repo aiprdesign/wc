@@ -231,7 +231,7 @@ export class Engine {
     }
     // explore mode: the viewer's rig drives this sequence's camera; headings step aside
     const ex = this.explore?.active && this.explore.inst === inst ? this.explore : null;
-    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else this.words3d?.apply(inst, T);
+    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else { this.live?.apply(inst, info.t); this.words3d?.apply(inst, T); }
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);
@@ -270,7 +270,7 @@ export class Engine {
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
       u.uNear.value = inst.camera.near; u.uFar.value = inst.camera.far;
       u.uAOOn.value = useAO ? 1 : 0;
-      u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.width / FILM_ASPECT / 800) * 14;
+      u.uFocus.value = dof.focus * (inst._liveFocus ?? 1); u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.width / FILM_ASPECT / 800) * 14;
       r.setRenderTarget(dofRT);
       this.dofQuad.render(r);
       out = dofRT;
@@ -307,6 +307,7 @@ export class Engine {
   // the frame interval filmDt, centred on filmT) in linear HDR, then grade once. Sub-frames that
   // fall across a hard camera cut are dropped, so a cut never double-exposes.
   render(filmT, filmDt = 1 / 60, opts = {}) {
+    this.live?.tick();   // viewer's live camera offset (zero unless someone is dragging)
     const N = Math.max(1, Math.floor(opts.motionBlur ?? 0));
     if (N <= 1 || this.explore?.active || !(filmDt > 0)) {
       this._aoSeed = 0;

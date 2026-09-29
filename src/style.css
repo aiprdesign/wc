@@ -83,3 +83,10 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 .formats-pick a { color: var(--ink); text-decoration: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; padding: 5px 11px; }
 .formats-pick a:hover, .formats-pick a:focus-visible { border-color: var(--gold); outline: none; }
 .formats-pick a[aria-current="true"] { border-color: var(--gold); color: var(--gold); }
+
+/* live camera: drag to look around while playing */
+#film { touch-action: none; }
+.playing #film { cursor: grab; }
+#film.live-drag { cursor: grabbing; }
+.live-hint-on .live-hint { opacity: 1; transform: translate(-50%, 0); }
+.exploring-on .live-hint { opacity: 0; }
