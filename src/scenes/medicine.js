@@ -571,8 +571,22 @@ export function create(ctx, segment) {
   const qa = new THREE.Quaternion(), qm = new THREE.Quaternion(), m5 = new THREE.Matrix4(), s5 = new THREE.Vector3(), p5 = new THREE.Vector3();
   const ZK = [[0, 6.2], [tDive, 4.7], [tDive + 0.45, -8.5], [tDive + 0.8, -26.5], [tAnat - 0.05, -33.95], [tAnat + 0.25, -34.55], [DUR, -35.4]];
 
+  // the bracket and callouts are pinned (in the screen HUD) to projected points on the heart: re-projected
+  // from the viewer's camera when the live camera orbits, so they stay on the organ instead of the film's view
+  const placeHud = (cam) => {
+    tmp.copy(heartFocus).project(cam); bracket.position.set(tmp.x * A * PK, tmp.y * PK + 0.02, 0);
+    for (const { c, anchor } of CALL) {
+      if (!c.visible) continue;
+      tmp.copy(anchor).applyMatrix4(heart.matrixWorld).project(cam);
+      c.position.set(tmp.x * A * PK, tmp.y * PK, 0);
+    }
+  };
+
+  let lastT = 0;
+  const LIM_MICRO = { zoomOut: 1.5, fly: 1.4 }, LIM_STAGE = { zoomOut: 2.2, fly: 1.8 };
   const api = {
     scene, camera, hud: null,
+    explorePosed(cam) { if (api.hud) { cam.updateMatrixWorld(); placeHud(cam); } },
     dof: { focus: 5, range: 2.5, amount: 0 },
     bloom: { strength: 0.75 },
     exposure: 1.0,
@@ -580,9 +594,12 @@ export function create(ctx, segment) {
     background: 0x010608,
     // explore: the micro world and the anatomy stage are finite islands in the dark — keep the pull-back
     // short enough that they stay the subject instead of a speck
-    exploreLimits: { zoomOut: 2.2, fly: 1.8 },
+    // (the micro world is a corridor of cells a few units deep: pulled back further it reads as a thin strip
+    // floating in a black void)
+    get exploreLimits() { return lastT < tAnat - 0.3 ? LIM_MICRO : LIM_STAGE; },
     update(t, info) {
       const T = info.T;
+      lastT = t;
       const beat = pulse(T, { decay: 10 }), beat2 = pulse(T, { decay: 12, offset: 0.13 });
 
       // -------- camera: speed-ramped dive, then a slow orbit around the heart
@@ -695,7 +712,6 @@ export function create(ctx, segment) {
         hSub.reveal = ramp(t, tHud, tHud + 0.4); hSub.opacity = hSub.reveal > 0 ? 1 : 0;
         hRule.progress = hA; hRule.opacity = 0.8;
         bracket.reveal(ramp(t, tAnat + 0.45, tAnat + 0.8, ease.outCubic), 0.9);
-        tmp.copy(heartFocus).project(camera); bracket.position.set(tmp.x * A * PK, tmp.y * PK + 0.02, 0);
         const eIn = ramp(t, tHud + 0.05, tHud + 0.3);
         ecgMat.uniforms.uOpacity.value = eIn;
         const period = 2.0, head = (T / period) % 1;
@@ -714,15 +730,14 @@ export function create(ctx, segment) {
           g.ring.reveal(p, 0.9); g.arc.progress = p; g.arc.opacity = p > 0 ? 1 : 0;
           g.kt.reveal = p; g.kt.opacity = p > 0 ? 1 : 0; g.vt.reveal = sat(p * 1.3 - 0.2); g.vt.opacity = p > 0.15 ? 1 : 0;
         });
-        for (const { c, anchor, t0 } of CALL) {
+        for (const { c, t0 } of CALL) {
           const p = ramp(t, t0, t0 + 0.32, ease.outCubic);
           c.visible = p > 0;
           if (!c.visible) continue;
-          tmp.copy(anchor).applyMatrix4(heart.matrixWorld).project(camera);
-          c.position.set(tmp.x * A * PK, tmp.y * PK, 0);
           c.reveal(p, 1);
           if (c.sub) c.sub.reveal = sat((p - 0.4) / 0.5); // (lib Callout never finishes the sub-label wipe)
         }
+        placeHud(camera);
       }
 
       // -------- lens

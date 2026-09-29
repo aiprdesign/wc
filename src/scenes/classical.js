@@ -321,13 +321,17 @@ export function create(ctx, segment) {
 
   // sky dome: warm horizon glow fading to black
   const sky = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), new THREE.ShaderMaterial({
-    uniforms: { uLit: { value: 0 } },
+    uniforms: { uLit: { value: 0 }, uBelow: { value: 0 }, uFog: { value: scene.fog.color } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `uniform float uLit; varying vec3 vP;
+    fragmentShader: `uniform float uLit, uBelow; uniform vec3 uFog; varying vec3 vP;
       void main(){ float h = vP.y; float sun = pow(max(0.0, dot(vP, normalize(vec3(-0.85, 0.3, 0.2)))), 6.0);
         float band = smoothstep(-0.01, 0.06, h) * (1.0 - smoothstep(0.06, 0.45, h));
         vec3 c = vec3(0.05, 0.035, 0.025) + vec3(0.42, 0.24, 0.1) * band * (0.5 + sun) + vec3(0.9, 0.6, 0.3) * sun * 0.25 * smoothstep(-0.02, 0.1, h);
-        gl_FragColor = vec4(c * uLit, 1.0); }`,
+        c *= uLit;
+        // explore / live off-axis only: from up high the dome's horizon band sits below the true horizon, past
+        // the ground's rim — melt the bottom of the dome into the fog the far ground already wears
+        c = mix(c, uFog, uBelow * (1.0 - smoothstep(-0.007, 0.03, h)));
+        gl_FragColor = vec4(c, 1.0); }`,
     side: THREE.BackSide, depthWrite: false, fog: false,
   }));
   scene.add(sky);
@@ -475,7 +479,29 @@ export function create(ctx, segment) {
   const dof = { focus: 4, range: 1.6, amount: 0.6 };
   const bloom = { strength: 0.75 };
 
+  // Engineering overlays: k scales the facade drawings, ka the arch diagram (1 in the film; the explore
+  // hooks fade each one as it turns edge-on, where its additive lines stack into a hot streak)
+  function setOverlays(t, k, ka) {
+    const o = (i) => ramp(t, tOver + i * 0.14, tOver + 0.7 + i * 0.14, ease.outCubic);
+    const oFade = 1 - ramp(t, dur - 0.35, dur), f = oFade * k, fa = oFade * ka;
+    golden.progress = o(0); golden.opacity = 0.9 * f;
+    goldenSub.progress = o(1); goldenSub.opacity = 0.7 * f;
+    spiral.progress = o(2); spiral.opacity = f;
+    phiLabel.reveal = o(3); phiLabel.opacity = o(3) > 0 ? f : 0;
+    flowMat.uniforms.uTime.value = t; flowMat.uniforms.uOpacity.value = o(1) * f * 0.9;
+    loadLabel.reveal(o(2), f); pedLabel.reveal(o(3), f);
+    pedArc.progress = o(3); pedArc.opacity = f;
+    colDim.reveal(o(4), f); bayDim.reveal(o(5), f);
+    const archP = ramp(t, tOver + 0.2, tOver + 1.2, ease.outCubic);
+    archIn.progress = archP; archOut.progress = archP; piers.progress = archP; archJoints.progress = ramp(t, tOver + 0.5, tOver + 1.3);
+    thrust.progress = ramp(t, tOver + 0.8, tOver + 1.5);
+    for (const l of archLines) l.opacity = fa;
+    keystone.reveal(ramp(t, tOver + 0.9, tOver + 1.5), fa);
+  }
+  const archLines = [archIn, archOut, piers, archJoints, thrust];
+
   function update(t, info) {
+    lastT = t;
     // --- procedural modelling: profile → axis → revolve
     profile.progress = ramp(t, -0.3, tWire + 0.25, ease.outCubic);
     profile.opacity = 1 - ramp(t, tClay, tClay + 0.5);
@@ -509,6 +535,7 @@ export function create(ctx, segment) {
     fill.intensity = 0.05 + lit * 0.35;
     scene.environmentIntensity = 0.1 + lit * 0.32;
     sky.material.uniforms.uLit.value = lit;
+    sky.material.uniforms.uBelow.value = 0; ground.scale.setScalar(1);   // (explore hooks extend the set)
     shafts.forEach((s, i) => { s.material.uniforms.uIntensity.value = 0.07 * lit * (0.8 + 0.2 * Math.sin(t * 0.7 + i)); s.material.uniforms.uTime.value = t; });
     dust.tick(t, info);
     dust.u.opacity = 0.2 + lit * 0.45;
@@ -542,21 +569,7 @@ export function create(ctx, segment) {
     });
 
     // --- engineering overlays on the facade
-    const o = (i) => ramp(t, tOver + i * 0.14, tOver + 0.7 + i * 0.14, ease.outCubic);
-    const oFade = 1 - ramp(t, dur - 0.35, dur);
-    golden.progress = o(0); golden.opacity = 0.9 * oFade;
-    goldenSub.progress = o(1); goldenSub.opacity = 0.7 * oFade;
-    spiral.progress = o(2); spiral.opacity = oFade;
-    phiLabel.reveal = o(3); phiLabel.opacity = o(3) > 0 ? oFade : 0;
-    flowMat.uniforms.uTime.value = t; flowMat.uniforms.uOpacity.value = o(1) * oFade * 0.9;
-    loadLabel.reveal(o(2), oFade); pedLabel.reveal(o(3), oFade);
-    pedArc.progress = o(3); pedArc.opacity = oFade;
-    colDim.reveal(o(4), oFade); bayDim.reveal(o(5), oFade);
-    const archP = ramp(t, tOver + 0.2, tOver + 1.2, ease.outCubic);
-    archIn.progress = archP; archOut.progress = archP; piers.progress = archP; archJoints.progress = ramp(t, tOver + 0.5, tOver + 1.3);
-    thrust.progress = ramp(t, tOver + 0.8, tOver + 1.5);
-    [archIn, archOut, piers, archJoints, thrust].forEach((l) => (l.opacity = oFade));
-    keystone.reveal(ramp(t, tOver + 0.9, tOver + 1.5), oFade);
+    setOverlays(t, 1, 1);
 
     // --- chapter card
     const cc = envelope(t, tWire + 0.2, dur - 0.3, 0.5, 0.4);
@@ -575,14 +588,31 @@ export function create(ctx, segment) {
 
   // Explore 3D: while the lone column is still being modelled it would float a metre above the ground —
   // stand it on its (not yet dressed) crepidoma, which the build front raises in the film a moment later.
-  let lastTempleY = -2;
-  function explore() {
+  let lastTempleY = -2, lastT = 0;
+  const _d = new THREE.Vector3(), _c = new THREE.Vector3();
+  const OVER_C = new THREE.Vector3(0, 4, FRONT_Z + 0.7), OVER_N = new THREE.Vector3(0, 0, 1);
+  const ARCH_C = new THREE.Vector3(13.5, 3, FRONT_Z - 1.5), ARCH_N = new THREE.Vector3(Math.sin(-0.35), 0, Math.cos(-0.35));
+  const facing = (cam, C, N) => smoothstep(0.25, 0.6, _d.copy(_c.setFromMatrixPosition(cam.matrixWorld)).sub(C).normalize().dot(N));
+  function explore(t) {
     if (lastTempleY < 0.3) {
       stoneMat.userData.build.uBuild.value = 0.3;                  // steps only: every other stone part starts above y = 6
       temple.visible = true;
       templeCols.visible = false;
     }
+    // seen from up high the ground disc's rim showed against the dome's horizon band: carry the floor out to
+    // the dome and melt the dome's lower edge into the fog (update() resets both)
+    ground.scale.setScalar(149.5 / 120);
+    sky.material.uniforms.uBelow.value = 1;
+    // Explore hides the chapter heading, and with it the bloom duck the film applies under it: the
+    // wireframe / clay column (a strong additive emitter under the key spot) blew out into a glare
+    if (ctx.engine?.explore?.active) bloom.strength *= lerp(0.55, 1, ramp(t, tMarble - 0.2, tMarble + 0.4));
   }
-  const api = { scene, camera, hud, update, explore, dof, bloom, exposure: 1, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 3.0 } };
+  // callouts turn to the viewer's camera; the flat engineering drawings fade out as they turn edge-on
+  function explorePosed(cam) {
+    cam.updateMatrixWorld();
+    for (const c of partCallouts) if (c.visible) faceCamera(c, cam);
+    if (lastT > tOver - 0.1) setOverlays(lastT, facing(cam, OVER_C, OVER_N), facing(cam, ARCH_C, ARCH_N));
+  }
+  const api = { scene, camera, hud, update, explore, explorePosed, dof, bloom, exposure: 1, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 3.0 } };
   return api;
 }

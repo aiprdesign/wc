@@ -62,10 +62,11 @@ function makeSteam(count, emitters, { seed = 5, lightPos = new THREE.Vector3(0, 
       uAmb: { value: new THREE.Color('#565a60') }, uKey: { value: new THREE.Color('#bdb9b2') }, uBack: { value: new THREE.Color('#ffe2c2').multiplyScalar(3.0) },
       uLightPos: { value: lightPos.clone() }, uKeyW: { value: keyDir.clone().normalize() },
       uFirePos: { value: new THREE.Vector3() }, uFire: { value: new THREE.Color('#ff8a3c') }, uFireI: { value: 0 },
+      uNear: { value: new THREE.Vector2(0.35, 1.4) },
     },
     vertexShader: /* glsl */ `${GLSL_NOISE}
       attribute vec3 aVel; attribute vec4 aSeed; attribute float aBirth; attribute float aLife; attribute float aSize;
-      uniform float uTime, uViewport, uFireI; uniform vec3 uLightPos, uKeyW, uFirePos;
+      uniform float uTime, uViewport, uFireI; uniform vec3 uLightPos, uKeyW, uFirePos; uniform vec2 uNear;
       varying float vA; varying vec4 vSeed; varying float vAge; varying float vPhase; varying vec2 vL2; varying vec3 vKey; varying float vFire; varying vec2 vF2;
       void main(){
         float age = uTime - aBirth;
@@ -80,7 +81,7 @@ function makeSteam(count, emitters, { seed = 5, lightPos = new THREE.Vector3(0, 
         float s = aSize * mix(0.14, 2.5 + aSeed.w * 0.9, pow(u, 0.5));
         gl_PointSize = min(1000.0, s * uViewport * 0.5 * projectionMatrix[1][1] / max(0.2, -mv.z));
         // expanding puffs thin out; fade in fast, dissipate slowly; never pop against the lens
-        vA = smoothstep(0.0, 0.07, u) * pow(1.0 - u, 1.3) * smoothstep(0.35, 1.4, -mv.z) / (0.6 + 0.8 * u);
+        vA = smoothstep(0.0, 0.07, u) * pow(1.0 - u, 1.3) * smoothstep(uNear.x, uNear.y, -mv.z) / (0.6 + 0.8 * u);
         vec3 L = normalize(uLightPos - p), Vv = normalize(cameraPosition - p);
         float g = 0.7, ct = dot(-Vv, L);
         vPhase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5) * (1.0 - g) * (1.0 - g) / (1.0 + g);
@@ -709,6 +710,7 @@ export function create(ctx, segment) {
   ];
   const steam = makeSteam(5200, emitters, { seed: 17, lightPos: V(-12, 6, -9), keyDir: key.position });
   scene.add(steam);
+  const STEAM_BACK = steam.material.uniforms.uBack.value.clone();
   steam.material.uniforms.uFirePos.value.set(BO.x, 1.6, BO.z1 + 0.9);
 
   // ---- HUD ---------------------------------------------------------------------
@@ -741,12 +743,14 @@ export function create(ctx, segment) {
   const bloom = { strength: 0.6 };
   // explore: complete the sets (see explore() below)
   let exMode = false, lastInfo = null;
+  const LIM_A = { yaw: 0.45, pitchUp: 0.7, zoomOut: 2.4 }, LIM_HALL = {};
   let lastT = 0;
   const out = {
     scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update, explore, exploreEnd, explorePosed,
     // shot A is a macro a few units off the gear wall: a wide yaw only grazes the wall edge-on (gear rims
     // filling the lens); the engine hall and railway take the default window
-    get exploreLimits() { return lastT < tPist ? { yaw: 0.75, pitchUp: 0.7 } : {}; },
+    // (0.45: the director already looks at the wall ~35° off square, so a wider swing turns it edge-on to a void)
+    get exploreLimits() { return lastT < tPist ? LIM_A : LIM_HALL; },
   };
 
   // clockwork tick: advance one step per beat with an eased, slightly overshooting snap
@@ -890,11 +894,34 @@ export function create(ctx, segment) {
   function explore(t) {
     if (!exMode) { exMode = true; update(t, lastInfo); }
     // the whole wall, seen off-axis, would mirror the key into the lens as a white wash: broaden its highlights
-    if (t < tPist) wallMat.roughness = Math.max(wallMat.roughness, 0.55);
+    // …and so would the hero gear's polished faces and the key itself: off the film's angle the flat steel
+    // faces line up with the key's mirror direction and wash the frame white (restored in exploreEnd)
+    if (t < tPist) {
+      wallMat.roughness = Math.max(wallMat.roughness, 0.62);
+      steel.roughness = 0.46; steelPol.roughness = 0.34;
+      key.intensity *= 0.55;
+    } else { steel.roughness = 0.24; steelPol.roughness = 0.12; }
+    // sunlit steam seen from below, against its back light, blooms into a lamp-like white disc
+    // (and a puff right at the lens — a live zoom-in pushes into the drain-cock blast — is a white-out: thin it sooner)
+    steam.material.uniforms.uBack.value.copy(STEAM_BACK).multiplyScalar(0.5);
+    steam.material.uniforms.uNear.value.set(1.0, 2.6);
   }
-  function exploreEnd() { exMode = false; }
+  function exploreEnd() {
+    exMode = false; steel.roughness = 0.24; steelPol.roughness = 0.12;
+    steam.material.uniforms.uBack.value.copy(STEAM_BACK); steam.material.uniforms.uNear.value.set(0.35, 1.4);
+  }
   // the macro callouts are read-outs pinned to the gears: keep them facing the viewer from any angle
-  function explorePosed(cam) { calloutA.quaternion.copy(cam.quaternion); calloutB.quaternion.copy(cam.quaternion); }
+  function explorePosed(cam) {
+    calloutA.quaternion.copy(cam.quaternion); calloutB.quaternion.copy(cam.quaternion);
+    // engine hall: the high back light mirrors off the oiled floor plates straight into a camera craned up
+    // over the machine (a blown orange disc) — fade it as the view lines up with its mirror direction
+    if (lastT >= tPist) {
+      exF.set(0, 0, 1).applyQuaternion(cam.quaternion);                 // toward the camera
+      exM.set(-rim.position.x, rim.position.y, -rim.position.z).normalize();
+      rim.intensity *= 1 - 0.8 * smoothstep(0.7, 0.93, exF.dot(exM));
+    }
+  }
+  const exF = V(0, 0, 0), exM = V(0, 0, 0);
 
   return out;
 }

@@ -650,7 +650,18 @@ export function create(ctx, segment) {
     streaks.opacity = 0;
   }
   function exploreEnd() { desk.visible = false; backRun.visible = false; }
+  // inside the radio the viewer can orbit right past a valve: its glow sprite at the lens is a frame-filling
+  // orange wash — fade each glow as the camera closes on it (update() re-sets the opacities every frame)
+  const exP = V(0, 0, 0);
+  function explorePosed(cam) {
+    if (!radio.visible) return;
+    for (const tb of tubes) { nearFade(tb.gl, cam); nearFade(tb.gl2, cam); }
+  }
+  function nearFade(sp, cam) {
+    sp.getWorldPosition(exP);
+    sp.material.opacity *= smoothstep(0.05, 0.22, exP.distanceTo(cam.position) - sp.scale.x * 0.5);
+  }
   const ignite = (t) => Math.exp(-Math.max(0, t - 0.25) * 10) * (t > 0.2 ? 1 : 0);
 
-  return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG, explore, exploreEnd, exploreLimits: { zoomOut: 3 } };
+  return { scene, camera, update, hud, dof, bloom, exposure: 1, background: BG, explore, exploreEnd, explorePosed, exploreLimits: { zoomOut: 3 } };
 }
