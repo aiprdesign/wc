@@ -10,7 +10,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../timeline.js';
 import { sat, lerp, smoothstep, ease, ramp, envelope, timeWarp, rng, TAU } from '../lib/math.js';
 import { pulse } from '../lib/rhythm.js';
-import { GLSL_NOISE, noise3 } from '../lib/noise.js';
+import { GLSL_NOISE } from '../lib/noise.js';
+import { sdfBody, meshBody, sdPrim3 } from '../lib/sdfmesh.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, sampleBox, sampleGeometry } from '../lib/particles.js';
 import { progressLine, circlePoints, segmentsLine, revealLines } from '../lib/lines.js';
@@ -27,58 +28,105 @@ const HEART_S = 0.7;                             // heart model → world scale
 const HEART_ON_PAGE = new THREE.Vector2(-0.85, -0.02);
 
 // ------------------------------------------------------------------ heart model
-// A stylised anatomical heart: deformed-sphere ventricles, atria, great vessels and
-// coronary arteries. Everything lives in one local frame so the engraving can be
+// A clean anatomical heart as one signed-distance field (smooth-blended ellipsoids and round-cone
+// sweeps, meshed with surface nets): the ventricles, atria and auricles are separate lobes whose
+// soft blends leave the natural grooves, and the great vessels grow out of them seamlessly.
+// Frontal anatomical view: +x is the patient's left (the viewer's right), +z anterior. The apex
+// points down and to the patient's left; the aortic arch climbs over to the left and back, the
+// pulmonary trunk splits under it, the venae cavae enter the right atrium on the viewer's left and
+// the four pulmonary veins enter the left atrium behind. Arterial (oxygenated) vessels are coral,
+// venous ones teal — the textbook red / blue in the film's palette. Coronary arteries run in the
+// grooves as slightly raised tubes. Everything lives in one local frame so the engraving can be
 // rasterised from exactly the same triangles.
-const ROT = 0.42; // apex tilts to the viewer's right, as in a frontal anatomical view
-function deformBody(x, y, z, out) {
-  const k = y < 0 ? 1 + y * 0.6 : 1 + y * 0.1 - y * y * 0.22;
-  let px = x * k, pz = z * k * 0.8;
-  let py = y * 1.1 - (y < 0 ? y * y * 0.12 : 0);
-  // interventricular groove on the anterior surface
-  const g = x - 0.28 * y - 0.12;
-  const dent = 1 - 0.06 * Math.exp(-(g * g) / 0.005) * sat(z * 2.5) - 0.03 * Math.exp(-((y - 0.42) ** 2) / 0.004);
-  const lump = 1 + noise3(x * 1.7, y * 1.7, z * 1.7) * 0.025;
-  px *= dent * lump; py *= dent * lump; pz *= dent * lump;
-  const c = Math.cos(ROT), s = Math.sin(ROT);
-  return out.set((px * c - py * s) * 0.95, (px * s + py * c) * 0.95, pz * 0.95);
+const MUSC = 0, ART = 1, VEIN = 2;
+function heartPrims() {
+  const P = [];
+  const cone = (kind, a, b, ra, rb, k, flat = 1, cap = 0) => P.push({ type: 'cone', kind, a, b, ra, rb, flat, k, cap });
+  const ell = (kind, c, r, k, ang = 0) => P.push({ type: 'ell', kind, c, r, k, ang });
+  const vessel = (kind, pts, r0, r1, k, n, capEnd = true) => {
+    const q = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))).getSpacedPoints(n);
+    for (let i = 0; i < n; i++) cone(kind, q[i].toArray(), q[i + 1].toArray(), lerp(r0, r1, i / n), lerp(r0, r1, (i + 1) / n), i === 0 ? k : 0.012, 1, i === n - 1 && capEnd ? 2 : 0);
+  };
+  // chambers: the left ventricle forms the apex and the left border, the right ventricle most of the
+  // front and the lower border, the right atrium the right border; the left atrium sits behind
+  cone(MUSC, [0.16, 0.2, -0.14], [0.74, -0.96, 0.12], 0.64, 0.12, 0);             // left ventricle
+  cone(MUSC, [-0.38, 0.2, 0.18], [0.36, -0.72, 0.28], 0.5, 0.13, 0.1, 0.84);       // right ventricle
+  ell(MUSC, [-0.78, 0.36, 0.06], [0.34, 0.44, 0.38], 0.07);                        // right atrium
+  ell(MUSC, [-0.52, 0.7, 0.26], [0.26, 0.13, 0.08], 0.15, 0.55);                 // right auricle (a flap over the aortic root)
+  ell(MUSC, [0.2, 0.62, -0.5], [0.5, 0.3, 0.36], 0.1);                            // left atrium
+  ell(MUSC, [0.72, 0.56, 0.12], [0.2, 0.09, 0.1], 0.1, -0.4);                     // left auricle (beside the pulmonary trunk)
+  // aorta: ascending, arch, descending; brachiocephalic, left carotid, left subclavian
+  vessel(ART, [[0.0, 0.4, 0.05], [-0.1, 0.92, 0.06], [-0.03, 1.3, -0.07], [0.22, 1.44, -0.3], [0.46, 1.3, -0.52], [0.55, 0.9, -0.64], [0.56, 0.05, -0.7]], 0.22, 0.19, 0.06, 18);
+  vessel(ART, [[-0.03, 1.33, -0.12], [-0.12, 1.64, -0.1], [-0.2, 1.94, -0.08]], 0.085, 0.075, 0.04, 4);
+  vessel(ART, [[0.17, 1.44, -0.27], [0.19, 1.7, -0.29], [0.21, 1.96, -0.31]], 0.062, 0.058, 0.035, 4);
+  vessel(ART, [[0.36, 1.38, -0.43], [0.44, 1.65, -0.47], [0.52, 1.92, -0.51]], 0.068, 0.062, 0.035, 4);
+  // pulmonary trunk (in front of the aortic root) and its left / right branches
+  vessel(VEIN, [[0.02, 0.08, 0.22], [0.2, 0.7, 0.44], [0.34, 1.02, 0.2], [0.37, 1.09, 0.04]], 0.21, 0.17, 0.14, 9, false);
+  vessel(VEIN, [[0.37, 1.09, 0.04], [0.66, 1.1, -0.12], [0.92, 0.98, -0.26]], 0.135, 0.11, 0.04, 6);
+  vessel(VEIN, [[0.37, 1.09, 0.04], [0.0, 1.06, -0.3], [-0.55, 1.02, -0.36]], 0.13, 0.11, 0.04, 7);
+  // venae cavae into the right atrium
+  vessel(VEIN, [[-0.72, 0.55, -0.02], [-0.69, 1.2, -0.04], [-0.67, 1.72, -0.05]], 0.155, 0.15, 0.06, 6);
+  vessel(VEIN, [[-0.72, 0.1, -0.16], [-0.74, -0.25, -0.18], [-0.75, -0.6, -0.2]], 0.14, 0.14, 0.05, 4);
+  // pulmonary veins into the left atrium (two each side, from behind)
+  for (const [a, m, b] of [
+    [[-0.12, 0.72, -0.62], [-0.38, 0.76, -0.7], [-0.62, 0.8, -0.72]], [[-0.12, 0.54, -0.64], [-0.36, 0.5, -0.72], [-0.58, 0.44, -0.74]],
+    [[0.55, 0.74, -0.58], [0.78, 0.8, -0.62], [1.0, 0.84, -0.62]], [[0.55, 0.54, -0.6], [0.76, 0.5, -0.64], [0.98, 0.46, -0.64]],
+  ]) vessel(ART, [a, m, b], 0.075, 0.07, 0.04, 3);
+  return P;
 }
-function surfacePoint(x, y, z, lift = 1.03) {
-  const l = Math.hypot(x, y, z);
-  return deformBody(x / l, y / l, z / l, new THREE.Vector3()).multiplyScalar(lift);
-}
+const HEART_BOX = [[-1.2, -1.25, -0.95], [1.2, 2.02, 0.85]];
+const TISSUE = ['#8a1f17', '#d8432e', '#2b7390'].map((c) => new THREE.Color(c));   // muscle · artery · vein
+
 function buildHeart() {
-  const parts = { body: [], vessels: [], coronary: [] };
-  const body = new THREE.SphereGeometry(1, 72, 54);
-  const p = body.attributes.position, v = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) { deformBody(p.getX(i), p.getY(i), p.getZ(i), v); p.setXYZ(i, v.x, v.y, v.z); }
-  body.computeVertexNormals();
-  parts.body.push(body);
-  const blob = (r, sx, sy, sz, x, y, z) => { const g = new THREE.SphereGeometry(r, 36, 26); g.scale(sx, sy, sz); g.translate(x, y, z); return g; };
-  parts.body.push(blob(0.4, 1.0, 1.15, 0.85, -0.78, 0.5, 0.05));   // right atrium
-  parts.body.push(blob(0.36, 1.1, 0.9, 0.9, 0.3, 0.72, -0.38));    // left atrium
-  parts.body.push(blob(0.16, 1.3, 0.8, 0.8, 0.62, 0.62, 0.12));    // left auricle
-  const tube = (pts, r, seg = 48) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((a) => new THREE.Vector3(...a))), seg, r, 18, false);
-  // aorta (ascending, arch, descending) + arch branches
-  parts.vessels.push(tube([[-0.05, 0.7, 0.0], [-0.12, 1.15, 0.02], [0.0, 1.42, -0.1], [0.28, 1.46, -0.3], [0.48, 1.28, -0.48], [0.55, 0.85, -0.6], [0.55, 0.15, -0.65]], 0.22, 64));
-  parts.vessels.push(tube([[-0.04, 1.42, -0.09], [-0.1, 1.68, -0.06], [-0.14, 1.9, -0.04]], 0.075));
-  parts.vessels.push(tube([[0.16, 1.5, -0.22], [0.17, 1.72, -0.22], [0.18, 1.93, -0.22]], 0.062));
-  parts.vessels.push(tube([[0.36, 1.42, -0.38], [0.44, 1.64, -0.42], [0.54, 1.86, -0.45]], 0.068));
-  // pulmonary trunk and its branches
-  parts.vessels.push(tube([[0.18, 0.55, 0.42], [0.28, 0.92, 0.36], [0.36, 1.1, 0.16], [0.72, 1.14, -0.04], [1.06, 1.04, -0.1]], 0.19));
-  parts.vessels.push(tube([[0.36, 1.1, 0.16], [0.0, 1.1, -0.25], [-0.48, 1.06, -0.35]], 0.13));
-  // superior & inferior vena cava
-  parts.vessels.push(tube([[-0.72, 0.75, 0.02], [-0.67, 1.2, -0.02], [-0.63, 1.72, -0.05]], 0.15));
-  parts.vessels.push(tube([[-0.72, 0.05, -0.14], [-0.73, -0.25, -0.16], [-0.74, -0.5, -0.18]], 0.13, 24));
-  // coronary arteries follow the surface
-  const lad = []; for (let i = 0; i <= 20; i++) { const y = 0.75 - i * 0.085; const x = 0.28 * y + 0.12; lad.push(surfacePoint(x, y, Math.sqrt(Math.max(0.02, 1 - x * x - y * y)))); }
-  const rca = []; for (let i = 0; i <= 20; i++) { const a = 1.2 + i * 0.1; rca.push(surfacePoint(Math.cos(a) * 0.9, 0.42, Math.sin(a) * 0.9)); }
-  const cx = []; for (let i = 0; i <= 16; i++) { const a = 1.25 - i * 0.12; cx.push(surfacePoint(Math.cos(a) * 0.9, 0.44, Math.sin(a) * 0.9)); }
-  const dg1 = []; for (let i = 0; i <= 10; i++) { const u = i / 10; dg1.push(surfacePoint(0.32 + u * 0.4, 0.5 - u * 0.75, 0.8 - u * 0.2)); }
-  const dg2 = []; for (let i = 0; i <= 10; i++) { const u = i / 10; dg2.push(surfacePoint(-0.2 - u * 0.25, 0.3 - u * 0.7, 0.9 - u * 0.2)); }
-  for (const pts of [lad, rca, cx, dg1, dg2]) parts.coronary.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.028, 8, false));
+  const prims = heartPrims();
+  const field = sdfBody(prims);
+  const geo = meshBody(field, HEART_BOX[0], HEART_BOX[1], 0.025);
+  // vertex colours: soft-weighted by the nearest tissue, so the vessels flow out of the muscle
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3), dk = new Float64Array(prims.length), w = [0, 0, 0];
+  const T = TISSUE.map((c) => c.toArray());
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    let dmin = 1e9;
+    for (let j = 0; j < prims.length; j++) { dk[j] = sdPrim3(prims[j], x, y, z); if (dk[j] < dmin) dmin = dk[j]; }
+    w[0] = w[1] = w[2] = 0;
+    for (let j = 0; j < prims.length; j++) w[prims[j].kind] += Math.exp(-(dk[j] - dmin) / 0.025);
+    const ws = w[0] + w[1] + w[2];
+    for (let c = 0; c < 3; c++) col[i * 3 + c] = (T[0][c] * w[0] + T[1][c] * w[1] + T[2][c] * w[2]) / ws;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // a coarse mesh of the same field for the reconstruction lattice
+  const coarse = meshBody(field, HEART_BOX[0], HEART_BOX[1], 0.085);
+
+  // coronary arteries: guide lines laid along the grooves between the chambers, dropped onto the
+  // muscle surface (ray-marched along each guide's direction) and lifted a hair so they stand proud
+  const muscle = sdfBody(prims.filter((p) => p.kind === MUSC)).field3;
+  const e = 0.003;
+  const drop = (x, y, z, dx, dy, dz) => {
+    const q = new THREE.Vector3(x - dx * 2.5, y - dy * 2.5, z - dz * 2.5), dir = new THREE.Vector3(dx, dy, dz).normalize();
+    for (let i = 0; i < 600; i++) { const dd = muscle(q.x, q.y, q.z); if (dd < 0.0005) break; q.addScaledVector(dir, Math.min(0.03, Math.max(dd * 0.6, 0.001))); }
+    const n = new THREE.Vector3();
+    if (!(Math.abs(muscle(q.x, q.y, q.z)) < 0.01)) {                    // (guide off the silhouette: fall back to the nearest surface point)
+      q.set(x, y, z);
+      for (let it = 0; it < 12; it++) {
+        const f0 = muscle(q.x, q.y, q.z);
+        n.set(muscle(q.x + e, q.y, q.z) - muscle(q.x - e, q.y, q.z), muscle(q.x, q.y + e, q.z) - muscle(q.x, q.y - e, q.z), muscle(q.x, q.y, q.z + e) - muscle(q.x, q.y, q.z - e));
+        q.addScaledVector(n, -f0 * 2 * e / Math.max(1e-9, n.lengthSq()));
+      }
+    }
+    n.set(muscle(q.x + e, q.y, q.z) - muscle(q.x - e, q.y, q.z), muscle(q.x, q.y + e, q.z) - muscle(q.x, q.y - e, q.z), muscle(q.x, q.y, q.z + e) - muscle(q.x, q.y, q.z - e)).normalize();
+    return q.addScaledVector(n, 0.01);
+  };
+  const front = (pts) => pts.map(([x, y]) => drop(x, y, 0, 0, 0, -1));
+  const lad = front([[0.0, 0.28], [0.03, 0.15], [0.1, 0.0], [0.19, -0.1], [0.27, -0.2], [0.34, -0.3], [0.41, -0.4], [0.47, -0.5], [0.54, -0.6], [0.6, -0.7], [0.63, -0.8], [0.62, -0.9], [0.6, -0.98]]);   // anterior interventricular
+  const rca = [...front([[-0.56, 0.66], [-0.66, 0.54], [-0.74, 0.4], [-0.79, 0.28], [-0.83, 0.13], [-0.84, 0.0]]), drop(-1, -0.06, -0.1, 1, 0, 0.3), drop(-1, 0.0, -0.3, 1, 0, 0)];   // right AV groove
+  const marg = front([[-0.8, 0.0], [-0.62, -0.16], [-0.44, -0.28], [-0.24, -0.4], [-0.06, -0.5]]);                                 // acute marginal
+  const cx = [drop(0.62, 0.36, 0, 0, 0, -1), drop(0.74, 0.27, 0, 0, 0, -1), drop(1, 0.22, -0.05, -1, 0, 0), drop(1, 0.18, -0.35, -1, 0, 0), drop(1, 0.14, -0.6, -1, 0, 0.3)];   // circumflex (under the left auricle, round the left border)
+  const dg1 = front([[0.14, -0.04], [0.32, -0.16], [0.5, -0.3], [0.66, -0.46], [0.78, -0.6]]);                                     // diagonal onto the left ventricle
+  const coronary = [[lad, 0.024], [rca, 0.024], [cx, 0.022], [marg, 0.016], [dg1, 0.017]].map(([pts, r]) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 6, r, 8, false));
+
+  const parts = { body: [geo], vessels: [], coronary, lattice: coarse };
   // centre the model on its visual middle
-  for (const list of Object.values(parts)) for (const g of list) g.translate(0, -0.45, 0);
+  for (const gg of [geo, coarse, ...coronary]) gg.translate(0, -0.45, 0);
   return parts;
 }
 
@@ -393,14 +441,32 @@ export function create(ctx, segment) {
 
   const heartRoot = new THREE.Group(); scene.add(heartRoot);
   const heart = new THREE.Group(); heartRoot.add(heart);
-  const holoBody = holoMaterial({ color: TEAL, deep: '#123f4c', intensity: 0.8, base: 0.04 });
-  const holoVessel = holoMaterial({ color: '#b9f2ff', deep: '#1a4660', intensity: 0.75, base: 0.04 });
-  const holoCor = holoMaterial({ color: CORAL, deep: '#6a2a24', intensity: 1.6, base: 0.35 });
-  const holoMats = [holoBody, holoVessel, holoCor];
-  for (const g of parts.body) heart.add(new THREE.Mesh(g, holoBody));
-  for (const g of parts.vessels) heart.add(new THREE.Mesh(g, holoVessel));
-  for (const g of parts.coronary) heart.add(new THREE.Mesh(g, holoCor));
-  const lattice = revealLines(parts.body[0], { mode: 'wire', order: 'y', color: '#6fd8c8', headColor: '#e8fffa', intensity: 0.22, head: 0.06 });
+  // the reconstructed organ: satin, softly translucent-looking tissue (sheen + clearcoat + a warm rim)
+  const satin = (opts) => {
+    const m = new THREE.MeshPhysicalMaterial({ roughness: 0.44, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.32, sheen: 0.7, sheenRoughness: 0.45, sheenColor: new THREE.Color('#ff8f7a'), envMapIntensity: 0.6, transparent: true, opacity: 0, ...opts });
+    m.userData.rim = { value: 0 };
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uRim = m.userData.rim;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uRim;')
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          float rimF = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.6);
+          totalEmissiveRadiance += vec3(1.0, 0.56, 0.44) * rimF * uRim;`);
+    };
+    return m;
+  };
+  const satinBody = satin({ vertexColors: true });
+  const satinCor = satin({ color: '#c8402f', emissive: new THREE.Color('#2a0604'), roughness: 0.36 });
+  const satinMats = [satinBody, satinCor];
+  for (const g of parts.body) { const m = new THREE.Mesh(g, satinBody); heart.add(m); }
+  for (const g of parts.coronary) { const m = new THREE.Mesh(g, satinCor); heart.add(m); }
+  // …wrapped in the holographic scan: a fresnel shell, scanlines and the MRI slice band
+  const holoBody = holoMaterial({ color: TEAL, deep: '#0c2a33', intensity: 0.42, base: 0.0 });
+  const holoCor = holoMaterial({ color: CORAL, deep: '#6a2a24', intensity: 0.5, base: 0.12 });
+  const holoMats = [holoBody, holoCor];
+  for (const g of parts.body) { const m = new THREE.Mesh(g, holoBody); m.renderOrder = 2; heart.add(m); }
+  for (const g of parts.coronary) { const m = new THREE.Mesh(g, holoCor); m.renderOrder = 2; heart.add(m); }
+  const lattice = revealLines(parts.lattice, { mode: 'wire', order: 'y', color: '#6fd8c8', headColor: '#e8fffa', intensity: 0.12, head: 0.06 });
+  lattice.renderOrder = 3;
   heart.add(lattice);
   const heartDust = new MorphParticles({ count: 2400, positions: sampleGeometry(parts.body[0], 2400, { seed: 41 }), size: 0.025, color: '#c8fff4', intensity: 1.6, opacity: 0.8, seed: 42 });
   heartDust.u.noise = 0.02; heartDust.u.twinkle = 0.7;
@@ -510,6 +576,7 @@ export function create(ctx, segment) {
     dof: { focus: 5, range: 2.5, amount: 0 },
     bloom: { strength: 0.75 },
     exposure: 1.0,
+    harmony: 1,
     background: 0x010608,
     // explore: the micro world and the anatomy stage are finite islands in the dark — keep the pull-back
     // short enough that they stay the subject instead of a speck
@@ -601,8 +668,9 @@ export function create(ctx, segment) {
         m.uniforms.uTime.value = t; m.uniforms.uOpacity.value = holo; m.uniforms.uBeat.value = beat;
         m.uniforms.uSliceY.value = sliceY; m.uniforms.uSliceAmt.value = sliceOn;
       }
+      for (const m of satinMats) { m.opacity = holo; m.userData.rim.value = 0.8 + 0.6 * beat; }
       lattice.progress = ramp(t, tAnat + 0.2, tHud + 0.3); lattice.opacity = holo * 0.9;
-      heartDust.tick(t, info); heartDust.u.opacity = holo * 0.6; heartDust.u.intensity = 0.9 + beat * 1.0;
+      heartDust.tick(t, info); heartDust.u.opacity = holo * 0.3; heartDust.u.intensity = 0.9 + beat * 1.0;
       heartRoot.updateMatrixWorld(true);
       heartFocus.setFromMatrixPosition(heart.matrixWorld);
 
@@ -667,6 +735,9 @@ export function create(ctx, segment) {
       } else {
         api.dof.focus = camPos.distanceTo(heartFocus); api.dof.range = 3; api.dof.amount = 0;
       }
+      // the grade's colour harmony mutes off-palette reds; relax it while the organ is on stage so the
+      // tissue reads as living red rather than grey-pink (the teal HUD stays in family either way)
+      api.harmony = 1 - 0.45 * ramp(t, tAnat + 0.05, tAnat + 0.45);
       api.exposure = 1.0 + envelope(t, tAnat - 0.3, tAnat + 0.2, 0.15, 0.25) * 0.08;   // gentle: the 3D chapter word is sweeping here too
       api.bloom.strength = 0.8 + envelope(t, tAnat - 0.3, tAnat + 0.3, 0.2, 0.2) * 0.15;
     },
