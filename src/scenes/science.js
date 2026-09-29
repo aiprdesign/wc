@@ -289,8 +289,8 @@ export function create(ctx, segment) {
 
   // ---- orrery ---------------------------------------------------------------
   const orrery = new THREE.Group(); orrery.position.copy(O); scene.add(orrery);
-  // (the dial and the base gearing carry its own copies of the brass, with the scene's environment set explicitly — the
-  // same look — so the explore hook can ease the studio reflections that flare off these flat faces)
+  // (the dial and the base gearing set the scene's environment on their own materials — the same look — so the
+  // explore hook can ease the studio reflections that flare off these flat faces)
   const glintMats = [];
   const glintMat = (m) => { m.envMap = ctx.env; m.envMapIntensity = ENV_I; glintMats.push(m); return m; };
   const hs = S.y - O.y;
