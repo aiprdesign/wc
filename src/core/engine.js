@@ -315,8 +315,7 @@ export class Engine {
       return;
     }
     const open = (this.fx.shutter / 360) * filmDt;
-    let times = Array.from({ length: N }, (_, i) => filmT + ((i + 0.5) / N - 0.5) * open);
-    times = this.dropCuts(times, filmT);
+    const times = this.subframeTimes(filmT, open, N);
     if (!this.accum) this.accum = new THREE.WebGLRenderTarget(this.width, this.height, { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace });
     const r = this.renderer, au = this.accumQuad.material.uniforms;
     r.setRenderTarget(this.accum);
@@ -335,34 +334,71 @@ export class Engine {
     this.grade(this.accum.texture, { T: filmT / TIME_SCALE, exposure, harmony });
   }
 
-  // Motion-blur helper: poses each sub-frame's owning camera (sequences are pure functions of
-  // time) and keeps only the contiguous run of samples around filmT without a pose discontinuity.
-  dropCuts(times, filmT) {
-    if (times.length < 3) return times;
-    const pose = times.map((ft) => {
+  // Motion-blur helpers. Sequences are pure functions of time, so each sub-frame's owning camera
+  // can be posed cheaply without rendering.
+  subframePoses(times) {
+    return times.map((ft) => {
       const T = ft / TIME_SCALE, inst = this.mainInstance(T), cam = inst.camera;
       try { inst.update(T - inst.segment.start, this.info(T, inst.segment, 0)); } catch { /* reported by render */ }
       cam.updateMatrixWorld(true);
       const p = new THREE.Vector3(), q = new THREE.Quaternion();
       cam.matrixWorld.decompose(p, q, new THREE.Vector3());
-      return { inst, p, q, fov: cam.fov ?? 0, focus: inst.dof?.focus || 0 };
+      // headings move on their own (e.g. the zoom through STARS): track their corners on screen
+      const probes = [];
+      if (this.words3d) {
+        this.words3d.apply(inst, T);
+        this.withMatte(cam, () => {
+          for (const it of this.words3d.items) {
+            if (it.inst !== inst || !it.group.visible) continue;
+            it.group.updateMatrixWorld(true);
+            for (const [x, y] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, 0]]) {
+              probes.push(new THREE.Vector3(x * it.width, y * it.capH, 0).applyMatrix4(it.group.matrixWorld).project(cam));
+            }
+          }
+        });
+      }
+      return { inst, p, q, fov: cam.fov ?? 50, focus: inst.dof?.focus || 0, probes };
     });
-    const dP = [], dA = [];
+  }
+
+  // Per-step camera motion: { px: approximate image motion in pixels, cut: hard-cut flag }.
+  subframeSteps(pose) {
+    const steps = [];
     for (let i = 0; i + 1 < pose.length; i++) {
       const a = pose[i], b = pose[i + 1];
-      dP.push(a.inst === b.inst ? a.p.distanceTo(b.p) : 0);
-      dA.push(a.inst === b.inst ? a.q.angleTo(b.q) + Math.abs(a.fov - b.fov) * Math.PI / 180 : 0);
+      if (a.inst !== b.inst) { steps.push({ dP: 0, dA: 0, px: 0 }); continue; }   // transition hand-over
+      const dP = a.p.distanceTo(b.p), dA = a.q.angleTo(b.q) + Math.abs(a.fov - b.fov) * Math.PI / 180;
+      const scale = Math.max(a.focus, 0.05 * a.p.length(), 0.5);
+      let px = (dA / THREE.MathUtils.degToRad(a.fov) + dP / scale * 0.5) * this.height;
+      if (a.probes.length === b.probes.length) {
+        a.probes.forEach((u, k) => {
+          const v = b.probes[k];
+          if (Math.abs(u.z) > 1 || Math.abs(v.z) > 1 || Math.abs(u.x) > 2 || Math.abs(u.y) > 2) return;   // behind / far off screen
+          px = Math.max(px, Math.hypot((u.x - v.x) * this.width, (u.y - v.y) * this.height) / 2);
+        });
+      }
+      steps.push({ dP, dA, px, scale });
     }
-    const med = (v) => [...v].sort((x, y) => x - y)[v.length >> 1];
-    const mP = med(dP), mA = med(dA);
-    const cut = dP.map((d, i) => {
-      const a = pose[i], scale = Math.max(a.focus, 0.05 * a.p.length(), 0.5);
-      return (d > 6 * mP && d > 0.04 * scale) || (dA[i] > 6 * mA && dA[i] > 0.035);
-    });
-    // centre sample: the one closest to filmT (lower-middle for even counts)
+    const med = (k) => steps.map((s) => s[k]).sort((x, y) => x - y)[steps.length >> 1];
+    const mP = med('dP'), mA = med('dA');
+    for (const s of steps) s.cut = (s.dP > 6 * mP && s.dP > 0.04 * (s.scale ?? 1)) || (s.dA > 6 * mA && s.dA > 0.035);
+    return steps;
+  }
+
+  // Sub-frame times for one output frame: N across the open shutter, raised (up to 4×) when the
+  // camera moves so fast that N discrete copies would show as steps instead of a smooth streak;
+  // then only the contiguous run around filmT without a hard cut is kept (a cut never double-exposes).
+  subframeTimes(filmT, open, N) {
+    const make = (n) => Array.from({ length: n }, (_, i) => filmT + ((i + 0.5) / n - 0.5) * open);
+    let times = make(N);
+    if (N < 3) return times;
+    let pose = this.subframePoses(times), steps = this.subframeSteps(pose);
+    const maxPx = Math.max(0, ...steps.filter((st) => !st.cut).map((st) => st.px));
+    const want = Math.min(N * 4, Math.ceil(N * maxPx / 2.5));   // ≤ ~2.5 px between copies
+    if (want > N) { times = make(want); pose = this.subframePoses(times); steps = this.subframeSteps(pose); }
     let lo = Math.floor((times.length - 1) / 2), hi = lo;
-    while (lo > 0 && !cut[lo - 1]) lo--;
-    while (hi < times.length - 1 && !cut[hi]) hi++;
+    while (lo > 0 && !steps[lo - 1].cut) lo--;
+    while (hi < times.length - 1 && !steps[hi].cut) hi++;
     return times.slice(lo, hi + 1);
   }
 

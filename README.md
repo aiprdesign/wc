@@ -31,7 +31,9 @@ chapter · `m` mute · `f` fullscreen · `r` record to WebM · `h` toggle contro
 | `#square` | 1:1 frame |
 | `#16x9` | 16:9 frame |
 | `?aspect=9:16` | 9:16 vertical frame |
-| `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920) |
+| `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920). `high` and `ultra` also add ambient occlusion and 2× shadow-map resolution |
+| `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
+| `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
 | `?novo` | no narrator · `?noaudio` silent |
 
 ## Render the MP4s
@@ -42,6 +44,7 @@ npm run render:1x1       # → renders/1x1/achievements-of-western-civilization-
 npm run render:16x9      # → renders/16x9/…-16x9.mp4                                     (1920 × 1080)
 npm run render:9x16      # → renders/9x16/…-9x16.mp4                                     (1080 × 1920)
 npm run render:all       # all three, one after another
+npm run render:draft:1x1 # quick preview (also :16x9, :9x16): no motion blur or supersampling
 ```
 
 Each frame is rendered deterministically (identical to real-time playback, never a dropped
@@ -51,6 +54,19 @@ them alone until they close. Without `--gpu` Chromium renders in software, which
 anywhere but is far slower. More options (`--fps`, `--workers`, `--from/--to`, `--ffmpeg`)
 are listed at the top of `tools/render.mjs`. In the browser you can also press `r` to record
 a real-time `.webm`.
+
+The `render:*` scripts use the **cinematic** preset (`--preset cinematic`), which adds what
+real-time playback can't afford:
+
+| Flag | Effect |
+|---|---|
+| `--mb 8` | **motion blur**: each frame integrates 8 sub-frames across a 180° shutter (`--shutter` to change) in linear HDR, before bloom and grade. Exact, because every sequence is a pure function of time; very fast moves get extra sub-frames so streaks stay smooth, and sub-frames across a hard cut are dropped |
+| `--ss 2` | **supersampling**: rendered at 2× and filtered down with a tent filter: clean edges, stable fine detail, finer grain |
+| `--q high` | **ambient occlusion** (contact shadows from the depth buffer) and **2× shadow maps** with soft PCF (`ultra` above 2560 px wide) |
+
+`--preset draft` (the default for a bare `node tools/render.mjs`) turns them off for fast
+previews. Explicit flags override the preset, e.g. `--preset cinematic --mb 12`. The cinematic
+preset costs roughly 8 × 4 = 32× the GPU work of a draft frame.
 
 ## The film
 
@@ -78,7 +94,7 @@ light across the running time. The final grade applies this shift as an era whit
 ```
 index.html            page shell + import map (no bundler)
 src/timeline.js       master timeline: segments, transitions, cue sheet, BPM, era warmth
-src/core/engine.js    renders any time T: sequences → HDR targets → DOF → transition → bloom → grade
+src/core/engine.js    renders any time T: sequences → HDR targets → AO + DOF → transition → bloom → [motion blur] → grade
 src/core/post.js      depth of field, 6 transition shaders, ACES film grade (CA, vignette, grain)
 src/core/player.js    audio-clock transport, seeking, WebM recording
 src/audio/            procedural score + sound design, pre-rendered in an OfflineAudioContext
