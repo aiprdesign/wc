@@ -565,15 +565,31 @@ export function create(ctx, segment) {
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
   const dof = { focus: 10, range: 3, amount: 0 };
   const bloom = { strength: 0.75 };
-  let lastT = 0;
+  let lastT = 0, lastH = 800;
+  const _cp = new THREE.Vector3(), _rc = new THREE.Vector3(), _rn = new THREE.Vector3(), _rv = new THREE.Vector3();
+  // how face-on the viewer sees a plane (centre c, normal n), relative to the film camera (never above 1)
+  const faceK = (c, n, cp) => {
+    const f = (p) => smoothstep(0.3, 0.8, Math.abs(_rv.copy(p).sub(c).normalize().dot(n)));
+    return Math.min(1, f(cp) / Math.max(0.05, f(camPos)));
+  };
+  // a GPU point never rasterises smaller than a pixel: once a world-sized particle falls under one, its
+  // light no longer shrinks with distance and a dense cloud stacks into glare. The film is graded at the
+  // director's distance dF; seen from dA, scale the cloud's opacity so each particle carries the light
+  // its true size would (never brighter than the film's)
+  const pxLight = (size, dF, dA) => {
+    const k = size * lastH * 0.5 * camera.projectionMatrix.elements[5];
+    const pf = k / Math.max(0.05, dF), pa = k / Math.max(0.05, dA);
+    return Math.min(1, ((pa * pa) / (pf * pf)) * (Math.max(pf, 1) ** 2) / (Math.max(pa, 1) ** 2));
+  };
   // Explore 3D windows per phase (read on entering explore, right after update(t))
   const LIM_GRID = { yaw: 0.5, pitchDown: 0.3, pitchUp: 0.4, zoomIn: 0.45, zoomOut: 2.2, fly: 1.2 };   // flat compass-and-straightedge linework
   const LIM_PAGES = { yaw: 0.8, pitchDown: 0.35, pitchUp: 0.5, zoomOut: 2.4, fly: 1.5 };                // 2.5D manuscript planes along the flight
   const LIM_TITLE = { yaw: 1.1, pitchDown: 0.35, pitchUp: 0.7, zoomOut: 2.6 };
+  const LIM_TITLE_FLAT = { ...LIM_TITLE, yaw: 0.9 };   // before the extrusion the tightly tracked words crowd into each other past ~50°
 
   const api = {
     scene, camera, hud, dof, bloom, exposure: 1,
-    get exploreLimits() { return lastT < fT + 0.15 ? LIM_GRID : lastT < tL - 0.3 ? LIM_PAGES : LIM_TITLE; },
+    get exploreLimits() { return lastT < fT + 0.15 ? LIM_GRID : lastT < tL - 0.3 ? LIM_PAGES : lastT < l3 ? LIM_TITLE_FLAT : LIM_TITLE; },
     // Explore: the flat title (between the particle lock and the extrusion) is paper-thin edge-on — give
     // the glyphs real depth (update() rebuilds the scale every frame, so this is idempotent)
     explore(t) {
@@ -581,8 +597,51 @@ export function create(ctx, segment) {
         for (const g of glyphs) if (g.mesh.visible) g.mesh.scale.z = Math.max(g.mesh.scale.z, g.s * 0.35);
       }
     },
+    // After the viewer's camera is posed (explore, or the live offset). Everything touched here is
+    // rebuilt by update() every frame, so the film's own frames never see it.
+    explorePosed(cam) {
+      cam.updateMatrixWorld();
+      const cp = _cp.setFromMatrixPosition(cam.matrixWorld);
+      // the ignition burst and the point of light are sized to the film camera's distance (a constant
+      // size on screen): size them to the viewer's, or zooming in grew them into a frame-filling glare
+      const dF0 = Math.max(0.5, camPos.length()), dA0 = Math.max(0.5, cp.length());
+      const glowK = clamp(dA0 / dF0, 0.35, 2.5);
+      if (burstCore.visible) { burstCore.scale.multiplyScalar(glowK); burstGlow.scale.multiplyScalar(glowK); }
+      if (point.visible) { point.scale.multiplyScalar(glowK); pointCore.scale.multiplyScalar(glowK); }
+      // the flash-forward's dense gold linework (1-px lines) piles up into a hot knot when zoomed out
+      const lineK = Math.sqrt(clamp(dF0 / dA0, 0.4, 1));
+      if (lineK < 1) for (const ic of icons) if (ic.g.visible) for (const { obj } of ic.parts) obj.intensity *= lineK;
+      // manuscripts drifting up to the viewer's lens step back (the film's own near passes are kept:
+      // nothing fades farther out than the film camera has that page)
+      for (const L of layers) {
+        if (!L.m.visible) continue;
+        const h = L.m.scale.y, dA = L.m.position.distanceTo(cp), dF = L.m.position.distanceTo(camPos);
+        const m = Math.min(dF, 3.6 * h);
+        const k = smoothstep(0.45 * m, m, dA);
+        if (k < 1) { L.mat.opacity *= k; L.m.visible = L.mat.opacity > 0.002; }
+      }
+      // the title's particle cloud: keep the film's light per particle from the viewer's distance
+      const c = titleGroup.position, dFT = c.distanceTo(camPos), dAT = c.distanceTo(cp);
+      if (titleParticles.visible) titleParticles.u.opacity *= pxLight(titleParticles.u.size, dFT, dAT);
+      // the two hits (ignition, SLAM) are graded as a flash at the film's distance: pushed in close, their
+      // sparks, shockwave rings and rays swelled until they washed the whole frame out
+      const nearI = clamp(dA0 / dF0, 0.45, 1), nearS = clamp(dAT / Math.max(0.5, dFT), 0.45, 1);
+      sparksA.U.uOpacity.value *= nearI; ringU.uI.value *= nearI;
+      sparksT.U.uOpacity.value *= nearS; slamRingU.uI.value *= nearS; raysU.uI.value *= nearS;
+      // both shockwave rings lie in their plane: turned toward edge-on they read as a stray sliver of
+      // light off to one side, so they thin out as the view leaves the film's face-on axis
+      if (ring.visible) {
+        ring.getWorldPosition(_rc); ring.getWorldDirection(_rn);
+        ringU.uI.value *= faceK(_rc, _rn, cp);
+      }
+      if (slamRing.visible) {
+        slamRing.getWorldPosition(_rc); slamRing.getWorldDirection(_rn);
+        slamRingU.uI.value *= faceK(_rc, _rn, cp);
+      }
+    },
     update(t, info) {
       const T = info.T;
+      lastH = info.height ?? 800;
       // the two hits of the cold open: the ignition and the title SLAM (1 on the hit, decaying)
       const ign = decay(t, tIgn, 1), slam = decay(t, tL, 1);
       const aI = t - tIgn, aS = t - tL;
@@ -627,6 +686,7 @@ export function create(ctx, segment) {
       ringU.uI.value = aI >= 0 ? 0.8 * (1 - ringU.uR.value) ** 1.5 * sat(aI / 0.03) : 0;
       ring.visible = aI >= 0 && aI < 0.55;
       sparksA.tick(t, info.height);
+      sparksA.U.uOpacity.value = sparksT.U.uOpacity.value = 1;   // (explorePosed may dim them)
 
       // ---------------------------------------------------------------- flash-forward
       // each silhouette flashes on its 8th and holds (a slow push) until the next cut; then all
