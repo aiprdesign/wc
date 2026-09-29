@@ -626,7 +626,8 @@ export function create(ctx, segment) {
   function fanMesh(starts, dirs, lens, frag, uniforms) {
     const pos = [], uvs = [], st = [], dr = [], ln = [], idx = [], ROWS = 24;
     for (let j = 0; j <= ROWS; j++) for (let i = 0; i <= NU; i++) {
-      pos.push(0, 0, 0); uvs.push(i / NU, j / ROWS);
+      // (the real rest positions, though the shader places the vertices: bounds, picking and scans see the fan's true shape)
+      pos.push(starts[i].x + dirs[i].x * lens[i] * j / ROWS, starts[i].y + dirs[i].y * lens[i] * j / ROWS, 0); uvs.push(i / NU, j / ROWS);
       st.push(starts[i].x, starts[i].y, 0); dr.push(dirs[i].x, dirs[i].y, 0); ln.push(lens[i]);
     }
     for (let j = 0; j < ROWS; j++) for (let i = 0; i < NU; i++) { const a = j * (NU + 1) + i, b = a + 1, c = a + NU + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
@@ -644,6 +645,7 @@ export function create(ctx, segment) {
       fragmentShader: SPECTRAL + frag,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     });
+    g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
     return mesh;
   }
@@ -709,7 +711,7 @@ export function create(ctx, segment) {
     idxs.forEach((i, k) => {
       const base = st.length / 3;
       for (let j = 0; j <= rows; j++) for (const s of [-1, 1]) {
-        pos.push(0, 0, 0); uvs.push(s * 0.5 + 0.5, j / rows);
+        pos.push(starts[i].x + dirs[i].x * lens[i] * j / rows, starts[i].y + dirs[i].y * lens[i] * j / rows, s * R_BEAM); uvs.push(s * 0.5 + 0.5, j / rows);
         st.push(starts[i].x, starts[i].y, 0); dr.push(dirs[i].x, dirs[i].y, 0); ln.push(lens[i]); us.push(i / NU); sd.push(s);
       }
       for (let j = 0; j < rows; j++) { const a = base + j * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
@@ -722,7 +724,7 @@ export function create(ctx, segment) {
     g.setAttribute('aLen', new THREE.Float32BufferAttribute(ln, 1));
     g.setAttribute('aU', new THREE.Float32BufferAttribute(us, 1));
     g.setAttribute('aSide', new THREE.Float32BufferAttribute(sd, 1));
-    g.setIndex(idx);
+    g.setIndex(idx); g.computeBoundingSphere();
     const m = new THREE.ShaderMaterial({
       uniforms, vertexShader: RAYS, fragmentShader: SPECTRAL + frag,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,

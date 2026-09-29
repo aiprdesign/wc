@@ -142,7 +142,7 @@ export function create(ctx, segment) {
   // the superstructure (entablature, pediments, roof) is set on them once the hero column stands complete
   const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f3ede2', roughness: 0.34, clearcoat: 0.25, clearcoatRoughness: 0.4 });
   const baseMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 5 }), color: '#d9d1c4', roughness: 0.5 });
-  const wallMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#a69885', roughness: 0.62 });
+  const wallMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#8c7f6d', roughness: 0.66 });
   const heroMarble = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f5efe4', roughness: 0.3, clearcoat: 0.35, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), '#ffd9a0');
   const heroClay = withBuild(new THREE.MeshStandardMaterial({ color: '#b9a48c', roughness: 0.95 }), '#ff9f4a');
   const stoneMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 5 }), color: '#d9d1c4', roughness: 0.5 }), '#ffc680');
@@ -404,7 +404,8 @@ export function create(ctx, segment) {
   scene.add(sky);
 
   // ---------------------------------------------------------------------- light
-  const key = new THREE.SpotLight('#ffd2a0', 0, 30, 0.45, 0.6, 1.2);   // opening pool of light on the hero column
+  // (a tight cone: the rest of the finished colonnade stays in the dark around the column being modelled)
+  const key = new THREE.SpotLight('#ffd2a0', 0, 30, 0.34, 0.75, 1.2);   // opening pool of light on the hero column
   key.position.set(HERO.x + 5, 11, HERO.z + 6);
   key.target.position.set(HERO.x, 3, HERO.z);
   scene.add(key, key.target);
@@ -607,7 +608,9 @@ export function create(ctx, segment) {
     fill.intensity = 0.05 + lit * 0.35;
     // bounce off the lit stylobate: without it every face turned from the key spot (the clay plinth's
     // shaded side, the far side of each column) was pure black against the bright floor
-    bounce.intensity = 1.4 * key.intensity / 55;
+    bounce.intensity = 0.3 * key.intensity / 55;
+    // until the sun comes up the finished temple waits in the dark around the column being modelled
+    for (const m of [marbleMat, baseMat, wallMat]) m.envMapIntensity = lerp(0.12, 1, lit);
     doorGlowMat.color.copy(doorBase).multiplyScalar(0.06 + 0.3 * lit);
     scene.environmentIntensity = 0.1 + lit * 0.32;
     sky.material.uniforms.uLit.value = lit;
