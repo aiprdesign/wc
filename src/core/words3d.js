@@ -52,7 +52,7 @@ function letterMaterial(era, env, shared, invert = false) {
     envMap: env, envMapIntensity: invert ? 0.35 : era.env,
     emissive: new THREE.Color(era.color).multiplyScalar(0.0), transparent: true, fog: false,
   });
-  const u = { ...shared, uFlash: { value: 0 } };
+  const u = { ...shared, uFlash: { value: 0 }, uLShine: { value: 0 } };
   m.userData.u = u;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -60,7 +60,7 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <common>', '#include <common>\nuniform mat4 uWordInv; varying vec3 vWordPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine; uniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine; uniform vec3 uTint;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
@@ -70,9 +70,11 @@ function letterMaterial(era, env, shared, invert = false) {
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
           if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
-        gl_FragColor.rgb += uTint * band * uShine * 0.12;`);
+        gl_FragColor.rgb += uTint * band * uShine * 0.12;
+        // per-letter shine: a brief bright flare on this letter alone (past the knee, so it reads)
+        gl_FragColor.rgb += uTint * uLShine * (0.26 + 0.1 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v6';
+  m.customProgramCacheKey = () => 'word3d-v7';
   return m;
 }
 
@@ -323,7 +325,10 @@ export class Words3D {
       it.group.rotateX(-0.08);
       const n = it.letters.length;
       const pace = it.pace ?? 1;
-      const inDur = (it.swap ? 0.32 : 0.75) * pace, st = (it.swap ? 0.022 : 0.07) * pace;
+      // KICK-IN: letters fly in from beside the camera one after another on a 32nd-note grid,
+      // land with a small impact, then shine one by one (all fast, all on the beat grid)
+      const slot = BEAT / (it.swap ? 16 : 8) * pace, fly = (it.swap ? 0.16 : 0.26) * pace;
+      const inDur = (n - 1) * slot + fly, st = slot;
       const held = sat((t - inDur) / 0.2) * (1 - sat((T - it.t1 + 0.3) / 0.2));
       const beat = pulse(T, { decay: 9 }) * held;
       it.group.scale.setScalar(k * (1 + 0.018 * beat));   // a gentle breath on every beat
@@ -358,37 +363,47 @@ export class Words3D {
       // stagger from the anchor: centred words grow from the middle, side words from their margin
       const mid = (n - 1) / 2, maxD = Math.max(1, mid);
       const anchorX = it.align === 'left' ? -it.width / 2 : it.align === 'right' ? it.width / 2 : 0;
+      const Dz = it.d / Math.max(1e-4, k);                 // camera distance in the word's own units
+      const shineSlot = (it.swap ? 0.025 : 0.045) * pace, shineDur = it.swap ? 0.1 : 0.16;
+      const shine0 = nextBeat(it.t0 + inDur, 4) - it.t0;   // the letter-by-letter shine starts on a 16th
       it.letters.forEach((l) => {
         const c = it.align === 'left' ? l.i / Math.max(1, n - 1) : it.align === 'right' ? (n - 1 - l.i) / Math.max(1, n - 1) : Math.abs(l.i - mid) / maxD;
-        const d0 = onBeat(c * st * n * 0.55, 4);          // each letter lands on a 16th note
-        const u = sat((t - d0) / inDur);
-        const kin = ease.outBack(u), kc = ease.outCubic(u);
+        const d0 = l.i * slot;                             // left to right, one per 32nd note
+        const u = sat((t - d0) / fly);
+        const e = ease.outExpo(u);
         const kout = ease.inCubic(sat((T - outStart - (1 - c) * st * n * 0.3) / outDur));
-        // ENTRANCE: every letter emerges from the centre point, spreading outward to its place
-        //           while hinging up from lying flat; EXIT: they fold back into the centre
-        // letters materialise inside the converging particle cloud: a small settle forward and a
-        // slight tilt-up, no big hinge — the particles do the forming
-        l.pivot.position.x = anchorX + (l.x - anchorX) * (0.96 + 0.04 * kc) * (1 - kout * 0.85);
-        l.pivot.position.z = (1 - kc) * 0.18;
-        l.pivot.rotation.x = (1 - kin) * -0.35 + kout * -0.5;
+        // flight: from just in front of the lens, off to the letter's side, spinning into place
+        const side = l.x > 0.01 ? 1 : l.x < -0.01 ? -1 : (l.i % 2 ? 1 : -1);
+        const fx = l.x + side * Dz * 0.32 + l.x * 0.8, fy = (l.i % 2 ? 1 : -1) * Dz * 0.07, fz = Dz * 0.7;
+        const ox = anchorX + (l.x - anchorX) * (1 - kout * 0.85);
+        l.pivot.position.x = lerp(fx, ox, e);
+        l.pivot.position.y = (l.pivot.userData.y0 ?? (l.pivot.userData.y0 = l.pivot.position.y)) + fy * (1 - e);
+        l.pivot.position.z = fz * (1 - e);
+        l.pivot.rotation.y = (1 - e) * side * 1.1;
+        l.pivot.rotation.x = (1 - e) * -0.55 + kout * -0.5;
         l.mesh.position.y = (l.mesh.userData.h ?? (l.mesh.userData.h = l.mesh.position.y));
-        l.mesh.scale.setScalar((0.8 + 0.2 * kc) * (1 - kout * 0.4));
-        // landing flash as each letter reaches its place
-        const land = t - d0 - inDur * 0.62;
-        l.mat.userData.u.uFlash.value = land > 0 ? Math.exp(-land * 9) * 0.45 : 0;
-        l.mat.opacity = fade * ease.inOutSine(sat((u - 0.25) / 0.6)) * (1 - kout);
+        // impact on landing: a quick squash-and-settle
+        const land = t - d0 - fly * 0.55;
+        const hit = land > 0 ? Math.exp(-land * 16) : 0;
+        l.mesh.scale.set((1 + 0.08 * hit) * (1 - kout * 0.4), (1 - 0.06 * hit) * (1 - kout * 0.4), (1 - kout * 0.4));
+        // each letter shines in turn, fast
+        const sh = Math.sin(Math.PI * sat((t - shine0 - l.i * shineSlot) / shineDur));
+        l.mat.userData.u.uFlash.value = hit * 0.3 + sh * 0.5;
+        l.mat.userData.u.uLShine.value = sh * fade;
+        l.mat.opacity = fade * sat(u * 5) * (1 - kout);
       });
       // formation particles: converge over the entrance, then dissolve into the solid letters
-      const formEnd = inDur + st * n * 0.55 + 0.1;
+      const formEnd = inDur + 0.1;
       it.dust.tick(t, { height: this.engine.height });
       it.dust.u.mix = ease.outCubic(sat(t / formEnd));
       it.dust.u.swirl = (1 - ease.outCubic(sat(t / formEnd))) * 1.2;
       it.dust.u.size = 0.03 * k;   // world-space diameter: scale with the word, or close-up words drown in giant motes
-      it.dust.u.opacity = sat(t / 0.12) * (1 - ramp(t, formEnd * 0.8, formEnd + 0.35)) + 0.25 * ramp(T, outStart - 0.05, outStart + 0.1) * (1 - ramp(T, outStart + 0.1, outStart + outDur + 0.2));
+      it.dust.u.opacity = 0.55 * sat(t / 0.12) * (1 - ramp(t, formEnd * 0.8, formEnd + 0.35)) + 0.25 * ramp(T, outStart - 0.05, outStart + 0.1) * (1 - ramp(T, outStart + 0.1, outStart + outDur + 0.2));
       it.dust.visible = it.dust.u.opacity > 0.01;
       // light sweep crosses the word once, after the letters stand
-      const sweepStart = nextBeat(it.t0 + inDur + n * st * 0.55, it.swap ? 2 : 1) - it.t0;   // the shine lands on a beat
-      const sweepP = ramp(t, sweepStart, sweepStart + (it.swap ? 0.25 : 0.5), ease.inOutSine);
+      // the sheen band and the glint ride along with the letter-by-letter shine
+      const sweepStart = shine0;
+      const sweepP = ramp(t, sweepStart - shineDur * 0.3, sweepStart + (n - 1) * shineSlot + shineDur * 1.3);
       it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
       // first show: the sweep is a real shine — bright band plus a star glint on its leading edge
       const shine = Math.sin(Math.PI * sweepP) * fade;
