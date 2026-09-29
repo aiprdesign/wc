@@ -165,8 +165,9 @@ export class TitleLayer {
     const top = my - 0.005, bot = -my + 0.035;
     // the square frame is ~2.4x narrower: HUD type grows so it stays legible at delivery size
     const hs = a < 0.9 ? 0.95 : a < 1.9 ? 1.3 : 1;   // tall frames: the counter must fit the narrow width
-    this.tcText = new LiveText({ height: 0.03 * hs, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.005, top - 0.035 * hs, 0);
-    this.idxText = new LiveText({ height: 0.03 * hs, chars: 48, align: 'left' }); this.idxText.position.set(-mx + 0.005, top - 0.035 * hs, 0);
+    this.tcText = new LiveText({ height: 0.03 * hs, chars: 12, align: 'right' }); this.tcText.position.set(mx - 0.03, top - 0.035 * hs - 0.024, 0);
+    // inset from the corner bracket (clear of both its strokes)
+    this.idxText = new LiveText({ height: 0.03 * hs, chars: 48, align: 'left' }); this.idxText.position.set(-mx + 0.03, top - 0.035 * hs - 0.024, 0);
     this.techText = new LiveText({ height: 0.026 * hs, chars: 64, align: 'left', spacing: 0.2 }); this.techText.position.set(-mx + 0.005, bot + 0.035 * hs, 0);
     // square: the long technique line needs the whole bottom edge, so the tag moves to the top centre
     this.rtText = new LiveText({ height: 0.026 * hs, chars: 20, align: hs > 1 ? 'center' : 'right', spacing: 0.2 });
