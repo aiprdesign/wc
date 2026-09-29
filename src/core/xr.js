@@ -200,7 +200,11 @@ export class XRMode {
     const aspect = OUTPUT_ASPECT;
     const pw = 2048, ph = Math.round(pw / aspect);
     this.panelRT = new THREE.WebGLRenderTarget(pw, ph, { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace, depthBuffer: true });
-    this.panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1 / aspect), new THREE.MeshBasicMaterial({ map: this.panelRT.texture, transparent: true, premultipliedAlpha: true, depthTest: false, depthWrite: false, fog: false }));
+    // (the texture holds premultiplied colour: blend it as such; fades scale colour and alpha alike)
+    this.panel = new THREE.Mesh(new THREE.PlaneGeometry(1, 1 / aspect), new THREE.MeshBasicMaterial({
+      map: this.panelRT.texture, transparent: true, depthTest: false, depthWrite: false, fog: false,
+      blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    }));
     this.panel.renderOrder = 1e5;
     this.panel.frustumCulled = false;
     this.hint = new Label(0.9);
@@ -356,7 +360,7 @@ export class XRMode {
     this.inst = inst;
     inst.scene.add(this.rig);
     this._hideList = null; this._wallList = null;
-    if (this.mode === AR && !globalThis.__xrNoPatch) this._clipShaders(inst);
+    if (this.mode === AR) this._clipShaders(inst);
   }
 
   // AR: materials are adapted for compositing over the camera view (all undone when the session
@@ -500,7 +504,7 @@ void main() {
   _render(time, frame) {
     this.frames = (this.frames ?? 0) + 1;
     const e = this.engine, r = e.renderer, ar = this.mode === AR, cfg = ar ? TUNE.ar : TUNE.vr;
-    const wall = this._lastTime == null ? 0 : Math.min(0.1, Math.max(0, (time - this._lastTime) / 1000));
+    const raw = this._lastTime == null ? 0 : Math.max(0, (time - this._lastTime) / 1000), wall = Math.min(0.1, raw);
     this._lastTime = time;
     this._input(frame);
 
@@ -516,7 +520,7 @@ void main() {
     const inst = e.mainInstance(T);
     let snap = !this._seeded;
     if (inst !== this.inst) { this._attach(inst); snap = true; }
-    const expected = (this._lastFilmT ?? filmT) + (playing ? wall * (exp ? exp.speed : 1) : 0);
+    const expected = (this._lastFilmT ?? filmT) + (playing ? (exp ? wall * exp.speed : raw) : 0);
     if (Math.abs(filmT - expected) > 0.35) snap = true;                   // a seek or a loop
     const dt = Math.max(0, filmT - (this._lastFilmT ?? filmT)) / TIME_SCALE;
     this._lastFilmT = filmT;
@@ -551,7 +555,7 @@ void main() {
     if (ar) {
       // what the shot shows: a depth probe of the director's view (on cuts and twice a second)
       const shot = cfg.shots[inst.segment.id] ?? {};
-      if (globalThis.__xrNoProbe || shot.centre) this._subject = { D: null, floorY: null };
+      if (shot.centre) this._subject = { D: null, floorY: null };
       else if (snap || !this._subject || time - this._probeAt > 500) { this._probeAt = time; this._subject = this._probe(inst, d); }
       const sub = this._subject, D = sub.D ?? d.focus;
       const R = shot.radius ?? D * d.tanHalf * cfg.frame * (shot.frame ?? 1);
@@ -602,6 +606,7 @@ void main() {
       this.panel.scale.setScalar(W);
       this.panel.position.set(0, 0, -D);
       this.panel.material.opacity = fade;
+      this.panel.material.color.setScalar(fade);
     }
 
     // AR: the vitrine
@@ -610,7 +615,7 @@ void main() {
     if (ar) {
       const half = cfg.half * scale;
       clipPrism(this.planes, pos, f.yaw.x, half, cfg.sides);
-      r.clippingPlanes = globalThis.__xrNoClip ? [] : this.planes;
+      r.clippingPlanes = this.planes;
       scene.background = null;
       // haze as thick at the subject as in the film, measured from where the viewer stands
       if (fog) {
@@ -618,7 +623,7 @@ void main() {
         const k = clamp((this._subject?.D ?? d.focus) / Math.max(1e-3, this._head().distanceTo(this.anchor) * scale), 0.05, 1);
         if (fog.isFogExp2) fog.density *= k; else { fog.near /= k; fog.far /= k; }
       }
-      if (!globalThis.__xrNoHide) this._hideOutside(inst, pos, half);
+      this._hideOutside(inst, pos, half);
       r.setClearColor(0x000000, 0);
       const head = this._head();
       this.plinth.position.copy(this.anchor);
@@ -684,8 +689,6 @@ void main() {
     return true;
   }
 
-  // AR: shader materials without clipping support can't be cut to the vitrine; anything of theirs
-  // that reaches outside it (star fields, sky domes, haze shells) steps aside for the frame.
   // AR: where the director's lens meets solid geometry. A tiny render of the shot with a material
   // that writes view depth (log-encoded into RGBA8) and is read back: the median depth of the centre
   // of frame is the subject's distance; the lowest hit under the subject is the set's floor.
@@ -760,8 +763,10 @@ void main() {
     return { D, floorY: ys.length > 8 ? ys[Math.floor(ys.length * 0.05)] : null };
   }
 
+  // AR, per frame: what would spoil the vitrine steps aside (restored right after the frame):
+  // backdrop walls behind the set, enclosing domes and rooms, dust clouds, glow billboards reaching
+  // past the glass, and any shader material that could not learn clipping yet reaches outside it.
   _hideOutside(inst, c, half) {
-    if (globalThis.__xrDebug) this._dbgHidden = [];
     let list = this._hideList;
     if (!list) {
       list = this._hideList = [];
@@ -808,7 +813,7 @@ void main() {
       if (axis < 0) {
         if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
         _sph.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
-        if (_sph.radius > half * 4 && _sph.center.distanceTo(c) < _sph.radius * 0.7) { o.visible = false; this.hidden.push(o); if (globalThis.__xrDebug) this._dbgHidden.push(['shell', o.name || o.type, +_sph.radius.toFixed(1)]); }
+        if (_sph.radius > half * 4 && _sph.center.distanceTo(c) < _sph.radius * 0.7) { o.visible = false; this.hidden.push(o); }
         continue;
       }
       const e = o.matrixWorld.elements, n = _v.set(e[axis * 4], e[axis * 4 + 1], e[axis * 4 + 2]).normalize();
@@ -817,7 +822,7 @@ void main() {
       if (Math.abs(n.y) > 0.6 || r < half * 1.6) continue;
       // …only behind the subject (a painting or a page at the subject stays)
       const behind = _u.copy(size.center).applyMatrix4(o.matrixWorld).sub(this.dp.P).dot(this.dp.F) - _sph.center.copy(c).sub(this.dp.P).dot(this.dp.F);
-      if (behind > half * 0.15 || (r > half * 2.5 && [o.material].flat().some((m) => m.transparent))) { o.visible = false; this.hidden.push(o); if (globalThis.__xrDebug) this._dbgHidden.push(['wall', o.name || o.type, +r.toFixed(1)]); }
+      if (behind > half * 0.15 || (r > half * 2.5 && [o.material].flat().some((m) => m.transparent))) { o.visible = false; this.hidden.push(o); }
     }
     if (!list.length) return;
     const lim = half * 1.15;
@@ -833,7 +838,6 @@ void main() {
       _sph.copy(bs).applyMatrix4(o.matrixWorld);
       const out = !isFinite(_sph.radius) || _sph.center.distanceTo(c) + _sph.radius * 0.6 > lim;
       if (out) { o.visible = false; this.hidden.push(o); }
-      if (out && globalThis.__xrDebug) (this._dbgHidden ??= []).push([o.name || o.type, +_sph.center.distanceTo(c).toFixed(2), +_sph.radius.toFixed(2)]);
     }
   }
 
