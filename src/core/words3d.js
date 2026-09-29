@@ -10,9 +10,7 @@
 import * as THREE from 'three';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
 import { pulse } from '../lib/rhythm.js';
-// beat-grid helpers (story time; the score plays the same grid)
-const onBeat = (x, div = 1) => Math.round(x / (BEAT / div)) * (BEAT / div);
-const nextBeat = (x, div = 1) => Math.ceil(x / (BEAT / div) - 1e-6) * (BEAT / div);
+import { WORDS, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
 import { letters3D, getFont3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
@@ -20,20 +18,11 @@ import { MorphParticles, sampleGeometry } from '../lib/particles.js';
 import { rng } from '../lib/math.js';
 import { ease, sat, lerp, ramp } from '../lib/math.js';
 
-// One defining word per chapter (Cinzel capitals — the film's display face).
-const WORDS = {
-  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
-  renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
-  electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
-  // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
-  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.3, pace: 0.8 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
-  frontier: { text: 'FRONTIER', t0: 49.8, t1: 50.95, pace: 0.8 },   // clears before the genome shot
-};
+// The words and their kick-in timing live in lib/headings.js (the score reads them too).
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
 // 'invert' flips contrast for bright plates — dark lacquered letters over a light halo.
 export const LAYOUT = {};   // every heading is centred and gold (user direction); kept as a hook for per-chapter layout
-const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'], ['mAtoms', 'ATOMS'], ['mCircuit', 'CIRCUITS'], ['mStars', 'STARS']];
 
 // Material per era: satin gold → bronze → brushed steel → satin chrome.
 const ERAS = [
@@ -327,8 +316,7 @@ export class Words3D {
       const pace = it.pace ?? 1;
       // KICK-IN: letters fly in from beside the camera one after another on a 32nd-note grid,
       // land with a small impact, then shine one by one (all fast, all on the beat grid)
-      const slot = BEAT / (it.swap ? 16 : 8) * pace, fly = (it.swap ? 0.16 : 0.26) * pace;
-      const inDur = (n - 1) * slot + fly, st = slot;
+      const { slot, fly, inDur, shineSlot, shineDur, shine0 } = kickTiming(n, it.swap, pace, it.t0), st = slot;
       const held = sat((t - inDur) / 0.2) * (1 - sat((T - it.t1 + 0.3) / 0.2));
       const beat = pulse(T, { decay: 9 }) * held;
       it.group.scale.setScalar(k * (1 + 0.018 * beat));   // a gentle breath on every beat
@@ -364,8 +352,6 @@ export class Words3D {
       const mid = (n - 1) / 2, maxD = Math.max(1, mid);
       const anchorX = it.align === 'left' ? -it.width / 2 : it.align === 'right' ? it.width / 2 : 0;
       const Dz = it.d / Math.max(1e-4, k);                 // camera distance in the word's own units
-      const shineSlot = (it.swap ? 0.025 : 0.045) * pace, shineDur = it.swap ? 0.1 : 0.16;
-      const shine0 = nextBeat(it.t0 + inDur, 4) - it.t0;   // the letter-by-letter shine starts on a 16th
       it.letters.forEach((l) => {
         const c = it.align === 'left' ? l.i / Math.max(1, n - 1) : it.align === 'right' ? (n - 1 - l.i) / Math.max(1, n - 1) : Math.abs(l.i - mid) / maxD;
         const d0 = l.i * slot;                             // left to right, one per 32nd note

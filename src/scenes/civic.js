@@ -190,8 +190,8 @@ function bakeParts(list) {
   }));
 }
 
-// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
-// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
+// headings (engine.headingsHidden), dropping the duck with them; the explore hook puts it back.
 function headingDuck(ctx, inst, T) {
   let d = 0;
   const items = ctx.engine?.words3d?.items;
@@ -523,7 +523,7 @@ export function create(ctx, segment) {
     explore(t) {
       stageFloor.visible = true; setWordDepth(true);
       // explore hides the chapter heading (LAW) and with it the film's bloom duck: put it back
-      if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
+      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
     },
     // off the film's axis: callouts turn to the viewer, props drifting up to the lens step back, and the
     // additive particle clouds are kept from stacking into glare (edge-on on the documents, or zoomed out)

@@ -105,8 +105,8 @@ function withBuild(material, edgeColor = '#ffb766') {
   return material;
 }
 
-// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
-// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back so the
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
+// headings (engine.headingsHidden), dropping the duck with them; the explore hook puts it back so the
 // plate glows as it does in the film.
 function headingDuck(ctx, inst, T) {
   let d = 0;
@@ -612,7 +612,7 @@ export function create(ctx, segment) {
     ground.scale.setScalar(149.5 / 120);
     // Explore hides the chapter heading, and with it the bloom duck the film applies under it: the
     // wireframe / clay column (a strong additive emitter under the key spot) blew out into a glare
-    if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
+    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
   }
   // callouts turn to the viewer's camera; the flat engineering drawings fade out as they turn edge-on
   function explorePosed(cam) {

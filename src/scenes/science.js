@@ -71,8 +71,8 @@ function planetTexture(kind, seed = 1) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
-// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
-// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
+// headings (engine.headingsHidden), dropping the duck with them; the explore hook puts it back.
 function headingDuck(ctx, inst, T) {
   let d = 0;
   const items = ctx.engine?.words3d?.items;
@@ -1017,7 +1017,7 @@ export function create(ctx, segment) {
     // once the camera has swooped down to the orrery the instruments of shot 2 hang far overhead, out of the
     // film's frame: off-axis they read as leftovers of the previous shot floating in the void
     if (t > 2.6) scope.visible = armil.visible = gearGrp.visible = diag.visible = false;
-    if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, out, t + segment.start);
+    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, out, t + segment.start);
   }
   // labels turn to the viewer's camera (the film turns them to its own); the Opticks caption on the prism too
   const _qp = new THREE.Quaternion(), _cw = new THREE.Vector3();

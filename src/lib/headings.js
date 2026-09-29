@@ -1,0 +1,51 @@
+// The chapter headings' words and their kick-in timing, shared by the picture (core/words3d.js)
+// and the score (audio/cues.js) so every letter's whip, landing and shine is heard on its frame.
+// Pure data + math (no three.js): the score renders in contexts without the importmap.
+import { SEGMENTS, CUES, BEAT } from '../timeline.js';
+
+// beat-grid helpers (story time; the score plays the same grid)
+export const onBeat = (x, div = 1) => Math.round(x / (BEAT / div)) * (BEAT / div);
+export const nextBeat = (x, div = 1) => Math.ceil(x / (BEAT / div) - 1e-6) * (BEAT / div);
+
+// One defining word per chapter (Cinzel capitals — the film's display face).
+// entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
+export const WORDS = {
+  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
+  renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
+  electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
+  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.3, pace: 0.8 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
+  frontier: { text: 'FRONTIER', t0: 49.8, t1: 50.95, pace: 0.8 },   // clears before the genome shot
+};
+// the montage's rapid word swaps, each on its cue
+export const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'], ['mAtoms', 'ATOMS'], ['mCircuit', 'CIRCUITS'], ['mStars', 'STARS']];
+
+// Every heading in film order: { text, seg, t0, t1, swap, pace, entry } with t0/t1 as authored
+// (words3d snaps them to the beat in build()).
+export function headingList() {
+  const out = [];
+  for (const seg of SEGMENTS) {
+    const dur = seg.end - seg.start;
+    // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
+    for (const w of [WORDS[seg.id] ?? []].flat()) {
+      // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
+      if (typeof w === 'string') out.push({ text: w, seg: seg.id, t0: seg.start + 0.3, t1: seg.start + Math.min(1.95, dur - 0.65), swap: false, pace: 0.8, entry: {} });
+      else out.push({ text: w.text, seg: seg.id, t0: w.t0, t1: w.t1, swap: false, pace: w.pace ?? 1, entry: w });
+    }
+  }
+  SWAPS.forEach(([cue, w], i) => {
+    const t0 = CUES[cue], t1 = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
+    out.push({ text: w, seg: 'montage', t0: t0 - 0.05, t1: t1 - 0.08, swap: true, pace: 1, entry: {}, last: !SWAPS[i + 1] });
+  });
+  return out;
+}
+
+// The kick-in clock for a word of n letters (times relative to its beat-snapped t0):
+// letters fly in from beside the camera one per 32nd note (`slot`), each flight `fly` long,
+// landing at ~55% of it; then each letter shines in turn from `shine0`, `shineSlot` apart.
+export function kickTiming(n, swap, pace, t0) {
+  const slot = BEAT / (swap ? 16 : 8) * pace, fly = (swap ? 0.16 : 0.26) * pace;
+  const inDur = (n - 1) * slot + fly;
+  const shineSlot = (swap ? 0.025 : 0.045) * pace, shineDur = swap ? 0.1 : 0.16;
+  const shine0 = nextBeat(t0 + inDur, 4) - t0;   // the letter-by-letter shine starts on a 16th
+  return { slot, fly, inDur, land: fly * 0.55, shineSlot, shineDur, shine0 };
+}

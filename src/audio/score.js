@@ -45,7 +45,7 @@ import { loadVoiceOver, mixVoiceOver } from './voice.js';
 
 export { encodeWav } from './wav.js';
 
-export const SCORE_VERSION = 12;
+export const SCORE_VERSION = 13;
 
 const TAIL = 1.5;              // film seconds rendered past FILM_DURATION
 const CEILING = 0.891;         // -1 dBFS

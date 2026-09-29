@@ -22,7 +22,7 @@ const shaderMat = (def) => new THREE.ShaderMaterial({
 });
 
 export class Engine {
-  constructor(canvas, { maxWidth = 1920, pixelRatio = Math.min(window.devicePixelRatio || 1, 2), quality = 'medium', supersample = 1, fx = {} } = {}) {
+  constructor(canvas, { maxWidth = 1920, pixelRatio = Math.min(window.devicePixelRatio || 1, 2), quality = 'medium', supersample = 1, fx = {}, xr = null } = {}) {
     this.canvas = canvas;
     this.maxWidth = maxWidth;
     this.pixelRatio = pixelRatio;
@@ -34,7 +34,15 @@ export class Engine {
       shutter: fx.shutter ?? 180,                   // motion-blur shutter angle (degrees)
     };
     this.supersample = Math.max(1, Math.min(4, supersample || 1));
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    // xr: this device offers VR / AR (core/xr.js). The context is then made XR-compatible up front
+    // (no context loss on entering a session) and, for headsets, multisampled: the XR framebuffer
+    // inherits it. The film itself only ever draws one full-screen quad to the canvas, so its
+    // pixels are identical either way.
+    let context;
+    if (xr) {
+      try { context = canvas.getContext('webgl2', { alpha: false, antialias: xr.antialias !== false, xrCompatible: true, depth: true, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: false }) ?? undefined; } catch { context = undefined; }
+    }
+    this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;       // tone mapping happens in the final grade
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -44,9 +52,14 @@ export class Engine {
     this.instances = new Map();
     this.width = 2; this.height = 1;
     this.lastT = 0;
-    // clean picture (Experience mode): no headings, HUD, titles or interludes, but, unlike explore,
+    // clean picture (Experience mode): no HUD, titles or interludes, but, unlike explore,
     // every sequence and transition keeps playing. Off by default: the film is untouched.
     this.clean = false;
+    // chapter headings (the 3D words): drawn in the film and in Experience mode; they only
+    // step aside while exploring (or when this is switched off)
+    this.headings = true;
+    // a VR / AR session is drawing (core/xr.js): the film's own frame loops stand down
+    this.xrActive = false;
   }
 
   // Build shared resources and every sequence. `modules` maps segment id → scene module.
@@ -90,6 +103,10 @@ export class Engine {
     // 3D chapter words live inside each sequence's scene (built after every scene exists)
     this.words3d = new Words3D(this);
   }
+
+  /** The chapter heading isn't on screen (exploring, or headings off): scenes then apply the
+   *  heading's bloom duck themselves, so the plate reads the same as in the film. */
+  get headingsHidden() { return !!this.explore?.active || !this.headings; }
 
   // High quality: sharper, cleaner shadows. Each shadow-casting light's map is enlarged (capped at
   // 4096 / the GPU limit) and its PCF radius widened in proportion, so penumbrae keep their size
@@ -235,10 +252,10 @@ export class Engine {
     }
     // explore mode: the viewer's rig drives this sequence's camera; headings step aside
     const ex = this.explore?.active && this.explore.inst === inst ? this.explore : null;
-    const clean = ex || this.clean;
+    const clean = ex || this.clean, noWords = ex || !this.headings;
     if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else {
       this.live?.apply(inst, info.t);
-      if (clean) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; } else this.words3d?.apply(inst, T);
+      if (noWords) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; } else this.words3d?.apply(inst, T);
     }
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
@@ -261,7 +278,7 @@ export class Engine {
     const drawHUD = (target) => { if (inst.hud && !clean) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
     // chapter headings: a 3D overlay drawn over the finished (depth-of-field) plate with the same
     // lens, so they never intersect scene geometry and are never blurred by the scene's focus
-    const drawWords = (target) => { if (clean) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
+    const drawWords = (target) => { if (noWords) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
     let out = rt;
     const useDof = dof && dof.amount > 0.01 && !ex;
     const useAO = this.renderAO(inst, rt, cam);
@@ -315,6 +332,7 @@ export class Engine {
   // the frame interval filmDt, centred on filmT) in linear HDR, then grade once. Sub-frames that
   // fall across a hard camera cut are dropped, so a cut never double-exposes.
   render(filmT, filmDt = 1 / 60, opts = {}) {
+    if (this.xrActive) return;   // the headset's frame loop renders (core/xr.js)
     this.live?.tick();   // viewer's live camera offset (zero unless someone is dragging)
     const N = Math.max(1, Math.floor(opts.motionBlur ?? 0));
     if (N <= 1 || this.explore?.active || !(filmDt > 0)) {
@@ -432,7 +450,7 @@ export class Engine {
       tu.uMode.value = TRANSITION_MODES[a.transition] ?? 0;
       tu.uSingle.value = 0;
       tu.uTriOn.value = 0;
-      if (a.transition === 'letter' && !this.clean) this.withMatte(instA.camera, () => this.words3d?.letterWindow(instA, tu));
+      if (a.transition === 'letter' && this.headings) this.withMatte(instA.camera, () => this.words3d?.letterWindow(instA, tu));
       const s = p * p * (3 - 2 * p);
       bloomStrength = THREE.MathUtils.lerp(bloomStrength, (instB.bloom?.strength ?? 0.7) * (1 - 0.45 * (instB._wordsDuck ?? 0)), s);
       exposure = THREE.MathUtils.lerp(exposure, instB.exposure ?? 1, s);
@@ -445,7 +463,7 @@ export class Engine {
     this.transQuad.render(r);
     // a heading the camera zooms THROUGH sits over the composite (its counter frames the next shot)
     const clean = ex || this.clean;
-    if (!clean) this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
+    if (!ex && this.headings) this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
     // chapter headings and story cards sit above every sequence (before bloom, so they glow softly)
     if (!clean && this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
 

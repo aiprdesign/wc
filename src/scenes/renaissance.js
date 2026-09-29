@@ -137,8 +137,8 @@ function goldenConstruction(x0, y0, w, h, steps = 9) {
 
 function sharpen(obj) { obj.traverse((o) => { if (o.material) o.material.depthWrite = true; }); return obj; }
 
-// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
-// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
+// headings (engine.headingsHidden), dropping the duck with them; the explore hook puts it back.
 function headingDuck(ctx, inst, T) {
   let d = 0;
   const items = ctx.engine?.words3d?.items;
@@ -454,7 +454,7 @@ export function create(ctx, segment) {
     strokeCount,
     get exploreLimits() { return lastT < m3 ? LIM_2D : LIM_3D; },
     explore(t) {
-      if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, this, t + segment.start);
+      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, this, t + segment.start);
       easel.visible = true;
       // once the canvas recedes the lit figure and its drafting grid are the set: the canvas keeps its easel
       // (off-axis it otherwise hung as a dark card in the void) but not the studio boards below the grid

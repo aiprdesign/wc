@@ -136,3 +136,20 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 }
 @media (max-width: 360px) { .controls #time { display: none; } }
 .controls #btn-explore { display: inline-flex; align-items: center; }
+
+/* VR / AR (WebXR): buttons only where the browser offers a session (body.has-vr / .has-ar) */
+#intro .play-xr, .controls .xr-btn { display: none; }
+.has-vr #intro.ready .play-vr, .has-ar #intro.ready .play-ar { display: inline-flex; }
+.has-vr .controls #btn-vr, .has-ar .controls #btn-ar { display: inline-flex; align-items: center; }
+.xr-link-vr .play-vr, .xr-link-ar .play-ar { border-color: var(--gold); background: rgba(226, 195, 138, 0.14); }
+.xr-on .controls, .xr-on .explore-hint { display: none; }
+.xr-overlay { display: none; }
+.xr-ar-on .xr-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); pointer-events: none; background: transparent; z-index: 30; }
+.xr-hint { margin: 0; padding: 8px 14px; font-size: 12px; letter-spacing: 0.08em; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.4); border-radius: 999px; }
+.xr-hint-move, .xr-placed .xr-hint-place { display: none; }
+.xr-placed .xr-hint-move { display: inline; }
+.xr-bar { display: flex; gap: 12px; pointer-events: auto; }
+.xr-bar button { min-width: 52px; height: 44px; padding: 0 16px; display: grid; place-items: center; font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.5); border-radius: 999px; }
+.xr-bar svg { width: 18px; height: 18px; fill: var(--gold); }
+.xr-overlay .i-pause, .xr-overlay.xr-playing .i-play { display: none; }
+.xr-overlay.xr-playing .i-pause { display: block; }

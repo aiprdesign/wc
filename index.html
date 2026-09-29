@@ -31,6 +31,14 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6zM12 5c5.5 0 10 3.1 10 7s-4.5 7-10 7S2 15.9 2 12s4.5-7 10-7zm0 1.6c-4.9 0-8.4 2.7-8.4 5.4s3.5 5.4 8.4 5.4 8.4-2.7 8.4-5.4-3.5-5.4-8.4-5.4z" /></svg>
           <span class="pe-text"><span class="pe-title">Experience mode</span><span class="pe-sub">Slow-motion flythrough · no narration</span></span>
         </button>
+        <button id="play-vr" class="play play-exp play-xr play-vr" title="Watch in a VR headset (WebXR)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-4.2l-2.3-3a1.9 1.9 0 0 0-3 0L8.2 17H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm3.5 3.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6zm9 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z" /></svg>
+          <span class="pe-text"><span class="pe-title">Watch in VR</span><span class="pe-sub">Ride the camera in a headset</span></span>
+        </button>
+        <button id="play-ar" class="play play-exp play-xr play-ar" title="Place the film on a table in augmented reality (WebXR)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 2.3 6.6 3.7L12 11.7 5.4 8 12 4.3zM5 9.7l6 3.4v6.6l-6-3.4V9.7zm8 10v-6.6l6-3.4v6.6l-6 3.4z" /></svg>
+          <span class="pe-text"><span class="pe-title">View in AR</span><span class="pe-sub">A tabletop diorama in your room</span></span>
+        </button>
       </div>
       <p class="hint">Sound on · 108 seconds</p>
       <nav class="formats-pick" aria-label="Choose a frame format">
@@ -75,6 +83,8 @@
       <svg class="i-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z" /></svg>
       <span class="lbl-on">Experience</span><span class="lbl-off">Exit experience</span>
     </button>
+    <button id="btn-vr" class="fmt xr-btn" title="Watch in VR (WebXR headset)" aria-label="Watch in VR">VR</button>
+    <button id="btn-ar" class="fmt xr-btn" title="View as an AR tabletop diorama (WebXR)" aria-label="View in AR">AR</button>
     <button id="btn-explore" class="fmt" title="Explore the 3D scene (e)" aria-label="Explore the 3D scene" aria-pressed="false"><span class="lbl-long">Explore&nbsp;</span>3D</button>
     <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16" aria-label="Change frame format">2.39</button>
     <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
@@ -91,6 +101,18 @@
   <div id="explore-hint" class="explore-hint" role="status">
     <strong>Exploring</strong>
     <span>Drag to look around</span><span>Scroll or pinch to zoom</span><span>Right-drag or Shift-drag to pan</span><span>W A S D to fly · R / F up and down</span><span>Double-click to reset</span><span>E or Esc to return · Space to play</span>
+  </div>
+
+  <!-- AR on phones: shown over the camera view while a session runs (WebXR DOM overlay) -->
+  <div id="xr-overlay" class="xr-overlay">
+    <p class="xr-hint"><span class="xr-hint-place">Point at a table, then tap to place the film</span><span class="xr-hint-move">Tap to move it</span></p>
+    <div class="xr-bar">
+      <button type="button" data-xr="play" aria-label="Play or pause">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
+      </button>
+      <button type="button" data-xr="exit">Exit AR</button>
+    </div>
   </div>
 
   <script type="module" src="src/main.js"></script>

@@ -1,12 +1,13 @@
 // Entry point: load fonts, sequences and the procedural score, then hand over to the transport UI.
 // hashopts first: it narrows a combined fragment (#square&experience) to the format token before
 // timeline.js reads it
-import { HASH_EXPERIENCE, restoreHash, setHashExperience } from './core/hashopts.js';
+import { HASH_EXPERIENCE, HASH_XR, restoreHash, setHashExperience } from './core/hashopts.js';
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
 import { LiveCam } from './core/live.js';
 import { Experience } from './core/experience.js';
+import { XRMode, xrSupport, VR, AR } from './core/xr.js';
 import { Ambient } from './audio/ambient.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
@@ -19,6 +20,8 @@ const $ = (id) => document.getElementById(id);
 const intro = $('intro'), controls = $('controls'), status = $('status');
 const setStatus = (s) => { status.textContent = s; };
 const setLoad = (p) => { $('loader').firstElementChild.style.width = `${Math.round(p * 100)}%`; };
+// VR / AR: asked up front (it shapes the WebGL context); false wherever WebXR is missing
+const xrReady = params.has('still') ? Promise.resolve({ vr: false, ar: false }) : xrSupport();
 
 async function loadScore() {
   if (params.has('noaudio')) return null;
@@ -52,6 +55,7 @@ async function boot() {
   // ?shadows=1|2|4 overrides the shadow-map multiplier.
   const quality = QUALITY[params.get('q')] ? params.get('q') : 'medium';
   const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
+  const xrs = await xrReady;
   const engine = new Engine($('film'), {
     maxWidth: QUALITY[quality], quality,
     supersample: Math.max(1, Math.min(4, parseFloat(params.get('ss') ?? '1') || 1)),
@@ -60,6 +64,8 @@ async function boot() {
       shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
       shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
     },
+    // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
+    xr: xrs.vr || xrs.ar ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,
   });
   window.__film = { engine };
   setStatus('Loading typography…');
@@ -120,7 +126,7 @@ async function boot() {
 
   if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
 
-  const ui = setupUI(player, score, explorer, experience, ambient);
+  const ui = setupUI(player, score, explorer, experience, ambient, xrs);
   intro.classList.add('ready');
   $('play').disabled = false;
   $('play-exp').disabled = false;
@@ -129,6 +135,7 @@ async function boot() {
   window.__film.ready = true;
   window.__film.enterExperience = ui.enterExperience;
   window.__film.exitExperience = ui.exitExperience;
+  window.__film.xr = ui.xr;
   if (params.has('autoplay')) { if (HASH_EXPERIENCE) ui.enterExperience(); else begin(player); }
 }
 
@@ -142,7 +149,7 @@ function fmt(t) {
   return `${m}:${s.toFixed(1).padStart(4, '0')}`;
 }
 
-function setupUI(player, score, explorer, experience, ambient) {
+function setupUI(player, score, explorer, experience, ambient, xrs) {
   const body = document.body;
   const exp = experience;
   const playing = () => (exp.active ? exp.playing : player.playing);
@@ -255,6 +262,7 @@ function setupUI(player, score, explorer, experience, ambient) {
     const k = e.key.toLowerCase();
     if (k === 'e' && !e.target.closest?.('input, textarea')) { e.preventDefault(); setExplore(!explorer.active); }
     else if (k === 'escape' && explorer.active) setExplore(false);
+    else if (k === 'escape' && xr.active) xr.stop();
     else if (k === 'escape' && exp.active) exitExperience();
   });
 
@@ -314,7 +322,35 @@ function setupUI(player, score, explorer, experience, ambient) {
   };
   const origSeek = player.seek.bind(player);
   player.seek = (t) => { origSeek(t); if (explorer.active) explorer.enter(player.time); };   // scrubbing re-poses the world
-  return { enterExperience, exitExperience };
+
+  // VR / AR (WebXR): the buttons appear only where the browser offers a session
+  const xr = new XRMode(engine, {
+    player, experience: exp, overlay: $('xr-overlay'),
+    onStart: () => { intro.classList.add('hidden'); controls.classList.remove('show'); syncPlaying(); },
+    onToggle: syncPlaying,
+    onEnd: () => {
+      // back to the flat film at the same moment, still playing if it was
+      if (exp.active) { if (exp.playing) exp._loop(); else exp.render(); }
+      else if (player.playing) player.loop();
+      else { engine.render(player.time, 0); player.onTick(player.time); }
+      syncPlaying();
+      showControls();
+    },
+  });
+  body.classList.toggle('has-vr', !!xrs?.vr);
+  body.classList.toggle('has-ar', !!xrs?.ar);
+  if (HASH_XR) body.classList.add(`xr-link-${HASH_XR}`);
+  const startXR = (mode) => {
+    if (xr.active) { xr.stop(); return; }
+    if (explorer.active) setExplore(false);
+    xr.start(mode).catch((e) => {
+      console.warn('[xr] could not start', e);
+      setStatus(`${mode === VR ? 'VR' : 'AR'} could not start: ${e?.message ?? e}`);
+    });
+  };
+  for (const [id, mode] of [['play-vr', VR], ['play-ar', AR], ['btn-vr', VR], ['btn-ar', AR]]) $(id)?.addEventListener('click', () => startXR(mode));
+  if (HASH_XR && xrs?.[HASH_XR]) setTimeout(() => $(`play-${HASH_XR}`)?.focus(), 0);
+  return { enterExperience, exitExperience, xr };
 }
 
 function download(blob, name) {
