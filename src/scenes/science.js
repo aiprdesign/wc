@@ -369,14 +369,14 @@ export function create(ctx, segment) {
     const hold = new THREE.Group(); hold.position.set(p.r, hs, 0); grp.add(hold);
     const tiltG = new THREE.Group(); tiltG.rotation.set(0, p.az, p.tilt * DEG); hold.add(tiltG);
     const ring = p.ring ? { tex: ringTex[p.ring], spec: ringSpec[p.ring] } : null;
-    const planet = new THREE.Mesh(unitSphere, planetMaterial(p.k, maps, PU, ring ? { ringTex: ring.tex, ring: ring.spec, ringK: p.ring === 'saturn' ? 0.85 : 0.5 } : {}));
+    const planet = new THREE.Mesh(unitSphere, planetMaterial(p.k, maps, PU, ring ? { ringTex: ring.tex, ring: ring.spec, ringK: p.ring === 'saturn' ? 0.85 : 0.3 } : {}));
     planet.scale.setScalar(p.s); planet.name = `body:${p.k}`; tiltG.add(planet);
     if (p.k === 'earth' || p.k === 'venus') {
       const a = atmosphereShell(p.k === 'earth' ? [0.28, 0.55, 1.0] : [1.0, 0.86, 0.6], PU, p.k === 'earth' ? { k: 0.9, hs: 0.022 } : { k: 0.55, hs: 0.03 });
       const shell = new THREE.Mesh(unitSphere, a.material); shell.scale.setScalar(a.scale); planet.add(shell);
     }
     if (ring) {
-      const rm = ringMesh(ring.tex, ring.spec, PU, p.ring === 'saturn' ? { k: 1, glow: 1 } : { k: 0.9, glow: 0.6 });
+      const rm = ringMesh(ring.tex, ring.spec, PU, p.ring === 'saturn' ? { k: 1, glow: 1 } : { k: 1, glow: 0.3 });
       rm.scale.setScalar(p.s); tiltG.add(rm);
     }
     const pcup = new THREE.Mesh(new THREE.CylinderGeometry(p.s * 0.45, 0.012, p.s * 0.35, 20), brassPolish); pcup.position.set(p.r, hs - p.s * 0.95, 0); grp.add(pcup);
@@ -986,7 +986,8 @@ export function create(ctx, segment) {
     else if (t < 3.8) { dof.focus = camera.position.distanceTo(S) * lerp(1, 0.75, smoothstep(2.9, 3.4, t)); dof.range = 1.6; dof.amount = 0.6; }
     else { dof.focus = camera.position.distanceTo(P) + 0.1; dof.range = 1.8; dof.amount = 0.4; }
     if (t >= 3.4 && t < 3.8) dof.focus = lerp(camera.position.distanceTo(S) * 0.75, camera.position.distanceTo(P), smoothstep(3.4, 3.8, t));
-    bloom.strength = 0.55 + 0.2 * smoothstep(tBeam, tSpec, t);
+    // bloom eases while the orrery is close so the bodies' surfaces read through the glow
+    bloom.strength = (0.55 + 0.2 * smoothstep(tBeam, tSpec, t)) * (1 - 0.22 * envelope(t, 2.3, 3.85, 0.3, 0.2));
   }
 
   function explore(t) { if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.15); } }

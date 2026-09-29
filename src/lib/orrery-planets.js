@@ -90,16 +90,23 @@ void main(){
     alb *= 0.82 + 0.3 * (snoise(p * 90.0) * 0.5 + 0.5) + 0.12 * fbm(p * 7.0, 4);
     hgt = 0.5 + 0.22 * c.x + 0.03 * fbm(p * 20.0, 3);
   } else if (uMode == 1) {
-    // VENUS: an unbroken cloud deck, cream with soft sulphur-tan streaks and the sideways-Y chevron
+    // VENUS: an unbroken sulphuric cloud deck: fine streaks sheared by the super-rotation and the dark
+    // sideways 'Y' (stem along the equator, arms opening toward the mid-latitudes), on a yellow cream
     float lon = atan(p.z, -p.x);
-    float chev = 0.28 * cos(lon * 1.0 + 0.6) * (1.0 - alat);
-    vec3 q = vec3(p.x * 1.6, (p.y + chev) * 7.0, p.z * 1.6);
-    float w = fbm(vec3(p.x * 2.5, p.y * 5.0, p.z * 2.5) + 3.0, 4);
-    float streak = fbm(q + vec3(0.0, w * 1.2, 0.0), 6);
-    float fine = fbm(vec3(p.x * 6.0, p.y * 26.0, p.z * 6.0) + w, 4);
-    alb = mix(vec3(0.80, 0.66, 0.43), vec3(0.95, 0.88, 0.70), smoothstep(-0.45, 0.45, streak + 0.35 * fine));
-    alb = mix(alb, vec3(0.97, 0.93, 0.82), smoothstep(0.62, 0.85, alat) * 0.7);    // bright polar collars
-    alb *= 0.96 + 0.06 * snoise(p * 40.0);
+    float w = fbm(vec3(p.x * 2.5, p.y * 5.0, p.z * 2.5) + 3.0, 5);
+    float rl = atan(sin(lon - 0.4), cos(lon - 0.4));
+    float armLat = 34.0 * smoothstep(0.0, 1.8, rl) * (1.0 - smoothstep(2.3, 3.1, rl));
+    float yw = 6.0 + 5.0 * smoothstep(0.0, 1.8, rl);
+    float yMask = exp(-pow((abs(lat) - armLat + 3.0 * w) / yw, 2.0)) * smoothstep(-2.8, -1.4, rl) * (1.0 - smoothstep(2.0, 2.9, rl));
+    float bow = sin(radians(armLat)) * sign(p.y) * 0.7;
+    vec3 q = vec3(p.x * 1.4, (p.y - bow) * 9.0, p.z * 1.4);
+    float streak = fbm(q + vec3(0.0, w * 1.4, 0.0), 7);
+    float fine = fbm(vec3(p.x * 7.0, (p.y - bow) * 46.0, p.z * 7.0) + w * 2.0, 5);
+    alb = mix(vec3(0.80, 0.64, 0.38), vec3(0.95, 0.86, 0.62), smoothstep(-0.4, 0.4, streak + 0.45 * fine));
+    alb = mix(alb, vec3(0.70, 0.54, 0.32), yMask * 0.55 * (0.7 + 0.3 * smoothstep(-0.3, 0.3, fine)));
+    alb = mix(alb, vec3(0.97, 0.92, 0.76), smoothstep(0.62, 0.85, alat) * 0.6);    // bright polar collars
+    alb = mix(alb, alb * 0.86, exp(-pow((alat - 0.6) / 0.05, 2.0)) * 0.6);        // dark collar edge
+    alb *= 0.95 + 0.07 * snoise(p * 60.0);
     hgt = 0.5;
   } else if (uMode == 2 || uMode == 3) {
     // EARTH: continents from domain-warped fbm, biomes by latitude & moisture, ice caps, clouds
@@ -126,8 +133,8 @@ void main(){
       L *= 0.8 + 0.4 * (snoise(p * 48.0) * 0.5 + 0.5) * (0.7 + 0.3 * snoise(p * 150.0));
       float ice = smoothstep(0.8, 0.86, alat + 0.05 * snoise(p * 7.0) + 0.02 * snoise(p * 40.0));
       ice = max(ice, land * smoothstep(0.35, 0.5, elev + 0.25 * mtn - 0.1 + 0.4 * alat - 0.2) * 0.9);
-      float deep = smoothstep(0.0, 0.2, -elev);
-      vec3 ocean = mix(vec3(0.03, 0.12, 0.2), vec3(0.008, 0.035, 0.12), deep);
+      float deep = smoothstep(0.0, 0.22, -elev + 0.05 * fbm(p * 5.0 + 3.0, 4));
+      vec3 ocean = mix(vec3(0.03, 0.12, 0.2), vec3(0.004, 0.022, 0.08), deep);
       ocean = mix(ocean, vec3(0.05, 0.2, 0.24), (1.0 - smoothstep(0.0, 0.025, -elev)) * 0.6);   // shallow shelves
       ocean *= 0.9 + 0.2 * snoise(p * 9.0);
       alb = mix(ocean, L, land);
@@ -136,22 +143,27 @@ void main(){
       float water = (1.0 - land) * (1.0 - ice);
       hgt = water > 0.5 ? 0.0 : 0.06 + 0.94 * max(relief, ice * 0.15);
     } else {
-      vec3 cw = vec3(snoise(p * 1.3 + 2.0), snoise(p * 1.3 + 7.0), snoise(p * 1.3 + 13.0));
-      vec3 cp = p + 0.35 * cw;
-      float cl = fbm(cp * vec3(2.2, 3.6, 2.2), 8) + 0.3 * fbm(p * 8.0 + cw * 2.5, 5);
-      float bands = 0.75 + 0.45 * exp(-pow(alat / 0.12, 2.0)) + 0.4 * exp(-pow((alat - 0.58) / 0.12, 2.0)) - 0.45 * belt;
-      // a couple of cyclone spirals in the storm belts
-      float spiral = 0.0;
-      for (int i = 0; i < 3; i++){
-        vec3 cc = dirLL(i == 0 ? 52.0 : (i == 1 ? -48.0 : 15.0), float(i) * 127.0 - 40.0);
-        float d = adist(p, cc);
-        vec3 e1 = normalize(cross(cc, vec3(0.0, 1.0, 0.0))); vec3 e2 = cross(cc, e1);
-        float a = atan(dot(p, e2), dot(p, e1));
-        float arm = 0.5 + 0.5 * sin(a * 2.0 + log(d + 0.02) * 7.0 * (cc.y > 0.0 ? 1.0 : -1.0));
-        spiral += arm * smoothstep(0.35, 0.05, d) * smoothstep(0.0, 0.03, d);
+      // wispy, domain-warped decks: the ITCZ along the equator, cyclone swirls in the storm tracks,
+      // clear subtropical belts; thin veils as well as thick cores
+      vec3 cw = vec3(fbm(p * 1.4 + 2.0, 4), fbm(p * 1.4 + 7.0, 4), fbm(p * 1.4 + 13.0, 4));
+      vec3 cp = normalize(p + 0.4 * cw);
+      for (int i = 0; i < 8; i++){
+        vec3 h = hash33(vec3(float(i) * 3.7, 1.3, 7.9));
+        float cla = (h.x < 0.5 ? 1.0 : -1.0) * (36.0 + 24.0 * h.y);
+        vec3 cc = dirLL(cla, h.z * 360.0);
+        float R = 0.14 + 0.1 * fract(h.y * 7.0);
+        float ang = (cla > 0.0 ? 1.0 : -1.0) * 5.5 * exp(-pow(adist(cp, cc) / R, 2.0));
+        cp = cp * cos(ang) + cross(cc, cp) * sin(ang) + cc * dot(cc, cp) * (1.0 - cos(ang));   // Rodrigues
       }
-      float cloud = smoothstep(0.14, 0.66, cl * bands + 0.02 + spiral * 0.25);
-      cloud *= 0.85 + 0.15 * snoise(p * 60.0);
+      float base = fbm(cp * vec3(2.4, 3.4, 2.4) + 1.0, 8);
+      float wisp = fbm(cp * vec3(6.0, 9.0, 6.0) + cw * 3.0, 6);
+      float itcz = exp(-pow((lat - 6.0 + 5.0 * cw.x) / 5.0, 2.0));
+      float storm = exp(-pow((alat - 0.55) / 0.14, 2.0));
+      float subtrop = exp(-pow((alat - 0.26) / 0.08, 2.0));
+      float cl = base * 0.8 + wisp * 0.4 + 0.02 + 0.3 * itcz + 0.16 * storm - 0.22 * subtrop;
+      float cloud = smoothstep(0.02, 0.6, cl);
+      cloud *= cloud * (0.65 + 0.35 * smoothstep(-0.1, 0.5, wisp + 0.2));
+      cloud *= 0.9 + 0.1 * snoise(p * 80.0);
       alb = vec3(clamp(cloud, 0.0, 1.0)); hgt = 1.0;
     }
   } else if (uMode == 4) {
@@ -169,7 +181,9 @@ void main(){
     dark *= 1.0 - thar * 0.85;                                                 // Tharsis stays bright & dusty
     dark *= 0.62 + 0.38 * smoothstep(-0.35, 0.35, fbm(p * 11.0 + 5.0, 5));      // streaky, wind-blown edges
     vec3 basalt = mix(vec3(0.19, 0.11, 0.07), vec3(0.3, 0.17, 0.1), smoothstep(-0.3, 0.3, fbm(p * 6.0 + 2.0, 4)));
-    alb = mix(dust, basalt, dark * 0.85);
+    float bright = max(max(blob(p, dirLL(20.0, 20.0), 0.35, 0.2), blob(p, dirLL(25.0, 147.0), 0.25, 0.15)), max(blob(p, dirLL(10.0, -160.0), 0.3, 0.2), thar));
+    dust = mix(dust, vec3(0.8, 0.52, 0.3), bright * 0.6 * (0.7 + 0.3 * m));          // pale ochre deserts: Arabia, Elysium, Amazonis, Tharsis
+    alb = mix(dust, basalt, dark * 0.9);
     // Hellas: a bright, deep impact basin
     float hel = adist(p, dirLL(-42.0, 70.0));
     alb = mix(alb, vec3(0.78, 0.55, 0.36), (1.0 - smoothstep(0.2, 0.3, hel)) * 0.7);
@@ -209,98 +223,129 @@ void main(){
     // GAS GIANTS: zonal belts & zones with sheared turbulence (Jupiter adds the Great Red Spot)
     float lon = atan(p.z, -p.x);
     float la = lat, lo = lon;
-    float grs = 0.0, grsR = 9.0;
+    float grs = 0.0, grsR = 9.0, gdx = 0.0;
     if (uMode == 5) {
-      // Great Red Spot vortex: swirl the coordinates around it before the bands are sampled
-      float latc = -22.0, lonc = 1.2;
+      // Great Red Spot vortex against the SEB's southern edge: swirl the coordinates around it
+      float latc = -21.5, lonc = 1.2;
       float dl = atan(sin(lon - lonc), cos(lon - lonc)) * cos(radians(lat));
-      vec2 d = vec2(degrees(dl) / 13.0, (lat - latc) / 7.0);
+      vec2 d = vec2(degrees(dl) / 12.0, (lat - latc) / 6.0);
+      gdx = d.x;
       grsR = length(d);
-      float ang = 3.2 * exp(-grsR * grsR * 0.7);
+      float ang = 3.6 * exp(-grsR * grsR * 0.8);
       vec2 dr = mat2(cos(ang), sin(ang), -sin(ang), cos(ang)) * d;
-      la = latc + dr.y * 7.0;
-      lo = lonc + radians(dr.x * 13.0) / max(cos(radians(la)), 0.2);
-      grs = 1.0 - smoothstep(0.85, 1.05, grsR);
+      la = latc + dr.y * 6.0;
+      lo = lonc + radians(dr.x * 12.0) / max(cos(radians(la)), 0.2);
+      grs = 1.0 - smoothstep(0.85, 1.02, grsR);
     }
     vec3 pp = dirLL(la, degrees(lo));
-    // turbulence: lateral wobble of the band edges, stronger at belt boundaries
     float wob = fbm(vec3(pp.x * 3.0, pp.y * 10.0, pp.z * 3.0) + 5.0, 6);
     float edd = fbm(vec3(pp.x * 9.0, pp.y * 30.0, pp.z * 9.0) + wob * 1.5, 5);
-    float L = la + 2.2 * wob + 0.9 * edd;
+    float L = la + 1.6 * wob + 0.7 * edd;
     float tex = fbm(vec3(pp.x * 14.0, pp.y * 60.0, pp.z * 14.0) + vec3(wob * 3.0), 5);
     if (uMode == 5) {
-      vec3 zone = vec3(0.86, 0.80, 0.68), belt = vec3(0.46, 0.27, 0.15), polar = vec3(0.46, 0.43, 0.40);
       #define BELT(a, b, s) (smoothstep(a - s, a + s, L) * (1.0 - smoothstep(b - s, b + s, L)))
-      float neb = BELT(7.0, 17.0, 1.2), seb = BELT(-20.0, -7.0, 1.2);
-      float ntb = BELT(24.0, 30.0, 1.0), stb = BELT(-33.0, -27.0, 1.0);
-      float nntb = BELT(35.0, 40.0, 1.2), sstb = BELT(-41.0, -37.0, 1.2);
-      alb = zone;
-      alb = mix(alb, vec3(0.93, 0.87, 0.72), BELT(-5.0, 5.0, 2.0) * 0.5);                 // bright equatorial zone
-      alb = mix(alb, vec3(0.78, 0.66, 0.46), BELT(-5.0, 5.0, 2.0) * smoothstep(0.1, 0.4, tex) * 0.5);
-      alb = mix(alb, belt * vec3(1.05, 0.95, 0.9), neb);
-      alb = mix(alb, belt * vec3(1.12, 1.0, 0.92), seb * (0.85 - 0.3 * BELT(-15.0, -11.0, 1.5)));   // SEB with its lighter middle
-      alb = mix(alb, vec3(0.62, 0.50, 0.38), ntb * 0.8);
-      alb = mix(alb, vec3(0.64, 0.53, 0.42), stb * 0.75);
-      alb = mix(alb, vec3(0.66, 0.58, 0.48), (nntb + sstb) * 0.55);
-      alb = mix(alb, polar, smoothstep(45.0, 62.0, abs(L)));
-      // festoons: blue-grey plumes trailing from the NEB's southern edge into the equatorial zone
-      float fest = smoothstep(0.35, 0.7, snoise(vec3(lo * 6.0, L * 0.25, 1.0))) * exp(-pow((L - 5.5) / 2.2, 2.0));
-      alb = mix(alb, vec3(0.34, 0.36, 0.40), fest * 0.7);
-      // white ovals in the south temperate belt
-      for (int i = 0; i < 5; i++){
-        vec3 oc = dirLL(-34.0 + float(i % 2) * 2.0, float(i) * 72.0 + 20.0);
-        float od = adist(pp, oc);
-        alb = mix(alb, vec3(0.95, 0.93, 0.88), (1.0 - smoothstep(0.018, 0.03, od)) * 0.85);
+      #define EDGE(e, w) exp(-pow((la - e) / w, 2.0))
+      // turbulence concentrates along the jets at band edges: vortex streets and shear eddies
+      float edge = EDGE(7.0, 1.6) + EDGE(-7.0, 1.6) + EDGE(17.0, 1.6) + EDGE(-20.0, 1.6)
+                 + 0.7 * (EDGE(24.0, 1.2) + EDGE(-26.0, 1.2) + EDGE(29.0, 1.2) + EDGE(-31.0, 1.2) + EDGE(35.0, 1.2) + EDGE(-36.0, 1.2));
+      float vort = snoise(vec3(pp.x * 22.0, pp.y * 55.0, pp.z * 22.0) + wob * 2.0);
+      float vort2 = snoise(vec3(pp.x * 48.0, pp.y * 90.0, pp.z * 48.0) + edd * 2.0);
+      L += edge * (1.5 * vort + 0.6 * vort2);
+      vec3 cream = vec3(0.90, 0.85, 0.74), ochre = vec3(0.80, 0.62, 0.40), tanc = vec3(0.66, 0.50, 0.35);
+      vec3 brown = vec3(0.48, 0.30, 0.18), rbrown = vec3(0.50, 0.26, 0.14), greyb = vec3(0.46, 0.47, 0.50);
+      alb = cream;
+      alb = mix(alb, mix(ochre, cream, 0.5), BELT(-7.0, 7.0, 1.5) * 0.8);          // equatorial zone
+      alb = mix(alb, ochre * 0.95, BELT(-1.8, 1.8, 1.0) * 0.45);                   // faint equatorial band
+      alb = mix(alb, rbrown, BELT(7.0, 17.0, 1.0));                                // NEB
+      alb = mix(alb, mix(rbrown, ochre, 0.4), BELT(10.5, 13.0, 1.0) * 0.4);
+      alb = mix(alb, brown * 1.05, BELT(-20.0, -7.0, 1.0));                        // SEB
+      alb = mix(alb, mix(brown, ochre, 0.6), BELT(-16.0, -11.0, 1.2) * 0.6);       // SEB's lighter middle
+      alb = mix(alb, cream * 1.04, BELT(-26.0, -20.0, 1.0) * 0.6);                 // bright STrZ
+      alb = mix(alb, tanc, BELT(24.0, 29.0, 0.8));                                 // NTB
+      alb = mix(alb, rbrown * 0.9, BELT(23.0, 24.6, 0.4) * 0.8);                   // NTBs jet
+      alb = mix(alb, tanc * 1.03, BELT(-31.0, -26.0, 0.8) * 0.9);                  // STB
+      alb = mix(alb, mix(tanc, greyb, 0.3), BELT(35.0, 39.0, 0.8) * 0.8);          // NNTB
+      alb = mix(alb, mix(tanc, greyb, 0.3), BELT(-40.0, -36.0, 0.8) * 0.75);       // SSTB
+      alb = mix(alb, mix(tanc, greyb, 0.5), BELT(43.0, 46.0, 0.7) * 0.6);
+      alb = mix(alb, mix(tanc, greyb, 0.5), BELT(-47.0, -44.0, 0.7) * 0.55);
+      // grey-blue polar regions, finely banded and mottled
+      float pol = smoothstep(48.0, 62.0, abs(L));
+      vec3 pc = greyb * (0.9 + 0.1 * sin(L * 1.7 + wob * 4.0)) * (0.88 + 0.24 * (fbm(pp * 12.0, 4) * 0.5 + 0.5));
+      alb = mix(alb, pc, pol);
+      alb *= 0.95 + 0.05 * sin(L * 2.6 + 1.3) + 0.03 * sin(L * 5.3);               // many narrow jets
+      // festoons: slanted blue-grey plumes from the NEB's southern edge into the equatorial zone
+      float fs = sin(lo * 11.0 + (la - 7.0) * 0.28 + 1.5 * snoise(pp * 6.0));
+      float fest = smoothstep(0.55, 0.9, fs) * exp(-pow((la - 4.5) / 2.6, 2.0));
+      alb = mix(alb, vec3(0.30, 0.33, 0.38), fest * 0.75);
+      alb = mix(alb, vec3(0.28, 0.24, 0.24), smoothstep(0.8, 0.98, fs) * EDGE(7.2, 0.9) * 0.8);   // dark hot spots
+      // small white ovals (temperate & polar belts) and dark brown barges in the NEB
+      for (int i = 0; i < 20; i++){
+        vec3 h = hash33(vec3(float(i), 4.2, 9.1));
+        float olat = i < 6 ? -41.0 + h.x * 3.0 : (i < 10 ? -33.5 + h.x * 2.0 : (i < 14 ? 40.5 + h.x * 3.0 : (i < 17 ? -52.0 + h.x * 6.0 : 14.5 + h.x)));
+        float olon = h.y * 6.2832;
+        float a = i < 10 ? 0.022 + 0.02 * h.z : 0.012 + 0.012 * h.z;
+        float odl = atan(sin(lo - olon), cos(lo - olon)) * cos(radians(la));
+        float r = length(vec2(odl / a, radians(la - olat) / (a * 0.62)));
+        vec3 oc = i < 17 ? vec3(0.95, 0.93, 0.88) : vec3(0.36, 0.2, 0.12);
+        alb = mix(alb, alb * 0.8, exp(-pow((r - 1.05) / 0.18, 2.0)) * 0.6);
+        alb = mix(alb, oc, (1.0 - smoothstep(0.75, 1.0, r)) * 0.9);
       }
-      alb *= 0.86 + 0.28 * (tex * 0.5 + 0.5);
-      // the Great Red Spot, its pale hollow and turbulent wake
-      vec3 red = mix(vec3(0.72, 0.30, 0.17), vec3(0.82, 0.45, 0.28), smoothstep(0.2, 0.8, grsR) + 0.2 * tex);
-      alb = mix(alb, vec3(0.92, 0.88, 0.78), exp(-pow((grsR - 1.15) / 0.22, 2.0)) * 0.7);
+      alb *= 0.87 + 0.26 * (tex * 0.5 + 0.5);
+      // the Great Red Spot: pale hollow cut into the SEB, a turbulent wake trailing west of it
+      float wake = smoothstep(1.1, 1.9, gdx) * (1.0 - smoothstep(3.5, 8.0, gdx)) * exp(-pow((lat + 15.5) / 4.0, 2.0));
+      float wt = fbm(vec3(pp.x * 26.0, pp.y * 60.0, pp.z * 26.0) + edd * 3.0, 5);
+      alb = mix(alb, mix(vec3(0.38, 0.23, 0.14), vec3(0.95, 0.91, 0.82), smoothstep(-0.25, 0.25, wt)), wake * 0.75);
+      alb = mix(alb, vec3(0.93, 0.89, 0.79), exp(-pow((grsR - 1.2) / 0.22, 2.0)) * 0.85);
+      vec3 red = mix(vec3(0.72, 0.29, 0.16), vec3(0.84, 0.47, 0.3), smoothstep(0.15, 0.55, grsR) * (1.0 - smoothstep(0.7, 0.95, grsR)) + 0.25 * tex);
       alb = mix(alb, red, grs);
     } else {
-      // SATURN: pale gold, low-contrast banding, bluish north pole with the hexagon
+      // SATURN: warm pale gold, soft low-contrast banding, bluish north pole with the hexagon
       float bandsF = sin(L * 0.55) * 0.5 + sin(L * 1.3 + 1.0) * 0.3 + sin(L * 2.9 + 2.0) * 0.2;
-      alb = mix(vec3(0.80, 0.68, 0.46), vec3(0.93, 0.85, 0.64), bandsF * 0.5 + 0.5);
-      alb = mix(alb, vec3(0.96, 0.9, 0.72), exp(-pow(L / 9.0, 2.0)) * 0.7);                // bright equatorial zone
-      alb = mix(alb, vec3(0.72, 0.60, 0.40), exp(-pow((abs(L) - 22.0) / 5.0, 2.0)) * 0.5);  // temperate belts
-      alb *= 0.93 + 0.12 * (tex * 0.5 + 0.5);
-      // north polar region: the hexagonal jet stream around a blue-grey cap
+      alb = mix(vec3(0.84, 0.70, 0.46), vec3(0.93, 0.83, 0.60), 0.5 + 0.35 * bandsF);
+      alb = mix(alb, vec3(0.96, 0.88, 0.68), exp(-pow(L / 9.0, 2.0)) * 0.6);                // bright equatorial zone
+      alb = mix(alb, vec3(0.76, 0.62, 0.40), exp(-pow((abs(L) - 22.0) / 5.0, 2.0)) * 0.4);  // temperate belts
+      alb *= 0.95 + 0.08 * (tex * 0.5 + 0.5);
       float a = atan(p.z, -p.x);
       float hexr = cos(PI / 6.0) / cos(mod(a + 0.3, PI / 3.0) - PI / 6.0);
       float r = (90.0 - lat) / 14.0;
       float inHex = 1.0 - smoothstep(hexr - 0.06, hexr + 0.06, r);
-      alb = mix(alb, vec3(0.56, 0.62, 0.64), inHex * 0.85 * step(0.0, lat));
-      alb = mix(alb, vec3(0.45, 0.42, 0.36), exp(-pow((r - hexr) / 0.05, 2.0)) * 0.6 * step(0.0, lat));
-      alb = mix(alb, vec3(0.63, 0.58, 0.5), smoothstep(-60.0, -80.0, lat) * 0.6);
+      alb = mix(alb, vec3(0.58, 0.62, 0.62), inHex * 0.8 * step(0.0, lat));
+      alb = mix(alb, vec3(0.5, 0.44, 0.36), exp(-pow((r - hexr) / 0.05, 2.0)) * 0.5 * step(0.0, lat));
+      alb = mix(alb, vec3(0.66, 0.6, 0.5), smoothstep(-60.0, -80.0, lat) * 0.5);
     }
     hgt = 0.5;
   } else if (uMode == 7) {
-    // URANUS: pale cyan haze, all but featureless: faint banding, a brighter polar collar
-    float b = fbm(vec3(p.x * 1.5, p.y * 8.0, p.z * 1.5) + 2.0, 4);
-    alb = mix(vec3(0.40, 0.76, 0.84), vec3(0.50, 0.85, 0.90), b * 0.5 + 0.5);
-    alb = mix(alb, vec3(0.62, 0.9, 0.93), smoothstep(40.0, 70.0, -lat) * 0.6);
-    alb = mix(alb, vec3(0.9, 0.97, 0.97), (1.0 - smoothstep(0.02, 0.05, adist(p, dirLL(28.0, 60.0)))) * 0.5);
+    // URANUS: pale cyan methane haze: very subtle banding, brighter polar hoods (south the brighter)
+    float b = fbm(vec3(p.x * 1.2, p.y * 10.0, p.z * 1.2) + 2.0, 5);
+    float bands = sin(lat * 0.22 + b * 0.9) * 0.5 + 0.5;
+    alb = mix(vec3(0.42, 0.75, 0.81), vec3(0.50, 0.83, 0.87), bands * 0.55 + 0.25 + 0.2 * b);
+    alb = mix(alb, vec3(0.64, 0.89, 0.91), smoothstep(40.0, 72.0, -lat) * 0.6 + smoothstep(50.0, 78.0, lat) * 0.35);
+    alb = mix(alb, alb * 0.93, exp(-pow((abs(lat) - 38.0) / 5.0, 2.0)) * 0.6);   // faint darker collar
+    alb = mix(alb, vec3(0.86, 0.96, 0.97), (1.0 - smoothstep(0.015, 0.04, adist(p, dirLL(28.0, 60.0)))) * 0.35);
     hgt = 0.5;
   } else if (uMode == 8) {
-    // NEPTUNE: deep azure, darker southern band, the Great Dark Spot with its white companion clouds
-    float wob = fbm(vec3(p.x * 2.5, p.y * 9.0, p.z * 2.5) + 7.0, 5);
-    float L = lat + 3.0 * wob;
-    alb = mix(vec3(0.04, 0.22, 0.7), vec3(0.09, 0.34, 0.84), smoothstep(-0.5, 0.5, sin(L * 0.2) + 0.4 * wob));
-    alb = mix(alb, vec3(0.04, 0.12, 0.5), exp(-pow((L + 55.0) / 7.0, 2.0)) * 0.8);
+    // NEPTUNE: deep azure with soft, irregular banding, the Great Dark Spot and its bright companion
+    // clouds, thin methane-ice cirrus streaks
+    float wob = fbm(vec3(p.x * 2.0, p.y * 6.0, p.z * 2.0) + 7.0, 6);
+    float L = lat + 7.0 * wob;
+    float soft = fbm(vec3(p.x * 1.5, p.y * 4.0, p.z * 1.5) + 3.0, 5);
+    alb = mix(vec3(0.03, 0.15, 0.6), vec3(0.07, 0.27, 0.76), smoothstep(-0.6, 0.6, soft * 1.3 + 0.35 * sin(L * 0.12)));
+    alb = mix(alb, vec3(0.02, 0.09, 0.42), exp(-pow((L + 58.0) / 9.0, 2.0)) * 0.65);
+    alb = mix(alb, vec3(0.1, 0.32, 0.8), smoothstep(62.0, 80.0, -L) * 0.45);
     float lon = atan(p.z, -p.x);
     float dl = atan(sin(lon - 2.2), cos(lon - 2.2)) * cos(radians(lat));
-    float gd = length(vec2(degrees(dl) / 16.0, (lat + 20.0) / 8.0));
-    alb = mix(alb, vec3(0.02, 0.06, 0.3), 1.0 - smoothstep(0.75, 1.0, gd + 0.1 * wob));
-    // bright methane-ice cirrus: the companion clouds, 'Scooter' and scattered streaks
-    float streak = smoothstep(0.45, 0.8, fbm(vec3(p.x * 3.0, p.y * 30.0, p.z * 3.0) + 11.0, 5));
-    float cir = streak * (exp(-pow((lat + 42.0) / 4.0, 2.0)) + exp(-pow((lat - 28.0) / 5.0, 2.0)) * 0.7 + exp(-pow((lat + 70.0) / 4.0, 2.0)) * 0.5);
-    float comp = exp(-pow((gd - 1.25) / 0.25, 2.0)) * step(lat, -22.0) * (0.6 + 0.4 * wob);
-    alb = mix(alb, vec3(0.9, 0.94, 1.0), clamp(cir + comp, 0.0, 0.9));
+    float gd = length(vec2(degrees(dl) / 15.0, (lat + 20.0) / 7.5));
+    alb = mix(alb, vec3(0.015, 0.05, 0.28), 1.0 - smoothstep(0.7, 1.0, gd + 0.12 * wob));
+    float streak = smoothstep(0.5, 0.85, fbm(vec3(p.x * 4.0, p.y * 70.0, p.z * 4.0) + vec3(wob * 2.0) + 11.0, 5));
+    float cir = streak * (exp(-pow((L + 42.0) / 5.0, 2.0)) + exp(-pow((L - 27.0) / 6.0, 2.0)) * 0.8 + exp(-pow((L + 70.0) / 4.0, 2.0)) * 0.5 + exp(-pow((L - 45.0) / 4.0, 2.0)) * 0.4);
+    float comp = exp(-pow((gd - 1.2) / 0.22, 2.0)) * smoothstep(-19.0, -24.0, lat) * (0.6 + 0.6 * wob);
+    comp += exp(-pow(length(vec2(degrees(dl) / 9.0 - 1.9, (lat + 16.0) / 2.5)), 2.0)) * 0.8;   // bright streak trailing east
+    alb = mix(alb, vec3(0.88, 0.93, 1.0), clamp(cir * 0.85 + comp, 0.0, 0.9));
     hgt = 0.5;
   } else {
     // MOON: bright cratered highlands, dark maria on the near side (−x, facing Earth), rayed Tycho
     float m = fbm(p * 2.5 + 8.0, 6);
-    alb = mix(vec3(0.33, 0.325, 0.31), vec3(0.47, 0.46, 0.44), m * 0.5 + 0.5);
+    alb = mix(vec3(0.36, 0.355, 0.34), vec3(0.52, 0.51, 0.49), m * 0.5 + 0.5);
     float n = fbm(p * 3.0 + 1.0, 6) * 0.1 + fbm(p * 9.0 + 4.0, 4) * 0.03;
     float mare = 0.0;
     mare = max(mare, blob(p, dirLL(33.0, -16.0), 0.3 + n, 0.035));        // Imbrium
@@ -313,8 +358,8 @@ void main(){
     mare = max(mare, blob(p, dirLL(-24.0, -39.0), 0.1 + n, 0.03));        // Humorum
     mare = max(mare, blob(p, dirLL(-2.0, 15.0), 0.08 + n, 0.04) * 0.7);   // Sinus Medii / Vaporum
     mare *= 0.8 + 0.2 * smoothstep(-0.3, 0.3, fbm(p * 6.0 + 2.0, 4));
-    vec3 basalt = mix(vec3(0.13, 0.13, 0.135), vec3(0.2, 0.195, 0.19), smoothstep(-0.4, 0.4, fbm(p * 5.0 + 7.0, 5)));
-    alb = mix(alb, basalt, mare * 0.9);
+    vec3 basalt = mix(vec3(0.085, 0.085, 0.09), vec3(0.14, 0.137, 0.135), smoothstep(-0.4, 0.4, fbm(p * 5.0 + 7.0, 5)));
+    alb = mix(alb, basalt, mare);
     vec2 c = craters(p, 4.0, 0.5, 21.0) * (1.0 - mare * 0.8) + craters(p, 9.0, 0.6, 22.0) * 0.55 * (1.0 - mare * 0.6) + craters(p, 20.0, 0.65, 23.0) * 0.3 + craters(p, 44.0, 0.7, 24.0) * 0.14;
     float ry = rays(p, dirLL(-43.0, -11.0), 0.04, 5.0) + rays(p, dirLL(10.0, -20.0), 0.03, 6.0) * 0.6 + rays(p, dirLL(8.0, -38.0), 0.025, 7.0) * 0.5;
     alb *= 1.0 + 0.3 * c.y;
@@ -325,7 +370,7 @@ void main(){
   gl_FragColor = vec4(sqrt(clamp(alb, 0.0, 1.0)), clamp(hgt, 0.0, 1.0));
 }`;
 
-const SIZES = { mercury: 1024, venus: 512, earth: 2048, earthClouds: 2048, mars: 2048, jupiter: 2048, saturn: 1024, uranus: 256, neptune: 512, moon: 1024 };
+const SIZES = { mercury: 1024, venus: 1024, earth: 2048, earthClouds: 2048, mars: 2048, jupiter: 2048, saturn: 1024, uranus: 256, neptune: 512, moon: 1024 };
 
 export function bakePlanetMaps(renderer) {
   const mat = new THREE.ShaderMaterial({
@@ -375,9 +420,9 @@ const sstep = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a)
 
 export function saturnRingTexture() {
   const { inner, outer } = SATURN_RING;
-  return ringTexture(2048, (u) => {
+  return ringTexture(4096, (u) => {
     const r = inner + u * (outer - inner);
-    const ringlets = 0.75 + 0.25 * vnoise(r * 180) * 0.6 + 0.25 * vnoise(r * 520) * 0.4;
+    const ringlets = 0.62 + 0.16 * vnoise(r * 160) + 0.12 * vnoise(r * 480) + 0.1 * vnoise(r * 1400) + 0.06 * Math.sin(r * 2600) ** 2;
     let a = 0, col = [0.8, 0.7, 0.55];
     if (r < 1.236) { a = 0.03 * sstep(1.11, 1.2, r); col = [0.5, 0.45, 0.4]; }                                  // D ring
     else if (r < 1.527) { a = (0.09 + 0.1 * sstep(1.3, 1.52, r)) * (0.7 + 0.6 * vnoise(r * 260)); col = [0.55, 0.5, 0.44]; }   // C ring
@@ -398,9 +443,9 @@ export function uranusRingTexture() {
   const rings = [[1.637, 0.0015], [1.652, 0.0015], [1.666, 0.0015], [1.834, 0.002], [1.849, 0.002], [1.863, 0.0025], [1.901, 0.003], [1.947, 0.003], [1.996, 0.009]];
   return ringTexture(1024, (u) => {
     const r = inner + u * (outer - inner);
-    let a = 0.02;
-    for (const [c, w] of rings) a += Math.exp(-((r - c) ** 2) / (w * w)) * (c > 1.99 ? 0.75 : 0.45);
-    return [0.55, 0.57, 0.6, a];
+    let a = 0.006;
+    for (const [c, w] of rings) a += Math.exp(-((r - c) ** 2) / (w * w * 0.3)) * (c > 1.99 ? 0.6 : 0.32);
+    return [0.26, 0.26, 0.27, a];
   });
 }
 
@@ -481,7 +526,7 @@ void main(){
   float cl = 0.0, csh = 0.0;
   if (uCloudK > 0.0) {
     vec2 cuv = vUv + vec2(uCloudOff, 0.0);
-    cl = texture2D(uCloud, cuv).r * uCloudK;
+    cl = texture2D(uCloud, cuv).r * uCloudK * 0.9;
     float lo = 0.01 / max(ndl0, 0.15);
     vec2 so = vec2(dot(L, east) / (6.2832 * sinT), dot(L, north) / 3.1416) * lo;
     csh = texture2D(uCloud, cuv + so).r * uCloudK;
@@ -498,7 +543,7 @@ void main(){
   }
   if (uCloudK > 0.0) {
     float cdiff = smoothstep(-0.1, 1.0, ndl0);
-    vec3 cc = vec3(0.93, 0.94, 0.96) * (sunE * cdiff + uKeyCol * max(dot(n, K), 0.0) + uAmb) * (0.85 + 0.15 * cl);
+    vec3 cc = vec3(0.84, 0.86, 0.9) * (sunE * cdiff + uKeyCol * max(dot(n, K), 0.0) + uAmb) * (0.85 + 0.15 * cl);
     col = mix(col, cc, cl);
   }
   // limb darkening of the deep atmospheres
@@ -520,10 +565,10 @@ const LOOK = {
   mercury: { bump: 3.6, rocky: 1, gloss: 0.02 },
   venus: { rocky: 0.3, atm: [1.0, 0.85, 0.55], atmK: 0.5, limb: 0.3, gloss: 0.03, bright: 0.72 },
   earth: { bump: 1.2, ocean: 1, atm: [0.3, 0.55, 1.0], atmK: 0.7, gloss: 0.02, clouds: true },
-  mars: { bump: 1.6, rocky: 0.35, atm: [0.9, 0.55, 0.4], atmK: 0.18, gloss: 0.02 },
+  mars: { bump: 1.6, rocky: 0.35, atm: [0.95, 0.68, 0.48], atmK: 0.32, gloss: 0.02 },
   jupiter: { flow: 1, rocky: 0.4, limb: 0.4, atm: [0.9, 0.82, 0.7], atmK: 0.2, gloss: 0.03, bright: 0.85 },
   saturn: { flow: 0.6, rocky: 0.4, limb: 0.4, atm: [0.95, 0.85, 0.62], atmK: 0.2, gloss: 0.03, bright: 0.82 },
-  uranus: { flow: 0.2, rocky: 0.3, limb: 0.35, atm: [0.5, 0.9, 1.0], atmK: 0.3, gloss: 0.03, bright: 0.72 },
+  uranus: { flow: 0.2, rocky: 0.3, limb: 0.5, atm: [0.5, 0.9, 1.0], atmK: 0.3, gloss: 0.03, bright: 0.72 },
   neptune: { flow: 0.4, rocky: 0.3, limb: 0.35, atm: [0.35, 0.55, 1.0], atmK: 0.4, gloss: 0.03 },
   moon: { bump: 3.2, rocky: 1, gloss: 0.015 },
 };
@@ -692,9 +737,9 @@ export function sunMaterial() {
         }
         float x = 1.0 - mu;
         float ld = 1.0 - 0.52 * x - 0.26 * x * x;                    // photospheric limb darkening
-        vec3 c = mix(vec3(1.0, 0.34, 0.08), vec3(1.0, 0.74, 0.45), pow(mu, 0.5));
+        vec3 c = mix(vec3(1.0, 0.3, 0.06), vec3(1.0, 0.66, 0.32), pow(mu, 0.5));
         float I = ld * gran * (1.0 + 0.16 * mott) * spot * (1.0 + fac * 0.35 * x);
-        gl_FragColor = vec4(c * uI * I * 0.9, 1.0);
+        gl_FragColor = vec4(c * uI * I * 0.76, 1.0);
       }`,
   });
 }
