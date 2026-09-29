@@ -88,16 +88,22 @@ export const AoShader = {
     vec3 viewPos(vec2 uv, float z){ vec2 n = uv * 2.0 - 1.0; return vec3((n.x + uProj.z) * z / uProj.x, (n.y + uProj.w) * z / uProj.y, -z); }
     vec3 posAt(vec2 uv){ return viewPos(uv, linZ(rawD(uv))); }
     void main(){
-      float d0 = rawD(vUv);
+      // work on an exact full-resolution depth texel (this pass runs at half resolution, whose pixel
+      // centres fall on texel corners — nearest-filtered depth would be ambiguous there)
+      vec2 uv0 = (floor(vUv * uDepthRes) + 0.5) / uDepthRes;
+      float d0 = rawD(uv0);
       if (d0 >= 0.99999) { gl_FragColor = vec4(1.0, uFar, 0.0, 1.0); return; }   // sky / empty space
       float z0 = linZ(d0);
-      vec3 P = viewPos(vUv, z0);
+      vec3 P = viewPos(uv0, z0);
       // normal from depth: of the two one-sided differences take the smaller (no smearing across silhouettes)
       vec2 tx = vec2(1.0 / uDepthRes.x, 0.0), ty = vec2(0.0, 1.0 / uDepthRes.y);
-      vec3 pr = posAt(vUv + tx) - P, pl = P - posAt(vUv - tx);
-      vec3 pu = posAt(vUv + ty) - P, pd = P - posAt(vUv - ty);
+      vec3 pr = posAt(uv0 + tx) - P, pl = P - posAt(uv0 - tx);
+      vec3 pu = posAt(uv0 + ty) - P, pd = P - posAt(uv0 - ty);
       vec3 dx = abs(pr.z) < abs(pl.z) ? pr : pl, dy = abs(pu.z) < abs(pd.z) ? pu : pd;
-      vec3 N = normalize(cross(dx, dy));
+      vec3 N = cross(dx, dy);
+      float nl = length(N);
+      if (!(nl > 1e-12)) { gl_FragColor = vec4(1.0, z0, 0.0, 1.0); return; }
+      N /= nl;
       if (dot(N, P) > 0.0) N = -N;
       // world radius that spans uRadius of the frame height at this depth
       float R = uRadius * 2.0 * z0 / uProj.y;
@@ -109,8 +115,9 @@ export const AoShader = {
       for (int i = 0; i < K; i++) {
         float fr = (float(i) + 0.5) / float(K);
         float a = float(i) * GA + phi;
-        vec2 suv = vUv + vec2(cos(a), sin(a)) * rUV * mix(0.04, 1.0, fr * fr);   // denser near the centre: contact detail
+        vec2 suv = uv0 + vec2(cos(a), sin(a)) * rUV * mix(0.04, 1.0, fr * fr);   // denser near the centre: contact detail
         if (suv.x < 0.0 || suv.y < 0.0 || suv.x > 1.0 || suv.y > 1.0) continue;
+        suv = (floor(suv * uDepthRes) + 0.5) / uDepthRes;
         float ds = rawD(suv);
         if (ds >= 0.99999) continue;
         vec3 v = viewPos(suv, linZ(ds)) - P;
@@ -118,7 +125,7 @@ export const AoShader = {
         float fall = clamp(1.0 - (L * L) / (R * R), 0.0, 1.0);
         occ += max(0.0, dot(v, N) / max(L, 1e-5) - 0.12) * fall;
       }
-      float ao = clamp(1.0 - uIntensity * 2.2 * occ / float(K), 0.0, 1.0);
+      float ao = clamp(1.0 - uIntensity * 3.2 * occ / float(K), 0.0, 1.0);
       // fade out towards the far plane (distant haze is not contact-shadowed)
       ao = mix(ao, 1.0, smoothstep(uFar * 0.35, uFar * 0.8, z0));
       gl_FragColor = vec4(ao, z0, 0.0, 1.0);

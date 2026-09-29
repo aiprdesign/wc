@@ -372,7 +372,7 @@ export function create(ctx, segment) {
     const planet = new THREE.Mesh(unitSphere, planetMaterial(p.k, maps, PU, ring ? { ringTex: ring.tex, ring: ring.spec, ringK: p.ring === 'saturn' ? 0.85 : 0.3 } : {}));
     planet.scale.setScalar(p.s); planet.name = `body:${p.k}`; tiltG.add(planet);
     if (p.k === 'earth' || p.k === 'venus') {
-      const a = atmosphereShell(p.k === 'earth' ? [0.28, 0.55, 1.0] : [1.0, 0.86, 0.6], PU, p.k === 'earth' ? { k: 0.9, hs: 0.022 } : { k: 0.55, hs: 0.03 });
+      const a = atmosphereShell(p.k === 'earth' ? [0.28, 0.55, 1.0] : [1.0, 0.86, 0.6], PU, p.k === 'earth' ? { k: 0.9, hs: 0.022 } : { k: 0.4, hs: 0.018 });
       const shell = new THREE.Mesh(unitSphere, a.material); shell.scale.setScalar(a.scale); planet.add(shell);
     }
     if (ring) {

@@ -5,9 +5,20 @@
 // Options: --gpu (use your graphics card: opens browser windows while it renders; without it
 // Chromium renders in software, which is slow), --fps 30, --workers 2, --from/--to (film s),
 // --noaudio, --ffmpeg /path/to/ffmpeg (else ffmpeg-static from npm, then ffmpeg on PATH).
-// Or simply: npm run render:1x1 / render:16x9 / render:9x16 / render:all
-// Every frame is rendered deterministically through window.__film.renderFrame(T), so the
-// result is identical to real-time playback but never drops a frame.
+// Realism (offline only — real-time playback never pays for these):
+//   --preset cinematic   --mb 8 --ss 2 --q high (ultra above 2560 px): the delivery look
+//   --preset draft       no motion blur, no supersampling, quality from the width (fast previews;
+//                        also the default when no preset is given)
+//   --mb N               motion blur: N sub-frames per frame over a --shutter 180 (degrees) shutter,
+//                        averaged in linear HDR before bloom and grade (sequences are pure functions of
+//                        time, so it is exact and deterministic; sub-frames across a hard cut are dropped)
+//   --ss N               supersampling: render at N× and filter down (cleaner edges, finer detail)
+//   --q low|medium|high|ultra   render quality; high/ultra add ambient occlusion and 2× shadow maps
+// Explicit flags override the preset (e.g. --preset cinematic --mb 12).
+// Or simply: npm run render:1x1 / render:16x9 / render:9x16 / render:all (cinematic preset),
+// npm run render:draft:1x1 … for quick drafts.
+// Every frame is rendered deterministically through window.__film.renderFrame(T, { motionBlur }),
+// so the result is identical to real-time playback but never drops a frame.
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -27,6 +38,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.resolve(args.out ?? 'renders/film');
 const fps = Number(args.fps ?? 30), width = Number(args.width ?? 1920), workers = Number(args.workers ?? 2);
 const from = Number(args.from ?? 0), to = Number(args.to ?? 108.3);
+const PRESETS = {
+  cinematic: { mb: 8, ss: 2, q: width > 2560 ? 'ultra' : 'high' },
+  draft: { mb: 0, ss: 1, q: width > 1920 ? 'high' : width > 1280 ? 'medium' : 'low' },
+};
+const presetName = args.preset === true || !args.preset ? 'draft' : String(args.preset);
+if (!PRESETS[presetName]) { console.error(`Unknown --preset ${presetName} (cinematic | draft)`); process.exit(1); }
+const preset = PRESETS[presetName];
+const mb = Math.max(0, Math.round(Number(args.mb ?? preset.mb) || 0));
+const ss = Math.max(1, Math.min(4, Number(args.ss ?? preset.ss) || 1));
+const shutter = Number(args.shutter ?? 180);
+const quality = ['low', 'medium', 'high', 'ultra'].includes(args.q) ? args.q : preset.q;
+console.log(`preset ${presetName}: quality ${quality}, motion blur ${mb > 1 ? `${mb} sub-frames @ ${shutter}°` : 'off'}, supersampling ${ss}×`);
 const framesDir = path.join(out, 'frames');
 fs.mkdirSync(framesDir, { recursive: true });
 
@@ -45,12 +68,12 @@ const port = server.address().port;
 const gl = args.gpu ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
 const browser = await chromium.launch({ headless: !args.gpu, args: [...gl, '--ignore-gpu-blocklist'] });
 if (args.gpu) console.log('Rendering on the GPU: browser windows will open and close by themselves. Leave them be.');
-const quality = width > 1920 ? 'high' : width > 1280 ? 'medium' : 'low';
 
 async function openPage(extra = '') {
   const page = await browser.newPage({ viewport: { width, height: Math.round(width / (args.aspect ? eval(String(args.aspect).replace(':', '/')) : 2.39)) } });
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
-  await page.goto(`http://localhost:${port}/?still&noaudio&q=${quality}${args.aspect ? `&aspect=${args.aspect}` : ''}${extra}`);
+  const fx = `${ss > 1 ? `&ss=${ss}` : ''}${shutter !== 180 ? `&shutter=${shutter}` : ''}`;
+  await page.goto(`http://localhost:${port}/?still&noaudio&q=${quality}${fx}${args.aspect ? `&aspect=${args.aspect}` : ''}${extra}`);
   await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 600000 });
   return page;
 }
@@ -86,7 +109,7 @@ async function worker(w) {
     // retry: under heavy machine load a screenshot can time out — never lose the whole render to it
     for (let attempt = 0; ; attempt++) {
       try {
-        await page.evaluate((t) => window.__film.renderFrame(t), T);
+        await page.evaluate(([t, o]) => window.__film.renderFrame(t, o), [T, { motionBlur: mb, fps }]);
         await canvas.screenshot({ path: file, type: 'jpeg', quality: 93, timeout: 180000 });
         break;
       } catch (e) {

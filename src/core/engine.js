@@ -286,13 +286,13 @@ export class Engine {
   renderAO(inst, rt, cam) {
     if (!this.fx.ao || inst.ao === false || !cam.isPerspectiveCamera) return false;
     const o = inst.ao ?? {};
-    const intensity = o.intensity ?? 0.85;
+    const intensity = o.intensity ?? 1;
     if (!(intensity > 0)) return false;
     const r = this.renderer, u = this.aoQuad.material.uniforms, e = cam.projectionMatrix.elements;
     u.tDepth.value = rt.depthTexture;
     u.uNear.value = cam.near; u.uFar.value = cam.far;
     u.uProj.value.set(e[0], e[5], e[8], e[9]);
-    u.uRadius.value = o.radius ?? 0.035;
+    u.uRadius.value = o.radius ?? 0.05;
     u.uIntensity.value = intensity;
     u.uSeed.value = this._aoSeed ?? 0;
     r.setRenderTarget(this.aoRaw);
