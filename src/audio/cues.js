@@ -5,7 +5,7 @@ import { CUES as C } from '../timeline.js';
 import * as I from './instruments.js';
 import * as X from './sfx.js';
 import * as O from './orchestra.js';
-import { groove, chordAt } from './music.js';
+import { groove } from './music.js';
 import { headingList, kickTiming, onBeat } from '../lib/headings.js';
 
 function opening(S) {
@@ -398,44 +398,38 @@ function finale(S) {
 
 // Designed air movement through the sequence changes: each whoosh peaks on the chapter's
 // downbeat (v11: every chapter has one; the moonshot's moves from 38.6 onto its downbeat, 38.5).
-// Chapter headings: every letter is heard as it forms. Each one whips in from its side of the
-// lens (a short air-whip panned from outside to its place), lands with a small bright metal
-// tick, then the letter-by-letter shine runs as a glass chime arpeggio climbing through the
-// chord of the moment. A soft low seat under the first landings, a breath of air as it clears.
-// Montage swaps (fast, stacked) are lighter: one whip + ticks + a two-note glint.
+// Chapter headings: the forming is heard as whooshes. Each letter rushes in with its own short
+// whoosh from its side of the lens to its place (they ripple together as the word flies in), under
+// one deeper whoosh that carries the whole word and peaks on the last landing. The letter-by-letter
+// shine is an airy high whoosh sweeping left to right across the word, and the clearing a soft
+// falling one. Montage swaps (fast, stacked) get the word whoosh and the shine sweep only.
 function headings(S) {
   for (const h of headingList()) {
     const t0 = onBeat(h.t0, h.swap ? 2 : 1), t1 = onBeat(h.t1, h.swap ? 2 : 1);
     const n = h.text.length, k = kickTiming(n, h.swap, h.pace, t0);
     const pos = (i) => (n > 1 ? (i / (n - 1)) * 2 - 1 : 0);   // -1 left … +1 right
-    const lv = h.swap ? 1.3 : 1, G = 5;   // G: the heading layer sits ~12 dB under the music
-    const tones = chordAt(t0 + k.shine0).choir.map((m) => m + 24);   // two octaves up: glass
-    S.at(t0 - 0.05, () => {
-      if (h.swap) {
-        I.whoosh(S, t0 - 0.03, k.inDur + 0.08, { level: 0.045 * G, f0: 1200, f1: 7000, pan0: -0.5, pan1: 0.5, peak: 0.5, kind: 'white' });
-      } else {
-        // the formation's seat: a soft low thump + a short swell of air into the first landing
-        X.thud(S, t0 + k.land, { level: 0.07 * G, f: 58, tone: 500, decay: 0.35 });
-        I.swellIn(S, t0 + k.land, 0.18, { level: 0.03 * G, top: 8000 });
-      }
-      for (let i = 0; i < n; i++) {
-        const p = pos(i) * 0.7, tf = t0 + i * k.slot, tl = tf + k.land;
-        const side = p > 0.05 ? 1 : p < -0.05 ? -1 : (i % 2 ? 1 : -1);
-        // whip: from beside the lens to the letter's place (full words only; swaps share one)
-        if (!h.swap) I.whoosh(S, tf, k.fly * 0.8, { level: 0.022 * G, f0: 1500, f1: 7500, pan0: side * 0.9, pan1: p, peak: 0.6, q: 1.6, kind: 'white' });
-        // landing: a small bright metal tick, rising a touch across the word
-        X.click(S, tl, { level: 0.05 * lv * G, freq: 3600 + 80 * i, body: 1100 + 40 * i, decay: 0.02, pan: p });
-        // shine: one glass note per letter, stepping up through the chord
-        const ts = t0 + k.shine0 + i * k.shineSlot + k.shineDur * 0.25;
-        if (!h.swap || i === 0 || i === n - 1) {
-          const m = tones[i % tones.length] + 12 * Math.floor(i / tones.length) * (n > 6 ? 0 : 1);
-          I.bell(S, ts, m, { level: (h.swap ? 0.012 : 0.016) * G, pan: p, bus: 'far', decay: 1.1 });
+    const G = h.swap ? 0.8 : 1;
+    const tIn = t0 + (n - 1) * k.slot + k.land;               // the last letter lands
+    S.at(t0 - 0.2, () => {
+      // the word: one deep whoosh that lifts in ahead of the letters and peaks as the last one lands
+      const w0 = t0 - 0.12, wd = tIn - w0 + 0.3;
+      I.whoosh(S, w0, wd, { level: 0.9 * G, f0: 160, f1: 2600, pan0: -0.45, pan1: 0.45, peak: (tIn - w0) / wd, q: 0.9, kind: 'pink' });
+      // each letter: a short whoosh from beside the lens to its place
+      if (!h.swap) {
+        for (let i = 0; i < n; i++) {
+          const p = pos(i) * 0.7, tf = t0 + i * k.slot;
+          const side = p > 0.05 ? 1 : p < -0.05 ? -1 : (i % 2 ? 1 : -1);
+          const d = k.fly * 1.5;
+          I.whoosh(S, tf - k.fly * 0.2, d, { level: 0.45, f0: 420 + 30 * i, f1: 4200 + 150 * i, pan0: side * 0.95, pan1: p, peak: (k.land + k.fly * 0.2) / d, q: 1.3, kind: 'pink' });
         }
       }
-      // clearing: a small breath of air as the letters fold away
+      // the shine: an airy high whoosh sweeping across the word, letter by letter
+      const s0 = t0 + k.shine0 - 0.03, sd = (n - 1) * k.shineSlot + k.shineDur + 0.12;
+      I.whoosh(S, s0, sd, { level: 0.45 * G, f0: 2400, f1: 9500, pan0: -0.6, pan1: 0.6, peak: 0.45, q: 1.1, kind: 'white' });
+      // clearing: a soft falling whoosh as the letters fold away
       if (!h.swap && !h.last) {
         const to = onBeat(t1 - 0.2, 4);
-        I.whoosh(S, to - 0.05, 0.4, { level: 0.02 * G, f0: 3000, f1: 600, pan0: 0.2, pan1: -0.2, peak: 0.3, kind: 'pink' });
+        I.whoosh(S, to - 0.05, 0.45, { level: 0.4, f0: 2800, f1: 400, pan0: 0.25, pan1: -0.25, peak: 0.3, kind: 'pink' });
       }
     });
   }

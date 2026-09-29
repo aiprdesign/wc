@@ -6,8 +6,8 @@
 //   shimmer sparse high chord tones (glass-like sines) through a soft echo and the hall
 //   air     band-passed noise, a quiet wind that moves with the filter LFO
 //   swell   swell() at chapter changes: a soft bloom of the current chord, never a beat
-//   letters whip() / tick() / ping(): the chapter headings forming, letter by letter (called by
-//           core/experience.js on each letter's flight, landing and shine)
+//   letters whoosh(): the chapter headings forming — a whoosh per letter, one under the word and an
+//           airy one for the shine (called by core/experience.js on the film's heading timing)
 // Everything goes through one long procedural hall (reverb.js) and a gentle master compressor.
 // The graph is built on the first play() (which must run inside a user gesture: mobile unlock), then
 // events are scheduled a few seconds ahead of the audio clock. pause() suspends the context, so
@@ -207,57 +207,21 @@ export class Ambient {
     return (this._nb = b);
   }
 
-  // A letter's flight: a short band of air sweeping up and across, from beside the listener to `pan`.
-  whip(pan0, pan1, dur = 0.3, level = 0.07) {
+  // A whoosh: a band of air sweeping from f0 to f1 (peaking at `peak`) and across from pan0 to pan1.
+  whoosh(pan0, pan1, dur = 0.3, level = 0.07, { f0 = 1400, f1 = 6500, peak = 0.6, q = 1.4 } = {}) {
     if (!this.ctx || !this.playing) return;
-    const ctx = this.ctx, t = ctx.currentTime + 0.01, d = Math.max(0.1, Math.min(1, dur));
-    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf();
-    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
-    bp.frequency.setValueAtTime(1400, t); bp.frequency.exponentialRampToValueAtTime(6500, t + d * 0.7);
+    const ctx = this.ctx, t = ctx.currentTime + 0.01, d = Math.max(0.1, Math.min(2.5, dur)), tp = t + d * peak;
+    const src = ctx.createBufferSource(); src.buffer = this._noiseBuf(); src.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+    bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, tp);
+    bp.frequency.exponentialRampToValueAtTime(Math.max(120, (f0 + f1) * 0.3), t + d);
     const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(level, t + d * 0.6); env.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    env.gain.setValueAtTime(0.0001, t); env.gain.exponentialRampToValueAtTime(level, tp); env.gain.exponentialRampToValueAtTime(0.0001, t + d);
     const p = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
     if (p.pan) { p.pan.setValueAtTime(pan0, t); p.pan.linearRampToValueAtTime(pan1, t + d); }
     src.connect(bp).connect(env).connect(p).connect(this.master);
     const send = ctx.createGain(); send.gain.value = 0.4; p.connect(send).connect(this.hallIn);
     src.start(t, this.random() * 0.8); src.stop(t + d + 0.05);
-  }
-
-  // A letter landing: a small crystal tick.
-  tick(pan = 0, i = 0, level = 0.05) {
-    if (!this.ctx || !this.playing) return;
-    const ctx = this.ctx, t = ctx.currentTime + 0.01, f = 2600 + 90 * i;
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(level, t); env.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-    const p = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
-    if (p.pan) p.pan.value = pan;
-    env.connect(p).connect(this.master);
-    const send = ctx.createGain(); send.gain.value = 0.3; p.connect(send).connect(this.hallIn);
-    for (const [r, a] of [[1, 1], [2.76, 0.35]]) {
-      const o = ctx.createOscillator(); o.frequency.value = f * r;
-      const gg = ctx.createGain(); gg.gain.value = a;
-      o.connect(gg).connect(env); o.start(t); o.stop(t + 0.12);
-    }
-  }
-
-  // A letter's shine: a glass chime climbing through the chord of the moment (into the echo + hall).
-  ping(i = 0, pan = 0, level = 0.09) {
-    if (!this.ctx || !this.playing) return;
-    const ctx = this.ctx, t = ctx.currentTime + 0.01;
-    const pcs = this.chordAt(t).slice(1);
-    let m = pcs[i % pcs.length] + 12 * Math.floor(i / pcs.length);
-    while (m < 81) m += 12;
-    while (m > 98) m -= 12;
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(level, t + 0.006); env.gain.setTargetAtTime(0, t + 0.01, 0.45);
-    const p = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
-    if (p.pan) p.pan.value = pan;
-    env.connect(p).connect(this.glass);
-    for (const [r, a] of [[1, 1], [1.003, 0.5], [2.01, 0.15]]) {
-      const o = ctx.createOscillator(); o.frequency.value = mtof(m) * r;
-      const gg = ctx.createGain(); gg.gain.value = a;
-      o.connect(gg).connect(env); o.start(t); o.stop(t + 3);
-    }
   }
 
   _unlock() {

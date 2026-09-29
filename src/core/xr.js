@@ -675,6 +675,7 @@ void main() {
     if (!words && !hud && !titles) return false;
     const xrTarget = r.getRenderTarget();
     r.xr.enabled = false;           // an ordinary render into a texture, mid-frame
+    r.autoClear = false;            // (layered like the engine's plate: no clear between passes)
     try {
       r.setRenderTarget(this.panelRT);
       r.setClearColor(0x000000, 0);
@@ -683,6 +684,7 @@ void main() {
       if (hud) { r.clearDepth(); r.render(hud.scene, hud.camera); }
       if (titles) { r.clearDepth(); r.render(e.titles.scene, e.titles.camera); }
     } finally {
+      r.autoClear = true;
       r.xr.enabled = true;
       r.setRenderTarget(xrTarget);
     }

@@ -11,19 +11,24 @@ export const SPEEDS = [0.35, 0.5, 1, 0.25];   // the speed button cycles through
 const HOLD_AT = DURATION - 0.75;               // film time of the closing hold (just before the fade)
 const HOLD_S = 7;                              // wall seconds held there
 
-// The chapter headings' letter events on the film clock, for the ambient score: each letter's
-// flight (whip), landing (tick) and shine (ping), panned to its place in the word.
+// The chapter headings' whooshes on the film clock, for the ambient score: one deep whoosh under
+// each word, one per letter from its side of the lens to its place, and an airy one for the shine.
 function letterEvents() {
-  const ev = [];
+  const ev = [], F = TIME_SCALE;
   for (const h of headingList()) {
     const t0 = onBeat(h.t0, h.swap ? 2 : 1), n = h.text.length, k = kickTiming(n, h.swap, h.pace, t0);
-    for (let i = 0; i < n; i++) {
-      const pan = (n > 1 ? (i / (n - 1)) * 2 - 1 : 0) * 0.7, side = pan > 0.05 ? 1 : pan < -0.05 ? -1 : (i % 2 ? 1 : -1);
-      const tf = t0 + i * k.slot;
-      if (!h.swap || i === 0) ev.push({ t: tf * TIME_SCALE, kind: 'whip', pan, side, fly: (h.swap ? k.inDur : k.fly) * TIME_SCALE, swap: h.swap });
-      ev.push({ t: (tf + k.land) * TIME_SCALE, kind: 'tick', pan, i, swap: h.swap });
-      if (!h.swap || i === 0 || i === n - 1) ev.push({ t: (t0 + k.shine0 + i * k.shineSlot) * TIME_SCALE, kind: 'ping', pan, i, swap: h.swap });
+    const tIn = t0 + (n - 1) * k.slot + k.land, w0 = t0 - 0.12, wd = tIn - w0 + 0.3;
+    const q = h.swap ? 0.7 : 1;
+    ev.push({ t: w0 * F, dur: wd * F, pan0: -0.45, pan1: 0.45, level: 0.6 * q, o: { f0: 160, f1: 2600, peak: (tIn - w0) / wd, q: 0.9 } });
+    if (!h.swap) {
+      for (let i = 0; i < n; i++) {
+        const pan = (n > 1 ? (i / (n - 1)) * 2 - 1 : 0) * 0.7, side = pan > 0.05 ? 1 : pan < -0.05 ? -1 : (i % 2 ? 1 : -1);
+        const d = k.fly * 1.5;
+        ev.push({ t: (t0 + i * k.slot - k.fly * 0.2) * F, dur: d * F, pan0: side * 0.95, pan1: pan, level: 0.3, o: { f0: 420 + 30 * i, f1: 4200 + 150 * i, peak: (k.land + k.fly * 0.2) / d, q: 1.3 } });
+      }
     }
+    const sd = (n - 1) * k.shineSlot + k.shineDur + 0.12;
+    ev.push({ t: (t0 + k.shine0 - 0.03) * F, dur: sd * F, pan0: -0.6, pan1: 0.6, level: 0.3 * q, o: { f0: 2400, f1: 9500, peak: 0.45, q: 1.1 } });
   }
   return ev.sort((a, b) => a.t - b.t);
 }
@@ -105,7 +110,7 @@ export class Experience {
       this.t += dt;
       if (this.t >= DURATION) { this.t = 0; this.hold = 0; dt = 0; this.onLoop(); }
     }
-    // the headings forming, letter by letter (only when time actually moves forward, not on a loop)
+    // the headings forming, as whooshes (only when time actually moves forward, not on a loop)
     if (dt > 0 && this.ambient) this._letters(this.t - dt, this.t);
     // a soft swell in the score at each chapter change
     const seg = this.engine.mainInstance(this.t / TIME_SCALE).segment.id;
@@ -119,10 +124,7 @@ export class Experience {
     for (const e of this.letters) {
       if (e.t <= a) continue;
       if (e.t > b) break;
-      const q = e.swap ? 0.7 : 1;
-      if (e.kind === 'whip') A.whip(e.side * 0.9, e.pan, e.fly / sp, 0.07 * q);
-      else if (e.kind === 'tick') A.tick(e.pan, e.i, 0.05 * q);
-      else A.ping(e.i, e.pan, 0.09 * q);
+      A.whoosh(e.pan0, e.pan1, e.dur / sp, e.level, e.o);   // stretched with the slow motion
     }
   }
 
