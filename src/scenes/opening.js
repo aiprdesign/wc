@@ -96,11 +96,11 @@ function makeSparks(list, { drag = 3, trail = 0.045, grav = [0, -0.5, 0], size =
 // ---- a shockwave ring (camera-facing plane): a hot annulus with a faint wake inside it
 const QUAD_VERT = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const RING_FRAG = /* glsl */ `
-uniform float uR, uW, uI; uniform vec3 uColor; varying vec2 vUv;
+uniform float uR, uW, uI, uWake; uniform vec3 uColor; varying vec2 vUv;
 void main(){
   float r = length(vUv - 0.5) * 2.0;
   float d = (r - uR) / uW;
-  float a = exp(-d * d) + 0.18 * step(r, uR) * exp((r - uR) / (uW * 6.0));
+  float a = exp(-d * d) + uWake * step(r, uR) * exp((r - uR) / (uW * 6.0));
   a *= uI * smoothstep(1.0, 0.9, r);
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor * a, 1.0);
@@ -228,15 +228,15 @@ export function create(ctx, segment) {
   const burstGlow = glowSprite({ color: '#ffb866', intensity: 1, scale: 1 });
   const burstCore = glowSprite({ color: '#fff6e6', intensity: 1, scale: 1 });
   fx.add(burstGlow, burstCore);
-  const ringU = { uR: { value: 0 }, uW: { value: 0.02 }, uI: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.8, 0.5).multiplyScalar(2.6) } };
+  const ringU = { uR: { value: 0 }, uW: { value: 0.02 }, uI: { value: 0 }, uWake: { value: 0.18 }, uColor: { value: new THREE.Color(1.0, 0.8, 0.5).multiplyScalar(2.6) } };
   const ring = fxMesh(RING_FRAG, ringU);
   ring.scale.setScalar(2.6);
   ring.position.z = 0.01;
   fx.add(ring);
-  for (let i = 0; i < 700; i++) {
+  for (let i = 0; i < 420; i++) {
     const u = RS() * 2 - 1, th = RS() * Math.PI * 2, r = Math.sqrt(1 - u * u);
-    const sp = 1.1 + 5.2 * RS() ** 2;
-    sparkList.push({ o: V(0, 0, 0), v: V(Math.cos(th) * r * sp, Math.sin(th) * r * sp, (u * 0.45 - 0.15) * sp), birth: tIgn + RS() * 0.035, life: 0.35 + 0.75 * RS(), seed: RS() });
+    const sp = 1.4 + 5.4 * RS() ** 2;
+    sparkList.push({ o: V(0, 0, 0), v: V(Math.cos(th) * r * sp, Math.sin(th) * r * sp, (u * 0.45 - 0.15) * sp), birth: tIgn + RS() * 0.06, life: 0.35 + 0.75 * RS(), seed: RS() });
   }
   // the drawing heads shed sparks: `pts` (a polyline) is drawn over [t0, t1] with `fn`
   const headSparks = (pts, t0, t1, fn, { speed = 1, life = 0.4, per = 7, max = 48 } = {}) => {
@@ -509,21 +509,21 @@ export function create(ctx, segment) {
   rays.position.set(0, 0.33, -1.2);
   rays.scale.setScalar(44);
   titleGroup.add(rays);
-  const slamRingU = { uR: { value: 0 }, uW: { value: 0.02 }, uI: { value: 0 }, uColor: { value: new THREE.Color(1.0, 0.82, 0.55).multiplyScalar(2.2) } };
+  const slamRingU = { uR: { value: 0 }, uW: { value: 0.02 }, uI: { value: 0 }, uWake: { value: 0.04 }, uColor: { value: new THREE.Color(1.0, 0.82, 0.55).multiplyScalar(2.2) } };
   const slamRing = fxMesh(RING_FRAG, slamRingU);
   slamRing.position.set(0, 0.33, 0.3);
   slamRing.scale.set(40, 22, 1);
   titleGroup.add(slamRing);
   const tLk = cue('titleLocked');
   const slamList = [];
-  for (let i = 0; i < 1800; i++) {
+  for (let i = 0; i < 1100; i++) {
     const j = Math.floor(RS() * NP) * 3;
     const o = V(tgt[j], tgt[j + 1], 0.1);
     const d = V(o.x * 0.55, o.y - 0.33, 0).normalize();
     const sp = 2.5 + 13 * RS() ** 2;
-    slamList.push({ o, v: V(d.x * sp + (RS() - 0.5) * 2, d.y * sp + (RS() - 0.3) * 2.5, RS() * 6 - 0.5), birth: tLk + RS() * 0.03, life: 0.45 + 0.9 * RS(), seed: RS() });
+    slamList.push({ o, v: V(d.x * sp + (RS() - 0.5) * 2, d.y * sp + (RS() - 0.3) * 2.5, RS() * 6 - 0.5), birth: tLk + RS() * 0.06, life: 0.45 + 0.9 * RS(), seed: RS() });
   }
-  const sparksT = makeSparks(slamList, { drag: 2.4, trail: 0.05, grav: [0, -2.4, 0], size: 0.055, intensity: 2.6 });
+  const sparksT = makeSparks(slamList, { drag: 2.4, trail: 0.05, grav: [0, -2.4, 0], size: 0.036, intensity: 1.45 });
   titleGroup.add(sparksT.group);
 
   // HUD: the anamorphic streak of each hit (screen space; the film centres both on the frame)
@@ -617,14 +617,14 @@ export function create(ctx, segment) {
       burstCore.visible = burstGlow.visible = t > tIgn * 0.3 && aI < 0.9;
       if (burstCore.visible) {
         const k = aI >= 0 ? Math.exp(-aI * 9) : 0;
-        burstCore.scale.setScalar(camD * (aI >= 0 ? 0.03 + 0.2 * k : 0.004 + 0.02 * pre));
-        burstCore.material.color.setRGB(1, 0.96, 0.9).multiplyScalar(aI >= 0 ? 3.0 * Math.exp(-aI * 4.5) : 2 * pre);
-        burstGlow.scale.setScalar(camD * (aI >= 0 ? 0.4 + 1.7 * Math.exp(-aI * 9) : 0.05 * pre));
-        burstGlow.material.color.setRGB(1, 0.66, 0.34).multiplyScalar(aI >= 0 ? 0.25 + 1.6 * Math.exp(-aI * 14) : 0.4 * pre);
+        burstCore.scale.setScalar(camD * (aI >= 0 ? 0.03 + 0.16 * k : 0.004 + 0.02 * pre));
+        burstCore.material.color.setRGB(1, 0.96, 0.9).multiplyScalar(aI >= 0 ? 2.6 * Math.exp(-aI * 6) : 2 * pre);
+        burstGlow.scale.setScalar(camD * (aI >= 0 ? 0.4 + 1.5 * Math.exp(-aI * 12) : 0.05 * pre));
+        burstGlow.material.color.setRGB(1, 0.66, 0.34).multiplyScalar(aI >= 0 ? 0.2 + 1.4 * Math.exp(-aI * 20) : 0.4 * pre);
       }
       ringU.uR.value = ease.outCubic(sat(aI / 0.55));
       ringU.uW.value = 0.012 + 0.035 * ringU.uR.value;
-      ringU.uI.value = aI >= 0 ? (1 - ringU.uR.value) ** 1.5 : 0;
+      ringU.uI.value = aI >= 0 ? 0.8 * (1 - ringU.uR.value) ** 1.5 * sat(aI / 0.03) : 0;
       ring.visible = aI >= 0 && aI < 0.55;
       sparksA.tick(t, info.height);
 
@@ -703,7 +703,7 @@ export function create(ctx, segment) {
       const pOp = ramp(t, fT + 0.1, tA + 0.35) * lerp(1, 0.05, ramp(t, tL - 0.04, tL + 0.12)) * (1 - ramp(t, l3 + 0.05, l3 + 0.55));
       titleParticles.u.opacity = pOp;
       titleParticles.visible = pOp > 0.002;
-      titleParticles.u.intensity = lerp(0.9, 1.4, mix) + 0.8 * ramp(t, tL - 0.25, tL, ease.inQuad) * (t < tL ? 1 : 0);
+      titleParticles.u.intensity = lerp(0.9, 1.4, mix) + 0.35 * ramp(t, tL - 0.25, tL, ease.inQuad) * (t < tL ? 1 : 0);
       titleParticles.u.size = lerp(0.032, 0.026, mix);
 
       // ---------------------------------------------------------------- title glyphs
@@ -712,10 +712,10 @@ export function create(ctx, segment) {
       // once extruded and tumbling, glyphs turned away from the key went pure black and vanished from the words
       // (A, V, E of ACHIEVEMENTS): a faint self-glow keeps every letter legible against the dark
       const floorK = 0.12 * ramp(t, l3, l3 + 0.5);
-      const heat = decay(t, tL - 0.03, 4.5);             // white-hot on the SLAM, cooling to gold
-      marbleMat.emissiveIntensity = (0.55 + 1.5 * heat) * glowK + floorK;
-      goldMat.emissiveIntensity = (0.7 + 1.7 * heat) * glowK + floorK * 0.6;
-      bronzeMat.emissiveIntensity = (0.7 + 1.7 * heat) * glowK + floorK * 0.6;
+      const heat = decay(t, tL - 0.03, 6);             // white-hot on the SLAM, cooling to gold
+      marbleMat.emissiveIntensity = (0.55 + 0.9 * heat) * glowK + floorK;
+      goldMat.emissiveIntensity = (0.7 + 1.0 * heat) * glowK + floorK * 0.6;
+      bronzeMat.emissiveIntensity = (0.7 + 1.0 * heat) * glowK + floorK * 0.6;
       const flyK = ramp(t, lf, 8.0, ease.inQuad);
       const punch = 1 + 0.06 * decay(t, tL, 16);          // the letters land a touch large and settle
       for (const g of glyphs) {
@@ -744,12 +744,12 @@ export function create(ctx, segment) {
       rays.visible = raysU.uI.value > 0.003;
       slamRingU.uR.value = ease.outCubic(sat(aS / 0.8));
       slamRingU.uW.value = 0.01 + 0.03 * slamRingU.uR.value;
-      slamRingU.uI.value = aS >= 0 ? 0.55 * (1 - slamRingU.uR.value) ** 1.5 : 0;
+      slamRingU.uI.value = aS >= 0 ? 0.5 * (1 - slamRingU.uR.value) ** 1.5 * sat(aS / 0.03) : 0;
       slamRing.visible = aS >= 0 && aS < 0.8;
       sparksT.tick(t, info.height);
 
       // HUD streak: both hits (the film centres the burst and the title on the frame)
-      streakU.uI.value = 1.5 * (aI >= 0 ? Math.exp(-aI * 4.5) : 0.25 * pre) + 1.2 * slam ** 4.5;
+      streakU.uI.value = 1.5 * (aI >= 0 ? Math.exp(-aI * 4.5) : 0.25 * pre) + 1.2 * slam ** 4.5 + 0.1 * cut / 0.004;
       streak.scale.x = FILM_ASPECT * (1.6 + 1.1 * Math.exp(-Math.max(0, Math.min(aI >= 0 ? aI : 9, aS >= 0 ? aS : 9)) * 3));
       streak.visible = streakU.uI.value > 0.003;
 
@@ -802,7 +802,7 @@ export function create(ctx, segment) {
       if (dof.amount <= 0.01 && t < tL - 0.4) dof.focus = t < fT + 0.15 ? Math.max(1, camPos.z) : 7;
       lastT = t;
       // a frame or two of flash on each hit (never a white-out: the plate is mostly black)
-      api.exposure = 1 + 0.55 * (aI >= 0 ? Math.exp(-aI * 26) : 0) + 0.3 * (aS >= 0 ? Math.exp(-aS * 22) : 0);
+      api.exposure = 1 + 0.55 * (aI >= 0 ? Math.exp(-aI * 26) : 0) + 0.22 * (aS >= 0 ? Math.exp(-aS * 22) : 0);
       bloom.strength = 0.75 + 0.25 * envelope(t, pA, pA + 0.6, 0.05, 0.5) + 0.15 * ramp(t, 7.0, 8.0) + 0.45 * ign ** 3 + 0.25 * slam ** 6;
     },
   };

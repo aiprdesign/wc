@@ -401,7 +401,7 @@ function openingPulse(S) {
     });
   }
   // low strings + horns swell into the SLAM (they stop dead on the held breath)
-  S.at(C.flyThrough, () => O.brass(S, C.flyThrough, b - C.flyThrough, [38, 45, 50], { level: 0.14, attack: 0.7, release: 0.05, bright: 1500, kind: 'horn' }));
+  S.at(C.flyThrough, () => O.brass(S, C.flyThrough, b - C.flyThrough, [38, 45, 50], { level: 0.22, attack: 0.6, release: 0.05, bright: 1800, kind: 'horn' }));
 }
 
 // Rhythm studio: the hits of the cold open
@@ -429,15 +429,15 @@ function openingHits(S) {
     S.at(t, () => { I.tom(S, t, 0.1 + 0.2 * u, { f: 56, pan: 0 }); I.tom(S, t + 0.14, 0.06 + 0.12 * u, { f: 48, pan: 0 }); });
   }
   // into the SLAM: riser + reverse cymbal, and a taiko build on 16ths through the fly-through,
-  // stopping a 16th early — a held breath — so the hit lands out of a hole
-  S.at(C.gridDone, () => I.riser(S, C.gridDone, tL, { level: 0.07, from: 300, to: 8000, pitch: [38, 62] }));
-  S.at(tL - 0.9, () => I.revCymbal(S, tL, 0.9, { level: 0.07 }));
+  // stopping a 16th early (the riser ~100 ms early) — a held breath — so the hit lands out of a hole
+  S.at(C.gridDone, () => I.riser(S, C.gridDone, tL - 0.075, { level: 0.11, from: 300, to: 8000, pitch: [38, 62] }));
+  S.at(tL - 0.9, () => I.revCymbal(S, tL, 0.9, { level: 0.1 }));
   for (let t = C.flyThrough, k = 0; t < tL - STEP - 1e-6; t += STEP, k++) {
     const u = (t - C.flyThrough) / (tL - STEP - C.flyThrough);
-    S.at(t, () => I.taiko(S, t, 0.12 + 0.3 * u * u, { size: 0.6 }));
+    S.at(t, () => { I.taiko(S, t, 0.2 + 0.5 * u * u, { size: u > 0.5 ? 1 : 0.6 }); if (k % 2 === 0) I.boom(S, t, { level: 0.08 + 0.14 * u, f0: 70, f1: 40, decay: 0.35 }); });
   }
   // THE SLAM
-  hit(S, tL, { power: 1.15, braam: 50, chord: 'Dm', down: true, subHz: 110 });
+  hit(S, tL, { power: 1.35, braam: 50, chord: 'Dm', down: true, subHz: 110 });
   S.at(tL, () => {
     I.boom(S, tL, { level: 0.45, f0: 120, f1: 30, decay: 3.2 });
     I.kick(S, tL, 0.95);

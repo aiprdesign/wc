@@ -35,6 +35,25 @@ chapter · `m` mute · `f` fullscreen · `r` record (MP4 where the browser suppo
 | `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
 | `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
 | `?novo` | no narrator · `?noaudio` silent |
+| `#experience` (or `?experience`) | opens in **Experience mode** (below); with a format: `#square&experience`, `#9x16&experience`, `#16x9&experience` |
+
+### Experience mode
+
+A game-like, slow-motion flythrough of the whole film with no narration, headings or HUD.
+Start it with **Experience mode** on the start screen, the **Experience** button in the player
+bar, or the `#experience` link above (hash options also work inside embedded viewers, where query
+strings are not delivered). Time runs on its own clock at **0.35×** (the speed button, or `s`,
+cycles 0.35× · 0.5× · 1× · 0.25×), plays through every chapter and transition, holds on the
+finale's Earth, then loops. The camera is an autonomous drone: slow, never-repeating orbits,
+cranes and push-ins around each shot's subject, kept inside each scene's presentable window (and
+the scenes complete their camera cheats, as in Explore). Drag to steer, scroll or pinch to zoom;
+the drone takes over again a few seconds after you let go. The score is an ambient piece in D
+generated live with Web Audio (pads, a low drone, glass shimmer, air and a long hall, with soft
+swells at chapter changes). Space pauses, `E` explores the frozen scene, `Esc` (or **Exit
+experience**) returns to the normal film at the same moment. Code: `src/core/experience.js`,
+the drone in `src/core/live.js`, the score in `src/audio/ambient.js`; `engine.clean` hides the
+typography. None of it runs unless Experience mode is on, so the film and offline renders are
+unchanged.
 
 ## Render the MP4s
 

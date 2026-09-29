@@ -52,7 +52,7 @@ function opening(S) {
   // layers: pencil scratches drafting the layers
   S.at(C.layersStart, () => X.pencil(S, C.layersStart, C.flyThrough + 0.2, { level: 0.03, pan: -0.15, vigor: 1.4 }));
   // flyThrough: the push — a long rush of air into the SLAM, pages fluttering past
-  S.at(C.flyThrough, () => I.whoosh(S, C.flyThrough, tL - C.flyThrough + 0.05, { level: 0.12, f0: 180, f1: 3800, pan0: -0.3, pan1: 0.3, peak: 0.85, kind: 'white' }));
+  S.at(C.flyThrough, () => I.whoosh(S, C.flyThrough, tL - C.flyThrough - 0.06, { level: 0.12, f0: 180, f1: 3800, pan0: -0.3, pan1: 0.3, peak: 0.8, kind: 'white' }));
   [[2.8, -0.6], [2.95, 0.6], [3.1, -0.5], [3.22, 0.5]].forEach(([t, p]) => S.at(t, () => X.paperSwish(S, t, 0.18, { level: 0.05, pan0: p, pan1: p * 1.6 })));
   // the SLAM: its crack and the spark storm
   S.at(tL, () => X.sparks(S, tL + 0.01, 1.1, { level: 0.1, bursts: 1.8 }));

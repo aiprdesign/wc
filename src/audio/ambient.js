@@ -24,7 +24,7 @@ const CHORDS = [
   [53, 57, 64, 67, 72],   // Fmaj9    F3 A3 E4 G4 C5
   [45, 52, 60, 64, 67],   // Am7      A2 E3 C4 E4 G4
 ];
-const LEVEL = 0.85;       // master level (matched to the film's soundtrack loudness)
+const LEVEL = 0.65;       // master level: about the loudness of the film's soundtrack (RMS ≈ −17 dBFS)
 
 function rng(seed) {   // mulberry32: a repeatable, never-looping shimmer
   return () => {
@@ -63,7 +63,7 @@ export class Ambient {
     this.hallIn.connect(this.hall).connect(hallOut).connect(this.master);
     // buses
     this.pads = g(1); this.pads.connect(this.master); this.pads.connect(g(0.55)).connect(this.hallIn);
-    this.glass = g(1); this.glass.connect(g(0.3)).connect(this.master); this.glass.connect(this.hallIn);
+    this.glass = g(1); this.glass.connect(g(0.5)).connect(this.master); this.glass.connect(this.hallIn);
     // a soft echo for the shimmer (dark feedback loop)
     const echo = ctx.createDelay(2); echo.delayTime.value = 0.83;
     const fb = g(0.36), damp = ctx.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 2600;
@@ -84,9 +84,9 @@ export class Ambient {
 
   _drone(t0) {
     const ctx = this.ctx;
-    const out = ctx.createGain(); out.gain.value = 0.11;
+    const out = this.droneOut = ctx.createGain(); out.gain.value = 0.046;
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 0.3;
-    const breath = ctx.createGain(); breath.gain.value = 0.3; this.lfo.connect(breath).connect(out.gain);
+    const breath = ctx.createGain(); breath.gain.value = 0.013; this.lfo.connect(breath).connect(out.gain);   // ±28 %
     lp.connect(out).connect(this.master); out.connect(this.hallIn);
     for (const [m, v, det] of [[26, 0.5, 0], [38, 1, -4], [38, 0.7, 5], [45, 0.35, 2]]) {
       const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = mtof(m); o.detune.value = det;
@@ -110,14 +110,14 @@ export class Ambient {
     const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.6;
     const sweep = ctx.createGain(); sweep.gain.value = 450; this.lfo.connect(sweep).connect(bp.frequency);
-    this.airGain = ctx.createGain(); this.airGain.gain.value = 0.05;
+    this.airGain = ctx.createGain(); this.airGain.gain.value = 0.16;
     src.connect(bp).connect(this.airGain);
     this.airGain.connect(this.master); this.airGain.connect(this.hallIn);
     src.start(t0);
   }
 
   // One chord: five voices of two detuned oscillators, one opening-and-closing filter, long envelope.
-  _chord(notes, t0, len, { level = 1, attack = 5, release = 7, filter = [380, 1500, 600], bus = this.pads } = {}) {
+  _chord(notes, t0, len, { level = 1, attack = 5, release = 7, filter = [450, 1900, 700], bus = this.pads } = {}) {
     const ctx = this.ctx, end = t0 + len;
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, t0);
@@ -134,7 +134,7 @@ export class Ambient {
     notes.forEach((m, i) => {
       const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
       if (pan.pan) pan.pan.value = (i % 2 ? 1 : -1) * (0.15 + 0.5 * (i / notes.length));
-      const v = ctx.createGain(); v.gain.value = (0.075 / Math.sqrt(notes.length)) * (m < 50 ? 1.15 : m > 70 ? 0.7 : 1);
+      const v = ctx.createGain(); v.gain.value = (0.15 / Math.sqrt(notes.length)) * (m < 50 ? 1.15 : m > 70 ? 0.7 : 1);
       v.connect(pan).connect(lp);
       for (const sign of [-1, 1]) {
         const o = ctx.createOscillator();
@@ -179,7 +179,7 @@ export class Ambient {
       let m = pcs[Math.floor(this.random() * pcs.length)];
       while (m < 74) m += 12;
       if (m > 91) m -= 12;
-      this._glassNote(m, this.nextGlass, 0.022 + this.random() * 0.018, (this.random() * 2 - 1) * 0.7);
+      this._glassNote(m, this.nextGlass, 0.11 + this.random() * 0.08, (this.random() * 2 - 1) * 0.7);
       this.nextGlass += 2.4 + this.random() * 3.2;
     }
   }
@@ -193,7 +193,7 @@ export class Ambient {
     this._chord(notes, t, 2.8, { level: 0.9, attack: 2.4, release: 6, filter: [500, 2600, 800], bus: this.glass });
     const a = this.airGain.gain;
     a.cancelScheduledValues(t); a.setValueAtTime(a.value, t);
-    a.setTargetAtTime(0.13, t, 0.9); a.setTargetAtTime(0.05, t + 2.6, 1.6);
+    a.setTargetAtTime(0.36, t, 0.9); a.setTargetAtTime(0.16, t + 2.6, 1.6);
   }
 
   _unlock() {

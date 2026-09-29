@@ -819,6 +819,8 @@ export function create(ctx, segment) {
   const Y = V(0, 1, 0), qTmp = new THREE.Quaternion(), down = V(0, -1, 0);
   const dof = { focus: 1.3, range: 0.6, amount: 0.6 };
   const bloom = { strength: 0.55 };
+  let dirElev = 0;
+  const dirToS = V(0, 0, 1);
 
   function update(t, info) {
     const T = info?.T ?? t + segment.start;
@@ -936,6 +938,8 @@ export function create(ctx, segment) {
     const sunI = 1 + 0.08 * Math.sin(T * 9.0);
     sunMat.uniforms.uI.value = 1.7 * sunI * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.9);   // bright but still a textured sphere, not a clipped white disc
     sunLight.intensity = 18 * ramp(t, 1.9, 2.5);   // brass under a close point light was blooming into a gold wash
+    dirElev = elevOf(camPos);                       // the film's eye as seen from the sun (explorePosed compares against it)
+    dirToS.copy(camPos).sub(S).normalize();
     sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3; sunMat.uniforms.uT.value = t;
     PU.uSunI.value = 1.35 * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.1);
 
@@ -1010,9 +1014,19 @@ export function create(ctx, segment) {
     if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, out, t + segment.start);
   }
   // labels turn to the viewer's camera (the film turns them to its own); the Opticks caption on the prism too
-  const _qp = new THREE.Quaternion();
+  const _qp = new THREE.Quaternion(), _cw = new THREE.Vector3();
+  const elevOf = (p) => Math.asin(clamp((p.y - S.y) / Math.max(1e-3, p.distanceTo(S)), -1, 1));
   function explorePosed(cam) {
     cam.updateMatrixWorld();
+    // the orrery's sun is a point light hanging just above the polished dial and crown gear: seen from off the
+    // film's line of sight (above it most of all), its mirror image on those flat brass faces bloomed into a
+    // white-hot disc — the further the view turns away from the film's, the more the lamp is dimmed
+    if (sunLight.intensity > 0) {
+      _cw.setFromMatrixPosition(cam.matrixWorld);
+      const up = smoothstep(dirElev + 0.08, dirElev + 0.45, elevOf(_cw));
+      const turn = smoothstep(0.12, 0.6, Math.acos(clamp(_cw.sub(S).normalize().dot(dirToS), -1, 1)));
+      sunLight.intensity *= 1 - 0.65 * Math.max(up, turn);
+    }
     for (const l of labels3D) l.quaternion.copy(cam.quaternion);
     if (prism.visible) {
       _qp.copy(prism.quaternion).invert().multiply(cam.quaternion);
