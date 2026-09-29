@@ -51,7 +51,8 @@ export function create(ctx, segment) {
   const chrome = new THREE.MeshStandardMaterial({ color: '#b9bec5', metalness: 1, roughness: 0.14 });
   const walnutTex = surfaceTexture('walnut', 512, 21);
   const walnut = new THREE.MeshPhysicalMaterial({ map: walnutTex, color: '#ffffff', roughness: 0.62, metalness: 0, clearcoat: 0.15, clearcoatRoughness: 0.45, envMapIntensity: 0.45 });
-  const bakelite = new THREE.MeshPhysicalMaterial({ color: '#0d0c0c', roughness: 0.28, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 });
+  // (a very dark brown-black with a lacquer sheen: pure black bakelite read as flat black holes off-axis)
+  const bakelite = new THREE.MeshPhysicalMaterial({ color: '#16110e', roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, sheen: 0.35, sheenRoughness: 0.45, sheenColor: '#4a3a30', envMapIntensity: 1.25 });
   const ironM = new THREE.MeshStandardMaterial({ color: '#4a4f55', metalness: 0.9, roughness: 0.45 });
 
   // =====================================================================================
@@ -98,12 +99,26 @@ export function create(ctx, segment) {
   const wireMat = copper.clone(); wireMat.bumpMap = strandTex; wireMat.bumpScale = 0.6; wireMat.roughnessMap = strandTex;
   const wire = new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 1800, 0.013, 10, false), wireMat);
   scene.add(wire);
+  // the line runs on out of the dark behind the spark's start (it does not begin in mid-air)
+  {
+    const t0 = wireCurve.getTangentAt(0), p0 = wirePts[0];
+    const ext = new THREE.CatmullRomCurve3([p0.clone().addScaledVector(t0, -26).add(V(0, 1.6, 0)), p0.clone().addScaledVector(t0, -12).add(V(0, 0.5, 0)), p0.clone().addScaledVector(t0, -4), p0.clone().addScaledVector(t0, -0.8), p0.clone()], false, 'centripetal');
+    scene.add(new THREE.Mesh(new THREE.TubeGeometry(ext, 300, 0.013, 10, false), wireMat));
+  }
   // coil core (soft iron) + bobbin cheeks
   {
     const { C0, C1, ax, len } = scene.userData.coil;
     const core = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, len * 1.15, 32), ironM);
     core.position.copy(C0).lerp(C1, 0.5); core.quaternion.setFromUnitVectors(V(0, 1, 0), ax); scene.add(core);
     [0, 1].forEach((k) => { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 40), bakelite); ch.position.copy(C0).lerp(C1, k ? 1.02 : -0.02); ch.quaternion.copy(core.quaternion); scene.add(ch); });
+    // the bobbin's inner layers of enamelled winding under the outer turn the spark races along, and the core's
+    // pole faces proud of each cheek
+    const layerTex = canvasTex(64, 256, (x, w, h) => { x.fillStyle = '#7a7a7a'; x.fillRect(0, 0, w, h); for (let i = 0; i < h; i += 4) { x.fillStyle = 'rgba(20,20,20,0.8)'; x.fillRect(0, i, w, 1); x.fillStyle = 'rgba(230,230,230,0.5)'; x.fillRect(0, i + 2, w, 1); } }, { srgb: false });
+    layerTex.wrapS = layerTex.wrapT = THREE.RepeatWrapping; layerTex.repeat.set(6, 3);
+    const enamel = new THREE.MeshPhysicalMaterial({ color: '#8c4a24', metalness: 0.9, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.2, bumpMap: layerTex, bumpScale: 0.5 });
+    const winding = new THREE.Mesh(new THREE.CylinderGeometry(0.148, 0.148, len * 1.0, 48, 1, true), enamel);
+    winding.position.copy(core.position); winding.quaternion.copy(core.quaternion); scene.add(winding);
+    [0, 1].forEach((k) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 32), chrome); pole.position.copy(C0).lerp(C1, k ? 1.085 : -0.085); pole.quaternion.copy(core.quaternion); scene.add(pole); });
   }
   // pulse overlay: additive tube keyed by arc-length distance to the head
   const pulseMat = new THREE.ShaderMaterial({
@@ -174,11 +189,24 @@ export function create(ctx, segment) {
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.028, 24), brass); cap.position.set(-0.42, 0.135, s * 0.12); tele.add(cap);
     });
     // wire from the other post back out
-    const back = new THREE.CatmullRomCurve3([V(-0.42, 0.105, -0.12), V(-0.7, 0.08, -0.25), V(-1.3, 0.2, -0.9), V(-2.5, 0.6, -2.4)]);
-    tele.add(new THREE.Mesh(new THREE.TubeGeometry(back, 120, 0.013, 8), wireMat));
+    // (on out into the dark: it used to stop in mid-air 3 m away)
+    const back = new THREE.CatmullRomCurve3([V(-0.42, 0.105, -0.12), V(-0.7, 0.08, -0.25), V(-1.3, 0.2, -0.9), V(-2.5, 0.6, -2.4), V(-6.5, 1.3, -7), V(-14, 2.2, -16), V(-24, 3, -27)]);
+    tele.add(new THREE.Mesh(new THREE.TubeGeometry(back, 400, 0.013, 8), wireMat));
     // Morse tape strip on the base
     const tapeTex = canvasTex(512, 32, (x, w, h) => { x.fillStyle = '#e9dfc6'; x.fillRect(0, 0, w, h); x.fillStyle = '#2a1d12'; const code = '.-- .... .- - / .... .- - .... / --. --- -.. / .-- .-. --- ..- --. .... -'; let px = 10; for (const ch of code) { if (ch === '.') { x.fillRect(px, 13, 6, 6); px += 14; } else if (ch === '-') { x.fillRect(px, 13, 20, 6); px += 28; } else px += 18; } });
     const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.04), new THREE.MeshStandardMaterial({ map: tapeTex, color: '#6f6a60', roughness: 0.85 })); tape.rotation.x = -Math.PI / 2; tape.position.set(0.05, 0.0765, 0.17); tele.add(tape);
+    // slotted brass screws holding the plate, and the circuit closer: a pivoted switch arm on the side that
+    // shorts the key when the operator is receiving
+    const screwG = new THREE.CylinderGeometry(0.009, 0.009, 0.006, 16), slotG = new THREE.BoxGeometry(0.016, 0.002, 0.002);
+    for (const [x, z] of [[-0.37, -0.05], [-0.37, 0.05], [0.37, -0.05], [0.37, 0.05], [0.14, 0.05], [0.14, -0.05]]) {
+      const sc = new THREE.Mesh(screwG, brass); sc.position.set(x, 0.088, z); tele.add(sc);
+      const sl = new THREE.Mesh(slotG, walnut); sl.position.set(x, 0.0912, z); sl.rotation.y = x * 7; tele.add(sl);
+    }
+    const ccPost = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, 0.03, 20), brass); ccPost.position.set(0.12, 0.09, -0.16); tele.add(ccPost);
+    const ccArm = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.008, 0.026, 2, 0.003), brass); ccArm.position.set(0.2, 0.108, -0.14); ccArm.rotation.y = -0.25; tele.add(ccArm);
+    const ccKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.02, 16), bakelite); ccKnob.position.set(0.29, 0.118, -0.115); tele.add(ccKnob);
+    const ccContact = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.022, 16), brass); ccContact.position.set(0.3, 0.09, -0.12); tele.add(ccContact);
+    const ccPin = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.03, 10), chrome); ccPin.position.set(0.12, 0.112, -0.16); tele.add(ccPin);
   }
   const contactGlow = glowSprite({ color: '#cfe6ff', intensity: 3, scale: 0.12 }); contactGlow.position.set(0.24, 0.14, 0).add(TG); scene.add(contactGlow);
   const LEVER_C = TG.clone().add(V(0.06, 0.2, 0)); // silhouette centre used for the match cut
@@ -237,6 +265,14 @@ export function create(ctx, segment) {
     // coiled cord
     const cc = []; for (let i = 0; i <= 400; i++) { const f = i / 400, a = f * 28 * TAU; const base = V(-0.29 + f * -0.06, 0.18 - f * 0.17, -0.02 - f * 0.14); cc.push(base.add(V(Math.cos(a) * 0.012, Math.sin(a) * 0.012, Math.sin(a + 1) * 0.004))); }
     phone.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cc), 1200, 0.004, 6), bakelite));
+    // the handset cord's end runs into the side of the base through a strain-relief grommet; the line cord
+    // leaves the back and trails away across the desk
+    const cordM = new THREE.MeshStandardMaterial({ color: '#2a2320', roughness: 0.7, metalness: 0 });
+    const cEnd = cc[cc.length - 1];
+    phone.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([cEnd.clone(), cEnd.clone().add(V(0.02, -0.004, 0.02)), V(-0.26, 0.012, -0.1), V(-0.2, 0.03, -0.08)]), 40, 0.0045, 8), cordM));
+    const grom = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.013, 0.02, 16).rotateZ(Math.PI / 2), bakelite); grom.position.set(-0.195, 0.03, -0.08); phone.add(grom);
+    phone.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(0.08, 0.03, -0.215), V(0.1, 0.01, -0.3), V(0.16, 0.004, -0.6), V(0.4, 0.004, -1.2), V(0.9, 0.004, -2.4)]), 80, 0.005, 8), cordM));
+    const grom2 = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.014, 0.02, 16).rotateX(Math.PI / 2), bakelite); grom2.position.set(0.08, 0.03, -0.215); phone.add(grom2);
   }
   const DIAL_W = PH.clone().add(dialC); // world dial centre
   const DIAL_N = dialN.clone();
@@ -303,6 +339,19 @@ export function create(ctx, segment) {
     });
     const xfmr = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.09, 0.08), ironM); xfmr.position.set(0.24, 0.3, 0.06); radio.add(xfmr);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 24), new THREE.MeshStandardMaterial({ color: '#b8bdc4', metalness: 1, roughness: 0.3 })); cap.position.set(-0.24, 0.3, 0.07); radio.add(cap);
+    // loudspeaker behind the grille cloth (paper cone, pressed-steel frame, field coil at the back) on a
+    // baffle bracket, and the wiring: speaker leads down to the output transformer, a lead to each tube's cap
+    const spk = new THREE.Group(); spk.position.set(0, GY, RDP / 2 - 0.06); radio.add(spk);
+    const coneG = new THREE.LatheGeometry([[0.03, -0.07], [0.06, -0.055], [0.11, -0.03], [0.165, -0.008], [0.178, 0]].map(([x, y]) => new THREE.Vector2(x, y)), 48).rotateX(Math.PI / 2);
+    spk.add(new THREE.Mesh(coneG, new THREE.MeshStandardMaterial({ color: '#6b5a44', roughness: 0.95, side: THREE.DoubleSide })));
+    const frameM = new THREE.MeshStandardMaterial({ color: '#4a4d52', metalness: 0.85, roughness: 0.5 });
+    spk.add(new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.008, 8, 64), frameM));
+    for (let k = 0; k < 4; k++) { const a = (k / 4) * TAU + Math.PI / 4, arm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.16, 0.006), frameM); arm.position.set(Math.cos(a) * 0.11, Math.sin(a) * 0.11, -0.045); arm.rotation.set(0.5 * Math.sin(a), -0.5 * Math.cos(a), a - Math.PI / 2); spk.add(arm); }
+    const fieldCoil = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 24).rotateX(Math.PI / 2), frameM); fieldCoil.position.z = -0.09; spk.add(fieldCoil);
+    const dustCap = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 8, 0, TAU, 0, Math.PI / 2).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#4a3e30', roughness: 0.9 })); dustCap.position.z = -0.066; spk.add(dustCap);
+    const leadM = new THREE.MeshStandardMaterial({ color: '#7a2a1a', roughness: 0.6 }), leadM2 = new THREE.MeshStandardMaterial({ color: '#22303a', roughness: 0.6 });
+    [[-0.012, leadM], [0.012, leadM2]].forEach(([dx, m]) => radio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(dx, GY - 0.02, RDP / 2 - 0.17), V(dx + 0.05, GY - 0.12, 0.02), V(0.2 + dx, 0.36, 0.06), V(0.24 + dx, 0.345, 0.06)]), 40, 0.003, 6), m)));
+    tubeSpots.forEach(([x, z, h], i) => { if (i % 2) return; radio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(x, 0.25 + 0.02 + h + 0.03, z), V(x, 0.25 + h + 0.09, z - 0.02), V(x * 0.5, 0.25 + h + 0.06, -0.12), V(-0.24, 0.35, 0.07)]), 30, 0.0025, 6), leadM2)); });
   }
   const TUBE0 = tubes[2];
   TUBE0.gl2.scale.setScalar(0.1); TUBE0.gl2.material.color.multiplyScalar(1.8);
