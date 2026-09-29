@@ -55,6 +55,33 @@ the drone in `src/core/live.js`, the score in `src/audio/ambient.js`; `engine.cl
 typography. None of it runs unless Experience mode is on, so the film and offline renders are
 unchanged.
 
+### VR and AR (WebXR)
+
+**Watch in VR** rides the director's camera in a headset; **View in AR** turns the current shot
+into a tabletop diorama in your room. The buttons (start screen and player bar) appear only where
+the browser offers a WebXR session: **VR** on Meta Quest Browser, Pico, Apple Vision Pro (visionOS 2
+Safari, `immersive-vr`) and desktop Chrome/Edge with a headset; **AR** on Android Chrome with ARCore
+and Quest 3 passthrough. iPhone Safari has no WebXR, so the buttons stay hidden there. WebXR needs
+a secure page (https or `localhost`) and is blocked inside embedded viewers such as the claude.ai
+artifact frame: open the film from its own address (e.g. GitHub Pages). `#vr` / `#ar` (also
+`?vr` / `?ar`) put the button forward on the start screen; a tap still starts the session.
+
+- **VR**: the soundtrack (or Experience mode's clock) keeps time. Your viewpoint follows the
+  director's camera level (heading only, no pitch or roll) through a critically damped ~0.6 s
+  glide; cuts and chapter changes dip to black and snap. World scale adapts per shot so the subject
+  stands 1.5–30 m away. The film's 3D headings, HUD captions and chapter titles float on a panel
+  3 m ahead. Trigger / pinch: play or pause · A / X: play or pause · thumbstick left/right: seek 5 s ·
+  grip (or Esc): exit.
+- **AR**: point at a table (reticle), tap or pull the trigger to place the model, tap again to move
+  it. The shot's subject (found by a small depth probe of the director's view) sits in an octagonal
+  vitrine ~0.5 m across on a plinth; everything outside is clipped, sky, backdrops and haze step
+  aside, and the model turns as the director's camera orbits. On phones an overlay has play/pause
+  and exit.
+
+Bloom, depth of field and the grade do not run in XR (the scene is rendered straight to the
+headset with ACES tone mapping). Code: `src/core/xr.js`; nothing in it runs unless a session is
+active, so the film and offline renders are unchanged.
+
 ## Render the MP4s
 
 ```bash
