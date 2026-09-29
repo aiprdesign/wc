@@ -4,23 +4,49 @@
 import * as THREE from 'three';
 const fsVert = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
+// Ambient-occlusion lookup shared by the DOF pass and the AO apply pass. tAO is half resolution,
+// pre-blurred (x = openness, y = linear depth). Joint-bilateral upsample: of the four nearest AO
+// texels, trust the ones whose depth matches this pixel, so silhouettes stay clean.
+const AO_UP = /* glsl */ `
+    float aoUp(vec2 uv, float z){
+      vec2 aoRes = floor(uResolution * 0.5 + 0.5);
+      vec2 st = uv * aoRes - 0.5; vec2 i0 = floor(st), f = st - i0;
+      float acc = 0.0, ws = 0.0;
+      for (int k = 0; k < 4; k++) {
+        vec2 o = vec2(float(k - (k / 2) * 2), float(k / 2));
+        vec2 a = texture2D(tAO, (i0 + o + 0.5) / aoRes).xy;
+        float wb = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
+        float w = (wb + 1e-3) / (1e-3 + abs(a.y - z) / max(z, 1e-4) * 40.0);
+        acc += a.x * w; ws += w;
+      }
+      return ws > 0.0 ? acc / ws : 1.0;
+    }
+    // occlusion only darkens ambient-lit surfaces: light sources and hot emissives keep their energy
+    float aoFactor(vec3 c, float ao){ return mix(ao, 1.0, smoothstep(1.2, 5.0, dot(c, vec3(0.2126, 0.7152, 0.0722)))); }
+    vec3 applyAO(vec3 c, float ao){ return c * aoFactor(c, ao); }
+`;
+
 // ---------------------------------------------------------------------------
 // Depth of field — gather blur on a golden-angle spiral, CoC from linear depth.
 export const DofShader = {
   uniforms: {
     tColor: { value: null }, tDepth: { value: null }, uNear: { value: 0.1 }, uFar: { value: 100 },
     uFocus: { value: 5 }, uRange: { value: 2 }, uMaxBlur: { value: 10 }, uResolution: { value: null },
+    tAO: { value: null }, uAOOn: { value: 0 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
-    uniform sampler2D tColor, tDepth; uniform float uNear, uFar, uFocus, uRange, uMaxBlur; uniform vec2 uResolution;
+    uniform sampler2D tColor, tDepth, tAO; uniform float uNear, uFar, uFocus, uRange, uMaxBlur, uAOOn; uniform vec2 uResolution;
     varying vec2 vUv;
     float linDepth(vec2 uv){ float d = texture2D(tDepth, uv).x; float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
     float coc(float z){ return clamp(abs(z - uFocus) / uRange, 0.0, 1.0); }
+    ${AO_UP}
     void main(){
-      float c0 = coc(linDepth(vUv));
+      float z0 = linDepth(vUv);
+      float c0 = coc(z0);
       vec4 base = texture2D(tColor, vUv);
       if (any(isnan(base.rgb)) || any(isinf(base.rgb))) base = vec4(0.0, 0.0, 0.0, 1.0);
+      if (uAOOn > 0.5) base.rgb = applyAO(base.rgb, aoUp(vUv, z0));
       if (c0 * uMaxBlur < 0.5) { gl_FragColor = base; return; }
       vec2 px = 1.0 / uResolution;
       vec3 acc = base.rgb; float wsum = 1.0;
@@ -34,10 +60,122 @@ export const DofShader = {
         float w = smoothstep(r - 0.15, r, max(cs, c0 * 0.5)); // limit sharp foreground bleeding
         vec3 s = texture2D(tColor, suv).rgb;
         if (any(isnan(s)) || any(isinf(s))) { s = vec3(0.0); w = 0.0; }
+        if (uAOOn > 0.5) s = applyAO(s, texture2D(tAO, suv).x);
         w *= 1.0 + dot(s, vec3(0.3)) * 0.6;                    // bokeh highlight bias
         acc += s * w; wsum += w;
       }
       gl_FragColor = vec4(acc / wsum, base.a);
+    }`,
+};
+
+// ---------------------------------------------------------------------------
+// Screen-space ambient occlusion from the scene's own depth buffer (no extra geometry pass).
+// Normals are reconstructed from depth; the sampling radius is a fixed fraction of the frame
+// (scale-free, so the same settings work for a microchip and a lunar plain). Output at half
+// resolution: x = openness (1 = unoccluded), y = linear depth for the bilateral blur/upsample.
+export const AoShader = {
+  uniforms: {
+    tDepth: { value: null }, uNear: { value: 0.1 }, uFar: { value: 100 }, uProj: { value: new THREE.Vector4(1, 1, 0, 0) },
+    uRadius: { value: 0.035 }, uIntensity: { value: 1 }, uDepthRes: { value: new THREE.Vector2(1, 1) }, uAspect: { value: 1 },
+    uSeed: { value: 0 },
+  },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDepth; uniform float uNear, uFar, uRadius, uIntensity, uAspect, uSeed; uniform vec4 uProj; uniform vec2 uDepthRes;
+    varying vec2 vUv;
+    float rawD(vec2 uv){ return texture2D(tDepth, uv).x; }
+    float linZ(float d){ float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
+    vec3 viewPos(vec2 uv, float z){ vec2 n = uv * 2.0 - 1.0; return vec3((n.x + uProj.z) * z / uProj.x, (n.y + uProj.w) * z / uProj.y, -z); }
+    vec3 posAt(vec2 uv){ return viewPos(uv, linZ(rawD(uv))); }
+    void main(){
+      float d0 = rawD(vUv);
+      if (d0 >= 0.99999) { gl_FragColor = vec4(1.0, uFar, 0.0, 1.0); return; }   // sky / empty space
+      float z0 = linZ(d0);
+      vec3 P = viewPos(vUv, z0);
+      // normal from depth: of the two one-sided differences take the smaller (no smearing across silhouettes)
+      vec2 tx = vec2(1.0 / uDepthRes.x, 0.0), ty = vec2(0.0, 1.0 / uDepthRes.y);
+      vec3 pr = posAt(vUv + tx) - P, pl = P - posAt(vUv - tx);
+      vec3 pu = posAt(vUv + ty) - P, pd = P - posAt(vUv - ty);
+      vec3 dx = abs(pr.z) < abs(pl.z) ? pr : pl, dy = abs(pu.z) < abs(pd.z) ? pu : pd;
+      vec3 N = normalize(cross(dx, dy));
+      if (dot(N, P) > 0.0) N = -N;
+      // world radius that spans uRadius of the frame height at this depth
+      float R = uRadius * 2.0 * z0 / uProj.y;
+      vec2 rUV = vec2(uRadius / uAspect, uRadius);
+      // interleaved gradient noise rotates the spiral per pixel (the blur pass removes the pattern)
+      float phi = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy + uSeed * 7.13, vec2(0.06711056, 0.00583715))));
+      const int K = 14; const float GA = 2.39996323;
+      float occ = 0.0;
+      for (int i = 0; i < K; i++) {
+        float fr = (float(i) + 0.5) / float(K);
+        float a = float(i) * GA + phi;
+        vec2 suv = vUv + vec2(cos(a), sin(a)) * rUV * mix(0.04, 1.0, fr * fr);   // denser near the centre: contact detail
+        if (suv.x < 0.0 || suv.y < 0.0 || suv.x > 1.0 || suv.y > 1.0) continue;
+        float ds = rawD(suv);
+        if (ds >= 0.99999) continue;
+        vec3 v = viewPos(suv, linZ(ds)) - P;
+        float L = length(v);
+        float fall = clamp(1.0 - (L * L) / (R * R), 0.0, 1.0);
+        occ += max(0.0, dot(v, N) / max(L, 1e-5) - 0.12) * fall;
+      }
+      float ao = clamp(1.0 - uIntensity * 2.2 * occ / float(K), 0.0, 1.0);
+      // fade out towards the far plane (distant haze is not contact-shadowed)
+      ao = mix(ao, 1.0, smoothstep(uFar * 0.35, uFar * 0.8, z0));
+      gl_FragColor = vec4(ao, z0, 0.0, 1.0);
+    }`,
+};
+
+// Depth-aware blur of the raw occlusion (removes the per-pixel rotation pattern, keeps silhouettes).
+export const AoBlurShader = {
+  uniforms: { tAO: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tAO; uniform vec2 uTexel;
+    varying vec2 vUv;
+    void main(){
+      vec2 c = texture2D(tAO, vUv).xy;
+      float acc = 0.0, ws = 0.0;
+      for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
+        vec2 s = texture2D(tAO, vUv + vec2(float(x), float(y)) * uTexel).xy;
+        float w = exp(-float(x * x + y * y) * 0.18) / (1.0 + abs(s.y - c.y) / max(c.y, 1e-4) * 60.0);
+        acc += s.x * w; ws += w;
+      }
+      gl_FragColor = vec4(acc / ws, c.y, 0.0, 1.0);
+    }`,
+};
+
+// AO applied in place (no depth of field): drawn over the multisampled plate with multiplicative
+// blending, so headings and edges drawn afterwards keep their MSAA.
+export const AoApplyShader = {
+  uniforms: {
+    tColor: { value: null }, tDepth: { value: null }, tAO: { value: null },
+    uNear: { value: 0.1 }, uFar: { value: 100 }, uResolution: { value: null },
+  },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tColor, tDepth, tAO; uniform float uNear, uFar; uniform vec2 uResolution;
+    varying vec2 vUv;
+    float linDepth(vec2 uv){ float d = texture2D(tDepth, uv).x; float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
+    ${AO_UP}
+    void main(){
+      vec3 c = texture2D(tColor, vUv).rgb;
+      if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
+      float k = texture2D(tDepth, vUv).x >= 0.99999 ? 1.0 : aoFactor(c, aoUp(vUv, linDepth(vUv)));
+      gl_FragColor = vec4(vec3(k), 1.0);
+    }`,
+};
+
+// Motion-blur accumulation: adds one sub-frame (linear HDR) with weight uWeight (additive blend).
+export const AccumShader = {
+  uniforms: { tInput: { value: null }, uWeight: { value: 1 } },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tInput; uniform float uWeight;
+    varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tInput, vUv).rgb;
+      if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
+      gl_FragColor = vec4(min(c, vec3(64.0)) * uWeight, uWeight);
     }`,
 };
 
@@ -143,12 +281,21 @@ export const FinalShader = {
     tInput: { value: null }, uExposure: { value: 1 }, uWarmth: { value: 1 }, uTime: { value: 0 },
     uGrain: { value: 0.05 }, uVignette: { value: 0.55 }, uCA: { value: 0.0025 }, uFade: { value: 1 },
     uResolution: { value: null }, uAspect: { value: 2.39 }, uHarmony: { value: 0.85 },
+    uSS: { value: 1 }, uSrcTexel: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
     uniform float uHarmony;
-    uniform sampler2D tInput; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect; uniform vec2 uResolution;
+    uniform sampler2D tInput; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
     varying vec2 vUv;
+    // supersampled input (uSS > 1): a separable (1,3,3,1) tent over the source texels under this
+    // output pixel — four bilinear taps, smoother than a box and free of ringing
+    vec3 samp(vec2 uv){
+      if (uSS < 1.01) return texture2D(tInput, uv).rgb;
+      vec2 o = uSrcTexel * 0.375 * uSS;
+      return 0.25 * (texture2D(tInput, uv + vec2(-o.x, -o.y)).rgb + texture2D(tInput, uv + vec2(o.x, -o.y)).rgb
+                   + texture2D(tInput, uv + vec2(-o.x, o.y)).rgb + texture2D(tInput, uv + vec2(o.x, o.y)).rgb);
+    }
     vec3 RRTAndODTFit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
     vec3 aces(vec3 c){
       const mat3 inM = mat3(0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777);
@@ -189,7 +336,7 @@ export const FinalShader = {
       float r2 = dot(d * vec2(uAspect, 1.0), d * vec2(uAspect, 1.0));
       // radial chromatic aberration (stronger towards edges)
       vec2 ca = d * uCA * (0.4 + r2 * 1.5);
-      vec3 col = vec3(texture2D(tInput, uv + ca).r, texture2D(tInput, uv).g, texture2D(tInput, uv - ca).b);
+      vec3 col = vec3(samp(uv + ca).r, samp(uv).g, samp(uv - ca).b);
       if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
       col *= uExposure;
       // era colour temperature before tonemapping (white balance)
@@ -213,7 +360,17 @@ export const FinalShader = {
       col *= uFade;
       col = toSRGB(clamp(col, 0.0, 1.0));
       // film grain (luma-weighted, animated) + dither
-      float g = hash(vec3(uv * uResolution, floor(uTime * 24.0))) - 0.5;
+      // grain has a physical size: one cell per pixel up to 1080 lines, then it grows with the
+      // resolution (smoothly interpolated) so a 4K master has the same texture as the HD one
+      float gs = max(1.0, uResolution.y / 1080.0), gf = floor(uTime * 24.0);
+      float g;
+      if (gs < 1.01) g = hash(vec3(uv * uResolution, gf)) - 0.5;
+      else {
+        vec2 gp = uv * uResolution / gs, gi = floor(gp), gq = gp - gi; gq = gq * gq * (3.0 - 2.0 * gq);
+        g = mix(mix(hash(vec3(gi, gf)), hash(vec3(gi + vec2(1.0, 0.0), gf)), gq.x),
+                mix(hash(vec3(gi + vec2(0.0, 1.0), gf)), hash(vec3(gi + 1.0, gf)), gq.x), gq.y) - 0.5;
+        g *= 1.35;   // interpolation lowers the variance; restore the look's strength
+      }
       col += g * uGrain * (0.25 + 0.75 * smoothstep(0.0, 0.12, l)) * (1.0 - l * 0.6);
       col += (hash(vec3(uv * uResolution + 17.0, uTime)) - 0.5) / 255.0;
       gl_FragColor = vec4(col, 1.0);

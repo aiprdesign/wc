@@ -27,7 +27,15 @@ async function loadScore() {
 }
 
 async function boot() {
-  const engine = new Engine($('film'), { maxWidth: QUALITY[params.get('q')] ?? QUALITY.medium });
+  // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion and
+  // finer shadows. ?ss=2 supersamples (renders at 2× and filters down), ?ao=0/1 overrides AO.
+  const quality = QUALITY[params.get('q')] ? params.get('q') : 'medium';
+  const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
+  const engine = new Engine($('film'), {
+    maxWidth: QUALITY[quality], quality,
+    supersample: Math.max(1, Math.min(4, parseFloat(params.get('ss') ?? '1') || 1)),
+    fx: { ao: flag('ao'), shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined },
+  });
   window.__film = { engine };
   setStatus('Loading typography…');
   await loadFonts();
@@ -61,8 +69,10 @@ async function boot() {
   window.__film.explore = (filmT, view) => { explorer.view(filmT, view); return filmT; };   // automation: explore views
   window.__film.exploreExit = () => explorer.exit();
   // Deterministic frame access for automated rendering / screenshots.
-  window.__film.renderFrame = (T) => { engine.render(T, 1 / 30); return T; };            // film seconds
-  window.__film.renderStory = (t) => { engine.render(t * TIME_SCALE, 1 / 30); return t; };  // story seconds
+  // opts: { motionBlur: N sub-frames (0/1 = off), fps: frame rate the shutter is timed against (30) }
+  const frameOpts = (o = {}) => [1 / (o.fps || 30), { motionBlur: o.motionBlur ?? 0 }];
+  window.__film.renderFrame = (T, o) => { engine.render(T, ...frameOpts(o)); return T; };             // film seconds
+  window.__film.renderStory = (t, o) => { engine.render(t * TIME_SCALE, ...frameOpts(o)); return t; };  // story seconds
 
   const start = (parseFloat(params.get('t') ?? '0') || 0) * TIME_SCALE;   // ?t= is story time
   player.time = start;

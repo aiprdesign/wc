@@ -1,13 +1,16 @@
 // Film engine: owns the renderer, instantiates every sequence up front, and
 // renders any global time T deterministically:
-//   sequence(s) → HDR render targets → depth of field → transition composite
-//   → bloom → final grade.
+//   sequence(s) → HDR render targets → ambient occlusion + depth of field → transition composite
+//   → bloom → [motion-blur accumulation] → final grade (+ supersample downscale).
+// Realism options (constructor `fx`, see main.js): quality 'high'/'ultra' enables screen-space AO
+// and doubles shadow-map resolution; `supersample` renders internally at N× and filters down in the
+// grade; render(T, dt, { motionBlur: N }) integrates N sub-frames over a 180° shutter (offline).
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { SEGMENTS, DURATION, TIME_SCALE, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
-import { DofShader, TransitionShader, FinalShader, TRANSITION_MODES } from './post.js';
+import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApplyShader, AccumShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
@@ -19,17 +22,25 @@ const shaderMat = (def) => new THREE.ShaderMaterial({
 });
 
 export class Engine {
-  constructor(canvas, { maxWidth = 1920, pixelRatio = Math.min(window.devicePixelRatio || 1, 2) } = {}) {
+  constructor(canvas, { maxWidth = 1920, pixelRatio = Math.min(window.devicePixelRatio || 1, 2), quality = 'medium', supersample = 1, fx = {} } = {}) {
     this.canvas = canvas;
     this.maxWidth = maxWidth;
     this.pixelRatio = pixelRatio;
+    const hq = quality === 'high' || quality === 'ultra';
+    // realism features: heavy ones only at high quality (real-time at medium stays as it was)
+    this.fx = {
+      ao: fx.ao ?? hq,                              // screen-space ambient occlusion
+      shadowScale: fx.shadowScale ?? (hq ? 2 : 1),  // shadow-map resolution multiplier
+      shutter: fx.shutter ?? 180,                   // motion-blur shutter angle (degrees)
+    };
+    this.supersample = Math.max(1, Math.min(4, supersample || 1));
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;       // tone mapping happens in the final grade
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.autoClear = false;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;   // r186: soft Vogel-disk PCF (honours shadow.radius)
     this.instances = new Map();
     this.width = 2; this.height = 1;
     this.lastT = 0;
@@ -67,6 +78,7 @@ export class Engine {
       try {
         const dur = seg.end - seg.start;
         for (const u of [0, dur * 0.5, dur]) inst.update(u, this.info(seg.start + u, seg, 0));
+        this.upgradeShadows(inst);
         await r.compileAsync(inst.scene, inst.camera);
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
@@ -74,6 +86,25 @@ export class Engine {
     }
     // 3D chapter words live inside each sequence's scene (built after every scene exists)
     this.words3d = new Words3D(this);
+  }
+
+  // High quality: sharper, cleaner shadows. Each shadow-casting light's map is enlarged (capped at
+  // 4096 / the GPU limit) and its PCF radius widened in proportion, so penumbrae keep their size
+  // in the world but lose the stair-stepping and shimmer of coarse texels.
+  upgradeShadows(inst) {
+    const k = this.fx.shadowScale;
+    if (!(k > 1)) return;
+    const cap = Math.min(4096, this.renderer.capabilities.maxTextureSize);
+    inst.scene.traverse((o) => {
+      if (!o.isLight || !o.castShadow || !o.shadow || o.shadow._upgraded) return;
+      const sz = o.shadow.mapSize;
+      const n = Math.min(cap, sz.x * k), m = Math.min(cap, sz.y * k);
+      const f = n / sz.x;
+      sz.set(n, m);
+      o.shadow.radius = (o.shadow.radius ?? 1) * Math.max(1, f * 0.75);
+      o.shadow.map?.dispose(); o.shadow.map = null;
+      o.shadow._upgraded = true;
+    });
   }
 
   // Fit the canvas to the window at the film aspect (letterbox / pillarbox via CSS).
@@ -91,37 +122,66 @@ export class Engine {
   // Drop render resolution one step (used when the GPU can't hold frame rate).
   degrade() {
     const steps = [1920, 1600, 1280, 1024, 800];
-    const next = steps.find((s) => s < this.width);
+    const next = steps.find((s) => s < this.outW);
     if (!next) return false;
     this.maxWidth = next;
     this.resize();
-    console.info(`[engine] render width lowered to ${this.width}px to keep playback smooth`);
+    console.info(`[engine] render width lowered to ${this.outW}px to keep playback smooth`);
     return true;
   }
 
-  setSize(w, h) {
-    if (w === this.width && h === this.height && this.rtA) return;
+  // (w, h) is the delivered canvas size; with supersampling every internal target is N× larger and
+  // `width`/`height` (what scenes see as the render-target size) are the internal size.
+  setSize(ow, oh) {
+    if (ow === this.outW && oh === this.outH && this.rtA) return;
+    this.outW = ow; this.outH = oh;
+    const lim = Math.min(this.renderer.capabilities.maxTextureSize, 8192);
+    const ss = Math.max(1, Math.min(this.supersample, lim / Math.max(ow, oh)));
+    const w = Math.round(ow * ss), h = Math.round(oh * ss);
+    this.ss = w / ow;
     this.width = w; this.height = h;
     this.renderer.setPixelRatio(1);
-    this.renderer.setSize(w, h, false);
-    const mkRT = (depth, samples) => {
-      const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples, colorSpace: THREE.LinearSRGBColorSpace });
-      if (depth) { rt.depthTexture = new THREE.DepthTexture(w, h); rt.depthTexture.type = THREE.UnsignedIntType; }
+    this.renderer.setSize(ow, oh, false);
+    const mkRT = (depth, samples, W = w, H = h) => {
+      const rt = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples, colorSpace: THREE.LinearSRGBColorSpace });
+      if (depth) { rt.depthTexture = new THREE.DepthTexture(W, H); rt.depthTexture.type = THREE.UnsignedIntType; }
       return rt;
     };
-    [this.rtA, this.rtB, this.dofA, this.dofB, this.comp].forEach((rt) => rt?.dispose());
-    this.rtA = mkRT(true, 4); this.rtB = mkRT(true, 4);
+    [this.rtA, this.rtB, this.dofA, this.dofB, this.comp, this.accum, this.aoRaw, this.aoBlur].forEach((rt) => rt?.dispose());
+    this.accum = null;   // motion-blur buffer: created on first use
+    const msaa = this.ss >= 2 ? 2 : 4;   // supersampling already resolves edges; spare the memory
+    this.rtA = mkRT(true, msaa); this.rtB = mkRT(true, msaa);
     this.dofA = mkRT(false, 0); this.dofB = mkRT(false, 0); this.comp = mkRT(false, 0);
+    const aw = Math.max(1, Math.round(w / 2)), ah = Math.max(1, Math.round(h / 2));
+    this.aoRaw = mkRT(false, 0, aw, ah); this.aoBlur = mkRT(false, 0, aw, ah);
 
     if (!this.dofQuad) {
       this.dofQuad = new FullScreenQuad(shaderMat(DofShader));
       this.transQuad = new FullScreenQuad(shaderMat(TransitionShader));
       this.finalQuad = new FullScreenQuad(shaderMat(FinalShader));
+      this.aoQuad = new FullScreenQuad(shaderMat(AoShader));
+      this.aoBlurQuad = new FullScreenQuad(shaderMat(AoBlurShader));
+      const ap = shaderMat(AoApplyShader);   // multiplies the plate in place: dst * src
+      Object.assign(ap, { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor });
+      this.aoApplyQuad = new FullScreenQuad(ap);
+      const am = shaderMat(AccumShader);
+      Object.assign(am, { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
+      this.accumQuad = new FullScreenQuad(am);
       this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.7, 0.55, 0.82);
     }
     this.bloom.setSize(w, h);
     this.dofQuad.material.uniforms.uResolution.value = new THREE.Vector2(w, h);
-    this.finalQuad.material.uniforms.uResolution.value = new THREE.Vector2(w, h);
+    this.dofQuad.material.uniforms.tAO.value = this.aoBlur.texture;
+    this.aoApplyQuad.material.uniforms.tAO.value = this.aoBlur.texture;
+    this.aoApplyQuad.material.uniforms.uResolution.value = new THREE.Vector2(w, h);
+    this.aoQuad.material.uniforms.uDepthRes.value.set(w, h);
+    this.aoQuad.material.uniforms.uAspect.value = w / h;
+    this.aoBlurQuad.material.uniforms.uTexel.value.set(1 / aw, 1 / ah);
+    this.aoBlurQuad.material.uniforms.tAO.value = this.aoRaw.texture;
+    const fu = this.finalQuad.material.uniforms;
+    fu.uResolution.value = new THREE.Vector2(ow, oh);
+    fu.uSS.value = this.ss;
+    fu.uSrcTexel.value.set(1 / w, 1 / h);
     this.finalQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
     this.transQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
   }
@@ -195,10 +255,21 @@ export class Engine {
     // lens, so they never intersect scene geometry and are never blurred by the scene's focus
     const drawWords = (target) => { if (ex) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
     let out = rt;
-    if (dof && dof.amount > 0.01 && !ex) {
+    const useDof = dof && dof.amount > 0.01 && !ex;
+    const useAO = this.renderAO(inst, rt, cam);
+    if (useAO && !useDof) {
+      // no depth of field: darken the multisampled plate in place (it is read through its resolved
+      // texture, which is not attached to the multisample framebuffer being drawn)
+      const au = this.aoApplyQuad.material.uniforms;
+      au.tColor.value = rt.texture; au.tDepth.value = rt.depthTexture;
+      au.uNear.value = cam.near; au.uFar.value = cam.far;
+      r.setRenderTarget(rt);
+      this.aoApplyQuad.render(r);
+    } else if (useDof) {
       const u = this.dofQuad.material.uniforms;
       u.tColor.value = rt.texture; u.tDepth.value = rt.depthTexture;
       u.uNear.value = inst.camera.near; u.uFar.value = inst.camera.far;
+      u.uAOOn.value = useAO ? 1 : 0;
       u.uFocus.value = dof.focus; u.uRange.value = dof.range ?? 2; u.uMaxBlur.value = dof.amount * (this.width / FILM_ASPECT / 800) * 14;
       r.setRenderTarget(dofRT);
       this.dofQuad.render(r);
@@ -210,8 +281,93 @@ export class Engine {
     return out.texture;
   }
 
+  // Screen-space ambient occlusion of the plate just rendered into rt (lens already applied).
+  // Sequences can tune it with `inst.ao = { intensity, radius }` or opt out with `inst.ao = false`.
+  renderAO(inst, rt, cam) {
+    if (!this.fx.ao || inst.ao === false || !cam.isPerspectiveCamera) return false;
+    const o = inst.ao ?? {};
+    const intensity = o.intensity ?? 0.85;
+    if (!(intensity > 0)) return false;
+    const r = this.renderer, u = this.aoQuad.material.uniforms, e = cam.projectionMatrix.elements;
+    u.tDepth.value = rt.depthTexture;
+    u.uNear.value = cam.near; u.uFar.value = cam.far;
+    u.uProj.value.set(e[0], e[5], e[8], e[9]);
+    u.uRadius.value = o.radius ?? 0.035;
+    u.uIntensity.value = intensity;
+    u.uSeed.value = this._aoSeed ?? 0;
+    r.setRenderTarget(this.aoRaw);
+    this.aoQuad.render(r);
+    r.setRenderTarget(this.aoBlur);
+    this.aoBlurQuad.render(r);
+    return true;
+  }
+
   // T is film time (seconds of the delivered film); everything inside runs on story time.
-  render(filmT, filmDt = 1 / 60) {
+  // opts.motionBlur = N (offline): integrate N sub-frames across the shutter (fx.shutter degrees of
+  // the frame interval filmDt, centred on filmT) in linear HDR, then grade once. Sub-frames that
+  // fall across a hard camera cut are dropped, so a cut never double-exposes.
+  render(filmT, filmDt = 1 / 60, opts = {}) {
+    const N = Math.max(1, Math.floor(opts.motionBlur ?? 0));
+    if (N <= 1 || this.explore?.active || !(filmDt > 0)) {
+      this._aoSeed = 0;
+      const g = this.composite(filmT, filmDt);
+      this.grade(this.comp.texture, g);
+      return;
+    }
+    const open = (this.fx.shutter / 360) * filmDt;
+    let times = Array.from({ length: N }, (_, i) => filmT + ((i + 0.5) / N - 0.5) * open);
+    times = this.dropCuts(times, filmT);
+    if (!this.accum) this.accum = new THREE.WebGLRenderTarget(this.width, this.height, { type: THREE.HalfFloatType, colorSpace: THREE.LinearSRGBColorSpace });
+    const r = this.renderer, au = this.accumQuad.material.uniforms;
+    r.setRenderTarget(this.accum);
+    r.setClearColor(0x000000, 0);
+    r.clear(true, false, false);
+    let exposure = 0, harmony = 0;
+    times.forEach((t, i) => {
+      this._aoSeed = i;   // a different (deterministic) AO rotation per sub-frame: noise integrates away
+      const g = this.composite(t, open / times.length);
+      exposure += g.exposure / times.length; harmony += g.harmony / times.length;
+      au.tInput.value = this.comp.texture; au.uWeight.value = 1 / times.length;
+      r.setRenderTarget(this.accum);
+      this.accumQuad.render(r);
+    });
+    this._aoSeed = 0;
+    this.grade(this.accum.texture, { T: filmT / TIME_SCALE, exposure, harmony });
+  }
+
+  // Motion-blur helper: poses each sub-frame's owning camera (sequences are pure functions of
+  // time) and keeps only the contiguous run of samples around filmT without a pose discontinuity.
+  dropCuts(times, filmT) {
+    if (times.length < 3) return times;
+    const pose = times.map((ft) => {
+      const T = ft / TIME_SCALE, inst = this.mainInstance(T), cam = inst.camera;
+      try { inst.update(T - inst.segment.start, this.info(T, inst.segment, 0)); } catch { /* reported by render */ }
+      cam.updateMatrixWorld(true);
+      const p = new THREE.Vector3(), q = new THREE.Quaternion();
+      cam.matrixWorld.decompose(p, q, new THREE.Vector3());
+      return { inst, p, q, fov: cam.fov ?? 0, focus: inst.dof?.focus || 0 };
+    });
+    const dP = [], dA = [];
+    for (let i = 0; i + 1 < pose.length; i++) {
+      const a = pose[i], b = pose[i + 1];
+      dP.push(a.inst === b.inst ? a.p.distanceTo(b.p) : 0);
+      dA.push(a.inst === b.inst ? a.q.angleTo(b.q) + Math.abs(a.fov - b.fov) * Math.PI / 180 : 0);
+    }
+    const med = (v) => [...v].sort((x, y) => x - y)[v.length >> 1];
+    const mP = med(dP), mA = med(dA);
+    const cut = dP.map((d, i) => {
+      const a = pose[i], scale = Math.max(a.focus, 0.05 * a.p.length(), 0.5);
+      return (d > 6 * mP && d > 0.04 * scale) || (dA[i] > 6 * mA && dA[i] > 0.035);
+    });
+    // centre sample: the one closest to filmT (lower-middle for even counts)
+    let lo = Math.floor((times.length - 1) / 2), hi = lo;
+    while (lo > 0 && !cut[lo - 1]) lo--;
+    while (hi < times.length - 1 && !cut[hi]) hi++;
+    return times.slice(lo, hi + 1);
+  }
+
+  // Everything up to (and including) bloom into this.comp; returns the grade parameters.
+  composite(filmT, filmDt) {
     const T = filmT / TIME_SCALE, dt = filmDt / TIME_SCALE;
     const r = this.renderer;
     const segs = this.activeSegments(T);
@@ -249,9 +405,14 @@ export class Engine {
 
     this.bloom.strength = bloomStrength;
     this.bloom.render(r, null, this.comp, dt, false);
+    return { T, exposure, harmony };
+  }
 
+  // Final grade of a linear HDR image to the canvas (and downscale when supersampling).
+  grade(tex, { T, exposure, harmony }) {
+    const r = this.renderer;
     const fu = this.finalQuad.material.uniforms;
-    fu.tInput.value = this.comp.texture;
+    fu.tInput.value = tex;
     fu.uExposure.value = exposure;
     fu.uWarmth.value = warmthAt(T);
     fu.uHarmony.value = FinalShader.uniforms.uHarmony.value * Math.min(1, Math.max(0, harmony));
