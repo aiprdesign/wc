@@ -220,7 +220,10 @@ export function create(ctx, segment) {
   let k = 0;
   for (const [x, z] of colPositions) {
     if (x === HERO.x && z === HERO.z) continue;
-    m4.makeRotationY((x * 7.3 + z * 3.1) % 6.28).setPosition(x, 0, z);
+    // turn each column only by whole quarter turns: the flutes still vary from column to column (90° is five
+    // of the twenty flutes) while the square abacus and plinth stay square to the entablature and stylobate
+    const quarter = Math.abs(Math.round(x * 7.3 + z * 3.1)) % 4;
+    m4.makeRotationY(quarter * Math.PI / 2).setPosition(x, 0, z);
     colLayout.setMatrixAt(k++, m4);
   }
   colLayout.castShadow = colLayout.receiveShadow = true;
