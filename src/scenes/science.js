@@ -678,6 +678,92 @@ export function create(ctx, segment) {
       gl_FragColor = vec4(c * uI * edge * (1.1 - 0.4 * s), 1.0);
     }`, innerU);
   prism.add(innerFan);
+  // The fans above are sheets in the plane of incidence: face-on they read as a continuous spectrum, but a real
+  // beam has a round cross-section (the hole in Newton's shutter), so the dispersed light is a flattened cone with
+  // thickness. Volumetric rays: one camera-facing ribbon per wavelength (its width turns about the ray's own axis
+  // toward whatever camera looks at it, so each ray is a soft glowing cylinder from any angle — film, live,
+  // explore, Experience, headset). Face-on they overlap into the fan (white where they still coincide at the
+  // exit face, separating into distinct coloured rays toward the card); edge-on they stack into a solid beam.
+  const R_BEAM = 0.024;                                              // beam radius (the white beam's haze sheath)
+  const RAY_K = 25;                                                  // rays across the spectrum (u = k / 24)
+  const RAYS = /* glsl */ `
+    attribute vec3 aStart, aDir; attribute float aLen, aU, aSide;
+    uniform float uW0, uW1, uSp0, uSp1, uK, uLenF;
+    varying float vD, vL, vU, vS, vF;
+    void main(){
+      float L = aLen * uLenF;
+      float d = uv.y * L;
+      vec4 mv = modelViewMatrix * vec4(aStart + aDir * d, 1.0);
+      vec3 dv = normalize(mat3(modelViewMatrix) * aDir);
+      vec3 sd = cross(dv, normalize(mv.xyz));
+      float sl = length(sd);
+      sd = sl > 1e-4 ? sd / sl : normalize(cross(dv, vec3(0.0, 1.0, 0.0)));
+      float w = uW0 + uW1 * d, sp = max(1e-4, uSp0 + uSp1 * d);
+      mv.xyz += sd * aSide * w;
+      vD = d; vL = L; vU = aU; vS = aSide;
+      vF = 1.0 / min(uK, 1.0 + 2.0 * w / sp);                        // overlap normalisation (face-on sum ≈ one sheet)
+      gl_Position = projectionMatrix * mv;
+    }`;
+  function rayBundle(idxs, starts, dirs, lens, frag, uniforms, rows = 24) {
+    const st = [], dr = [], ln = [], us = [], sd = [], uvs = [], pos = [], idx = [];
+    idxs.forEach((i, k) => {
+      const base = st.length / 3;
+      for (let j = 0; j <= rows; j++) for (const s of [-1, 1]) {
+        pos.push(0, 0, 0); uvs.push(s * 0.5 + 0.5, j / rows);
+        st.push(starts[i].x, starts[i].y, 0); dr.push(dirs[i].x, dirs[i].y, 0); ln.push(lens[i]); us.push(i / NU); sd.push(s);
+      }
+      for (let j = 0; j < rows; j++) { const a = base + j * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    g.setAttribute('aStart', new THREE.Float32BufferAttribute(st, 3));
+    g.setAttribute('aDir', new THREE.Float32BufferAttribute(dr, 3));
+    g.setAttribute('aLen', new THREE.Float32BufferAttribute(ln, 1));
+    g.setAttribute('aU', new THREE.Float32BufferAttribute(us, 1));
+    g.setAttribute('aSide', new THREE.Float32BufferAttribute(sd, 1));
+    g.setIndex(idx);
+    const m = new THREE.ShaderMaterial({
+      uniforms, vertexShader: RAYS, fragmentShader: SPECTRAL + frag,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false;
+    return mesh;
+  }
+  const rayIdx = Array.from({ length: RAY_K }, (_, k) => Math.round((k / (RAY_K - 1)) * NU));
+  // fan spread (red↔violet) grows linearly with distance from the exit face
+  const spreadAt = (d) => V(exitP[0].x + exitD[0].x * d - exitP[NU].x - exitD[NU].x * d, exitP[0].y + exitD[0].y * d - exitP[NU].y - exitD[NU].y * d, 0).length();
+  const sp0 = spreadAt(0) / (RAY_K - 1), sp1 = (spreadAt(lenAt[0]) - spreadAt(0)) / lenAt[0] / (RAY_K - 1);
+  const rayU = {
+    uLen: { value: 0 }, uI: { value: 1 }, uTime: { value: 0 }, uSpec: { value: specTex }, uLenF: { value: 1 },
+    uW0: { value: R_BEAM }, uW1: { value: sp1 * 0.55 }, uSp0: { value: sp0 }, uSp1: { value: sp1 }, uK: { value: RAY_K },
+  };
+  const rays = rayBundle(rayIdx, exitP, exitD, lenAt, /* glsl */ `
+    uniform float uLen, uI, uTime; varying float vD, vL, vU, vS, vF;
+    void main(){
+      if (vD > uLen) discard;
+      float g = exp(-vS * vS * 3.2) * 0.75 + exp(-vS * vS * 22.0) * 0.5;   // soft sheath + brighter core
+      float edge = smoothstep(-0.05, 0.06, vU) * smoothstep(1.05, 0.92, vU);
+      float sep = smoothstep(0.0, 0.55, vD);
+      vec3 c = mix(vec3(1.0, 0.97, 0.94) * 1.1, spectral(vU), sep);
+      float haze = 0.85 + 0.15 * sin(vD * 9.0 - uTime * 1.3 + vU * 5.0);
+      float front = 1.0 + 1.4 * smoothstep(uLen - 0.1, uLen, vD) * step(uLen, vL - 0.02);
+      float landing = smoothstep(vL - 0.2, vL, vD);
+      float I = uI * g * edge * haze * front * vF * (0.62 / (1.0 + vD * 0.9)) * (1.0 + 0.6 * landing);
+      gl_FragColor = vec4(c * I, 1.0);
+    }`, rayU);
+  prism.add(rays);
+  // inside the glass: the same rays, barely split, from the entry point to the exit face
+  const innerRayU = { uLenF: { value: 0 }, uI: { value: 1 }, uSpec: { value: specTex }, uW0: { value: R_BEAM * 0.8 }, uW1: { value: 0 }, uSp0: { value: 1e-4 }, uSp1: { value: 0 }, uK: { value: 7 } };
+  const innerRays = rayBundle([0, 12, 24, 36, 48, 60, 72], exitP.map(() => Ein), inD, innerLens, /* glsl */ `
+    uniform float uI; varying float vD, vL, vU, vS, vF;
+    void main(){
+      float g = exp(-vS * vS * 3.0) * 0.7 + exp(-vS * vS * 20.0) * 0.6;
+      float s = vD / max(vL, 1e-4);
+      vec3 c = mix(vec3(1.0, 0.97, 0.93), spectral(vU), 0.2 + 0.45 * s);
+      gl_FragColor = vec4(c * uI * g * vF * 1.3, 1.0);
+    }`, innerRayU);
+  prism.add(innerRays);
   // secondary rays: ~4 % external reflection off the entry face, internal reflection off the exit face
   // (landing on the base as a faint caustic) — the tell-tale ghosts of real glass
   const reflOut = reflect2(dIn, nLeft);
@@ -708,22 +794,31 @@ export function create(ctx, segment) {
   const board = new THREE.Mesh(new THREE.BoxGeometry(cardW, cardH, 0.025), new THREE.MeshStandardMaterial({ color: '#23201d', roughness: 0.95, metalness: 0.0 }));
   board.position.z = -0.014; cardGrp.add(board);
   const boardFrame = new THREE.Mesh(new THREE.BoxGeometry(cardW + 0.03, cardH + 0.03, 0.02), bronzeDark); boardFrame.position.z = -0.03; cardGrp.add(boardFrame);
-  const bandU = { uLit: { value: 0 }, uI: { value: 1 }, uR: { value: new THREE.Vector2(hitR.x, hitR.y) }, uV: { value: new THREE.Vector2(hitV.x, hitV.y) }, uReveal: { value: 0 }, uSpec: { value: specTex } };
+  // Newton's "oblong" image: every wavelength paints a disc the size of the beam where its ray lands, so the
+  // spectrum is a band with rounded ends, red at the least-deviated end. Each colour lights as its own ray
+  // arrives (violet has the shortest path to the tilted card, so it lands first): L(u) is the traced path
+  // length, fitted as a quadratic through the red, middle and violet rays.
+  const Lq0 = lenAt[0], Lqm = lenAt[NU >> 1], Lq1 = lenAt[NU];
+  const bandU = {
+    uLit: { value: 0 }, uI: { value: 1 }, uR: { value: new THREE.Vector2(hitR.x, hitR.y) }, uV: { value: new THREE.Vector2(hitV.x, hitV.y) },
+    uReach: { value: 0 }, uLq: { value: V(Lq0, 4 * Lqm - 3 * Lq0 - Lq1, 2 * Lq0 + 2 * Lq1 - 4 * Lqm) }, uRw: { value: R_BEAM * 1.7 }, uSpec: { value: specTex },
+  };
   const specBand = new THREE.Mesh(new THREE.PlaneGeometry(cardW, cardH), new THREE.ShaderMaterial({
     uniforms: bandU,
     vertexShader: /* glsl */ `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: SPECTRAL + /* glsl */ `uniform float uLit, uI, uReveal; uniform vec2 uR, uV; varying vec2 vP;
+    fragmentShader: SPECTRAL + /* glsl */ `uniform float uLit, uI, uReach, uRw; uniform vec2 uR, uV; uniform vec3 uLq; varying vec2 vP;
       void main(){
         vec2 ax = uV - uR; float L = length(ax); vec2 dir = ax / L;
-        float u = dot(vP - uR, dir) / L;
+        float u = dot(vP - uR, dir) / L, uc = clamp(u, 0.0, 1.0);
         float across = dot(vP - uR, vec2(-dir.y, dir.x));
-        float w = 0.05;
-        float core = exp(-across * across / (w * w));
-        float win = smoothstep(-0.07, 0.07, u) * smoothstep(1.07, 0.9, u);
-        float lit = smoothstep(u - 0.08, u + 0.02, uReveal);
-        vec3 c = spectral(u) * core * win * 1.2;
+        float dist = length(vP - (uR + ax * uc));                    // to the red→violet chord (rounded ends)
+        float Lu = uLq.x + uLq.y * uc + uLq.z * uc * uc;
+        float lit = smoothstep(Lu - 0.01, Lu + 0.05, uReach);
+        float cov = smoothstep(uRw, uRw * 0.5, dist);
+        float core = exp(-dist * dist / (uRw * uRw * 0.18));
+        vec3 c = spectral(uc) * (cov * 0.95 + core * 0.45);
         float scatter = exp(-across * across / 0.02) * exp(-pow(max(0.0, abs(u - 0.5) - 0.5) * 6.0, 2.0)) * 0.07;
-        c += spectral(u) * scatter;
+        c += spectral(uc) * scatter;
         gl_FragColor = vec4(c * uI * lit * uLit, 1.0);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -965,9 +1060,11 @@ export function create(ctx, segment) {
     fanU.uI.value = 1 + 0.5 * Math.exp(-Math.max(0, hit - 0.1) * 5);
     fanU.uTime.value = t;
     fan.visible = hit > 0.04;
+    rayU.uLen.value = fanU.uLen.value; rayU.uI.value = fanU.uI.value; rayU.uTime.value = t; rays.visible = fan.visible;
+    innerRayU.uLenF.value = innerU.uLen.value; innerRayU.uI.value = innerU.uI.value; innerRays.visible = innerFan.visible;
     const reach = fanU.uLen.value;
-    bandU.uLit.value = sat((reach - lenAt[NU] + 0.05) / 0.1);
-    bandU.uReveal.value = 1.15 * sat((reach - lenAt[NU]) / Math.max(0.05, lenAt[0] - lenAt[NU]) + 0.1);
+    bandU.uLit.value = sat((reach - Math.min(lenAt[0], lenAt[NU]) + 0.05) / 0.1);
+    bandU.uReach.value = reach;
     bandU.uI.value = 1 + 0.35 * Math.exp(-Math.max(0, hit - 0.45) * 5);
     specBand.visible = bandU.uLit.value > 0;
     ghostIn.progress = sat((hit - 0.02) / 0.08); ghostOut.progress = 1;
