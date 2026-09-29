@@ -7,7 +7,11 @@ export class Player {
   constructor(engine, buffer) {
     this.engine = engine;
     this.buffer = buffer;
-    this.ctx = buffer ? new AudioContext({ sampleRate: buffer.sampleRate }) : null;
+    // default device rate: forcing 48 kHz fails or goes silent on some phones (iOS runs at 44.1 kHz);
+    // buffer sources resample on their own
+    this.ctx = buffer ? new (window.AudioContext || window.webkitAudioContext)() : null;
+    // iOS: play as media, so the ring/silent switch does not mute the film (Safari 16.4+)
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* unsupported */ }
     this.gain = this.ctx ? this.ctx.createGain() : null;
     if (this.gain) this.gain.connect(this.ctx.destination);
     this.playing = false;
@@ -25,7 +29,9 @@ export class Player {
 
   async play(from = this.time) {
     if (from >= DURATION - 0.05) from = 0;
-    if (this.ctx?.state === 'suspended') await this.ctx.resume();
+    // resume inside the tap (mobile browsers only unlock audio from a user gesture) — don't await
+    // before the source starts, or the gesture is lost on iOS
+    if (this.ctx && this.ctx.state !== 'running') { const r = this.ctx.resume(); this.unlock(); await r.catch(() => {}); }
     this.stopSource();
     this.time = from;
     if (this.ctx && this.buffer) {
@@ -42,6 +48,12 @@ export class Player {
     }
     this.playing = true;
     this.loop();
+  }
+
+  // iOS unlock: a one-sample silent buffer started inside the gesture wakes the audio output
+  unlock() {
+    if (this._unlocked || !this.ctx) return;
+    try { const b = this.ctx.createBuffer(1, 1, this.ctx.sampleRate), s = this.ctx.createBufferSource(); s.buffer = b; s.connect(this.ctx.destination); s.start(0); this._unlocked = true; } catch { /* ignore */ }
   }
 
   pause() {

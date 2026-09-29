@@ -14,8 +14,11 @@ export const OUTPUT_ASPECT = (() => {
   try {
     // ?aspect=1 / ?aspect=16:9, or a hash (#square, #16x9, #wide) — hashes survive embedded viewers
     const hash = (globalThis.location?.hash ?? '').slice(1).toLowerCase();
-    const fromHash = { square: '1', '1x1': '1', '16x9': '16:9', '4x5': '4:5', wide: '' }[hash];
-    const a = fromHash ?? new URLSearchParams(globalThis.location?.search ?? '').get('aspect');
+    const fromHash = { square: '1', '1x1': '1', '16x9': '16:9', landscape: '16:9', '9x16': '9:16', vertical: '9:16', '4x5': '4:5', wide: '' }[hash];
+    const q = new URLSearchParams(globalThis.location?.search ?? '');
+    let a = fromHash ?? q.get('aspect');
+    // no format chosen on a phone held upright: the vertical cut fills the screen
+    if (a == null && !q.has('still') && globalThis.matchMedia?.('(max-width: 700px) and (orientation: portrait)').matches) a = '9:16';
     if (!a) return FILM_ASPECT;
     const [x, y] = a.split(/[:x/]/).map(Number);
     const v = y ? x / y : x;

@@ -4,7 +4,7 @@ import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
-import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE } from './timeline.js';
+import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE, OUTPUT_ASPECT } from './timeline.js';
 
 const params = new URLSearchParams(location.search);
 const QUALITY = { low: 1280, medium: 1920, high: 2560, ultra: 3840 };
@@ -16,6 +16,19 @@ const setLoad = (p) => { $('loader').firstElementChild.style.width = `${Math.rou
 
 async function loadScore() {
   if (params.has('noaudio')) return null;
+  const { encodeWav } = await import('./audio/wav.js');
+  // The mixed soundtrack (score + narration) ships pre-rendered: quick to load and light on phones.
+  // ?livescore (or ?novo, the score without the narrator) composes it in the browser instead.
+  if (!params.has('livescore') && !params.has('novo')) {
+    try {
+      const res = await fetch('assets/audio/soundtrack.mp3');
+      if (res.ok) {
+        const data = await res.arrayBuffer();
+        const buffer = await new OfflineAudioContext(2, 1, 48000).decodeAudioData(data);
+        return { buffer, encodeWav };
+      }
+    } catch (e) { console.warn('[audio] soundtrack file unavailable, composing the score', e); }
+  }
   try {
     const mod = await import('./audio/score.js');
     const buffer = await mod.renderScore(48000, { voiceOver: !params.has('novo') });
@@ -119,8 +132,11 @@ function setupUI(player, score, explorer) {
   $('play').addEventListener('click', () => { begin(player); syncPlaying(); });
   $('btn-play').addEventListener('click', async () => { await player.toggle(); syncPlaying(); });
   $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); body.classList.toggle('muted', player.muted); });
-  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9']];
-  const cur = fmts.findIndex(([h]) => h === location.hash.slice(1));
+  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16']];
+  // intro: mark the format in use
+  const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16' }[OUTPUT_ASPECT] ?? 'wide';
+  document.querySelectorAll('.formats-pick a').forEach((a) => a.setAttribute('aria-current', String(a.dataset.fmt === curHash)));
+  const cur = fmts.findIndex(([h]) => h === curHash);
   $('btn-format').textContent = fmts[Math.max(0, cur)][1];
   $('btn-format').addEventListener('click', () => { location.hash = fmts[(Math.max(0, cur) + 1) % fmts.length][0]; });
   $('btn-fs').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()));

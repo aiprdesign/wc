@@ -27,7 +27,20 @@
         <span>Play film</span>
       </button>
       <p class="hint">Sound on · 108 seconds</p>
-      <p class="guide-link"><a href="guide.html">Videos · How to run it · Facts &amp; sources · Source code →</a></p>
+      <nav class="formats-pick" aria-label="Choose a frame format">
+        <span>Format</span>
+        <a href="#wide" data-fmt="wide">2.39 cinema</a>
+        <a href="#square" data-fmt="square">1:1 square</a>
+        <a href="#16x9" data-fmt="16x9">16:9 landscape</a>
+        <a href="#9x16" data-fmt="9x16">9:16 vertical</a>
+      </nav>
+      <a class="guide-card" href="guide.html">
+        <span class="gc-text">
+          <span class="gc-title">Open the guide</span>
+          <span class="gc-items">Videos in every format · How to run it · Facts &amp; sources · Source code</span>
+        </span>
+        <svg class="gc-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 5.3 19.9 12l-6.7 6.7-1.4-1.4 4.3-4.3H4v-2h12.1l-4.3-4.3z" /></svg>
+      </a>
       <p class="note">Many of these achievements grew from exchange with, and contributions from, civilizations across the world.</p>
     </div>
   </section>
@@ -51,7 +64,7 @@
     <button id="btn-rec" title="Record to WebM (r)" aria-label="Record video"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" /></svg></button>
     <button id="btn-wav" title="Download soundtrack (WAV)" aria-label="Download soundtrack"><svg viewBox="0 0 24 24"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 16.4l-4.7-4.7 1.4-1.4 3.3 3.3V3h2zM5 19h14v2H5z" /></svg></button>
     <button id="btn-explore" class="fmt" title="Explore the 3D scene (e)" aria-label="Explore the 3D scene" aria-pressed="false">Explore 3D</button>
-    <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9" aria-label="Change frame format">2.39</button>
+    <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16" aria-label="Change frame format">2.39</button>
     <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
   </nav>
   <div id="rec-badge" class="rec-badge">● REC</div>

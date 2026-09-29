@@ -30,7 +30,7 @@ chapter · `m` mute · `f` fullscreen · `r` record to WebM · `h` toggle contro
 |---|---|
 | `#square` | 1:1 frame |
 | `#16x9` | 16:9 frame |
-| `?aspect=9:16` | 9:16 vertical frame |
+| `#9x16` (or `?aspect=9:16`) | 9:16 vertical frame |
 | `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920). `high` and `ultra` also add ambient occlusion and 2× shadow-map resolution |
 | `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
 | `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
