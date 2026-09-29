@@ -6,7 +6,7 @@ one or two sources for each. Wikipedia links are included only as convenient poi
 primary or institutional source exists (NASA, Britannica, the Library of Congress, museums,
 universities), it is listed first.
 
-**Film time** is the playback time in the 1:40 film (story seconds × 100/72, see
+**Film time** is the playback time in the 1:48 film (story seconds × 100/72, see
 `src/timeline.js`). Captions appear for a second or two around the time given.
 
 **Status**
