@@ -181,7 +181,7 @@ export function create(ctx, segment) {
   const eqF = equation([['F = G '], ['m', 'n'], ['1', 'sub'], [' m'], ['2', 'sub'], [' / r'], ['2', 'sup']], { height: 0.2, intensity: 1.5 });
   const eqK = equation([['T'], ['2', 'sup'], [' ∝ a'], ['3', 'sup']], { height: 0.13, intensity: 1.3 });
   const capS = new TextPlane('GALILEO · DISCORSI · 1638', { font: FONTS.mono, height: 0.02, letterSpacing: 0.3, color: '#ffdcb0', intensity: 0.9 });
-  const capF = new TextPlane('NEWTON · PRINCIPIA MATHEMATICA · 1687', { font: FONTS.mono, height: 0.045, letterSpacing: 0.3, color: '#ffdcb0', intensity: 0.9 });
+  const capF = new TextPlane('PRINCIPIA 1687 · IN MODERN NOTATION', { font: FONTS.mono, height: 0.045, letterSpacing: 0.3, color: '#ffdcb0', intensity: 0.9 });
   const capK = new TextPlane('KEPLER · HARMONICES MUNDI · 1619', { font: FONTS.mono, height: 0.034, letterSpacing: 0.3, color: '#ffdcb0', intensity: 0.8 });
   fallPos(0.02, eqS.position).add(V(-0.12, 0.25, 0.05)); capS.position.copy(eqS.position).add(V(0, -0.075, 0));
   fallPos(0.3, eqA.position).add(V(0.2, -0.3, 0.06));

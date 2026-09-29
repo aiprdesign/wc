@@ -406,7 +406,7 @@ export function bakePlanetMaps(renderer) {
 // ---------------------------------------------------------------------------------------------
 // Ring maps (1D, radius → sqrt(colour), opacity). Radii in planet radii.
 export const SATURN_RING = { inner: 1.11, outer: 2.34 };
-export const URANUS_RING = { inner: 1.62, outer: 2.02 };
+export const URANUS_RING = { inner: 1.62, outer: 2.03 };
 function ringTexture(n, fn) {
   const d = new Uint8Array(n * 4);
   for (let i = 0; i < n; i++) {
@@ -445,7 +445,8 @@ export function saturnRingTexture() {
 }
 export function uranusRingTexture() {
   const { inner, outer } = URANUS_RING;
-  const rings = [[1.637, 0.0015], [1.652, 0.0015], [1.666, 0.0015], [1.834, 0.002], [1.849, 0.002], [1.863, 0.0025], [1.901, 0.003], [1.947, 0.003], [1.996, 0.009]];
+  // rings 6, 5, 4, α, β, η, γ, δ, λ, ε (NASA radii in km ÷ 25,559 km); ε is the widest and brightest
+  const rings = [[1.637, 0.0015], [1.652, 0.0015], [1.666, 0.0015], [1.750, 0.002], [1.786, 0.002], [1.846, 0.0015], [1.863, 0.0025], [1.890, 0.003], [1.957, 0.0015], [2.001, 0.009]];
   return ringTexture(1024, (u) => {
     const r = inner + u * (outer - inner);
     let a = 0.006;
