@@ -111,9 +111,27 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 .experience-on .live-hint { opacity: 0; }
 .exp-hint-on .exp-hint { opacity: 1; transform: translate(-50%, 0); }
 .exploring-on .exp-hint { opacity: 0; }
-@media (max-width: 560px) {
-  .play-exp { padding: 10px 16px; }
+@media (max-width: 560px) { .play-exp { padding: 10px 16px; } }
+@media (max-width: 720px) {
   .controls .exp-btn .lbl-on, .experience-on .controls .exp-btn .lbl-off { display: none; }
   .controls .exp-btn { padding: 0 7px; }
-  .experience-on .time.dim { display: none; }
+  .controls .time.dim { display: none; }
 }
+/* short screens (landscape phones): the start screen scrolls instead of clipping its buttons */
+#intro { overflow-y: auto; place-items: safe center; }
+@media (max-height: 560px) {
+  .eyebrow { margin-bottom: 12px; }
+  .sub { margin: 10px 0 18px; }
+  .hint { margin-top: 12px; }
+  .formats-pick { margin-top: 10px; }
+  .guide-card { margin-top: 12px; }
+  .note { display: none; }
+}
+
+/* narrow phones: the timeline takes its own row above the buttons, labels shorten */
+@media (max-width: 480px) {
+  .controls { flex-wrap: wrap; justify-content: center; row-gap: 2px; padding: 6px 10px 8px; }
+  .controls .scrub { order: -1; flex: 1 0 100%; height: 22px; }
+  .controls .time.dim, #btn-explore .lbl-long { display: none; }
+}
+@media (max-width: 360px) { .controls #time { display: none; } }
