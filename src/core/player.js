@@ -1,4 +1,4 @@
-// Transport: audio-clock-driven playback, seeking, pause, mute and WebM recording.
+// Transport: audio-clock-driven playback, seeking, pause, mute and MP4 (or WebM) recording.
 // The soundtrack is pre-rendered into an AudioBuffer, so the audio clock is the master
 // and picture stays locked to sound even under load.
 import { FILM_DURATION as DURATION } from '../timeline.js';
@@ -111,14 +111,16 @@ export class Player {
       this.recordDest = this.ctx.createMediaStreamDestination();
       this.recordDest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
     }
-    const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    // MP4 (H.264 + AAC) wherever the browser can record it (Chrome/Edge 126+, Safari); WebM otherwise
+    const types = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d002a,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
     const mimeType = types.find((t) => MediaRecorder.isTypeSupported(t)) || '';
     const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 24_000_000 });
     const chunks = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     rec.onstop = () => {
       this.recordDest = null;
-      onDone(new Blob(chunks, { type: 'video/webm' }));
+      const type = (rec.mimeType || mimeType || 'video/webm').split(';')[0];
+      onDone(new Blob(chunks, { type }), type === 'video/mp4' ? 'mp4' : 'webm');
     };
     const prevEnd = this.onEnd;
     this.onEnd = () => { this.onEnd = prevEnd; prevEnd(); setTimeout(() => rec.stop(), 300); };

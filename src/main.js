@@ -156,7 +156,7 @@ function setupUI(player, score, explorer) {
     if (body.classList.contains('recording')) return;
     body.classList.add('recording', 'playing');
     intro.classList.add('hidden');
-    await player.record((blob) => { body.classList.remove('recording'); download(blob, 'achievements-of-western-civilization.webm'); });
+    await player.record((blob, ext = 'webm') => { body.classList.remove('recording'); download(blob, `achievements-of-western-civilization.${ext}`); });
   });
 
   // Scrubbing

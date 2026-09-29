@@ -24,7 +24,7 @@ npm start            # serves the folder and opens http://localhost:8080
 ```
 
 Press **Play film** with sound on. Controls: `space` play/pause · `←/→` seek · `0–9` jump to a
-chapter · `m` mute · `f` fullscreen · `r` record to WebM · `h` toggle controls.
+chapter · `m` mute · `f` fullscreen · `r` record (MP4 where the browser supports it, else WebM) · `h` toggle controls.
 
 | Add to the address | Effect |
 |---|---|
@@ -53,7 +53,7 @@ scripts pass `--gpu`, which opens browser windows so Chromium uses your graphics
 them alone until they close. Without `--gpu` Chromium renders in software, which works
 anywhere but is far slower. More options (`--fps`, `--workers`, `--from/--to`, `--ffmpeg`)
 are listed at the top of `tools/render.mjs`. In the browser you can also press `r` to record
-a real-time `.webm`.
+a real-time `.mp4` (or `.webm` in browsers that cannot record MP4).
 
 The `render:*` scripts use the **cinematic** preset (`--preset cinematic`), which adds what
 real-time playback can't afford:
@@ -96,7 +96,7 @@ index.html            page shell + import map (no bundler)
 src/timeline.js       master timeline: segments, transitions, cue sheet, BPM, era warmth
 src/core/engine.js    renders any time T: sequences → HDR targets → AO + DOF → transition → bloom → [motion blur] → grade
 src/core/post.js      depth of field, 6 transition shaders, ACES film grade (CA, vignette, grain)
-src/core/player.js    audio-clock transport, seeking, WebM recording
+src/core/player.js    audio-clock transport, seeking, MP4/WebM recording
 src/audio/            procedural score + sound design, pre-rendered in an OfflineAudioContext
 src/scenes/<id>.js    one module per sequence (see docs/SCENE_GUIDE.md)
 src/lib/              motion-design toolkit: typography, particles, line reveals, HUD, materials, textures
