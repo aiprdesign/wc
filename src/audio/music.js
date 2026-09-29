@@ -11,8 +11,12 @@
 //   the pullBack → a tender REPRISE (solo piano, 61.5 s) → the head D — A asked by the
 //   piano in the hush and answered D — A — D' by the horns on the final button (71 s).
 //
-// ACT I   0 – 20    mystery & wonder: drone, distant choir, piano/celesta motif, space;
-//                   designed hits on titleLocked (whoosh-hit), templeReveal (BRAAM),
+// ACT I   0 – 20    (v12) a trailer COLD OPEN — a BRAAM out of silence on the ignition, taiko
+//                   stabs under the flash-forward, a ticking spiccato pulse through the
+//                   construction, a riser and a held breath into the title SLAM (the opening's
+//                   loudest moment: sub, taiko ensemble, BRAAM, brass + choir stab on D minor,
+//                   ringing under the subtitle) — then mystery & wonder: drone, distant choir,
+//                   piano/celesta motif, space; designed hits on templeReveal (BRAAM),
 //                   model3D (whoosh-hit on the dominant); riser bridges into act II.
 // ACT II  20 – 49.5 the build: ONE spiccato + synth-pulse ostinato from 20.0 to the
 //                   pullBack, never stopping at scene changes. A layer every 4 bars:
@@ -136,9 +140,9 @@ export const CHORDS = {
 const WEBB = q16(C.webb);   // 52.25: the frontier's theme sings its A (and the chord turns to F) on the grid
 export const HARMONY = [
   // ACT I
-  [0.0, 4.0, 'D5'],    // open fifth, no third yet
-  [4.0, 5.0, 'Bb9'],   // title assembling (suspended)
-  [5.0, 8.0, 'Dm'],    // titleLocked
+  [0.0, C.titleAssemble, 'D5'],                // open fifth, no third yet
+  [C.titleAssemble, C.titleLocked, 'Bb9'],     // title assembling (suspended)
+  [C.titleLocked, 8.0, 'Dm'],                  // titleLocked: the SLAM
   [8.0, 10.6, 'Bb'],   // columns rise
   [10.6, 12.0, 'F'],   // templeReveal: III major
   [12.0, 14.0, 'Dm'],  // theme, gentle statement: i – VI – iv – V
@@ -251,7 +255,7 @@ function themeLayer(S) {
 // String bed level / brightness per act (0..1), in pre-moonshot time
 function lift(t) {
   t = ot(t);
-  if (t < 5) return 0.18;
+  if (t < C.titleLocked) return 0.18;
   if (t < 12) return 0.34;
   if (t < 20) return 0.42;
   if (t < 45.5) return 0.46 + 0.38 * (t - 20) / 25.5;
@@ -281,12 +285,12 @@ function stringsLayer(S) {
     const moon = MOON_STR[a];
     // (v11: the moonshot's / frontier's arrivals are cued hits, so their strings enter just
     // before the cue rather than a full 0.12 early — the bow's bite no longer pre-empts the hit)
-    const start = first ? 1.0 : moon ? a - Math.min(0.12, moon.attack * 0.3) : a - 0.12;
+    const start = first ? C.pointAppears : moon ? a - Math.min(0.12, moon.attack * 0.3) : a - 0.12;
     // while the sub pulse runs, it owns the bass fundamental: a string note in unison
     // with it would only beat against it (slow, deep cancellations of the low end)
     const notes = a >= 20 ? CHORDS[name].str.filter((m) => m !== subRoot(CHORDS[name])) : CHORDS[name].str;
     S.at(start, () => O.chord(S, 'strings', start, b, notes, moon ?? {
-      level: 0.55 * lv, attack: first ? 3 : a < 20 ? 0.6 : 0.15, release: a < 20 ? 1.2 : 0.3,
+      level: 0.55 * lv, attack: first ? 1.6 : a < 20 ? 0.6 : 0.15, release: a < 20 ? 1.2 : 0.3,
       cutoff: 900 + 4000 * lv, swell: a === 8.0 ? 0.6 : null,
     }));
     // the climb: upper strings from 28, brighter every 4 bars (resting through the descent)
@@ -311,8 +315,8 @@ function stringsLayer(S) {
 
 const CHOIR = [
   // [start, end, chord, vowel, level, attack, release]
-  [1.5, 5.0, 'D5', 'choirO', 0.1, 2.5, 0.8],    // distant
-  [5.0, 8.9, 'Dm', 'choirO', 0.22, 0.3, 1.2],   // titleLocked (held into the columns: B♭maj7)
+  [C.pointAppears, C.titleLocked, 'D5', 'choirO', 0.1, 1.5, 0.1],   // distant, rising under the construction
+  [C.titleLocked, 8.9, 'Dm', 'choirA', 0.2, 0.03, 1.2],   // the SLAM: a full "ah", ringing under the subtitle (held into the columns: B♭maj7)
   [10.6, 12.4, 'F', 'choirA', 0.36, 0.1, 1.5],  // templeReveal
   [12.0, 14.2, 'Dm', 'choirO', 0.2, 1.2, 0.8],
   [14.0, 18.4, 'Bb', 'choirO', 0.12, 1.5, 0.6],  // behind the gentle theme
@@ -349,10 +353,9 @@ function choirLayer(S) {
 // ------------------------------------------------------------------ act I colour
 
 function actOne(S) {
-  // celesta sparkles of the theme head as the point appears / grid draws
-  [[0.6, 86], [1.0, 93], [2.6, 98]].forEach(([t, m]) => S.at(t, () => I.celesta(S, t, m, { level: 0.025, pan: 0.3, bus: 'far' })));
-  // distant piano: the leap D — A, twice, as the layers draw (before the title)
-  [[2.0, 50], [2.5, 57], [3.0, 62]].forEach(([t, m]) => S.at(t, () => I.piano(S, t, m, { level: 0.12, pan: -0.2, bus: 'far' })));
+  // celesta sparkles of the theme head as the point appears / the construction completes
+  [[C.pointAppears, 86], [C.gridDone, 98]].forEach(([t, m]) => S.at(t, () => I.celesta(S, t, m, { level: 0.025, pan: 0.3, bus: 'far' })));
+  openingPulse(S);
   // low sustained brass swell into the temple (no BRAAM at the title: a whoosh-hit)
   S.at(8.6, () => O.brass(S, 8.6, 2.0, CHORDS.Bb.brass, { level: 0.2, attack: 1.6, release: 0.3 }));
   S.at(12.0, () => O.brass(S, 12.0, 6.4, [38, 45, 50], { level: 0.08, attack: 3, release: 1.5 }));
@@ -371,6 +374,81 @@ function actOne(S) {
     const t = C.fallStart + k * 0.09;
     S.at(t, () => I.pluck(S, t, m, { level: 0.1 - k * 0.008, pan: 0.3 - k * 0.1 }));
   });
+}
+
+// ------------------------------------------------------------------ the COLD OPEN (v12)
+//
+//   0.0 – 0.125   a reversed suck out of silence (cues.js) …
+//   ignition      … BRAAM on D out of nothing: sub drop, taiko, kick, crash, impact
+//   flashForward  four taiko stabs on the 8ths under the silhouettes, a low brass "bwah" on the first
+//   pointAppears  a reverse cymbal collapses into the point: a soft low bloom
+//   1.5 – 3.375   the construction: spiccato D on 16ths and a low heartbeat on the beat, growing;
+//                 a riser + reverse cymbal from 2.5; a taiko build on 16ths through the fly-through,
+//                 cut a 16th early — a held breath —
+//   titleLocked   the SLAM, the opening's loudest moment: sub drop, taiko ensemble, kick, two crashes,
+//                 impact, BRAAM on D, a brass + choir + strings stab on D minor, a harp bloom and a
+//                 downer; the choir's "ah" (CHOIR) and a high shimmer ring on under the subtitle
+
+// Orchestra studio: the tension pulse under the construction
+function openingPulse(S) {
+  const a = C.pointAppears, b = C.titleLocked - STEP;   // … stops a 16th before the SLAM
+  for (let t = a, k = 0; t < b - 1e-6; t += STEP, k++) {
+    const u = (t - a) / (b - a);
+    const acc = k % 4 === 0 ? 1 : k % 2 === 0 ? 0.62 : 0.45;
+    S.at(t, () => {
+      O.spiccato(S, t, k % 8 === 6 ? 45 : 38, { level: (0.05 + 0.13 * u) * acc, decay: 0.11 });
+      if (k % 4 === 0) O.spiccato(S, t, 50, { level: (0.03 + 0.08 * u) * acc, decay: 0.1 });
+    });
+  }
+  // low strings + horns swell into the SLAM (they stop dead on the held breath)
+  S.at(C.flyThrough, () => O.brass(S, C.flyThrough, b - C.flyThrough, [38, 45, 50], { level: 0.14, attack: 0.7, release: 0.05, bright: 1500, kind: 'horn' }));
+}
+
+// Rhythm studio: the hits of the cold open
+function openingHits(S) {
+  const ign = C.ignition, ff = C.flashForward, pA = C.pointAppears, tL = C.titleLocked;
+  // IGNITION: BRAAM out of silence
+  hit(S, ign, { power: 0.95, braam: 38, down: true, subHz: 100 });
+  S.at(ign, () => { I.kick(S, ign, 0.8); I.taiko(S, ign + 0.015, 0.5, { size: 0.6 }); });
+  // flash-forward: a taiko stab under each silhouette (the last one a flam), a low brass bwah on the first
+  for (let k = 0; k < 4; k++) {
+    const t = ff + k * 0.25;
+    S.at(t, () => {
+      I.taiko(S, t, 0.36 + 0.06 * k, { size: 1 });
+      I.boom(S, t, { level: 0.16 + 0.03 * k, f0: 78, f1: 38, decay: 0.7 });
+      if (k === 3) I.taiko(S, t + 0.06, 0.3, { size: 0.6 });
+    });
+  }
+  S.at(ff, () => O.brass(S, ff, 0.2, [38, 45, 50], { level: 0.26, sfz: true, bright: 1400, release: 0.35 }));
+  // collapse → the point
+  S.at(pA - 0.25, () => I.revCymbal(S, pA, 0.25, { level: 0.05 }));
+  S.at(pA, () => I.boom(S, pA, { level: 0.14, f0: 60, f1: 36, decay: 1.2 }));
+  // the construction: a low heartbeat on the beat, growing
+  for (let t = pA + BEAT, k = 0; t < tL - 1e-6; t += BEAT, k++) {
+    const u = (t - pA) / (tL - pA);
+    S.at(t, () => { I.tom(S, t, 0.1 + 0.2 * u, { f: 56, pan: 0 }); I.tom(S, t + 0.14, 0.06 + 0.12 * u, { f: 48, pan: 0 }); });
+  }
+  // into the SLAM: riser + reverse cymbal, and a taiko build on 16ths through the fly-through,
+  // stopping a 16th early — a held breath — so the hit lands out of a hole
+  S.at(C.gridDone, () => I.riser(S, C.gridDone, tL, { level: 0.07, from: 300, to: 8000, pitch: [38, 62] }));
+  S.at(tL - 0.9, () => I.revCymbal(S, tL, 0.9, { level: 0.07 }));
+  for (let t = C.flyThrough, k = 0; t < tL - STEP - 1e-6; t += STEP, k++) {
+    const u = (t - C.flyThrough) / (tL - STEP - C.flyThrough);
+    S.at(t, () => I.taiko(S, t, 0.12 + 0.3 * u * u, { size: 0.6 }));
+  }
+  // THE SLAM
+  hit(S, tL, { power: 1.15, braam: 50, chord: 'Dm', down: true, subHz: 110 });
+  S.at(tL, () => {
+    I.boom(S, tL, { level: 0.45, f0: 120, f1: 30, decay: 3.2 });
+    I.kick(S, tL, 0.95);
+    I.taiko(S, tL + 0.018, 0.7, { size: 1 });
+    I.taiko(S, tL + 0.035, 0.5, { size: 0.6 });
+    I.crash(S, tL + 0.01, 0.07);
+    O.brass(S, tL, 0.7, [38, 45, 50, 53, 57], { level: 0.5, sfz: true, bright: 2300, release: 1.6 });
+    O.chord(S, 'strings', tL, tL + 0.6, [38, 50, 57, 62, 65, 69, 74], { level: 0.4, attack: 0.02, release: 1.6, cutoff: 5000 });
+  });
+  // … ringing on under the subtitle: a high shimmer of D minor
+  [[tL + 0.05, 86], [tL + 0.12, 89], [tL + 0.19, 93], [C.subtitle, 98]].forEach(([t, m], i) => S.at(t, () => I.bell(S, t, m, { level: 0.02, decay: 2.6, pan: -0.4 + i * 0.27, bus: 'far' })));
 }
 
 // ------------------------------------------------------------------ act II/III engine
@@ -542,7 +620,6 @@ function hit(S, t, { power = 1, braam = null, chord = null, down = false, subHz 
 function transitions(S) {
   // risers: title, temple, act I → II bridge, 4-bar layer arrivals, act II → III, climax
   const R = [
-    [3.6, C.titleLocked, 0.035, 400, 5000, null],
     [9.4, C.templeReveal, 0.05, 300, 6000, [41, 65]],
     [18.4, 20.0, 0.04, 300, 6000, [45, 62]],   // bridge into act II (lands on the ostinato)
     [26.5, 28.0, 0.035, 400, 6000, null],      // into layer 3 (train shots): a lift, no gap
@@ -570,7 +647,7 @@ function transitions(S) {
 }
 
 function accents(S) {
-  whooshHit(S, C.titleLocked, 0.85);
+  openingHits(S);
   hit(S, C.templeReveal, { power: 0.85, braam: 53, chord: 'F', down: true });   // BRAAM 1
   whooshHit(S, C.model3D, 0.7, -0.6);
   S.at(C.model3D, () => I.harpRoll(S, C.model3D, [57, 61, 64, 69, 73, 76], { level: 0.07 }));
@@ -1009,7 +1086,7 @@ function frontierRhythm(S) {
 
 // Pads step aside for the big hits (sidechain-style), then recover.
 function duckPads(S) {
-  const big = [[C.titleLocked, 0.6], [C.templeReveal, 0.5], [C.model3D, 0.65], [C.earthWide, 0.55], [C.earthrise, 0.75], [C.processorDive, 0.55], [49.5, 0.6], [55.5, 0.6], [C.pullBack, 0.5]];
+  const big = [[C.ignition, 0.55], [C.titleLocked, 0.5], [C.templeReveal, 0.5], [C.model3D, 0.65], [C.earthWide, 0.55], [C.earthrise, 0.75], [C.processorDive, 0.55], [49.5, 0.6], [55.5, 0.6], [C.pullBack, 0.5]];
   for (const name of ['strings', 'choir', 'pad']) {
     const g = S.bus(name).gain;
     const base = g.value;

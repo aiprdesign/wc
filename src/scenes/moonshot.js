@@ -494,6 +494,7 @@ export function create(ctx, segment) {
     l.mesh.opacity = p * opacity; l.mesh.position.set(l.base.x, l.base.y - (1 - p) * rise, 0);
   });
   let tNow = 0;
+  let lensFov = 35;                 // the surface shots' lens before the crash zoom narrows it (explore falls back to it)
 
   // ================================================================ animation state
   const camPos = new THREE.Vector3(), look = new THREE.Vector3(), tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
@@ -551,8 +552,9 @@ export function create(ctx, segment) {
           stepper.group.visible = true;
           poseStepLeg();
         }
-        // the crash zoom's extreme telephoto makes no sense off-axis: hand the explorer a normal lens
-        if (camera.fov < 30) { camera.fov = 30; camera.updateProjectionMatrix(); }
+        // the crash zoom's extreme telephoto makes no sense off-axis: hand the explorer the lens it narrowed from
+        // (the vertigo's own long lens, so the looming Earth keeps its size behind the LM)
+        if (camera.fov < lensFov) { camera.fov = lensFov; camera.updateProjectionMatrix(); }
       }
       if (t >= tS2) dPlate.scale.set(3, 3, 1);                           // the LM panel reaches past any explore view
     },
@@ -565,8 +567,12 @@ export function create(ctx, segment) {
     },
     get exploreLimits() {
       if (tNow > tFoot - 0.4 && tNow < tFoot + 0.3) return { zoomOut: 9, fly: 5, pitchDown: 0.3 };   // macro: pull back to see him
+      // vertigo pull-back + crash zoom: a ~10° telephoto plate of LM, flag and a looming Earth — a few degrees of parallax only
+      if (tNow >= tFoot + 0.55 && tNow < tS2) return { yaw: 0.1, pitchDown: 0.03, pitchUp: 0.07, zoomIn: 0.6, zoomOut: 2, fly: 0.08 };
       if (tNow >= tFoot + 0.3 && tNow < tS2) return { yaw: 0.75, pitchDown: 0.04, pitchUp: 0.22, zoomOut: 2 };    // low lens over the flat site (the curved horizon shows from high up)
       if (tNow >= tS2) return { yaw: 0.95, zoomOut: 2.5 };
+      if (tNow < tS1) return { zoomIn: 0.7 };                            // the stack rides just ahead of the lens: don't push into its engine bell
+
       return undefined;
     },
 
@@ -645,6 +651,7 @@ export function create(ctx, segment) {
 
       // ---------------- camera
       let fov = 35, dofAmt = 0, dofFocus = 10, dofRange = 3;
+      lensFov = 35;
       if (t < tFoot - 0.18) {
         lCamCurve.getPoint(sat(timeWarp(t, lCamK)), camPos);
         look.copy(lmP).add(tmp.set(0, 2.4, 0));
@@ -683,6 +690,7 @@ export function create(ctx, segment) {
         dofFocus = lerp(camPos.distanceTo(PRINT_LOOK), camPos.distanceTo(FC), rack);
         dofAmt = 0.75 - 0.2 * rack - 0.55 * kB; dofRange = lerp(0.35, 1.0, rack) + kB * 30;
         const z = ramp(t, tRise + 0.12, tS2, ease.inCubic);
+        lensFov = fov;
         camPos.z -= z * 12;
         look.lerp(WIN, ramp(t, tRise + 0.3, tS2 - 0.04, ease.inOutCubic));
         fov = fov * Math.pow(0.5 / fov, z);
@@ -697,7 +705,8 @@ export function create(ctx, segment) {
       camera.fov = fov; camera.near = t < tFoot + 0.4 && t > tFoot - 0.35 ? 0.02 : 0.1; camera.far = 4000; camera.updateProjectionMatrix();
       // with DOF off the focus distance is free: it sets where an explore orbit is centred (near, so the rig
       // stays over the flat site instead of swinging out into the crater field)
-      api.dof.amount = dofAmt; api.dof.focus = dofAmt > 0.01 ? dofFocus : Math.min(dofFocus, 22); api.dof.range = dofRange;
+      // … except in the vertigo / crash-zoom telephoto, where the orbit pivots on the LM so the Earth stays behind it
+      api.dof.amount = dofAmt; api.dof.focus = dofAmt > 0.01 ? dofFocus : t > tFoot + 0.55 ? camPos.distanceTo(LM_C) : Math.min(dofFocus, 22); api.dof.range = dofRange;
       const inFlash = envelope(t, tS1 - 0.02, tS1 + 0.22, 0.02, 0.2, ease.outQuad);
       api.exposure = 1 + inFlash * 0.9 + ramp(t, tS2 - 0.1, tS2) * 0.15;
       api.bloom.strength = 0.34 + ramp(t, tS2 - 0.15, tS2) * 0.3;

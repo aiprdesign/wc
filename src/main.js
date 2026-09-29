@@ -1,8 +1,13 @@
 // Entry point: load fonts, sequences and the procedural score, then hand over to the transport UI.
+// hashopts first: it narrows a combined fragment (#square&experience) to the format token before
+// timeline.js reads it
+import { HASH_EXPERIENCE, restoreHash, setHashExperience } from './core/hashopts.js';
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
 import { LiveCam } from './core/live.js';
+import { Experience } from './core/experience.js';
+import { Ambient } from './audio/ambient.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
 import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE, OUTPUT_ASPECT } from './timeline.js';
@@ -41,6 +46,7 @@ async function loadScore() {
 }
 
 async function boot() {
+  restoreHash();
   // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion and
   // finer shadows. ?ss=2 supersamples (renders at 2× and filters down), ?ao=0/1 overrides AO,
   // ?shadows=1|2|4 overrides the shadow-map multiplier.
@@ -68,24 +74,30 @@ async function boot() {
   setStatus('Composing score…');
   const score = await scorePromise;
   setLoad(1);
-  addEventListener('resize', () => { engine.resize(); if (!player.playing) engine.render(player.time, 0); });
-
   const player = new Player(engine, score?.buffer ?? null);
   const explorer = new Explorer(engine, $('film'));
+  // EXPERIENCE: slow-motion drone flythrough with a live ambient score (no narration)
+  const ambient = params.has('noaudio') ? null : new Ambient();
+  let experience = null;
+  const nowT = () => (experience?.active ? experience.t : player.time);
+  addEventListener('resize', () => { engine.resize(); if (!player.playing && !experience?.playing) engine.render(nowT(), 0); });
   // live camera: drag / scroll / pinch to look around while the film plays (not while exploring)
   const live = new LiveCam(engine, $('film'), {
     isBlocked: () => explorer.active,
-    isPlaying: () => player.playing,
-    onChange: () => engine.render(player.time, 0),
+    isPlaying: () => player.playing || !!experience?.playing,
+    onChange: () => engine.render(nowT(), 0),
   });
   engine.live = live;
+  experience = new Experience(engine, { live, ambient, onTick: (t) => player.onTick(t) });
   // If the GPU driver resets (context lost), reload at the same moment at a lighter quality.
   $('film').addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
     player.pause();
+    const tNow = nowT();
+    experience.pause();
     const q = { ultra: 'high', high: 'medium', medium: 'low' }[params.get('q') ?? 'medium'] ?? 'low';
     const url = new URL(location.href);
-    url.searchParams.set('t', player.time.toFixed(2));
+    url.searchParams.set('t', (tNow / TIME_SCALE).toFixed(2));   // ?t= is story time
     url.searchParams.set('q', q);
     setStatus('The graphics driver reset. Reloading at a lighter quality…');
     intro.classList.remove('hidden', 'ready');
@@ -94,6 +106,8 @@ async function boot() {
   window.__film.player = player;
   window.__film.explore = (filmT, view) => { explorer.view(filmT, view); return filmT; };   // automation: explore views
   window.__film.exploreExit = () => explorer.exit();
+  window.__film.experience = experience;
+  window.__film.ambient = ambient;
   // Deterministic frame access for automated rendering / screenshots.
   // opts: { motionBlur: N sub-frames (0/1 = off), fps: frame rate the shutter is timed against (30) }
   const frameOpts = (o = {}) => [1 / (o.fps || 30), { motionBlur: o.motionBlur ?? 0 }];
@@ -106,12 +120,16 @@ async function boot() {
 
   if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
 
-  setupUI(player, score, explorer);
+  const ui = setupUI(player, score, explorer, experience, ambient);
   intro.classList.add('ready');
   $('play').disabled = false;
-  $('play').focus();
+  $('play-exp').disabled = false;
+  // #experience: the start screen leads with Experience mode (one tap still starts it: audio unlock)
+  if (HASH_EXPERIENCE) { document.body.classList.add('exp-link'); $('play-exp').focus(); } else $('play').focus();
   window.__film.ready = true;
-  if (params.has('autoplay')) begin(player);
+  window.__film.enterExperience = ui.enterExperience;
+  window.__film.exitExperience = ui.exitExperience;
+  if (params.has('autoplay')) { if (HASH_EXPERIENCE) ui.enterExperience(); else begin(player); }
 }
 
 function begin(player) {
@@ -124,8 +142,12 @@ function fmt(t) {
   return `${m}:${s.toFixed(1).padStart(4, '0')}`;
 }
 
-function setupUI(player, score, explorer) {
+function setupUI(player, score, explorer, experience, ambient) {
   const body = document.body;
+  const exp = experience;
+  const playing = () => (exp.active ? exp.playing : player.playing);
+  const seek = (t) => (exp.active ? expSeek(t) : player.seek(t));
+  const currentTime = () => (exp.active ? exp.t : player.currentTime);
   const scrub = $('scrub'), fill = $('scrub-fill'), tip = $('scrub-tip'), time = $('time');
   $('chapters').innerHTML = SEGMENTS.slice(1).map((s) => `<i style="left:${(s.start * TIME_SCALE / DURATION) * 100}%"></i>`).join('');
 
@@ -135,15 +157,24 @@ function setupUI(player, score, explorer) {
     scrub.setAttribute('aria-valuenow', t.toFixed(1));
   };
   player.onEnd = () => { body.classList.remove('playing'); showControls(true); };
-  const syncPlaying = () => body.classList.toggle('playing', player.playing);
+  const syncPlaying = () => body.classList.toggle('playing', playing());
+  const toggle = async () => {
+    if (!exp.active) await player.toggle();
+    else if (exp.playing) exp.pause();
+    else expPlay();
+    syncPlaying();
+  };
 
   $('play').addEventListener('click', () => { begin(player); syncPlaying(); });
-  $('btn-play').addEventListener('click', async () => { await player.toggle(); syncPlaying(); });
-  $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); body.classList.toggle('muted', player.muted); });
+  $('btn-play').addEventListener('click', toggle);
+  $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); ambient?.setMuted(player.muted); body.classList.toggle('muted', player.muted); });
   const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16']];
-  // intro: mark the format in use
+  // intro: mark the format in use (arriving with #experience, a format keeps it: #square&experience)
   const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16' }[OUTPUT_ASPECT] ?? 'wide';
-  document.querySelectorAll('.formats-pick a').forEach((a) => a.setAttribute('aria-current', String(a.dataset.fmt === curHash)));
+  document.querySelectorAll('.formats-pick a').forEach((a) => {
+    a.setAttribute('aria-current', String(a.dataset.fmt === curHash));
+    if (HASH_EXPERIENCE) a.setAttribute('href', `#${a.dataset.fmt}&experience`);
+  });
   const cur = fmts.findIndex(([h]) => h === curHash);
   $('btn-format').textContent = fmts[Math.max(0, cur)][1];
   $('btn-format').addEventListener('click', () => { location.hash = fmts[(Math.max(0, cur) + 1) % fmts.length][0]; });
@@ -153,7 +184,7 @@ function setupUI(player, score, explorer) {
     download(score.encodeWav(score.buffer), 'achievements-of-western-civilization-score.wav');
   });
   $('btn-rec').addEventListener('click', async () => {
-    if (body.classList.contains('recording')) return;
+    if (body.classList.contains('recording') || exp.active) return;
     body.classList.add('recording', 'playing');
     intro.classList.add('hidden');
     await player.record((blob, ext = 'webm') => { body.classList.remove('recording'); download(blob, `achievements-of-western-civilization.${ext}`); });
@@ -166,17 +197,17 @@ function setupUI(player, score, explorer) {
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * DURATION;
   };
   let dragging = false;
-  scrub.addEventListener('pointerdown', (e) => { dragging = true; scrub.setPointerCapture(e.pointerId); player.seek(tAt(e)); });
+  scrub.addEventListener('pointerdown', (e) => { dragging = true; scrub.setPointerCapture(e.pointerId); seek(tAt(e)); });
   scrub.addEventListener('pointermove', (e) => {
     const t = tAt(e), r = scrub.getBoundingClientRect();
     tip.style.left = `${((t / DURATION) * r.width).toFixed(0)}px`;
     tip.textContent = `${fmt(t)} · ${chapterAt(t).title}`;
-    if (dragging) player.seek(t);
+    if (dragging) seek(t);
   });
   scrub.addEventListener('pointerup', () => { dragging = false; });
   scrub.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight') player.seek(player.currentTime + 1);
-    if (e.key === 'ArrowLeft') player.seek(player.currentTime - 1);
+    if (e.key === 'ArrowRight') seek(currentTime() + 1);
+    if (e.key === 'ArrowLeft') seek(currentTime() - 1);
   });
 
   // Auto-hiding controls
@@ -185,36 +216,91 @@ function setupUI(player, score, explorer) {
     controls.classList.add('show');
     body.classList.remove('hide-cursor');
     clearTimeout(hideTimer);
-    if (!stay) hideTimer = setTimeout(() => { if (player.playing) { controls.classList.remove('show'); body.classList.add('hide-cursor'); } }, 2200);
+    if (!stay) hideTimer = setTimeout(() => { if (playing()) { controls.classList.remove('show'); body.classList.add('hide-cursor'); } }, 2200);
   }
   addEventListener('pointermove', () => { if (intro.classList.contains('hidden') && !body.classList.contains('recording')) showControls(); });
 
   addEventListener('keydown', async (e) => {
     if (e.target.closest?.('button') && (e.key === ' ' || e.key === 'Enter')) return;
     const k = e.key.toLowerCase();
-    if (k === ' ') { e.preventDefault(); if (!intro.classList.contains('hidden')) begin(player); else await player.toggle(); syncPlaying(); showControls(); }
-    else if (k === 'arrowright') { player.seek(player.currentTime + 2); showControls(); }
-    else if (k === 'arrowleft') { player.seek(player.currentTime - 2); showControls(); }
+    if (k === ' ') { e.preventDefault(); if (!intro.classList.contains('hidden')) begin(player); else await toggle(); syncPlaying(); showControls(); }
+    else if (k === 'arrowright') { seek(currentTime() + 2); showControls(); }
+    else if (k === 'arrowleft') { seek(currentTime() - 2); showControls(); }
     else if (k === 'm') $('btn-mute').click();
     else if (k === 'f') $('btn-fs').click();
     else if (k === 'r') $('btn-rec').click();
+    else if (k === 's' && exp.active) $('btn-speed').click();
     else if (k === 'h') controls.classList.toggle('show');
-    else if (/^[0-9]$/.test(k)) { player.seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start * TIME_SCALE + 0.01); showControls(); }
+    else if (/^[0-9]$/.test(k)) { seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start * TIME_SCALE + 0.01); showControls(); }
   });
   // EXPLORE: pause and fly through the frozen 3D scene
+  // (in Experience mode the ambient score plays on while exploring, and the flight resumes after)
+  let resumeAfterExplore = false;
   const setExplore = (on) => {
-    if (on) { if (player.playing) { player.pause(); syncPlaying(); } intro.classList.add('hidden'); explorer.enter(player.time); }
-    else explorer.exit();
+    if (on) {
+      resumeAfterExplore = exp.active && exp.playing;
+      if (exp.active) { exp.pause({ keepAudio: true }); syncPlaying(); } else if (player.playing) { player.pause(); syncPlaying(); }
+      intro.classList.add('hidden');
+      explorer.enter(exp.active ? exp.t : player.time);
+    } else explorer.exit();
     body.classList.toggle('exploring-on', on);
     $('btn-explore').setAttribute('aria-pressed', String(on));
     showControls(on);
+    if (!on && resumeAfterExplore && exp.active) { resumeAfterExplore = false; expPlay(); }
   };
   $('btn-explore').addEventListener('click', () => setExplore(!explorer.active));
   addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'e' && !e.target.closest?.('input, textarea')) { e.preventDefault(); setExplore(!explorer.active); }
     else if (k === 'escape' && explorer.active) setExplore(false);
+    else if (k === 'escape' && exp.active) exitExperience();
   });
+
+  // EXPERIENCE mode
+  const expPlay = () => {
+    if (explorer.active) { resumeAfterExplore = false; setExplore(false); }
+    exp.play(); syncPlaying(); showControls();
+  };
+  const expSeek = (t) => { exp.seek(t); if (explorer.active) explorer.enter(exp.t); };
+  let hintTimer;
+  const enterExperience = () => {
+    if (exp.active) return;
+    if (explorer.active) setExplore(false);
+    const t = player.currentTime;
+    player.pause();
+    intro.classList.add('hidden');
+    body.classList.add('experience-on');
+    body.classList.remove('live-hint-on');
+    $('btn-exp').setAttribute('aria-pressed', 'true');
+    $('btn-exp').setAttribute('aria-label', 'Exit experience mode');
+    $('btn-speed').textContent = `${exp.speed}×`;
+    exp.enter(t >= DURATION - 0.05 ? 0 : t);   // starts the ambient score inside this tap
+    setHashExperience(true);
+    syncPlaying();
+    showControls();
+    body.classList.add('exp-hint-on');
+    clearTimeout(hintTimer); hintTimer = setTimeout(() => body.classList.remove('exp-hint-on'), 7000);
+  };
+  // back to the film at the same moment (playing on, with its soundtrack, if the flight was playing)
+  const exitExperience = () => {
+    if (!exp.active) return;
+    if (explorer.active) setExplore(false);
+    const wasPlaying = exp.playing;
+    const t = exp.exit();
+    body.classList.remove('experience-on', 'exp-hint-on');
+    $('btn-exp').setAttribute('aria-pressed', 'false');
+    $('btn-exp').setAttribute('aria-label', 'Experience mode');
+    setHashExperience(false);
+    player.time = t;
+    if (wasPlaying) player.play(t);
+    else { engine.render(t, 0); player.onTick(t); }
+    syncPlaying();
+    showControls();
+  };
+  const engine = player.engine;
+  $('play-exp').addEventListener('click', enterExperience);
+  $('btn-exp').addEventListener('click', () => (exp.active ? exitExperience() : enterExperience()));
+  $('btn-speed').addEventListener('click', () => { $('btn-speed').textContent = `${exp.cycleSpeed()}×`; showControls(); });
   const origPlay = player.play.bind(player);
   let hintShown = false;
   player.play = async (...a) => {
@@ -225,6 +311,7 @@ function setupUI(player, score, explorer) {
   };
   const origSeek = player.seek.bind(player);
   player.seek = (t) => { origSeek(t); if (explorer.active) explorer.enter(player.time); };   // scrubbing re-poses the world
+  return { enterExperience, exitExperience };
 }
 
 function download(blob, name) {

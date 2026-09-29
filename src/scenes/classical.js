@@ -105,12 +105,23 @@ function withBuild(material, edgeColor = '#ffb766') {
   return material;
 }
 
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
+// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back so the
+// plate glows as it does in the film.
+function headingDuck(ctx, inst, T) {
+  let d = 0;
+  const items = ctx.engine?.words3d?.items;
+  if (items) for (const it of items) if (it.inst === inst) d = Math.max(d, ramp(T - it.t0, 0, 0.35) * (1 - ramp(T, it.t1 - 0.2, it.t1 + 0.35)));
+  return d;
+}
+
 export function create(ctx, segment) {
   const cue = (name) => CUES[name] - segment.start;
   const scene = new THREE.Scene();
   scene.environment = ctx.env;
   scene.environmentIntensity = 0.12;
-  scene.fog = new THREE.FogExp2('#0d0a07', 0.018);
+  const FOG = 0.018;
+  scene.fog = new THREE.FogExp2('#0d0a07', FOG);
   const camera = new THREE.PerspectiveCamera(32, ctx.aspect, 0.1, 300);
 
   // ---------------------------------------------------------------------- temple layout
@@ -321,17 +332,13 @@ export function create(ctx, segment) {
 
   // sky dome: warm horizon glow fading to black
   const sky = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), new THREE.ShaderMaterial({
-    uniforms: { uLit: { value: 0 }, uBelow: { value: 0 }, uFog: { value: scene.fog.color } },
+    uniforms: { uLit: { value: 0 } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `uniform float uLit, uBelow; uniform vec3 uFog; varying vec3 vP;
+    fragmentShader: `uniform float uLit; varying vec3 vP;
       void main(){ float h = vP.y; float sun = pow(max(0.0, dot(vP, normalize(vec3(-0.85, 0.3, 0.2)))), 6.0);
         float band = smoothstep(-0.01, 0.06, h) * (1.0 - smoothstep(0.06, 0.45, h));
         vec3 c = vec3(0.05, 0.035, 0.025) + vec3(0.42, 0.24, 0.1) * band * (0.5 + sun) + vec3(0.9, 0.6, 0.3) * sun * 0.25 * smoothstep(-0.02, 0.1, h);
-        c *= uLit;
-        // explore / live off-axis only: from up high the dome's horizon band sits below the true horizon, past
-        // the ground's rim — melt the bottom of the dome into the fog the far ground already wears
-        c = mix(c, uFog, uBelow * (1.0 - smoothstep(-0.007, 0.03, h)));
-        gl_FragColor = vec4(c, 1.0); }`,
+        gl_FragColor = vec4(c * uLit, 1.0); }`,
     side: THREE.BackSide, depthWrite: false, fog: false,
   }));
   scene.add(sky);
@@ -535,7 +542,7 @@ export function create(ctx, segment) {
     fill.intensity = 0.05 + lit * 0.35;
     scene.environmentIntensity = 0.1 + lit * 0.32;
     sky.material.uniforms.uLit.value = lit;
-    sky.material.uniforms.uBelow.value = 0; ground.scale.setScalar(1);   // (explore hooks extend the set)
+    ground.scale.setScalar(1); scene.fog.density = FOG;   // (the explore hooks extend the set)
     shafts.forEach((s, i) => { s.material.uniforms.uIntensity.value = 0.07 * lit * (0.8 + 0.2 * Math.sin(t * 0.7 + i)); s.material.uniforms.uTime.value = t; });
     dust.tick(t, info);
     dust.u.opacity = 0.2 + lit * 0.45;
@@ -554,6 +561,7 @@ export function create(ctx, segment) {
     // subtle handheld drift
     camPos.x += Math.sin(t * 0.9) * 0.03; camPos.y += Math.sin(t * 1.3 + 1) * 0.02;
     camera.position.copy(camPos);
+    dirY = camPos.y;
     camera.lookAt(camLook);
     camera.fov = lerp(34, 38, pull);
     camera.updateProjectionMatrix();
@@ -588,11 +596,11 @@ export function create(ctx, segment) {
 
   // Explore 3D: while the lone column is still being modelled it would float a metre above the ground —
   // stand it on its (not yet dressed) crepidoma, which the build front raises in the film a moment later.
-  let lastTempleY = -2, lastT = 0;
+  let lastTempleY = -2, lastT = 0, dirY = 3;
   const _d = new THREE.Vector3(), _c = new THREE.Vector3();
   const OVER_C = new THREE.Vector3(0, 4, FRONT_Z + 0.7), OVER_N = new THREE.Vector3(0, 0, 1);
   const ARCH_C = new THREE.Vector3(13.5, 3, FRONT_Z - 1.5), ARCH_N = new THREE.Vector3(Math.sin(-0.35), 0, Math.cos(-0.35));
-  const facing = (cam, C, N) => smoothstep(0.25, 0.6, _d.copy(_c.setFromMatrixPosition(cam.matrixWorld)).sub(C).normalize().dot(N));
+  const facing = (cam, C, N) => smoothstep(0.4, 0.75, _d.copy(_c.setFromMatrixPosition(cam.matrixWorld)).sub(C).normalize().dot(N));
   function explore(t) {
     if (lastTempleY < 0.3) {
       stoneMat.userData.build.uBuild.value = 0.3;                  // steps only: every other stone part starts above y = 6
@@ -600,17 +608,20 @@ export function create(ctx, segment) {
       templeCols.visible = false;
     }
     // seen from up high the ground disc's rim showed against the dome's horizon band: carry the floor out to
-    // the dome and melt the dome's lower edge into the fog (update() resets both)
+    // the dome (update() resets it; explorePosed thins the haze with height)
     ground.scale.setScalar(149.5 / 120);
-    sky.material.uniforms.uBelow.value = 1;
     // Explore hides the chapter heading, and with it the bloom duck the film applies under it: the
     // wireframe / clay column (a strong additive emitter under the key spot) blew out into a glare
-    if (ctx.engine?.explore?.active) bloom.strength *= lerp(0.55, 1, ramp(t, tMarble - 0.2, tMarble + 0.4));
+    if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
   }
   // callouts turn to the viewer's camera; the flat engineering drawings fade out as they turn edge-on
   function explorePosed(cam) {
     cam.updateMatrixWorld();
     for (const c of partCallouts) if (c.visible) faceCamera(c, cam);
+    // risen well above the film's eye, the fogged far ground read as a black ring under the horizon glow:
+    // thin the haze with height (unchanged at the film's own eye level)
+    const up = (_c.setFromMatrixPosition(cam.matrixWorld).y + 1.05) / Math.max(0.5, dirY + 1.05);
+    scene.fog.density = FOG * lerp(1, 0.25, smoothstep(1.3, 3.0, up));
     if (lastT > tOver - 0.1) setOverlays(lastT, facing(cam, OVER_C, OVER_N), facing(cam, ARCH_C, ARCH_N));
   }
   const api = { scene, camera, hud, update, explore, explorePosed, dof, bloom, exposure: 1, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 3.0 } };

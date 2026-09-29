@@ -5,11 +5,39 @@
 // Explore), completes camera cheats through the scenes' `explore(t)` hooks while it is off-axis,
 // and glides back to the director's framing a few seconds after the viewer lets go.
 // With no input the offset is exactly zero, so offline renders are untouched.
+//
+// DRONE (Experience mode, `setDrone(true)`): the offset steers itself. A slow, never-repeating
+// path (sums of sines with incommensurate periods, eased) orbits, cranes and pushes around each
+// shot's subject inside a wider window (DRONE, narrowed by the scene's `exploreLimits`), with
+// the scenes' explore hooks always on. The viewer can still drag / pinch / scroll: the drone
+// holds its course while they steer and resumes a few seconds after they let go.
 import * as THREE from 'three';
 
 const LIVE = { yaw: 0.7, pitchDown: 0.25, pitchUp: 0.5, zoomIn: 0.5, zoomOut: 2.0 };
+const DRONE = { yaw: 1.0, pitchDown: 0.3, pitchUp: 0.7, zoomIn: 0.5, zoomOut: 2.4 };
 const IDLE_RETURN = 3.0;   // s without input before the camera drifts home
 const HOOKS_ON = 0.04;     // offset strength above which scenes complete their sets
+
+// Drone path: each axis is a normalised sum of slow sines (periods in seconds, no common
+// multiple, so the flight never repeats), softly saturated so it lingers near the extremes.
+const PATH = {
+  yaw: [[1, 43, 0.3], [0.55, 71, 2.1], [0.3, 29, 4.0]],
+  pitch: [[1, 59, 1.1], [0.5, 37, 5.2], [0.25, 97, 0.7]],
+  zoom: [[1, 53, 2.6], [0.5, 31, 0.4], [0.35, 89, 3.3]],
+};
+const wave = (parts, s) => {
+  let v = 0, n = 0;
+  for (const [a, P, ph] of parts) { v += a * Math.sin((2 * Math.PI * s) / P + ph); n += a; }
+  return Math.tanh(1.7 * v / n) / Math.tanh(1.7);
+};
+export function dronePath(s) {
+  return {
+    yaw: wave(PATH.yaw, s),
+    pitch: 0.3 + 0.7 * wave(PATH.pitch, s),            // biased upward: a crane that rises over the set
+    zoom: 0.15 + 0.85 * wave(PATH.zoom, s),            // biased outward: reveal more of the world
+    reach: 0.7 + 0.3 * Math.sin((2 * Math.PI * s) / 127 + 1.9),   // the whole move breathes
+  };
+}
 
 export class LiveCam {
   constructor(engine, canvas, { isBlocked = () => false, isPlaying = () => true, onChange = () => {} } = {}) {
@@ -21,6 +49,9 @@ export class LiveCam {
     this.prev = performance.now();
     this.pointers = new Map();
     this.hooked = new Set();
+    this.droneOn = false;
+    this.tau = 0; this.droneRate = 0; this.droneW = 0;
+    this.dn = { yaw: 0, pitch: 0, zoom: 0, reach: 0 };
     this._P = new THREE.Vector3(); this._C = new THREE.Vector3(); this._F = new THREE.Vector3();
     this._Up = new THREE.Vector3(); this._R = new THREE.Vector3();
     this._q = new THREE.Quaternion(); this._qy = new THREE.Quaternion(); this._qp = new THREE.Quaternion();
@@ -35,13 +66,34 @@ export class LiveCam {
 
   recentre() { this.target.yaw = 0; this.target.pitch = 0; this.target.zoom = 1; this.poke(); }
 
+  // Experience mode: the camera flies itself. Off: every hooked scene is handed back.
+  setDrone(on) {
+    if (on === this.droneOn) return;
+    this.droneOn = on;
+    this.target.yaw = this.target.pitch = this.cur.yaw = this.cur.pitch = 0;
+    this.target.zoom = this.cur.zoom = 1;
+    this.droneW = 0; this.droneRate = 0;
+    if (on) this.tau = 11 + Math.random() * 60;   // a different flight every time
+    else { this.lim = { ...LIVE }; this.unhookAll(); }
+  }
+
+  unhookAll() { for (const inst of [...this.hooked]) this._unhook(inst); }
+
   // Engine hook, once per rendered frame: ease toward the target, and home when idle.
   tick() {
     const now = performance.now(), dt = Math.min(0.1, Math.max(0, (now - this.prev) / 1000));
     this.prev = now;
     const idle = (now - this.lastInput) / 1000;
+    if (this.droneOn) {
+      // the drone holds its course while the viewer steers (and while paused), then eases back in
+      const run = this.isPlaying() && !this.pointers.size && idle > IDLE_RETURN ? 1 : 0;
+      this.droneRate += (run - this.droneRate) * (1 - Math.exp(-dt / 1.4));
+      this.tau += dt * this.droneRate;
+      this.droneW = Math.min(1, this.droneW + (dt * this.droneRate) / 6);   // lifts off gently from the director's framing
+      this.dn = dronePath(this.tau);
+    }
     if (this.isPlaying() && !this.pointers.size && idle > IDLE_RETURN) {
-      const k = 1 - Math.exp(-dt / 0.9);
+      const k = 1 - Math.exp(-dt / (this.droneOn ? 1.8 : 0.9));
       this.target.yaw -= this.target.yaw * k; this.target.pitch -= this.target.pitch * k;
       this.target.zoom = Math.exp(Math.log(this.target.zoom) * (1 - k));
     }
@@ -55,19 +107,29 @@ export class LiveCam {
   // Engine hook, after a sequence's update and before headings/rendering: offset its camera.
   apply(inst, t) {
     inst._liveFocus = 1;
-    const a = this.amount;
-    if (a < 1e-4) { this._unhook(inst); return; }
-    const L = inst.exploreLimits ?? {};
+    const a = this.amount, drone = this.droneOn;
+    if (a < 1e-4 && !drone) { this._unhook(inst); return; }
+    const L = inst.exploreLimits ?? {}, B = drone ? DRONE : LIVE;
     const lim = this.lim = {
-      yaw: Math.min(LIVE.yaw, L.yaw ?? LIVE.yaw), pitchDown: Math.min(LIVE.pitchDown, L.pitchDown ?? LIVE.pitchDown),
-      pitchUp: Math.min(LIVE.pitchUp, L.pitchUp ?? LIVE.pitchUp),
-      zoomIn: Math.max(LIVE.zoomIn, L.zoomIn ?? LIVE.zoomIn), zoomOut: Math.min(LIVE.zoomOut, L.zoomOut ?? LIVE.zoomOut),
+      yaw: Math.min(B.yaw, L.yaw ?? B.yaw), pitchDown: Math.min(B.pitchDown, L.pitchDown ?? B.pitchDown),
+      pitchUp: Math.min(B.pitchUp, L.pitchUp ?? B.pitchUp),
+      zoomIn: Math.max(B.zoomIn, L.zoomIn ?? B.zoomIn), zoomOut: Math.min(B.zoomOut, L.zoomOut ?? B.zoomOut),
     };
-    const yaw = THREE.MathUtils.clamp(this.cur.yaw, -lim.yaw, lim.yaw);
-    const pitch = THREE.MathUtils.clamp(this.cur.pitch, -lim.pitchDown, lim.pitchUp);
-    const zoom = THREE.MathUtils.clamp(this.cur.zoom, lim.zoomIn, lim.zoomOut);
+    let dYaw = 0, dPitch = 0, dZoom = 1;
+    if (drone) {
+      // the drone's own move, scaled into this shot's window (a margin short of its edges)
+      const dn = this.dn, A = this.droneW * dn.reach;
+      dYaw = dn.yaw * lim.yaw * 0.8 * A;
+      dPitch = (dn.pitch >= 0 ? dn.pitch * lim.pitchUp * 0.75 : dn.pitch * lim.pitchDown * 0.6) * A;
+      const zIn = Math.max(lim.zoomIn, 0.72), zOut = Math.min(lim.zoomOut, 1.75);
+      dZoom = Math.exp((dn.zoom >= 0 ? dn.zoom * Math.log(zOut) : -dn.zoom * Math.log(zIn)) * A);
+    }
+    const yaw = THREE.MathUtils.clamp(dYaw + this.cur.yaw, -lim.yaw, lim.yaw);
+    const pitch = THREE.MathUtils.clamp(dPitch + this.cur.pitch, -lim.pitchDown, lim.pitchUp);
+    const zoom = THREE.MathUtils.clamp(dZoom * this.cur.zoom, lim.zoomIn, lim.zoomOut);
     // complete the set (e.g. the close-up's lone boot becomes the whole astronaut)
-    if (a > HOOKS_ON) {
+    const hooks = drone || a > HOOKS_ON;
+    if (hooks) {
       try { inst.explore?.(t); } catch { /* scene hook */ }
       this.hooked.add(inst);
     } else this._unhook(inst);
@@ -90,8 +152,8 @@ export class LiveCam {
     cam.position.copy(P);
     if (clamped) { cam.up.set(0, 1, 0); cam.lookAt(C); } else cam.quaternion.premultiply(rot);
     cam.updateMatrixWorld();
-    inst._liveFocus = zoom;                                                // depth of field follows the new distance
-    if (a > HOOKS_ON) { try { inst.explorePosed?.(cam); } catch { /* scene hook */ } }
+    inst._liveFocus = d > 0 ? cam.getWorldPosition(this._F).distanceTo(C) / d : zoom;   // depth of field follows the new distance
+    if (hooks) { try { inst.explorePosed?.(cam); } catch { /* scene hook */ } }
   }
 
   _unhook(inst) {

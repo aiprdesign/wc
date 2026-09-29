@@ -44,6 +44,9 @@ export class Engine {
     this.instances = new Map();
     this.width = 2; this.height = 1;
     this.lastT = 0;
+    // clean picture (Experience mode): no headings, HUD, titles or interludes, but, unlike explore,
+    // every sequence and transition keeps playing. Off by default: the film is untouched.
+    this.clean = false;
   }
 
   // Build shared resources and every sequence. `modules` maps segment id → scene module.
@@ -231,7 +234,11 @@ export class Engine {
     }
     // explore mode: the viewer's rig drives this sequence's camera; headings step aside
     const ex = this.explore?.active && this.explore.inst === inst ? this.explore : null;
-    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else { this.live?.apply(inst, info.t); this.words3d?.apply(inst, T); }
+    const clean = ex || this.clean;
+    if (ex) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; ex.prepare(info.t); } else {
+      this.live?.apply(inst, info.t);
+      if (clean) { this.words3d?.hideAll(inst); inst._wordsDuck = 0; } else this.words3d?.apply(inst, T);
+    }
     r.setRenderTarget(rt);
     const bg = inst.background ?? 0x000000;
     r.setClearColor(bg, 1);
@@ -250,10 +257,10 @@ export class Engine {
     r.render(inst.scene, cam);
     const dof = inst.dof;
     // The HUD is composited after depth of field so screen-space typography stays razor sharp.
-    const drawHUD = (target) => { if (inst.hud && !ex) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
+    const drawHUD = (target) => { if (inst.hud && !clean) { r.setRenderTarget(target); r.clearDepth(); r.render(inst.hud.scene, inst.hud.camera); } };
     // chapter headings: a 3D overlay drawn over the finished (depth-of-field) plate with the same
     // lens, so they never intersect scene geometry and are never blurred by the scene's focus
-    const drawWords = (target) => { if (ex) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
+    const drawWords = (target) => { if (clean) return; r.setRenderTarget(target); r.clearDepth(); this.words3d?.renderOverlay(inst, r, cam); };
     let out = rt;
     const useDof = dof && dof.amount > 0.01 && !ex;
     const useAO = this.renderAO(inst, rt, cam);
@@ -424,7 +431,7 @@ export class Engine {
       tu.uMode.value = TRANSITION_MODES[a.transition] ?? 0;
       tu.uSingle.value = 0;
       tu.uTriOn.value = 0;
-      if (a.transition === 'letter') this.withMatte(instA.camera, () => this.words3d?.letterWindow(instA, tu));
+      if (a.transition === 'letter' && !this.clean) this.withMatte(instA.camera, () => this.words3d?.letterWindow(instA, tu));
       const s = p * p * (3 - 2 * p);
       bloomStrength = THREE.MathUtils.lerp(bloomStrength, (instB.bloom?.strength ?? 0.7) * (1 - 0.45 * (instB._wordsDuck ?? 0)), s);
       exposure = THREE.MathUtils.lerp(exposure, instB.exposure ?? 1, s);
@@ -436,9 +443,10 @@ export class Engine {
     r.setRenderTarget(this.comp);
     this.transQuad.render(r);
     // a heading the camera zooms THROUGH sits over the composite (its counter frames the next shot)
-    if (!ex) this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
+    const clean = ex || this.clean;
+    if (!clean) this.withMatte(instA.camera, () => this.words3d?.renderPost(instA, r, instA.camera));
     // chapter headings and story cards sit above every sequence (before bloom, so they glow softly)
-    if (!ex && this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
+    if (!clean && this.titles?.update(T)) { r.clearDepth(); r.render(this.titles.scene, this.titles.camera); }
 
     this.bloom.strength = bloomStrength;
     this.bloom.render(r, null, this.comp, dt, false);

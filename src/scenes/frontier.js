@@ -466,9 +466,19 @@ export function create(ctx, segment) {
       if (cam.position.y < gy) { cam.position.y = gy; cam.updateMatrixWorld(); }
     }
     sky.position.copy(cam.position); stars.position.copy(cam.position);
+    if (visionSet.visible) sunDisc.position.copy(cam.position).addScaledVector(sunNow, 600);
+    // the live camera keeps the HUD on: re-pin the 3D callouts through the viewer's lens (update() pins them to the film's)
+    if (shotNow === 4) {
+      projHud(tmp.copy(heliPos).add(tmp2.set(0.1, 0.45, 0)), callHeli.position); callHeli.position.z = 0;
+      projHud(tmp.copy(rover.group.position).add(tmp2.set(0, 2.4, 0)), callRover.position); callRover.position.z = 0;
+    } else if (shotNow === 8) {
+      projHud(tmp.copy(cam.position).addScaledVector(EARTH_C, 500), callEarth.position); callEarth.position.z = 0;
+    }
   };
   let shotNow = 0;
-  const EX_LIM = { 2: { zoomIn: 0.6, fly: 1.2 }, 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
+  // 1: don't push the lens into Hubble's arrays; 2: the additive helix blows out from inside or from far off;
+  // 5: a 2.5D telephoto plate (the Moon is a backdrop in one direction), kept within a few degrees, and out of the plume glare
+  const EX_LIM = { 1: { zoomIn: 0.7 }, 2: { zoomIn: 0.85, zoomOut: 1.6, fly: 1.2 }, 5: { yaw: 0.12, pitchDown: 0.06, pitchUp: 0.1, zoomIn: 0.8, zoomOut: 1.5, fly: 0.06 }, 7: { pitchDown: 0.25 }, 9: { fly: 1.6 } };
 
   const api = {
     scene, camera, hud,
@@ -477,7 +487,7 @@ export function create(ctx, segment) {
       exploring = true;
       skirt.visible = wM.visible;
       webb.sweep.uSweepK.value = 0;              // the light sweep is a film accent: off while the set is explored
-      webb.sweep.uSpecMax.value = 1.4;           // … and a sun glint off the gold from a free angle is capped, so it can't flood the frame
+      webb.sweep.uSpecMax.value = 0.6;           // … and a sun glint off the gold from a free angle is capped, so it can't flood the frame
     },
     explorePosed,
     exploreEnd() { exploring = false; skirt.visible = false; },

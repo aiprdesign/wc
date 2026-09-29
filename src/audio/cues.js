@@ -8,26 +8,54 @@ import * as O from './orchestra.js';
 import { groove } from './music.js';
 
 function opening(S) {
-  // Distant atmospheric resonance: sub drone + airy filtered noise, very wet.
+  // v12 — trailer cold open (the hits themselves — sub, taiko, BRAAM, stabs — live in music.js)
+  const ign = C.ignition, ff = C.flashForward, pA = C.pointAppears, tL = C.titleLocked;
+  // Distant atmospheric resonance: the sub drone lands with the ignition, airy noise above it
   S.at(0, () => {
-    I.drone(S, 0, 8.5, 26, { level: 0.13, attack: 2.2, release: 2.5, beat: 0.18 });       // D1
-    I.drone(S, 0.3, 8.0, 38, { level: 0.05, attack: 2.5, release: 2.5, beat: 0.31 });    // D2
-    X.air(S, 0, 7.5, { level: 0.035, freq: 2400, attack: 1.8, release: 2.5 });
+    I.drone(S, ign, 8.5, 26, { level: 0.13, attack: 0.4, release: 2.5, beat: 0.18 });       // D1
+    I.drone(S, pA, 8.0, 38, { level: 0.05, attack: 1.5, release: 2.5, beat: 0.31 });       // D2
+    X.air(S, 0, 7.5, { level: 0.035, freq: 2400, attack: 1.2, release: 2.5 });
   });
-  // pointAppears: a tiny crystalline shimmer
-  S.at(C.pointAppears, () => {
-    [98, 105, 93, 110].forEach((m, i) => I.bell(S, C.pointAppears + i * 0.045, m, { level: 0.02, pan: [-0.3, 0.35, 0.1, -0.1][i], bus: 'far', decay: 2.2 }));
+  // ignition: a reversed suck out of silence into the first frame of light, then its crackle
+  S.at(0, () => {
+    I.swellIn(S, ign, ign, { level: 0.1, top: 9000 });
+    I.revCymbal(S, ign, ign, { level: 0.06 });
   });
-  // gridStart → gridDone: faint ticks as the grid lines draw, accelerating
-  for (let k = 0; k < 14; k++) {
-    const t = C.gridStart + (C.gridDone - C.gridStart) * (k / 14) ** 0.8;
-    S.at(t, () => X.click(S, t, { level: 0.012 + 0.001 * k, freq: 5200 + k * 150, body: 2600, q: 6, decay: 0.01, pan: (k % 2 ? 0.6 : -0.6) * (1 - k / 20), bus: 'far' }));
+  S.at(ign, () => {
+    X.sparks(S, ign + 0.02, 0.9, { level: 0.09, pan: 0, bursts: 1.6 });
+    I.whoosh(S, ign, 0.7, { level: 0.08, f0: 4000, f1: 300, pan0: -0.2, pan1: 0.2, peak: 0.12, kind: 'white' });   // the shockwave passing
+  });
+  // flash-forward: each silhouette cuts in on its 8th with a whip of air and its own voice —
+  // stone (column), iron (gear), fire (rocket), glass (the Moon)
+  for (let k = 0; k < 4; k++) {
+    const t = ff + k * 0.25, pan = [-0.35, 0.35, -0.2, 0.25][k];
+    S.at(t - 0.09, () => I.whoosh(S, t - 0.09, 0.2, { level: 0.05, f0: 900, f1: 6000, pan0: -pan, pan1: pan, peak: 0.45, kind: 'white' }));
+    S.at(t, () => X.sparks(S, t + 0.01, 0.12, { level: 0.035, pan, bursts: 1 }));
   }
+  S.at(ff, () => { I.stoneTap(S, ff, { level: 0.22, pan: -0.3 }); X.thud(S, ff, { level: 0.2, f: 62, tone: 900, decay: 0.3 }); });
+  S.at(ff + 0.25, () => { I.metal(S, ff + 0.25, 196, { level: 0.1, decay: 0.7, pan: 0.3 }); X.click(S, ff + 0.25, { level: 0.08, freq: 2400, body: 700, decay: 0.03, pan: 0.3 }); });
+  S.at(ff + 0.5, () => I.whoosh(S, ff + 0.5, 0.28, { level: 0.08, f0: 180, f1: 3200, pan0: 0, pan1: 0, peak: 0.25, kind: 'pink' }));   // ignition roar, rising
+  S.at(ff + 0.75, () => [93, 100, 105].forEach((m, i) => I.bell(S, ff + 0.75 + i * 0.03, m, { level: 0.03, pan: 0.25 - i * 0.2, bus: 'far', decay: 1.6 })));
+  // … all four collapse into the point: a suck, then its crystalline glint
+  S.at(pA - 0.14, () => I.swellIn(S, pA, 0.14, { level: 0.05, top: 7000 }));
+  S.at(pA, () => {
+    [98, 105, 93, 110].forEach((m, i) => I.bell(S, pA + i * 0.035, m, { level: 0.028, pan: [-0.3, 0.35, 0.1, -0.1][i], bus: 'far', decay: 2.2 }));
+  });
+  // the construction: a hard tick on every 8th as the strokes land (16ths into the fly-through),
+  // then a held breath — silence — for the 16th before the SLAM
+  for (let t = pA, k = 0; t < tL - 0.125 - 1e-6; t += t < C.flyThrough - 1e-6 ? 0.25 : 0.125, k++) {
+    const u = (t - pA) / (tL - pA);
+    S.at(t, () => X.click(S, t, { level: 0.03 + 0.05 * u, freq: k % 2 ? 2600 : 3600, body: 1300, q: 5, decay: 0.012, pan: k % 2 ? 0.45 : -0.45 }));
+  }
+  // sparks shed from the drawing heads
+  for (const t of [pA, pA + 0.125, pA + 0.25, pA + 0.5]) S.at(t, () => X.sparks(S, t, 0.2, { level: 0.03, pan: S.rand(-0.5, 0.5), bursts: 0.8 }));
   // layers: pencil scratches drafting the layers
-  S.at(C.layersStart, () => X.pencil(S, C.layersStart, 3.9, { level: 0.035, pan: -0.15 }));
-  S.at(2.6, () => X.pencil(S, 2.6, 3.8, { level: 0.02, pan: 0.35, vigor: 1.4 }));
-  // flyThrough
-  S.at(C.flyThrough, () => I.whoosh(S, C.flyThrough, 1.0, { level: 0.08, f0: 200, f1: 2200, pan0: -0.4, pan1: 0.4 }));
+  S.at(C.layersStart, () => X.pencil(S, C.layersStart, C.flyThrough + 0.2, { level: 0.03, pan: -0.15, vigor: 1.4 }));
+  // flyThrough: the push — a long rush of air into the SLAM, pages fluttering past
+  S.at(C.flyThrough, () => I.whoosh(S, C.flyThrough, tL - C.flyThrough + 0.05, { level: 0.12, f0: 180, f1: 3800, pan0: -0.3, pan1: 0.3, peak: 0.85, kind: 'white' }));
+  [[2.8, -0.6], [2.95, 0.6], [3.1, -0.5], [3.22, 0.5]].forEach(([t, p]) => S.at(t, () => X.paperSwish(S, t, 0.18, { level: 0.05, pan0: p, pan1: p * 1.6 })));
+  // the SLAM: its crack and the spark storm
+  S.at(tL, () => X.sparks(S, tL + 0.01, 1.1, { level: 0.1, bursts: 1.8 }));
   // subtitle: soft glint
   S.at(C.subtitle, () => I.bell(S, C.subtitle, 86, { level: 0.02, bus: 'far', pan: 0.2 }));
   // letters become 3D, then fly

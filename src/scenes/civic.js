@@ -190,6 +190,15 @@ function bakeParts(list) {
   }));
 }
 
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
+// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+function headingDuck(ctx, inst, T) {
+  let d = 0;
+  const items = ctx.engine?.words3d?.items;
+  if (items) for (const it of items) if (it.inst === inst) d = Math.max(d, ramp(T - it.t0, 0, 0.35) * (1 - ramp(T, it.t1 - 0.2, it.t1 + 0.35)));
+  return d;
+}
+
 export function create(ctx, segment) {
   const cue = (name) => CUES[name] - segment.start;
   const scene = new THREE.Scene();
@@ -244,7 +253,7 @@ export function create(ctx, segment) {
     const sh = new FoldSheet(1.5 * s, 2.0 * s, 4 + (i % 2), mat);
     sh.position.set(x, y, z);
     scene.add(sh);
-    sheets.push({ sh, mat, base: V(x, y, z), rot: [(R() - 0.5) * 0.6, R() * Math.PI * 2, (R() - 0.5) * 0.5], spin: (R() - 0.5) * 0.5, t0: cue('parchment') + i * 0.07 + R() * 0.08, drift: V((R() - 0.5) * 0.4, (R() - 0.2) * 0.3, (R() - 0.5) * 0.4) });
+    sheets.push({ sh, mat, base: V(x, y, z), rot: [(R() - 0.5) * 0.6, R() * Math.PI * 2, (R() - 0.5) * 0.5], spin: (R() - 0.5) * 0.5, t0: cue('parchment') + i * 0.07 + R() * 0.08, drift: V((R() - 0.5) * 0.4, (R() - 0.2) * 0.3, (R() - 0.5) * 0.4), k: 0 });
   });
 
   // ---------------------------------------------------------------- Greek assembly (Pnyx + stoa)
@@ -502,13 +511,37 @@ export function create(ctx, segment) {
   const pos = new THREE.Vector3(), look = new THREE.Vector3(), sv = new THREE.Vector3();
   const bloom = { strength: 0.8 };
   const dof = { focus: 10, range: 3, amount: 0 };     // never blurs; its focus is the Explore 3D pivot (the stage)
+  const callRev = [0, 0, 0];
+  let lastM1 = 0, lastM2 = 0;
+  const _cp = new THREE.Vector3(), _cd = new THREE.Vector3(), DOC_C = V(0, 1.9, 0.5), STAGE_C = V(0, 1.4, -1);
 
-  return {
+  const api = {
     scene, camera, bloom, dof, exposure: 1,
     exploreLimits: { yaw: 1.15, pitchDown: 0.3, pitchUp: 0.75, zoomIn: 0.35, zoomOut: 2.4, fly: 1.4 },
     // (the kinetic words ignore depth so they read over the set in the film's framing; orbiting, they must not
     // show through the buildings)
-    explore() { stageFloor.visible = true; setWordDepth(true); },
+    explore(t) {
+      stageFloor.visible = true; setWordDepth(true);
+      // explore hides the chapter heading (LAW) and with it the film's bloom duck: put it back
+      if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
+    },
+    // off the film's axis: callouts turn to the viewer, props drifting up to the lens step back, and the
+    // additive particle clouds are kept from stacking into glare (edge-on on the documents, or zoomed out)
+    explorePosed(cam) {
+      cam.updateMatrixWorld();
+      const cp = _cp.setFromMatrixPosition(cam.matrixWorld);
+      for (const S of sheets) if (S.k > 0.002) { S.mat.opacity = S.k * smoothstep(2.2, 4.2, S.sh.position.distanceTo(cp)); S.sh.visible = S.mat.opacity > 0.002; }
+      callGreek.quaternion.copy(cam.quaternion); callParl.quaternion.copy(cam.quaternion);
+      callGreek.reveal(callRev[0], callRev[1] * smoothstep(0.9, 2.0, callGreek.position.distanceTo(cp)));
+      callParl.reveal(callRev[2], smoothstep(0.9, 2.0, callParl.position.distanceTo(cp)));
+      _cd.copy(cp).sub(DOC_C).normalize();
+      let face = 1;
+      for (let i = 0; i < docDefs.length; i++) { const ry = docDefs[i][3]; face = Math.min(face, Math.abs(_cd.x * Math.sin(ry) + _cd.z * Math.cos(ry))); }
+      const edge = lerp(0.15, 1, smoothstep(0.25, 0.7, face));
+      const far = Math.pow(clamp(pos.distanceTo(STAGE_C) / Math.max(0.1, cp.distanceTo(STAGE_C)), 0.35, 1), 1.3);
+      p1.u.opacity *= lerp(1, edge, lastM1) * far;
+      p2.u.opacity *= lerp(1, edge, 1 - lastM2) * far;
+    },
     exploreEnd() { setWordDepth(false); },
     update(t, info) {
       const T = info.T;
@@ -537,7 +570,8 @@ export function create(ctx, segment) {
         // from the documents on, the stage is the frame centre: sheets drifting across it step back
         sv.copy(S.sh.position).project(camera);
         const onStage = (sv.z < 1 ? 1 : 0) * (1 - smoothstep(0.3, 0.6, Math.abs(sv.x))) * (1 - smoothstep(1.6, 2.3, Math.abs(sv.y))) * ramp(t, 1.5, 1.9);   // NDC y spans ±2.39 in the square open matte
-        S.mat.opacity = ramp(t, -0.2, 0.25) * (1 - 0.35 * ramp(t, 2.6, 3.6)) * smoothstep(2.2, 4.2, dCam) * (1 - 0.9 * onStage);
+        S.k = ramp(t, -0.2, 0.25) * (1 - 0.35 * ramp(t, 2.6, 3.6)) * (1 - 0.9 * onStage);
+        S.mat.opacity = S.k * smoothstep(2.2, 4.2, dCam);
         S.sh.visible = S.mat.opacity > 0.002;
       }
 
@@ -547,7 +581,7 @@ export function create(ctx, segment) {
       greek.visible = gd < 0.999;
       p1.tick(t, info); p2.tick(t, info);
       const m1 = ramp(t, 1.3, 2.05, ease.inOutSine);
-      p1.u.mix = m1;
+      p1.u.mix = m1; lastM1 = m1;
       p1.u.noise = 0.02 + 0.12 * Math.sin(Math.PI * m1);
       const p1op = ramp(t, 1.15, 1.45) * lerp(0.6, 1, m1) * (1 - ramp(t, 2.05, 2.35));
       p1.u.opacity = p1op; p1.visible = p1op > 0.002;
@@ -563,7 +597,7 @@ export function create(ctx, segment) {
         D.sh.visible = op > 0.002;
       }
       const m2 = ramp(t, 2.45, 3.15, ease.inOutSine);
-      p2.u.mix = m2;
+      p2.u.mix = m2; lastM2 = m2;
       p2.u.noise = 0.02 + 0.14 * Math.sin(Math.PI * m2);
       const p2op = ramp(t, 2.35, 2.55) * (1 - ramp(t, 3.15, 3.5));
       p2.u.opacity = p2op; p2.visible = p2op > 0.002;
@@ -644,9 +678,10 @@ export function create(ctx, segment) {
       drumColMat.emissiveIntensity = 1.4 * (1 - ramp(t, lg + 0.9, lg + 1.3)) * (t > lg ? 1 : 0) + 0.15;
 
       // callouts
-      callGreek.reveal(ramp(t, 0.45, 0.95, ease.outCubic), 1 - ramp(t, 1.05, 1.3));
+      callRev[0] = ramp(t, 0.45, 0.95, ease.outCubic); callRev[1] = 1 - ramp(t, 1.05, 1.3); callRev[2] = ramp(t, 3.35, 3.8, ease.outCubic);
+      callGreek.reveal(callRev[0], callRev[1]);
       callGreek.quaternion.copy(faceQ);
-      callParl.reveal(ramp(t, 3.35, 3.8, ease.outCubic), 1);
+      callParl.reveal(callRev[2], 1);
       callParl.quaternion.copy(faceQ);
 
       // atmosphere
@@ -658,4 +693,5 @@ export function create(ctx, segment) {
       bloom.strength = 0.8 + 0.2 * envelope(t, wL, wL + 0.6, 0.05, 0.4);
     },
   };
+  return api;
 }

@@ -8,8 +8,8 @@ from kokoro_onnx import Kokoro
 TS = 100 / 72
 VOICE, SPEED = 'bm_george', 0.92
 LINES = [  # (story seconds, text)
-  (0.75,  "Every achievement begins as an idea."),
-  (4.2,   "And some ideas change the world."),
+  (0.625, "Every achievement begins as an idea."),   # over the flash-forward; clear of the SLAM (3.5)
+  (4.1,   "And some ideas change the world."),        # after the SLAM, over the title
   (8.1,   "In Athens and Rome, we learned proportion, engineering… and the citizen."),
   (12.5,  "Then, power was made answerable to the people."),
   (16.0,  "The Renaissance. Artists became scientists."),

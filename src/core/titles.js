@@ -36,7 +36,7 @@ const SWAPS = [['mColumns', 'Order.'], ['mGears', 'Motion.'], ['mOrbits', 'Orbit
 
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
-  { start: 1.25, end: 3.0, text: 'Every achievement begins as an idea.' },
+  { start: 1.375, end: 2.95, text: 'Every achievement begins as an idea.' },   // with the VO's "begins as an idea"; gone before the SLAM (3.5)
   { start: 55.9, end: 60.2, text: 'Standing on the shoulders of giants.', cite: 'NEWTON TO HOOKE · 1675/6', low: true },
 ];
 

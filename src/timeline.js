@@ -52,15 +52,17 @@ export const SEGMENTS = [
 // Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`;
 // the score places its hits on exactly the same numbers.
 export const CUES = {
-  // opening
-  pointAppears: 0.6,
-  gridStart: 1.0,
-  gridDone: 2.6,
-  layersStart: 2.0,
-  flyThrough: 3.0,
-  titleAssemble: 4.0,
-  titleLocked: 5.0,
-  subtitle: 5.4,
+  // opening — a trailer cold open (v12): hit from black, a flash-forward, the idea, the title SLAM
+  ignition: 0.125,      // from black: a light burst, shockwave and sparks on the first hit
+  flashForward: 0.375,  // gold-linework flashes on the 8ths: column · gear · rocket · Moon, then all collapse …
+  pointAppears: 1.5,    // … into the point of light: the idea
+  gridStart: 1.5,       // the construction explodes out of the point, stroke by stroke on the beat
+  layersStart: 2.125,
+  gridDone: 2.5,
+  flyThrough: 2.625,    // a hard push through the linework and the manuscripts …
+  titleAssemble: 2.75,
+  titleLocked: 3.5,     // … into the title SLAM (film ≈ 4.86 s)
+  subtitle: 3.875,
   letters3D: 6.3,
   lettersFly: 6.8,
   // classical

@@ -413,6 +413,30 @@ export function create(ctx, segment) {
   const ndc = new THREE.Vector3(), cdir = new THREE.Vector3(), inv = new THREE.Quaternion();
   const sPos = new THREE.Vector3(), sQuat = new THREE.Quaternion();
 
+  // the HUD flare sits where the sun projects through the lens; the live camera keeps the HUD on, so it is
+  // re-placed through the viewer's lens after that camera is posed (update() places it for the film's)
+  let flareK = 0;
+  const flareQ = new THREE.Quaternion();
+  function placeFlare(q, fov) {
+    rig.projectDir(sunDir, q, ndc);
+    const fk = Math.tan(THREE.MathUtils.degToRad(17.5)) / Math.tan(THREE.MathUtils.degToRad(fov / 2));   // rig assumes fov 35
+    ndc.x *= fk; ndc.y *= fk;
+    const onScreen = ndc.z < 0 ? 1 : 0;
+    const fl = onScreen * flareK;
+    const sx = ndc.x * HX, sy = ndc.y * M;
+    flareGlow.position.set(sx, sy, 0); flareGlow.scale.setScalar(L(1.3, 0.8));
+    flareGlow.material.uniforms.uI.value = fl * 0.3;
+    flareStreak.position.set(sx, sy, 0); flareStreak.scale.set(HX * 2.6, L(0.5, 0.35), 1);
+    flareStreak.material.uniforms.uI.value = fl * 0.55;
+    ghostA.position.set(-sx * 0.55, -sy * 0.55, 0); ghostA.scale.setScalar(0.22);
+    ghostA.material.uniforms.uI.value = 0;
+    ghostB.position.set(-sx * 1.1, -sy * 1.1, 0); ghostB.scale.setScalar(0.42);
+    ghostB.material.uniforms.uI.value = 0;
+    flareGlow.visible = flareGlow.material.uniforms.uI.value > 0.002; flareStreak.visible = flareStreak.material.uniforms.uI.value > 0.002;
+    ghostA.visible = ghostB.visible = false;
+  }
+  self.explorePosed = (cam) => { cam.getWorldQuaternion(flareQ); placeFlare(flareQ, cam.fov); };
+
   function update(t, info) {
     const T = segment.start + t - SHIFT;
 
@@ -471,21 +495,8 @@ export function create(ctx, segment) {
     sunCore.visible = T > C_SUN - 0.3;
 
     // lens flare in screen space
-    rig.projectDir(sunDir, quat, ndc);
-    const fk = Math.tan(THREE.MathUtils.degToRad(17.5)) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));   // rig assumes fov 35
-    ndc.x *= fk; ndc.y *= fk;
-    const onScreen = ndc.z < 0 ? 1 : 0;
-    const fl = onScreen * sunVis * smoothstep(C_SUN, C_SUN + 0.8, T) * (0.75 + 0.45 * envelope(T, C_SUN + 0.4, C_IMPACT + 2.2, 0.8, 1.8)) * lerp(1, 0.35, fadeK);
-    const sx = ndc.x * HX, sy = ndc.y * M;
-    flareGlow.position.set(sx, sy, 0); flareGlow.scale.setScalar(L(1.3, 0.8));
-    flareGlow.material.uniforms.uI.value = fl * 0.3;
-    flareStreak.position.set(sx, sy, 0); flareStreak.scale.set(HX * 2.6, L(0.5, 0.35), 1);
-    flareStreak.material.uniforms.uI.value = fl * 0.55;
-    ghostA.position.set(-sx * 0.55, -sy * 0.55, 0); ghostA.scale.setScalar(0.22);
-    ghostA.material.uniforms.uI.value = 0;
-    ghostB.position.set(-sx * 1.1, -sy * 1.1, 0); ghostB.scale.setScalar(0.42);
-    ghostB.material.uniforms.uI.value = 0;
-    for (const o of [flareGlow, flareStreak, ghostA, ghostB]) o.visible = o.material.uniforms.uI.value > 0.002;
+    flareK = sunVis * smoothstep(C_SUN, C_SUN + 0.8, T) * (0.75 + 0.45 * envelope(T, C_SUN + 0.4, C_IMPACT + 2.2, 0.8, 1.8)) * lerp(1, 0.35, fadeK);
+    placeFlare(quat, camera.fov);
 
     // arcs trace themselves after the pull-back, then glide
     const draw = ease.inOutSine(sat((T - 54.9) / 2.6));

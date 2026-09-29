@@ -22,10 +22,16 @@
       <p class="sub">Ideas · Discovery · Engineering · Art · Institutions</p>
       <div id="loader" class="loader"><span></span></div>
       <p id="status" class="status">Preparing sequences…</p>
-      <button id="play" class="play" disabled>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-        <span>Play film</span>
-      </button>
+      <div class="play-row">
+        <button id="play" class="play" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          <span>Play film</span>
+        </button>
+        <button id="play-exp" class="play play-exp" disabled title="Experience mode: a slow-motion drone flythrough with an ambient score and no narration">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6zM12 5c5.5 0 10 3.1 10 7s-4.5 7-10 7S2 15.9 2 12s4.5-7 10-7zm0 1.6c-4.9 0-8.4 2.7-8.4 5.4s3.5 5.4 8.4 5.4 8.4-2.7 8.4-5.4-3.5-5.4-8.4-5.4z" /></svg>
+          <span class="pe-text"><span class="pe-title">Experience mode</span><span class="pe-sub">Slow-motion flythrough · no narration</span></span>
+        </button>
+      </div>
       <p class="hint">Sound on · 108 seconds</p>
       <nav class="formats-pick" aria-label="Choose a frame format">
         <span>Format</span>
@@ -63,6 +69,12 @@
     </button>
     <button id="btn-rec" title="Record video (r): MP4 where supported" aria-label="Record video"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" /></svg></button>
     <button id="btn-wav" title="Download soundtrack (WAV)" aria-label="Download soundtrack"><svg viewBox="0 0 24 24"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 16.4l-4.7-4.7 1.4-1.4 3.3 3.3V3h2zM5 19h14v2H5z" /></svg></button>
+    <button id="btn-speed" class="fmt" title="Playback speed (s): 0.35× · 0.5× · 1× · 0.25×" aria-label="Playback speed">0.35×</button>
+    <button id="btn-exp" class="fmt exp-btn" title="Experience mode: slow-motion flythrough, no narration" aria-label="Experience mode" aria-pressed="false">
+      <svg class="i-exp" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6zM12 5c5.5 0 10 3.1 10 7s-4.5 7-10 7S2 15.9 2 12s4.5-7 10-7zm0 1.6c-4.9 0-8.4 2.7-8.4 5.4s3.5 5.4 8.4 5.4 8.4-2.7 8.4-5.4-3.5-5.4-8.4-5.4z" /></svg>
+      <svg class="i-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z" /></svg>
+      <span class="lbl-on">Experience</span><span class="lbl-off">Exit experience</span>
+    </button>
     <button id="btn-explore" class="fmt" title="Explore the 3D scene (e)" aria-label="Explore the 3D scene" aria-pressed="false">Explore 3D</button>
     <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16" aria-label="Change frame format">2.39</button>
     <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
@@ -71,6 +83,10 @@
   <div id="live-hint" class="explore-hint live-hint" role="status">
     <strong>Interactive</strong>
     <span>Drag to look around</span><span>Scroll or pinch to zoom</span><span>Double-click to recentre</span><span>Pause + E to explore</span>
+  </div>
+  <div id="exp-hint" class="explore-hint exp-hint" role="status">
+    <strong>Experience</strong>
+    <span>Drag to steer</span><span>Scroll or pinch to zoom</span><span>Esc to exit</span>
   </div>
   <div id="explore-hint" class="explore-hint" role="status">
     <strong>Exploring</strong>

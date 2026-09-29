@@ -71,6 +71,15 @@ function planetTexture(kind, seed = 1) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
+// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+function headingDuck(ctx, inst, T) {
+  let d = 0;
+  const items = ctx.engine?.words3d?.items;
+  if (items) for (const it of items) if (it.inst === inst) d = Math.max(d, ramp(T - it.t0, 0, 0.35) * (1 - ramp(T, it.t1 - 0.2, it.t1 + 0.35)));
+  return d;
+}
+
 export function create(ctx, segment) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, ctx.aspect, 0.05, 200);
@@ -569,7 +578,10 @@ export function create(ctx, segment) {
   const standLen = (P.y + baseY - 0.05) - (BENCH + 0.06);
   const pcradle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.05, 0.05, 32), brassPolish); pcradle.position.y = baseY - 0.028; prism.add(pcradle);
   const pstand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, standLen, 20), brassPolish); pstand.position.y = baseY - 0.05 - standLen / 2; prism.add(pstand);
-  const pfoot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.06, 48), brass); pfoot.position.y = baseY - 0.05 - standLen; prism.add(pfoot);
+  // (the feet stand on the bench, below the film's frame: a satin cast finish — polished and clear-coated, their
+  // flat tops mirrored the key light into a blown-out glint when Explore looks down at the bench)
+  const footMat = new THREE.MeshStandardMaterial({ color: '#b08a55', metalness: 1, roughness: 0.55 });
+  const pfoot = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.06, 48), footMat); pfoot.position.y = baseY - 0.05 - standLen; prism.add(pfoot);
   // optical-bench fittings: a trunnion yoke holding the prism by its end faces (pivot bosses on the axis
   // through the centroid), a clamp collar with a thumbscrew on the stand, and a tripod spider on the foot
   {
@@ -719,7 +731,7 @@ export function create(ctx, segment) {
   cardPost.position.set(Q.x, postTop - postLen / 2, Q.z - 0.05); prism.add(cardPost);
   {
     const cp = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.08, 20), brass); cp.position.set(Q.x, postTop - 0.04, Q.z - 0.05); prism.add(cp);
-    const cf = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.19, 0.05, 36), brass); cf.position.set(Q.x, benchY + 0.025, Q.z - 0.05); prism.add(cf);
+    const cf = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.19, 0.05, 36), footMat); cf.position.set(Q.x, benchY + 0.025, Q.z - 0.05); prism.add(cf);
   }
 
   const lamRed = new TextPlane('λ 700 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#ffc2b0', intensity: 1.1 });
@@ -990,7 +1002,23 @@ export function create(ctx, segment) {
     bloom.strength = (0.55 + 0.2 * smoothstep(tBeam, tSpec, t)) * (1 - 0.22 * envelope(t, 2.3, 3.85, 0.3, 0.2));
   }
 
-  function explore(t) { if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.15); } }
-  const out = { scene, camera, update, explore, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
+  function explore(t) {
+    if (t > 1.8) { bench.visible = true; out.harmony = Math.min(out.harmony, 0.15); }
+    // once the camera has swooped down to the orrery the instruments of shot 2 hang far overhead, out of the
+    // film's frame: off-axis they read as leftovers of the previous shot floating in the void
+    if (t > 2.6) scope.visible = armil.visible = gearGrp.visible = diag.visible = false;
+    if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, out, t + segment.start);
+  }
+  // labels turn to the viewer's camera (the film turns them to its own); the Opticks caption on the prism too
+  const _qp = new THREE.Quaternion();
+  function explorePosed(cam) {
+    cam.updateMatrixWorld();
+    for (const l of labels3D) l.quaternion.copy(cam.quaternion);
+    if (prism.visible) {
+      _qp.copy(prism.quaternion).invert().multiply(cam.quaternion);
+      eqN.quaternion.copy(_qp); capO.quaternion.copy(_qp);
+    }
+  }
+  const out = { scene, camera, update, explore, explorePosed, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
   return out;
 }

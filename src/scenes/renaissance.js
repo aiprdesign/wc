@@ -7,7 +7,7 @@
 // and a pigment particle explosion into the 'flash'.
 import * as THREE from 'three';
 import { CUES } from '../timeline.js';
-import { ramp, ease, sat, lerp, envelope, rng } from '../lib/math.js';
+import { ramp, ease, sat, lerp, envelope, rng, smoothstep } from '../lib/math.js';
 import { progressLine, segmentsLine, circlePoints } from '../lib/lines.js';
 import { MorphParticles, Dust, sampleGeometry } from '../lib/particles.js';
 import { TextPlane, FONTS } from '../lib/text.js';
@@ -136,6 +136,15 @@ function goldenConstruction(x0, y0, w, h, steps = 9) {
 }
 
 function sharpen(obj) { obj.traverse((o) => { if (o.material) o.material.depthWrite = true; }); return obj; }
+
+// The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore (and the clean
+// Experience picture) hide the headings and drop the duck with them; the explore hook puts it back.
+function headingDuck(ctx, inst, T) {
+  let d = 0;
+  const items = ctx.engine?.words3d?.items;
+  if (items) for (const it of items) if (it.inst === inst) d = Math.max(d, ramp(T - it.t0, 0, 0.35) * (1 - ramp(T, it.t1 - 0.2, it.t1 + 0.35)));
+  return d;
+}
 
 export function create(ctx, segment) {
   const cue = (name) => CUES[name] - segment.start;
@@ -434,7 +443,10 @@ export function create(ctx, segment) {
   const seqProg = (t, a, b) => sat((t - a) / (b - a));
   const cSepia = new THREE.Color(SEPIA), cGold = new THREE.Color(GOLD);
 
-  let lastT = 0;
+  let lastT = 0, rigOp = 0, hudOp = 0, lastInk = 1;
+  const hudRev = [0, 0, 0, 0, 0, 0], hudParts = [dimH, dimW, dimN, dimN2, callRatio, callProp];
+  const setHud = (k) => { for (let i = 0; i < 6; i++) hudParts[i].reveal(hudRev[i], hudOp * k); };
+  const _p = new THREE.Vector3(), _n = new THREE.Vector3(), _q = new THREE.Quaternion();
   const LIM_2D = { yaw: 0.8, pitchDown: 0.3, pitchUp: 0.55, zoomIn: 0.35, zoomOut: 2.2, fly: 1.2 };   // the drawing on its canvas
   const LIM_3D = { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.8, zoomOut: 2.1 };                        // the lifted figure; the grid ends past that
   return {
@@ -442,11 +454,28 @@ export function create(ctx, segment) {
     strokeCount,
     get exploreLimits() { return lastT < m3 ? LIM_2D : LIM_3D; },
     explore(t) {
-      if (t >= m3) return;                                      // once the canvas recedes the lit figure is the set
+      if (ctx.engine?.explore?.active || ctx.engine?.clean) bloom.strength *= 1 - 0.45 * headingDuck(ctx, this, t + segment.start);
       easel.visible = true;
+      // once the canvas recedes the lit figure and its drafting grid are the set: the canvas keeps its easel
+      // (off-axis it otherwise hung as a dark card in the void) but not the studio boards below the grid
+      if (t >= m3) return;
       const fl = easel.userData.floor;
       fl.visible = true;
       fl.position.set(canvasRig.position.x, EASEL_FOOT, canvasRig.position.z - 0.4);
+    },
+    // off-axis: the flat proportion rig (gold circle and square, dimension lines, the lifting strokes) fades
+    // as it turns edge-on, where its additive lines stacked into a hot vertical streak; labels face the viewer
+    explorePosed(cam) {
+      if (lastT < m3 - 0.1) return;
+      cam.updateMatrixWorld(); figGroup.updateMatrixWorld();
+      figGroup.getWorldQuaternion(_q);
+      const f = smoothstep(0.15, 0.5, Math.abs(_p.setFromMatrixPosition(cam.matrixWorld).sub(_n.setFromMatrixPosition(figGroup.matrixWorld)).normalize().dot(_n.set(0, 0, 1).applyQuaternion(_q))));
+      gRing.opacity = gSquare.opacity = rigOp * f;
+      setHud(f);
+      faceCamera(callRatio.label, cam); faceCamera(callProp.label, cam);
+      const ink = lastInk * f;
+      strokesA.opacity = 0.42 * ink; strokesB.opacity = 0.9 * ink; strokesC.opacity = 0.32 * ink;
+      strokesP.opacity = 0.4 * ink; strokesH.opacity = 0.7 * ink; strokesT.opacity = 0.55 * ink;
     },
     update(t, info) {
       const T = info.T;
@@ -505,6 +534,7 @@ export function create(ctx, segment) {
       const inkOut = 1 - ramp(t, m3 + 0.25, m3 + 0.75);
       sq1.opacity = 0.85 * inkOut * (1 - lift); sq2.opacity = 0.4 * inkOut * (1 - lift);
       ci1.opacity = 0.85 * inkOut * (1 - lift); ci2.opacity = 0.4 * inkOut * (1 - lift);
+      lastInk = inkOut;
       strokesA.opacity = 0.42 * inkOut; strokesB.opacity = 0.9 * inkOut; strokesC.opacity = 0.32 * inkOut;
       strokesP.opacity = 0.4 * inkOut; strokesH.opacity = 0.7 * inkOut; strokesT.opacity = 0.55 * inkOut;
       // strokes lift off the canvas plane and glow as they go
@@ -536,16 +566,15 @@ export function create(ctx, segment) {
       figGhost.visible = ghost > 0.002;
       const ringOn = ramp(t, m3 + 0.1, m3 + 0.7, ease.inOutSine);
       gRing.progress = ringOn; gSquare.progress = ringOn;
-      gRing.opacity = gSquare.opacity = (1 - ramp(t, pB, pB + 0.3)) * 0.95;
+      gRing.opacity = gSquare.opacity = rigOp = (1 - ramp(t, pB, pB + 0.3)) * 0.95;
       goldRig.scale.setScalar(1 + ramp(t, pB, 5.0, ease.outCubic) * 1.5);
       // HUD / proportion diagrams
       const h0 = m3 + 0.35;
-      dimH.reveal(ramp(t, h0, h0 + 0.5, ease.outCubic), 1 - burst);
-      dimW.reveal(ramp(t, h0 + 0.1, h0 + 0.6, ease.outCubic), 1 - burst);
-      dimN.reveal(ramp(t, h0 + 0.25, h0 + 0.75, ease.outCubic), 1 - burst);
-      dimN2.reveal(ramp(t, h0 + 0.35, h0 + 0.85, ease.outCubic), 1 - burst);
-      callRatio.reveal(ramp(t, h0 + 0.45, h0 + 0.95, ease.outCubic), 1 - burst);
-      callProp.reveal(ramp(t, h0 + 0.3, h0 + 0.8, ease.outCubic), 1 - burst);
+      hudRev[0] = ramp(t, h0, h0 + 0.5, ease.outCubic); hudRev[1] = ramp(t, h0 + 0.1, h0 + 0.6, ease.outCubic);
+      hudRev[2] = ramp(t, h0 + 0.25, h0 + 0.75, ease.outCubic); hudRev[3] = ramp(t, h0 + 0.35, h0 + 0.85, ease.outCubic);
+      hudRev[4] = ramp(t, h0 + 0.45, h0 + 0.95, ease.outCubic); hudRev[5] = ramp(t, h0 + 0.3, h0 + 0.8, ease.outCubic);
+      hudOp = 1 - burst;
+      setHud(1);
       faceCamera(callRatio.label, camera); faceCamera(callProp.label, camera);
       // perspective grid + visual pyramid
       floorGrid.progress = ramp(t, m3 + 0.15, m3 + 1.1, ease.outCubic);

@@ -90,3 +90,30 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 #film.live-drag { cursor: grabbing; }
 .live-hint-on .live-hint { opacity: 1; transform: translate(-50%, 0); }
 .exploring-on .live-hint { opacity: 0; }
+
+
+/* experience mode: slow-motion drone flythrough (start-screen button, player-bar controls, hint) */
+.play-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: 12px; margin: 8px auto 0; }
+.play-row .play { margin: 0; }
+.play-exp { gap: 14px; padding: 10px 22px 10px 18px; text-align: left; border-color: rgba(226, 195, 138, 0.38); background: rgba(226, 195, 138, 0.03); }
+.play-exp svg { width: 20px; height: 20px; }
+.play-exp .pe-text { display: grid; gap: 4px; }
+.play-exp .pe-sub { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 14px; letter-spacing: 0.03em; text-transform: none; color: var(--dim); }
+.exp-link .play-exp { border-color: var(--gold); background: rgba(226, 195, 138, 0.14); }
+.controls .exp-btn { gap: 6px; display: inline-flex; align-items: center; }
+.controls .exp-btn svg { width: 14px; height: 14px; }
+.exp-btn .i-exit, .exp-btn .lbl-off, #btn-speed { display: none; }
+.experience-on .exp-btn .i-exp, .experience-on .exp-btn .lbl-on { display: none; }
+.experience-on .exp-btn .i-exit, .experience-on .exp-btn .lbl-off { display: inline; }
+.experience-on .controls button#btn-speed { display: grid; min-width: 46px; font-variant-numeric: tabular-nums; }
+.experience-on .controls .exp-btn { border-color: rgba(226, 195, 138, 0.6); color: var(--gold); }
+.experience-on #btn-rec, .experience-on #btn-wav, .experience-on #btn-format { display: none; }
+.experience-on .live-hint { opacity: 0; }
+.exp-hint-on .exp-hint { opacity: 1; transform: translate(-50%, 0); }
+.exploring-on .exp-hint { opacity: 0; }
+@media (max-width: 560px) {
+  .play-exp { padding: 10px 16px; }
+  .controls .exp-btn .lbl-on, .experience-on .controls .exp-btn .lbl-off { display: none; }
+  .controls .exp-btn { padding: 0 7px; }
+  .experience-on .time.dim { display: none; }
+}
