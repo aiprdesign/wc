@@ -82,7 +82,7 @@ export class LiveCam {
 
   // Engine hook, once per rendered frame: ease toward the target, and home when idle.
   tick() {
-    const now = performance.now(), dt = Math.min(0.1, Math.max(0, (now - this.prev) / 1000));
+    const now = performance.now(), dt = Math.min(this.droneOn ? 0.25 : 0.1, Math.max(0, (now - this.prev) / 1000));   // the drone keeps wall-clock pace on slow devices
     this.prev = now;
     const idle = (now - this.lastInput) / 1000;
     if (this.droneOn) {
