@@ -101,6 +101,9 @@ export class Explorer {
       this.target.y + this.dist * Math.sin(this.pitch),
       this.target.z + this.dist * cp * Math.cos(this.yaw),
     );
+    // never below the film camera's eye or the subject it framed: no peeking under the ground
+    const floorY = Math.min(this.home.pos.y, this.homeTarget?.y ?? this.home.pos.y);
+    if (cam.position.y < floorY) cam.position.y = floorY;
     cam.up.set(0, 1, 0);
     cam.lookAt(this.target);
     cam.updateMatrixWorld();

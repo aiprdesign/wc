@@ -82,10 +82,13 @@ export class LiveCam {
     this._qy.setFromAxisAngle(up, -yaw);
     this._qp.setFromAxisAngle(right, -pitch);
     const rot = this._qy.multiply(this._qp);                               // yaw about world up, pitch about the lens axis
+    const floorY = Math.min(P.y, C.y);                                     // never below the director's eye / the subject: no peeking under the ground
     P.sub(C).applyQuaternion(rot).multiplyScalar(zoom).add(C);
+    const clamped = P.y < floorY;
+    if (clamped) P.y = floorY;
     if (cam.parent) cam.parent.worldToLocal(P);
     cam.position.copy(P);
-    cam.quaternion.premultiply(rot);
+    if (clamped) { cam.up.set(0, 1, 0); cam.lookAt(C); } else cam.quaternion.premultiply(rot);
     cam.updateMatrixWorld();
     inst._liveFocus = zoom;                                                // depth of field follows the new distance
     if (a > HOOKS_ON) { try { inst.explorePosed?.(cam); } catch { /* scene hook */ } }
