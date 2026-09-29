@@ -226,6 +226,7 @@ export class Engine {
   renderInstance(inst, T, dt, rt, dofRT) {
     const r = this.renderer;
     const info = this.info(T, inst.segment, dt);
+    this.live?.restore?.(inst);   // undo last frame's live / drone offset (no-op when there was none)
     try {
       inst.update(info.t, info);
     } catch (e) {

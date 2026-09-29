@@ -21,9 +21,9 @@ const HOOKS_ON = 0.04;     // offset strength above which scenes complete their 
 // Drone path: each axis is a normalised sum of slow sines (periods in seconds, no common
 // multiple, so the flight never repeats), softly saturated so it lingers near the extremes.
 const PATH = {
-  yaw: [[1, 43, 0.3], [0.55, 71, 2.1], [0.3, 29, 4.0]],
-  pitch: [[1, 59, 1.1], [0.5, 37, 5.2], [0.25, 97, 0.7]],
-  zoom: [[1, 53, 2.6], [0.5, 31, 0.4], [0.35, 89, 3.3]],
+  yaw: [[1, 37, 0.3], [0.55, 59, 2.1], [0.3, 23, 4.0], [0.04, 7.3, 1.3]],     // last term: a faint hover
+  pitch: [[1, 47, 1.1], [0.5, 31, 5.2], [0.25, 83, 0.7], [0.05, 11.1, 2.9]],
+  zoom: [[1, 43, 2.6], [0.5, 27, 0.4], [0.35, 71, 3.3]],
 };
 const wave = (parts, s) => {
   let v = 0, n = 0;
@@ -35,7 +35,7 @@ export function dronePath(s) {
     yaw: wave(PATH.yaw, s),
     pitch: 0.3 + 0.7 * wave(PATH.pitch, s),            // biased upward: a crane that rises over the set
     zoom: 0.15 + 0.85 * wave(PATH.zoom, s),            // biased outward: reveal more of the world
-    reach: 0.7 + 0.3 * Math.sin((2 * Math.PI * s) / 127 + 1.9),   // the whole move breathes
+    reach: 0.72 + 0.28 * Math.sin((2 * Math.PI * s) / 101 + 1.9),   // the whole move breathes
   };
 }
 
@@ -52,6 +52,7 @@ export class LiveCam {
     this.droneOn = false;
     this.tau = 0; this.droneRate = 0; this.droneW = 0;
     this.dn = { yaw: 0, pitch: 0, zoom: 0, reach: 0 };
+    this.bank = 0;
     this._P = new THREE.Vector3(); this._C = new THREE.Vector3(); this._F = new THREE.Vector3();
     this._Up = new THREE.Vector3(); this._R = new THREE.Vector3();
     this._q = new THREE.Quaternion(); this._qy = new THREE.Quaternion(); this._qp = new THREE.Quaternion();
@@ -72,7 +73,7 @@ export class LiveCam {
     this.droneOn = on;
     this.target.yaw = this.target.pitch = this.cur.yaw = this.cur.pitch = 0;
     this.target.zoom = this.cur.zoom = 1;
-    this.droneW = 0; this.droneRate = 0;
+    this.droneW = 0; this.droneRate = 0; this.bank = 0;
     if (on) this.tau = 11 + Math.random() * 60;   // a different flight every time
     else { this.lim = { ...LIVE }; this.unhookAll(); }
   }
@@ -90,7 +91,12 @@ export class LiveCam {
       this.droneRate += (run - this.droneRate) * (1 - Math.exp(-dt / 1.4));
       this.tau += dt * this.droneRate;
       this.droneW = Math.min(1, this.droneW + (dt * this.droneRate) / 6);   // lifts off gently from the director's framing
+      const prevYaw = this.dn.yaw * this.dn.reach;
       this.dn = dronePath(this.tau);
+      // bank into the orbit like a real drone: roll follows the sideways speed (a few degrees)
+      const v = dt > 0 ? (this.dn.yaw * this.dn.reach - prevYaw) / dt : 0;
+      const bank = THREE.MathUtils.clamp(v * 0.45, -0.06, 0.06) * this.droneW;
+      this.bank += (bank - this.bank) * (1 - Math.exp(-dt / 0.8));
     }
     if (this.isPlaying() && !this.pointers.size && idle > IDLE_RETURN) {
       const k = 1 - Math.exp(-dt / (this.droneOn ? 1.8 : 0.9));
@@ -134,6 +140,10 @@ export class LiveCam {
       this.hooked.add(inst);
     } else this._unhook(inst);
     const cam = inst.camera;
+    // remember the director's pose: restore() puts it back before the next update, so a scene that
+    // only animates part of its camera (or eases from its last pose) never inherits the offset
+    const sv = inst._livePose ??= { p: new THREE.Vector3(), q: new THREE.Quaternion(), up: new THREE.Vector3(), on: false };
+    sv.p.copy(cam.position); sv.q.copy(cam.quaternion); sv.up.copy(cam.up); sv.on = true;
     cam.updateMatrixWorld();
     const P = this._P.setFromMatrixPosition(cam.matrixWorld);
     const Q = this._q.setFromRotationMatrix(cam.matrixWorld);
@@ -151,9 +161,19 @@ export class LiveCam {
     if (cam.parent) cam.parent.worldToLocal(P);
     cam.position.copy(P);
     if (clamped) { cam.up.set(0, 1, 0); cam.lookAt(C); } else cam.quaternion.premultiply(rot);
+    if (drone && this.bank) cam.rotateZ(this.bank * Math.min(1, lim.yaw / 0.6));   // (scaled down in narrow windows)
     cam.updateMatrixWorld();
     inst._liveFocus = d > 0 ? cam.getWorldPosition(this._F).distanceTo(C) / d : zoom;   // depth of field follows the new distance
     if (hooks) { try { inst.explorePosed?.(cam); } catch { /* scene hook */ } }
+  }
+
+  // Engine hook, before a sequence's update: hand the camera back exactly as the director left it.
+  restore(inst) {
+    const sv = inst._livePose;
+    if (!sv?.on) return;
+    sv.on = false;
+    const cam = inst.camera;
+    cam.position.copy(sv.p); cam.quaternion.copy(sv.q); cam.up.copy(sv.up);
   }
 
   _unhook(inst) {

@@ -4,3 +4,4 @@ node_modules/
 frames/
 *.bundle
 renders/
+tools/__pycache__/

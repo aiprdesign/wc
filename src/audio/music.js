@@ -439,13 +439,13 @@ function openingHits(S) {
   // THE SLAM
   hit(S, tL, { power: 1.35, braam: 50, chord: 'Dm', down: true, subHz: 110 });
   S.at(tL, () => {
-    I.boom(S, tL, { level: 0.45, f0: 120, f1: 30, decay: 3.2 });
-    I.kick(S, tL, 0.95);
+    I.boom(S, tL, { level: 0.6, f0: 120, f1: 30, decay: 3.2 });
+    I.kick(S, tL, 1.0);
     I.taiko(S, tL + 0.018, 0.7, { size: 1 });
     I.taiko(S, tL + 0.035, 0.5, { size: 0.6 });
     I.crash(S, tL + 0.01, 0.07);
-    O.brass(S, tL, 0.7, [38, 45, 50, 53, 57], { level: 0.5, sfz: true, bright: 2300, release: 1.6 });
-    O.chord(S, 'strings', tL, tL + 0.6, [38, 50, 57, 62, 65, 69, 74], { level: 0.4, attack: 0.02, release: 1.6, cutoff: 5000 });
+    O.brass(S, tL, 0.7, [38, 45, 50, 53, 57], { level: 0.62, sfz: true, bright: 2300, release: 1.6 });
+    O.chord(S, 'strings', tL, tL + 0.6, [38, 50, 57, 62, 65, 69, 74], { level: 0.5, attack: 0.02, release: 1.6, cutoff: 5000 });
   });
   // … ringing on under the subtitle: a high shimmer of D minor
   [[tL + 0.05, 86], [tL + 0.12, 89], [tL + 0.19, 93], [C.subtitle, 98]].forEach(([t, m], i) => S.at(t, () => I.bell(S, t, m, { level: 0.02, decay: 2.6, pan: -0.4 + i * 0.27, bus: 'far' })));

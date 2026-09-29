@@ -88,7 +88,8 @@ export function create(ctx, segment) {
   const DUR = segment.end - segment.start;
 
   scene.environment = ctx.env;
-  scene.environmentIntensity = 0.4;
+  const ENV_I = 0.4;
+  scene.environmentIntensity = ENV_I;
   scene.fog = new THREE.FogExp2(0x060403, 0.035);
   const BG = 0x040302;
 
@@ -288,6 +289,10 @@ export function create(ctx, segment) {
 
   // ---- orrery ---------------------------------------------------------------
   const orrery = new THREE.Group(); orrery.position.copy(O); scene.add(orrery);
+  // (the dial and the base gearing carry its own copies of the brass, with the scene's environment set explicitly — the
+  // same look — so the explore hook can ease the studio reflections that flare off these flat faces)
+  const glintMats = [];
+  const glintMat = (m) => { m.envMap = ctx.env; m.envMapIntensity = ENV_I; glintMats.push(m); return m; };
   const hs = S.y - O.y;
   {
     // moulded plinth (lathe profile: foot, cavetto, drum, ovolo, top) standing on three bun feet
@@ -318,7 +323,7 @@ export function create(ctx, segment) {
     const dialTex = new THREE.CanvasTexture(dc); dialTex.colorSpace = THREE.SRGBColorSpace; dialTex.anisotropy = 8;
     const dialGeo = new THREE.RingGeometry(0.42, 1.25, 128, 1);
     { const p = dialGeo.attributes.position, uv = dialGeo.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, 0.5 + p.getX(i) / 2.52, 0.5 + p.getY(i) / 2.52); }
-    const dial = new THREE.Mesh(dialGeo, new THREE.MeshPhysicalMaterial({ map: dialTex, color: '#e2bd7c', metalness: 1, roughness: 0.34, bumpMap: dialTex, bumpScale: -1.2, clearcoat: 0.2 }));
+    const dial = new THREE.Mesh(dialGeo, glintMat(new THREE.MeshPhysicalMaterial({ map: dialTex, color: '#e2bd7c', metalness: 1, roughness: 0.34, bumpMap: dialTex, bumpScale: -1.2, clearcoat: 0.2 })));
     dial.rotation.x = -Math.PI / 2; dial.position.y = 0.003; orrery.add(dial);
     const column = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.07, hs, 24), brassPolish); column.position.y = hs / 2; orrery.add(column);
     // gilded cup carrying the sun
@@ -326,12 +331,12 @@ export function create(ctx, segment) {
     const cup = new THREE.Mesh(new THREE.LatheGeometry(cupP, 48), brassPolish); cup.position.y = hs; orrery.add(cup);
   }
   // base gearing (flat): crown gear + pinions
-  const crown = new THREE.Mesh(gearGeometry({ teeth: 56, module: 0.036, thickness: 0.05, bevel: 0.006, bore: 0.08, spokes: 8 }), brassLathe);
+  const crown = new THREE.Mesh(gearGeometry({ teeth: 56, module: 0.036, thickness: 0.05, bevel: 0.006, bore: 0.08, spokes: 8 }), glintMat(brassMat({ roughness: 0.3, lathe: true })));
   const crownSpin = new THREE.Group(); crownSpin.position.y = 0.05; crownSpin.rotation.x = -Math.PI / 2; crownSpin.add(crown); orrery.add(crownSpin);
   const pinions = [];
   for (let i = 0; i < 3; i++) {
     const pz = 14, dir = (i / 3) * TAU + 0.4, d = (56 + pz) * 0.036 / 2;
-    const pg = new THREE.Mesh(gearGeometry({ teeth: pz, module: 0.036, thickness: 0.07, bevel: 0.006, bore: 0.03, spokes: 0 }), brassMat({ roughness: 0.2, color: '#dcb97c', lathe: true }));
+    const pg = new THREE.Mesh(gearGeometry({ teeth: pz, module: 0.036, thickness: 0.07, bevel: 0.006, bore: 0.03, spokes: 0 }), glintMat(brassMat({ roughness: 0.2, color: '#dcb97c', lathe: true })));
     const grp = new THREE.Group(); grp.position.set(Math.cos(dir) * d, 0.06, -Math.sin(dir) * d); grp.rotation.x = -Math.PI / 2; grp.add(pg); orrery.add(grp);
     pinions.push({ grp, pz, dir });
   }
@@ -940,6 +945,7 @@ export function create(ctx, segment) {
     sunLight.intensity = 18 * ramp(t, 1.9, 2.5);   // brass under a close point light was blooming into a gold wash
     dirElev = elevOf(camPos);                       // the film's eye as seen from the sun (explorePosed compares against it)
     dirToS.copy(camPos).sub(S).normalize();
+    for (const m of glintMats) m.envMapIntensity = ENV_I;
     sunGlow.material.opacity = 1; sun.rotation.y = t * 0.3; sunMat.uniforms.uT.value = t;
     PU.uSunI.value = 1.35 * (1 + envelope(t, tBeam - 0.3, tBeam + 0.3, 0.2, 0.2) * 0.1);
 
@@ -1018,14 +1024,16 @@ export function create(ctx, segment) {
   const elevOf = (p) => Math.asin(clamp((p.y - S.y) / Math.max(1e-3, p.distanceTo(S)), -1, 1));
   function explorePosed(cam) {
     cam.updateMatrixWorld();
-    // the orrery's sun is a point light hanging just above the polished dial and crown gear: seen from off the
-    // film's line of sight (above it most of all), its mirror image on those flat brass faces bloomed into a
-    // white-hot disc — the further the view turns away from the film's, the more the lamp is dimmed
-    if (sunLight.intensity > 0) {
+    // the orrery's sun lamp and the studio reflections flare off the flat brass of the dial, crown gear and
+    // pinions: seen from off the film's line of sight (above it most of all) they bloomed into a white-hot
+    // disc — the further the view turns away from the film's, the more both are eased (update() resets them)
+    if (orrery.visible) {
       _cw.setFromMatrixPosition(cam.matrixWorld);
       const up = smoothstep(dirElev + 0.08, dirElev + 0.45, elevOf(_cw));
       const turn = smoothstep(0.12, 0.6, Math.acos(clamp(_cw.sub(S).normalize().dot(dirToS), -1, 1)));
-      sunLight.intensity *= 1 - 0.65 * Math.max(up, turn);
+      const k = Math.max(up, turn);
+      sunLight.intensity *= 1 - 0.65 * k;
+      for (const m of glintMats) m.envMapIntensity = ENV_I * (1 - 0.7 * k);
     }
     for (const l of labels3D) l.quaternion.copy(cam.quaternion);
     if (prism.visible) {
