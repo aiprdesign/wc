@@ -46,7 +46,9 @@ function heartPrims() {
   const vessel = (kind, pts, r0, r1, k, n, capEnd = true) => {
     const q = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))).getSpacedPoints(n);
     for (let i = 0; i < n; i++) cone(kind, q[i].toArray(), q[i + 1].toArray(), lerp(r0, r1, i / n), lerp(r0, r1, (i + 1) / n), i === 0 ? k : 0.012, 1, i === n - 1 && capEnd ? 2 : 0);
+    if (capEnd) P.ends.push({ kind, p: q[n].clone(), dir: q[n].clone().sub(q[n - 1]).normalize(), r: r1 });   // cut end (the lumen is drawn there)
   };
+  P.ends = [];
   // chambers: the left ventricle forms the apex and the left border, the right ventricle most of the
   // front and the lower border, the right atrium the right border; the left atrium sits behind
   cone(MUSC, [0.16, 0.2, -0.14], [0.74, -0.96, 0.12], 0.64, 0.12, 0);             // left ventricle
@@ -123,10 +125,26 @@ function buildHeart() {
   const cx = [drop(0.62, 0.36, 0, 0, 0, -1), drop(0.74, 0.27, 0, 0, 0, -1), drop(1, 0.22, -0.05, -1, 0, 0), drop(1, 0.18, -0.35, -1, 0, 0), drop(1, 0.14, -0.6, -1, 0, 0.3)];   // circumflex (under the left auricle, round the left border)
   const dg1 = front([[0.14, -0.04], [0.32, -0.16], [0.5, -0.3], [0.66, -0.46], [0.78, -0.6]]);                                     // diagonal onto the left ventricle
   const coronary = [[lad, 0.024], [rca, 0.024], [cx, 0.022], [marg, 0.016], [dg1, 0.017]].map(([pts, r]) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 6, r, 8, false));
+  // cardiac veins beside the arteries: the great cardiac vein up the anterior groove, the small cardiac
+  // vein in the right groove and a left marginal vein (they drain to the coronary sinus behind)
+  const gcv = front([[-0.05, 0.3], [-0.03, 0.16], [0.05, 0.0], [0.14, -0.12], [0.22, -0.22], [0.3, -0.33], [0.37, -0.43], [0.43, -0.53], [0.5, -0.63], [0.55, -0.73], [0.57, -0.84]]);
+  const scv = front([[-0.6, 0.6], [-0.7, 0.45], [-0.77, 0.3], [-0.81, 0.15], [-0.82, 0.02]]);
+  const lmv = front([[0.7, 0.3], [0.78, 0.1], [0.84, -0.1], [0.86, -0.3], [0.84, -0.48]]);
+  const cveins = [[gcv, 0.016], [scv, 0.013], [lmv, 0.013]].map(([pts, r]) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 6, r, 8, false));
+  // the cut ends of the great vessels, as on an anatomical model: the vessel wall and its open lumen
+  const ends = prims.ends.map(({ kind, p, dir, r }) => {
+    const g = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.RingGeometry(r * 0.72, r * 0.98, 32), null); wall.userData.tissue = kind;
+    const lumen = new THREE.Mesh(new THREE.CircleGeometry(r * 0.72, 32), null); lumen.position.z = -0.004; lumen.userData.tissue = -1;
+    g.add(wall, lumen);
+    g.position.copy(p).addScaledVector(dir, 0.012).add(new THREE.Vector3(0, -0.45, 0));
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+    return g;
+  });
 
-  const parts = { body: [geo], vessels: [], coronary, lattice: coarse };
+  const parts = { body: [geo], vessels: [], coronary, cveins, ends, lattice: coarse };
   // centre the model on its visual middle
-  for (const gg of [geo, coarse, ...coronary]) gg.translate(0, -0.45, 0);
+  for (const gg of [geo, coarse, ...coronary, ...cveins]) gg.translate(0, -0.45, 0);
   return parts;
 }
 
@@ -139,7 +157,7 @@ function engrave(parts) {
   const tris = [];
   const L = new THREE.Vector3(-0.55, 0.6, 0.6).normalize();
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
-  for (const g of [...parts.body, ...parts.vessels, ...parts.coronary]) {
+  for (const g of [...parts.body, ...parts.vessels, ...parts.coronary, ...(parts.cveins ?? [])]) {
     const ng = g.index ? g.toNonIndexed() : g, pos = ng.attributes.position;
     for (let i = 0; i < pos.count; i += 3) {
       a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
@@ -456,15 +474,21 @@ export function create(ctx, segment) {
   };
   const satinBody = satin({ vertexColors: true });
   const satinCor = satin({ color: '#c8402f', emissive: new THREE.Color('#2a0604'), roughness: 0.36 });
-  const satinMats = [satinBody, satinCor];
+  const satinVein = satin({ color: '#2f6f86', emissive: new THREE.Color('#041218'), roughness: 0.36 });
+  const satinWallA = satin({ color: '#d8543e', side: THREE.DoubleSide }), satinWallV = satin({ color: '#3a8098', side: THREE.DoubleSide });
+  const satinLumen = satin({ color: '#2a0604', roughness: 0.6, sheen: 0.2, side: THREE.DoubleSide });
+  const satinMats = [satinBody, satinCor, satinVein, satinWallA, satinWallV, satinLumen];
   for (const g of parts.body) { const m = new THREE.Mesh(g, satinBody); heart.add(m); }
   for (const g of parts.coronary) { const m = new THREE.Mesh(g, satinCor); heart.add(m); }
+  for (const g of parts.cveins) { const m = new THREE.Mesh(g, satinVein); heart.add(m); }
+  for (const e of parts.ends) { e.traverse((o) => { if (o.isMesh) o.material = o.userData.tissue < 0 ? satinLumen : o.userData.tissue === 1 ? satinWallA : satinWallV; }); heart.add(e); }
   // …wrapped in the holographic scan: a fresnel shell, scanlines and the MRI slice band
   const holoBody = holoMaterial({ color: TEAL, deep: '#0c2a33', intensity: 0.42, base: 0.0 });
   const holoCor = holoMaterial({ color: CORAL, deep: '#6a2a24', intensity: 0.5, base: 0.12 });
   const holoMats = [holoBody, holoCor];
   for (const g of parts.body) { const m = new THREE.Mesh(g, holoBody); m.renderOrder = 2; heart.add(m); }
   for (const g of parts.coronary) { const m = new THREE.Mesh(g, holoCor); m.renderOrder = 2; heart.add(m); }
+  for (const g of parts.cveins) { const m = new THREE.Mesh(g, holoBody); m.renderOrder = 2; heart.add(m); }
   const lattice = revealLines(parts.lattice, { mode: 'wire', order: 'y', color: '#6fd8c8', headColor: '#e8fffa', intensity: 0.12, head: 0.06 });
   lattice.renderOrder = 3;
   heart.add(lattice);

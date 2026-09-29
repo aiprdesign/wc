@@ -220,6 +220,19 @@ export function create(ctx, segment) {
     });
     return mesh;
   }
+  // (the added fittings fly in on their own random paths, so the original parts keep exactly theirs)
+  const R2 = rng(177);
+  function addFitting(mesh, group, delay, spread = 1.6) {
+    group.add(mesh);
+    const dir = V(R2() - 0.5, R2() - 0.5, -0.3 - R2() * 0.7).normalize();
+    parts.push({
+      mesh, delay,
+      p1: mesh.position.clone(), q1: mesh.quaternion.clone(), s1: mesh.scale.clone(),
+      p0: mesh.position.clone().addScaledVector(dir, spread * (0.6 + R2() * 0.8)),
+      q0: new THREE.Quaternion().setFromEuler(new THREE.Euler((R2() - 0.5) * 4, (R2() - 0.5) * 4, (R2() - 0.5) * 4)).multiply(mesh.quaternion),
+    });
+    return mesh;
+  }
 
   // (a) refracting telescope, upper-left foreground
   const scope = new THREE.Group(); scope.position.set(-2.0, 0.75, 2.6); scope.rotation.set(0.1, 0.35, 0.34); scene.add(scope);
@@ -232,6 +245,28 @@ export function create(ctx, segment) {
     for (let i = 0; i < 5; i++) addPart(along(new THREE.Mesh(new THREE.TorusGeometry(0.088 + (i === 4 ? 0.014 : 0), 0.012, 12, 48).rotateY(Math.PI / 2), brassPolish), -0.52 + i * 0.3), scope, 0.1 + i * 0.04, 1.6);
     const lens = along(new THREE.Mesh(new THREE.CylinderGeometry(0.093, 0.093, 0.02, 48), lensMat), 1.2);
     addPart(lens, scope, 0.3, 1.2);
+    // finder scope on two brackets, the rack-and-pinion focusing knobs, and the altazimuth mount: cradle
+    // rings, trunnion fork, pillar and a tripod foot (the pillar stands plumb, whatever the tube's tilt)
+    addFitting(along(new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.02, 0.42, 24), brass), 0.25), scope, 0.22).position.y = 0.14;
+    for (const x of [0.1, 0.38]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.06, 0.018), brassPolish); b.position.set(x, 0.11, 0); addFitting(b, scope, 0.2); }
+    addFitting(along(new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 20), lensMat), 0.465), scope, 0.3).position.y = 0.14;
+    const rack = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.03, 0.03), brassPolish); rack.position.set(-0.62, -0.07, 0); addFitting(rack, scope, 0.18);
+    for (const sz of [-1, 1]) { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.025, 20).rotateX(Math.PI / 2), bronzeDark); k.position.set(-0.62, -0.08, sz * 0.05); addFitting(k, scope, 0.24); }
+    for (const x of [-0.05, 0.3]) { const cr = new THREE.Mesh(new THREE.TorusGeometry(0.094, 0.012, 10, 48).rotateY(Math.PI / 2), bronzeDark); cr.position.x = x; addFitting(cr, scope, 0.16); }
+    const mount = new THREE.Group(); mount.position.set(0.12, -0.1, 0); scope.add(mount);
+    scope.updateMatrixWorld();
+    mount.quaternion.copy(scope.quaternion).invert();                   // local frame of the mount = world axes
+    const fork = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.014, 10, 32, Math.PI), bronzeDark); fork.rotation.set(0, Math.PI / 2 + 0.35, Math.PI); fork.position.y = 0.05; addFitting(fork, mount, 0.26);
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 20), brassPolish); boss.position.y = -0.09; addFitting(boss, mount, 0.28);
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.034, 0.56, 20), brassLathe); pillar.position.y = -0.39; addFitting(pillar, mount, 0.3);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.05, 24), brassPolish); collar.position.y = -0.68; addFitting(collar, mount, 0.32);
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * TAU + 0.4, top = V(Math.cos(a) * 0.03, -0.69, Math.sin(a) * 0.03), toe = V(Math.cos(a) * 0.26, -0.88, Math.sin(a) * 0.26);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.02, top.distanceTo(toe), 12), bronzeDark);
+      leg.position.copy(top).add(toe).multiplyScalar(0.5); leg.quaternion.setFromUnitVectors(V(0, 1, 0), top.clone().sub(toe).normalize());
+      addFitting(leg, mount, 0.34);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.022, 12, 8), brassPolish); foot.position.copy(toe); addFitting(foot, mount, 0.36);
+    }
   }
   // (b) armillary sphere, right
   const armil = new THREE.Group(); armil.position.set(3.0, 0.05, 2.0); armil.rotation.set(0.25, -0.5, 0.1); scene.add(armil);
@@ -260,6 +295,20 @@ export function create(ctx, segment) {
     for (let i = 0; i < 72; i++) { const a = (i / 72) * TAU, l = i % 6 === 0 ? 0.06 : 0.03; tk.push([V(Math.cos(a) * RR * 1.03, 0, Math.sin(a) * RR * 1.03), V(Math.cos(a) * (RR * 1.03 + l), 0, Math.sin(a) * (RR * 1.03 + l))]); }
     armil.userData.ticks = segmentsLine(tk, { color: '#ffd28a', intensity: 1.2, orderFn: (a, b, i) => i / 72, stagger: 0.9 });
     armil.add(armil.userData.ticks);
+    // the zodiac band (a broad belt along the ecliptic ring), pole caps on the axis, and the stand's collar
+    // and half-meridian yoke holding the sphere on its stem
+    const zod = new THREE.Group(); zod.rotation.set(Math.PI / 2, 0, 0.41);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(RR * 0.975, RR * 0.975, 0.07, 128, 1, true), new THREE.MeshStandardMaterial({ color: '#b98c4e', metalness: 1, roughness: 0.32, side: THREE.DoubleSide }));
+    band.rotation.x = -Math.PI / 2; zod.add(band);
+    addFitting(zod, armil, 0.2, 2.2);
+    armil.userData.zod = zod;
+    for (const s of [1, -1]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.022, 16, 12), brassPolish);
+      cap.position.set(-Math.sin(0.41) * RR * 1.25 * s, Math.cos(0.41) * RR * 1.25 * s, 0); addFitting(cap, armil, 0.1);
+    }
+    const yoke = new THREE.Mesh(new THREE.TorusGeometry(RR + 0.05, 0.016, 10, 64, Math.PI), bronzeDark); yoke.rotation.z = Math.PI; addFitting(yoke, armil, 0.28, 2.0);
+    const coll = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 24), brassPolish); coll.position.y = -RR - 0.05; addFitting(coll, armil, 0.3);
+    for (const sx of [-1, 1]) { const pv = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 16).rotateZ(Math.PI / 2), brassPolish); pv.position.x = sx * (RR + 0.05); addFitting(pv, armil, 0.3); }
   }
   // (c) gear train, lower-left
   const gearGrp = new THREE.Group(); gearGrp.position.set(-2.2, -1.25, 2.6); gearGrp.rotation.set(-0.15, 0.35, 0.1); scene.add(gearGrp);
@@ -272,6 +321,20 @@ export function create(ctx, segment) {
   gearC.position.set(Math.cos(dirAC) * dAC, Math.sin(dirAC) * dAC, -0.01);
   const gearSpin = [new THREE.Group(), new THREE.Group(), new THREE.Group()];
   [gearA, gearB, gearC].forEach((g, i) => { gearSpin[i].position.copy(g.position); g.position.set(0, 0, 0); gearSpin[i].add(g); addPart(gearSpin[i], gearGrp, 0.1 + i * 0.1, 2.0); });
+  // the train's frame: a pierced back plate with pillars, a steel arbor through each wheel with its collet
+  {
+    const plateShape = new THREE.Shape(); plateShape.absarc(0, 0, 0.62, 0, TAU, false);
+    for (const [x, y, r] of [[0.28, -0.22, 0.08], [-0.3, 0.3, 0.07], [0.12, 0.42, 0.06]]) { const h = new THREE.Path(); h.absarc(x, y, r, 0, TAU, true); plateShape.holes.push(h); }
+    const plateG = new THREE.ExtrudeGeometry(plateShape, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 2, curveSegments: 48 });
+    const plate = new THREE.Mesh(plateG, bronzeDark); plate.position.set(-0.05, 0.12, -0.12); addFitting(plate, gearGrp, 0.05, 2.0);
+    const arborM = new THREE.MeshStandardMaterial({ color: '#b8bec6', metalness: 1, roughness: 0.2 });
+    gearSpin.forEach((gs, i) => {
+      const arbor = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 12).rotateX(Math.PI / 2), arborM); arbor.position.z = -0.04; gs.add(arbor);
+      const collet = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 20).rotateX(Math.PI / 2), brassPolish); collet.position.z = 0.045; gs.add(collet);
+      void i;
+    });
+    for (const [x, y] of [[0.4, 0.4], [-0.45, -0.25], [0.45, -0.4]]) { const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.14, 12).rotateX(Math.PI / 2), brassPolish); pil.position.set(x - 0.05, y + 0.12, -0.06); addFitting(pil, gearGrp, 0.12); }
+  }
   // (d) orbital diagrams drawn in the background
   const diag = new THREE.Group(); diag.position.set(0.6, 0.2, -2.2); scene.add(diag);
   const ell = (a, b, rot) => { const pts = []; for (let i = 0; i <= 160; i++) { const th = (i / 160) * TAU; pts.push(V(Math.cos(th) * a - Math.sqrt(a * a - b * b), Math.sin(th) * b, 0).applyAxisAngle(V(0, 0, 1), rot)); } return pts; };
@@ -1006,6 +1069,7 @@ export function create(ctx, segment) {
     }
     armil.rotation.y = -0.5 + t * 0.25;
     armRings[2].rotation.y = t * 0.6; armRings[3].rotation.x = t * 0.4;
+    armil.userData.zod.rotation.y = t * 0.6;                         // (the zodiac band turns with its ecliptic ring)
     armil.userData.ticks.progress = ramp(t, tInst + 0.4, tInst + 1.1);
     const thA = t * 1.1;
     gearSpin[0].rotation.z = thA;

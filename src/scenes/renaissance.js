@@ -46,20 +46,21 @@ function figureParts(pose = 0) {
   const P = [];
   const cone = (a, b, ra, rb, k, flat = 1, limb = false) => P.push({ type: 'cone', a, b, ra, rb, flat, k, limb });
   const ell = (c, r, k, limb = false, ang = 0, yaw = 0) => P.push({ type: 'ell', c, r, k, limb, ang, yaw });
-  // head: cranium and jaw (an egg from the side), small ears, the neck
+  // head: cranium and jaw (an egg from the side), small ears; the rounded fork of the body
   ell([0, 0.693, -0.006], [0.079, 0.107, 0.1], 0);
   ell([0, 0.617, 0.02], [0.056, 0.068, 0.07], 0.05);
   for (const s of [1, -1]) ell([s * 0.076, 0.648, -0.008], [0.011, 0.026, 0.017], 0.012);
-  cone([0, 0.47, -0.012], [0, 0.6, -0.012], 0.05, 0.041, 0.035, 0.95);
+  ell([0, -0.215, -0.004], [0.05, 0.045, 0.06], 0.045);
   // trunk: one smooth profile (half-width seen head-on, half-depth) from the neck over the chest, a
   // tapered waist above the navel, the iliac crest and hips, closing under the groin
   P.push({ ...profilePrim(
-    [-0.25, -0.2, -0.15, -0.09, -0.03, 0.03, 0.09, 0.16, 0.23, 0.3, 0.36, 0.41, 0.45, 0.48, 0.51, 0.535],
-    [0.09, 0.148, 0.168, 0.172, 0.164, 0.144, 0.133, 0.141, 0.158, 0.172, 0.184, 0.179, 0.15, 0.1, 0.056, 0.042],
-    [0.07, 0.092, 0.1, 0.1, 0.097, 0.093, 0.09, 0.095, 0.104, 0.108, 0.104, 0.094, 0.08, 0.064, 0.05, 0.044], 0.035), limb: false });
+    [-0.25, -0.2, -0.15, -0.09, -0.03, 0.03, 0.09, 0.16, 0.23, 0.3, 0.36, 0.41, 0.45, 0.48, 0.505, 0.53],
+    [0.09, 0.146, 0.163, 0.166, 0.159, 0.142, 0.133, 0.142, 0.16, 0.176, 0.19, 0.19, 0.16, 0.104, 0.05, 0.02],
+    [0.07, 0.092, 0.1, 0.1, 0.097, 0.093, 0.09, 0.095, 0.104, 0.108, 0.104, 0.094, 0.08, 0.064, 0.046, 0.02], 0.035), limb: false });
+  cone([0, 0.47, -0.012], [0, 0.6, -0.012], 0.05, 0.041, 0.05, 0.95);                    // neck, blended into the trunk
   for (const s of [1, -1]) {
-    // trunk surface forms: pectorals, shoulder blades, buttocks
-    ell([s * 0.078, 0.312, 0.052], [0.08, 0.056, 0.045], 0.04, false, s * -0.12);
+    // trunk surface forms: pectorals (broad and flat, rising to the armpit), shoulder blades, buttocks
+    ell([s * 0.08, 0.322, 0.056], [0.092, 0.05, 0.03], 0.045, false, s * 0.24);
     ell([s * 0.085, 0.33, -0.058], [0.07, 0.075, 0.04], 0.04);
     ell([s * 0.072, -0.15, -0.046], [0.076, 0.086, 0.052], 0.045);
     // trapezius: the long slope from the neck to the point of the shoulder
@@ -79,7 +80,7 @@ function figureParts(pose = 0) {
     const lEll = (c, r, k, ang = 0, yaw = 0) => ell(L(...c), r, k, true, s * ang + la, s * yaw);
     // arm (palm forward, thumb up): deltoid cap, upper arm with biceps and triceps, the forearm swelling
     // below the elbow and flattening to the wrist
-    aEll([0.232, 0.43, 0], [0.075, 0.056, 0.058], 0.035, -0.12);
+    aEll([0.232, 0.432, 0], [0.08, 0.06, 0.062], 0.035, -0.12);
     cone(A(0.2, 0.43), A(0.5, 0.434), 0.051, 0.035, 0.035, 0.95, true);
     aEll([0.37, 0.441, 0.008], [0.09, 0.041, 0.043], 0.03);
     aEll([0.34, 0.419, -0.01], [0.1, 0.039, 0.041], 0.03);
@@ -94,7 +95,7 @@ function figureParts(pose = 0) {
     cone(A(0.812, 0.458, 0.006), A(0.872, 0.497, 0.012), 0.0135, 0.0092, 0.012, 0.9, true);
     // leg: thigh with the outer quadriceps, the inner vastus above the knee and the adductors, the
     // kneecap, the shin with the two heads of the calf (the inner one lower), the ankle bones
-    cone(L(0.095, -0.13), L(0.07, -0.64), 0.078, 0.046, 0.035, 0.95, true);
+    cone(L(0.095, -0.13), L(0.07, -0.64), 0.078, 0.046, 0.05, 0.95, true);
     lEll([0.122, -0.32, 0.012], [0.052, 0.17, 0.062], 0.04, 0.04);
     lEll([0.05, -0.27, -0.004], [0.052, 0.11, 0.062], 0.04);
     lEll([0.052, -0.56, 0.016], [0.034, 0.066, 0.04], 0.045, -0.1);

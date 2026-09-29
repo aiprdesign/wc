@@ -103,22 +103,24 @@ export function create(ctx, segment) {
   {
     const t0 = wireCurve.getTangentAt(0), p0 = wirePts[0];
     const ext = new THREE.CatmullRomCurve3([p0.clone().addScaledVector(t0, -26).add(V(0, 1.6, 0)), p0.clone().addScaledVector(t0, -12).add(V(0, 0.5, 0)), p0.clone().addScaledVector(t0, -4), p0.clone().addScaledVector(t0, -0.8), p0.clone()], false, 'centripetal');
-    scene.add(new THREE.Mesh(new THREE.TubeGeometry(ext, 300, 0.013, 10, false), wireMat));
+    wire.add(new THREE.Mesh(new THREE.TubeGeometry(ext, 300, 0.013, 10, false), wireMat));
   }
-  // coil core (soft iron) + bobbin cheeks
+  // coil core (soft iron) + bobbin cheeks (grouped: they leave with the wire after shot 2 — left standing they
+  // hung in the void, wireless, behind the telephone, radio and circuit shots)
+  const coilGrp = new THREE.Group(); scene.add(coilGrp);
   {
     const { C0, C1, ax, len } = scene.userData.coil;
     const core = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, len * 1.15, 32), ironM);
-    core.position.copy(C0).lerp(C1, 0.5); core.quaternion.setFromUnitVectors(V(0, 1, 0), ax); scene.add(core);
-    [0, 1].forEach((k) => { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 40), bakelite); ch.position.copy(C0).lerp(C1, k ? 1.02 : -0.02); ch.quaternion.copy(core.quaternion); scene.add(ch); });
+    core.position.copy(C0).lerp(C1, 0.5); core.quaternion.setFromUnitVectors(V(0, 1, 0), ax); coilGrp.add(core);
+    [0, 1].forEach((k) => { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 40), bakelite); ch.position.copy(C0).lerp(C1, k ? 1.02 : -0.02); ch.quaternion.copy(core.quaternion); coilGrp.add(ch); });
     // the bobbin's inner layers of enamelled winding under the outer turn the spark races along, and the core's
     // pole faces proud of each cheek
     const layerTex = canvasTex(64, 256, (x, w, h) => { x.fillStyle = '#7a7a7a'; x.fillRect(0, 0, w, h); for (let i = 0; i < h; i += 4) { x.fillStyle = 'rgba(20,20,20,0.8)'; x.fillRect(0, i, w, 1); x.fillStyle = 'rgba(230,230,230,0.5)'; x.fillRect(0, i + 2, w, 1); } }, { srgb: false });
     layerTex.wrapS = layerTex.wrapT = THREE.RepeatWrapping; layerTex.repeat.set(6, 3);
     const enamel = new THREE.MeshPhysicalMaterial({ color: '#8c4a24', metalness: 0.9, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.2, bumpMap: layerTex, bumpScale: 0.5 });
     const winding = new THREE.Mesh(new THREE.CylinderGeometry(0.148, 0.148, len * 1.0, 48, 1, true), enamel);
-    winding.position.copy(core.position); winding.quaternion.copy(core.quaternion); scene.add(winding);
-    [0, 1].forEach((k) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 32), chrome); pole.position.copy(C0).lerp(C1, k ? 1.085 : -0.085); pole.quaternion.copy(core.quaternion); scene.add(pole); });
+    winding.position.copy(core.position); winding.quaternion.copy(core.quaternion); coilGrp.add(winding);
+    [0, 1].forEach((k) => { const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.02, 32), chrome); pole.position.copy(C0).lerp(C1, k ? 1.078 : -0.078); pole.quaternion.copy(core.quaternion); coilGrp.add(pole); });
   }
   // pulse overlay: additive tube keyed by arc-length distance to the head
   const pulseMat = new THREE.ShaderMaterial({
@@ -339,19 +341,12 @@ export function create(ctx, segment) {
     });
     const xfmr = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.09, 0.08), ironM); xfmr.position.set(0.24, 0.3, 0.06); radio.add(xfmr);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.1, 24), new THREE.MeshStandardMaterial({ color: '#b8bdc4', metalness: 1, roughness: 0.3 })); cap.position.set(-0.24, 0.3, 0.07); radio.add(cap);
-    // loudspeaker behind the grille cloth (paper cone, pressed-steel frame, field coil at the back) on a
-    // baffle bracket, and the wiring: speaker leads down to the output transformer, a lead to each tube's cap
-    const spk = new THREE.Group(); spk.position.set(0, GY, RDP / 2 - 0.06); radio.add(spk);
-    const coneG = new THREE.LatheGeometry([[0.03, -0.07], [0.06, -0.055], [0.11, -0.03], [0.165, -0.008], [0.178, 0]].map(([x, y]) => new THREE.Vector2(x, y)), 48).rotateX(Math.PI / 2);
-    spk.add(new THREE.Mesh(coneG, new THREE.MeshStandardMaterial({ color: '#6b5a44', roughness: 0.95, side: THREE.DoubleSide })));
-    const frameM = new THREE.MeshStandardMaterial({ color: '#4a4d52', metalness: 0.85, roughness: 0.5 });
-    spk.add(new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.008, 8, 64), frameM));
-    for (let k = 0; k < 4; k++) { const a = (k / 4) * TAU + Math.PI / 4, arm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.16, 0.006), frameM); arm.position.set(Math.cos(a) * 0.11, Math.sin(a) * 0.11, -0.045); arm.rotation.set(0.5 * Math.sin(a), -0.5 * Math.cos(a), a - Math.PI / 2); spk.add(arm); }
-    const fieldCoil = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 24).rotateX(Math.PI / 2), frameM); fieldCoil.position.z = -0.09; spk.add(fieldCoil);
-    const dustCap = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 8, 0, TAU, 0, Math.PI / 2).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#4a3e30', roughness: 0.9 })); dustCap.position.z = -0.066; spk.add(dustCap);
-    const leadM = new THREE.MeshStandardMaterial({ color: '#7a2a1a', roughness: 0.6 }), leadM2 = new THREE.MeshStandardMaterial({ color: '#22303a', roughness: 0.6 });
-    [[-0.012, leadM], [0.012, leadM2]].forEach(([dx, m]) => radio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(dx, GY - 0.02, RDP / 2 - 0.17), V(dx + 0.05, GY - 0.12, 0.02), V(0.2 + dx, 0.36, 0.06), V(0.24 + dx, 0.345, 0.06)]), 40, 0.003, 6), m)));
-    tubeSpots.forEach(([x, z, h], i) => { if (i % 2) return; radio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(x, 0.25 + 0.02 + h + 0.03, z), V(x, 0.25 + h + 0.09, z - 0.02), V(x * 0.5, 0.25 + h + 0.06, -0.12), V(-0.24, 0.35, 0.07)]), 30, 0.0025, 6), leadM2)); });
+    // wiring over the chassis: a lead from the top cap of two of the tubes back to a terminal at the rear
+    const leadM2 = new THREE.MeshStandardMaterial({ color: '#5a2a1c', roughness: 0.6 }), capM = new THREE.MeshStandardMaterial({ color: '#b8bdc4', metalness: 1, roughness: 0.3 });
+    tubeSpots.forEach(([x, z, h], i) => { if (i !== 0 && i !== 3) return;   // (not the hero tube the camera dives onto)
+      const tc = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.012, 16), capM); tc.position.set(x, 0.25 + 0.02 + h + 0.032, z); radio.add(tc);
+      radio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(x, 0.25 + 0.02 + h + 0.03, z), V(x, 0.25 + h + 0.08, z - 0.03), V(x, 0.3, -0.125), V(x * 0.9, 0.268, -0.13)]), 30, 0.0025, 6), leadM2));
+      const tb = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.016, 0.02), bakelite); tb.position.set(x * 0.9, 0.258, -0.13); radio.add(tb); });
   }
   const TUBE0 = tubes[2];
   TUBE0.gl2.scale.setScalar(0.1); TUBE0.gl2.material.color.multiplyScalar(1.8);
@@ -610,7 +605,7 @@ export function create(ctx, segment) {
     compInst.instanceMatrix.needsUpdate = true; ledInst.instanceMatrix.needsUpdate = true;
 
     // ---- visibility per shot (hard match cuts)
-    wire.visible = pulseTube.visible = shot <= 2;
+    wire.visible = pulseTube.visible = coilGrp.visible = shot <= 2;
     tele.visible = shot <= 2;
     phone.visible = shot === 3;
     radio.visible = shot === 4; tubeLight.visible = shot === 4;
