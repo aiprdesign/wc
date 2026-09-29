@@ -266,7 +266,8 @@ export function create(ctx, segment) {
   const die = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.5), [epoxy, epoxy, dieChip, epoxy, epoxy, epoxy]); die.position.y = 0.07; chip.add(die);
   const DIE_TOP = 0.08;
   const lid = new THREE.Group(); chip.add(lid);
-  const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.045, 0.92), new THREE.MeshStandardMaterial({ color: '#cfd6de', metalness: 1, roughness: 0.22, map: brushedMetalTexture(), envMapIntensity: 1.3 }));
+  const lidM = new THREE.MeshStandardMaterial({ color: '#cfd6de', metalness: 1, roughness: 0.22, map: brushedMetalTexture(), envMapIntensity: 1.3 });
+  const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.045, 0.92), lidM);
   lidMesh.castShadow = true; lid.add(lidMesh);
   const lidText = new TextPlane('μP · 64-BIT · 3 nm', { font: FONTS.mono, height: 0.045, letterSpacing: 0.2, color: '#3a4048', intensity: 1, blending: THREE.NormalBlending });
   lidText.rotation.x = -Math.PI / 2; lidText.position.set(0, 0.0235, 0.3); lid.add(lidText);
@@ -401,7 +402,13 @@ export function create(ctx, segment) {
     scene, camera, hud,
     get exploreLimits() { return lastT < tSwitch ? LIM_BENCH : lastT < tBin + 0.05 ? LIM_DIE : LIM_CARDS; },
     // Explore 3D: the AI cards gain their glass backing slabs (so they read as panels, not decals, off-axis)
-    explore(t) { if (t >= tSwitch) ai.showBacks(); },
+    // Bench: the floor disc (r 12) is spread out so a wide orbit meets fog, not its rim; the processor's
+    // polished lid mirrors the key spot into a white-out from above, so its polish is broadened
+    explore(t) {
+      if (t >= tSwitch) ai.showBacks();
+      else { floor.scale.setScalar(3); lidM.roughness = 0.45; lidM.envMapIntensity = 0.9; }
+    },
+    exploreEnd() { floor.scale.setScalar(1); lidM.roughness = 0.22; lidM.envMapIntensity = 1.3; },
     dof: { focus: 3, range: 1.5, amount: 0 },
     bloom: { strength: 0.72 },
     exposure: 1.0,
