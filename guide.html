@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Achievements Screening Room</title>
+<meta name="description" content="Achievements of Western Civilization: the film in 1:1, 16:9 and 9:16, how to run it, facts and sources, and the full source code.">
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a screening room — one stage (the player) framed like a cinema screen, the reel's chapters beside it, then the workshop (real-time build + source) below. */
+:root {
+  --ink: #120f0c;        /* auditorium dark, warm */
+  --panel: #1b1713;      /* raised surfaces */
+  --line: #3a3128;       /* hairlines */
+  --paper: #efe8dc;      /* the film's title ink */
+  --muted: #a89c8a;      /* secondary text */
+  --gold: #c99a3e;       /* the film's heading gold (the 10%) */
+  --gold-hi: #e2bf72;
+  --display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+html, body { background: var(--ink); color: var(--paper); }
+body { font-family: var(--serif); font-size: 19px; line-height: 1.5; padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 56px; }
+a { color: var(--gold-hi); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+
+header { padding-top: 40px; display: grid; gap: 10px; text-align: center; justify-items: center; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 5.4vw, 60px); line-height: 1.05; letter-spacing: .06em; margin: 0; text-wrap: balance; color: var(--paper); }
+h1 small { display: block; font-size: .42em; letter-spacing: .34em; font-weight: 500; margin-top: .5em; color: var(--paper); opacity: .9; }
+.rule { width: min(320px, 60%); height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 6px 0 2px; }
+.lede { font-style: italic; font-size: 21px; color: var(--muted); max-width: 40ch; margin: 0; text-wrap: balance; }
+
+/* stage */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.screen { display: grid; gap: 14px; min-width: 0; }
+.formats { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.fmt { font-family: var(--mono); font-size: 13px; letter-spacing: .08em; background: transparent; color: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.fmt:hover { border-color: var(--muted); }
+.fmt[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-hi); }
+.fmt .dim { color: var(--muted); font-size: 11px; }
+.frame-wrap { background: #000; border: 1px solid var(--line); display: grid; place-items: center; padding: 14px; min-height: 260px; }
+.frame { position: relative; width: 100%; max-width: 100%; background: #000; }
+.frame video { display: block; width: 100%; height: 100%; background: #000; }
+.frame[data-fmt="1x1"] { aspect-ratio: 1 / 1; max-width: min(100%, 680px); }
+.frame[data-fmt="16x9"] { aspect-ratio: 16 / 9; }
+.frame[data-fmt="9x16"] { aspect-ratio: 9 / 16; max-width: min(100%, 400px); }
+.pending { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; background: radial-gradient(ellipse at center, #1f1a14 0%, #000 70%); }
+.pending p { margin: 0; max-width: 28ch; }
+.pending .eyebrow { display: block; margin-bottom: 8px; color: var(--gold-hi); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.btn { font-family: var(--mono); font-size: 13px; letter-spacing: .06em; border-radius: 6px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--gold); background: var(--gold); color: #1a1208; text-decoration: none; display: inline-flex; gap: 8px; align-items: center; }
+.btn.ghost { background: transparent; color: var(--gold-hi); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.note { font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 1.4em; margin: 0; }
+
+/* chapters */
+.reel { border-left: 1px solid var(--line); padding-left: 20px; min-width: 0; }
+@media (max-width: 900px) { .reel { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 18px; } }
+.reel h2, section h2 { font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: .28em; text-transform: uppercase; color: var(--gold-hi); margin: 0 0 12px; }
+.chapters { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.chapters button { width: 100%; display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: baseline; text-align: left; background: none; border: 0; color: var(--paper); padding: 6px 6px; border-radius: 4px; cursor: pointer; font: inherit; }
+.chapters button:hover { background: var(--panel); }
+.chapters button[aria-current="true"] { background: var(--panel); }
+.chapters button[aria-current="true"] .tc { color: var(--gold-hi); }
+.tc { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ch-title { font-size: 17px; line-height: 1.25; }
+.ch-word { display: block; font-family: var(--display); font-size: 11px; letter-spacing: .22em; color: var(--muted); }
+
+/* workshop */
+.workshop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 820px) { .workshop { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.card p { margin: 0; max-width: 60ch; }
+.links { display: flex; gap: 10px; flex-wrap: wrap; }
+.specs { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; font-size: 16px; }
+.specs dt { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; padding-top: 3px; }
+.specs dd { margin: 0; }
+
+/* source browser */
+.source { display: grid; grid-template-columns: 280px minmax(0, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #0d0b09; min-height: 520px; }
+@media (max-width: 820px) { .source { grid-template-columns: minmax(0, 1fr); } }
+.tree { border-right: 1px solid var(--line); overflow: auto; max-height: 640px; padding: 10px 0; }
+@media (max-width: 820px) { .tree { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; } }
+.tree .dir { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; color: var(--muted); padding: 10px 16px 4px; text-transform: uppercase; }
+.tree button { display: flex; justify-content: space-between; gap: 8px; width: 100%; background: none; border: 0; color: var(--paper); font-family: var(--mono); font-size: 12.5px; padding: 4px 16px; cursor: pointer; text-align: left; }
+.tree button:hover { background: var(--panel); }
+.tree button[aria-current="true"] { background: var(--panel); color: var(--gold-hi); }
+.tree .sz { color: var(--muted); font-variant-numeric: tabular-nums; }
+.viewer { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.viewer-bar { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.viewer-bar .path { color: var(--paper); overflow-wrap: anywhere; }
+.copy { font-family: var(--mono); font-size: 12px; background: none; border: 1px solid var(--line); color: var(--paper); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+pre.code { margin: 0; padding: 16px; overflow: auto; max-height: 640px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: #e6dccb; tab-size: 2; }
+.hljs-comment, .hljs-quote { color: #8a7d69; font-style: italic; }
+.hljs-keyword, .hljs-built_in, .hljs-literal { color: #e2bf72; }
+.hljs-string, .hljs-template-string, .hljs-regexp { color: #b7c98f; }
+.hljs-number { color: #d9a3ff; }
+.hljs-title, .hljs-title.function_, .hljs-title.class_ { color: #9cc7f0; }
+.hljs-attr, .hljs-property, .hljs-variable { color: #f0c9a0; }
+.hljs-tag, .hljs-name, .hljs-selector-tag { color: #9cc7f0; }
+/* run guide */
+.guide { display: grid; gap: 18px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: step; }
+.steps > li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; align-items: start; }
+.steps > li::before { counter-increment: step; content: counter(step); font-family: var(--display); font-size: 18px; color: var(--gold-hi); border: 1px solid var(--gold); border-radius: 50%; width: 34px; height: 34px; display: grid; place-items: center; }
+.steps h3 { font-family: var(--serif); font-weight: 500; font-size: 21px; margin: 2px 0 6px; }
+.steps p { margin: 0 0 8px; max-width: 64ch; }
+.cmd { display: flex; gap: 8px; align-items: stretch; margin: 6px 0; max-width: 100%; }
+.cmd pre { flex: 1; min-width: 0; margin: 0; background: #0d0b09; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: #e6dccb; overflow-x: auto; }
+.cmd .copy { flex: none; }
+.or { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.opts { width: 100%; border-collapse: collapse; font-size: 16px; }
+.opts th, .opts td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.opts th { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.opts code { font-family: var(--mono); font-size: 13px; color: var(--gold-hi); overflow-wrap: anywhere; }
+.table-wrap { overflow-x: auto; }
+code.inline { font-family: var(--mono); font-size: .8em; color: var(--gold-hi); background: #0d0b09; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.tip { font-size: 16px; color: var(--muted); margin: 0; max-width: 70ch; }
+/* facts */
+.facts { display: grid; gap: 14px; }
+.facts-body { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 22px 22px; max-height: 720px; overflow: auto; font-size: 16px; }
+.facts-body h1 { display: none; }
+.facts-body h2 { font-family: var(--display); font-weight: 500; font-size: 14px; letter-spacing: .22em; text-transform: uppercase; color: var(--gold-hi); margin: 26px 0 10px; }
+.facts-body p, .facts-body li { max-width: 80ch; }
+.facts-body table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 6px 0 4px; }
+.facts-body th, .facts-body td { text-align: left; vertical-align: top; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+.facts-body th { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+.facts-body td:first-child { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.facts-body code { font-family: var(--mono); font-size: .85em; color: var(--gold-hi); }
+.facts-body hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+.facts-body a { overflow-wrap: anywhere; }
+footer { text-align: center; font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">A short film · 1:48 · three formats</span>
+    <h1>Achievements<small>of Western Civilization</small></h1>
+    <div class="rule" aria-hidden="true"></div>
+    <p class="lede">From the agora to the Moon, and next to Mars. Twenty-five centuries of reason, courage and invention.</p>
+  </header>
+
+  <section class="stage" aria-label="Film player">
+    <div class="screen">
+      <div class="formats" role="group" aria-label="Frame format">
+        <button class="fmt" id="fmt-1x1" data-fmt="1x1" aria-pressed="true">1:1 <span class="dim">square</span></button>
+        <button class="fmt" id="fmt-16x9" data-fmt="16x9" aria-pressed="false">16:9 <span class="dim">landscape</span></button>
+        <button class="fmt" id="fmt-9x16" data-fmt="9x16" aria-pressed="false">9:16 <span class="dim">vertical</span></button>
+      </div>
+      <div class="frame-wrap">
+        <div class="frame" id="frame" data-fmt="1x1">
+          <video id="video" controls playsinline preload="metadata"></video>
+          <div class="pending" id="pending" hidden>
+            <p><span class="eyebrow">Rendering</span>This format is still being rendered. It will appear here when it is ready.</p>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="meta" id="vmeta">1:1 · 720 × 720 · H.264 + AAC stereo</span>
+        <div class="links">
+          <button class="btn" id="dl-video" type="button">Download MP4</button>
+        </div>
+      </div>
+      <p class="note" id="dl-note" aria-live="polite"></p>
+    </div>
+
+    <nav class="reel" aria-label="Chapters">
+      <h2>Chapters</h2>
+      <ol class="chapters" id="chapters"></ol>
+    </nav>
+  </section>
+
+  <section class="workshop" aria-label="Real-time film and project">
+    <div class="card">
+      <h2>Real-time version</h2>
+      <p>The same film renders live in the browser with three.js and a Web Audio score composed on the fly. Every frame is computed as you watch, in any format.</p>
+      <div class="links">
+        <a class="btn" href="./#square" >Play live · 1:1</a>
+        <a class="btn ghost" href="./#16x9">16:9</a>
+        <a class="btn ghost" href="./">2.39 scope</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>How it was made</h2>
+      <dl class="specs">
+        <dt>Picture</dt><dd>Procedural 3D in three.js r186: HDR, depth of field, bloom and a film grade</dd>
+        <dt>Score</dt><dd>Orchestral trailer score synthesised offline with Web Audio at 120 BPM</dd>
+        <dt>Voice</dt><dd>British narrator, Kokoro text-to-speech (bm_george)</dd>
+        <dt>Type</dt><dd>Cinzel, Cormorant Garamond, IBM Plex Mono</dd>
+        <dt>Render</dt><dd>Headless Chromium, 30 fps, open-matte from a 2.39 master</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="facts" aria-labelledby="facts-h" id="facts">
+    <div class="row">
+      <h2 id="facts-h" style="margin:0">Facts &amp; sources</h2>
+      <a class="btn ghost" href="https://github.com/aiprdesign/wc/blob/claude/trusting-noether-58oskk/docs/FACTS.md" target="_blank" rel="noopener">Open on GitHub</a>
+    </div>
+    <p class="tip">Every claim the film makes, spoken or on screen, checked against published sources. Each row gives where it appears (film time), its status and links so you can verify it yourself. Stylised elements that are not factual claims are listed at the end under Artistic licence.</p>
+    <div class="facts-body" id="facts-body" tabindex="0" aria-label="Fact sheet">Loading the fact sheet…</div>
+  </section>
+
+  <section class="guide" aria-labelledby="run-h" id="run">
+    <h2 id="run-h" style="margin:0">Run the code</h2>
+    <p class="tip">The film is a website that draws itself in real time. It has no installer and no build step: you only need to serve the folder from a small local web server and open it in a browser.</p>
+    <ol class="steps">
+      <li><div>
+        <h3>Download and unzip the source</h3>
+        <p>Press <strong>Download source (.zip)</strong> in the Source code section below and unzip it. You get a folder called <code class="inline">achievements-of-western-civilization</code>.</p>
+      </div></li>
+      <li><div>
+        <h3>Open a terminal in that folder</h3>
+        <p>On Windows, open the folder, click the address bar, type <code class="inline">cmd</code> and press Enter. On macOS, right-click the folder and choose New Terminal at Folder. Or type:</p>
+        <div class="cmd"><pre id="c1">cd achievements-of-western-civilization</pre><button class="copy" type="button" data-copy="c1">Copy</button></div>
+      </div></li>
+      <li><div>
+        <h3>Start a local web server</h3>
+        <p>Use whichever you already have. With Node.js:</p>
+        <div class="cmd"><pre id="c2">npx http-server -p 8080</pre><button class="copy" type="button" data-copy="c2">Copy</button></div>
+        <span class="or">or Python 3</span>
+        <div class="cmd"><pre id="c3">python3 -m http.server 8080</pre><button class="copy" type="button" data-copy="c3">Copy</button></div>
+        <p>Leave this window open while you watch. Opening index.html by double-clicking does not work, because browsers block the film's modules from local files.</p>
+      </div></li>
+      <li><div>
+        <h3>Open the film in your browser</h3>
+        <div class="cmd"><pre id="c4">http://localhost:8080</pre><button class="copy" type="button" data-copy="c4">Copy</button></div>
+        <p>Use Chrome, Edge or Firefox. Wait a few seconds while the score is composed, then press <strong>Play film</strong> (sound starts when you press Play).</p>
+      </div></li>
+    </ol>
+    <div class="table-wrap">
+      <table class="opts">
+        <thead><tr><th>Add to the address</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>#square</code></td><td>Square 1:1 frame</td></tr>
+          <tr><td><code>#16x9</code></td><td>Landscape 16:9 frame</td></tr>
+          <tr><td><code>?aspect=9:16</code></td><td>Vertical 9:16 frame for phones</td></tr>
+          <tr><td>(nothing)</td><td>The original 2.39 widescreen frame</td></tr>
+          <tr><td><code>?q=high</code> or <code>?q=ultra</code></td><td>Sharper picture on a strong graphics card (use <code>?q=low</code> on slower computers)</td></tr>
+          <tr><td><code>?novo</code></td><td>Plays without the narrator</td></tr>
+          <tr><td><code>?noaudio</code></td><td>Silent, and loads faster</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tip">Combine options with <code class="inline">&amp;</code>, for example <code class="inline">http://localhost:8080/?aspect=9:16&amp;q=high</code>. In the player, Space plays and pauses, F goes full screen, M mutes, R records to WebM, and the buttons save the soundtrack as WAV and switch the frame format.</p>
+    <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">Explore in 3D:</strong> pause anywhere and press <code class="inline">E</code> (or the Explore 3D button) to step into the frozen scene. Drag to look around, scroll or pinch to zoom, right-drag to pan, fly with W A S D and R / F, double-click to reset, and press E or Esc to return.</p>
+    <h3 style="font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: .28em; text-transform: uppercase; color: var(--gold-hi); margin: 18px 0 0;">Render the MP4 videos yourself</h3>
+    <p class="tip">Your own computer renders the videos much faster than a cloud machine, because it uses your graphics card. You need <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> (version 18 or newer). Everything else installs with one command.</p>
+    <ol class="steps">
+      <li><div>
+        <h3>Install the tools, once</h3>
+        <p>In the project folder, run this. It downloads the local server, a copy of Chromium to render with, and ffmpeg to make the MP4.</p>
+        <div class="cmd"><pre id="c5">npm install</pre><button class="copy" type="button" data-copy="c5">Copy</button></div>
+      </div></li>
+      <li><div>
+        <h3>Render the format you want</h3>
+        <div class="cmd"><pre id="c6">npm run render:1x1</pre><button class="copy" type="button" data-copy="c6">Copy</button></div>
+        <div class="cmd"><pre id="c7">npm run render:16x9</pre><button class="copy" type="button" data-copy="c7">Copy</button></div>
+        <div class="cmd"><pre id="c8">npm run render:9x16</pre><button class="copy" type="button" data-copy="c8">Copy</button></div>
+        <span class="or">or all three in a row</span>
+        <div class="cmd"><pre id="c9">npm run render:all</pre><button class="copy" type="button" data-copy="c9">Copy</button></div>
+        <p>Browser windows open and close by themselves while it renders: that is how it reaches your graphics card, so leave them alone. The terminal shows progress and the time left.</p>
+      </div></li>
+      <li><div>
+        <h3>Find your videos</h3>
+        <p>Each MP4 lands in the <code class="inline">renders</code> folder, with the music and narration included:</p>
+        <div class="table-wrap"><table class="opts">
+          <thead><tr><th>Command</th><th>Video</th><th>Size</th></tr></thead>
+          <tbody>
+            <tr><td><code>render:1x1</code></td><td><code>renders/1x1/achievements-of-western-civilization-1x1.mp4</code></td><td>1080 × 1080</td></tr>
+            <tr><td><code>render:16x9</code></td><td><code>renders/16x9/achievements-of-western-civilization-16x9.mp4</code></td><td>1920 × 1080</td></tr>
+            <tr><td><code>render:9x16</code></td><td><code>renders/9x16/achievements-of-western-civilization-9x16.mp4</code></td><td>1080 × 1920</td></tr>
+          </tbody>
+        </table></div>
+      </div></li>
+    </ol>
+    <p class="tip">If a render stops part-way, run the same command again: finished frames are kept and it carries on where it left off. Advanced options (frame rate, a time range, more workers) are listed at the top of <code class="inline">tools/render.mjs</code>.</p>
+  </section>
+
+  <section aria-label="Source code" style="display:grid; gap:14px;">
+    <div class="row">
+      <h2 style="margin:0">Source code</h2>
+      <div class="links">
+        <button class="btn" id="dl-zip" type="button">Download source (.zip)</button>
+        <a class="btn ghost" href="https://github.com/aiprdesign/wc/tree/claude/trusting-noether-58oskk" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+    <p class="note" id="zip-note" aria-live="polite">The zip is the complete project. See <a href="#run">Run the code</a> above for how to play it on your computer.</p>
+    <div class="source">
+      <div class="tree" id="tree" aria-label="Files"></div>
+      <div class="viewer">
+        <div class="viewer-bar"><span class="path" id="path">src/timeline.js</span><span><span id="fsize"></span> <button class="copy" id="copy" type="button">Copy</button></span></div>
+        <pre class="code"><code id="code" class="language-javascript">Loading…</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <footer>Achievements of Western Civilization · real-time film and source</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+// Formats published alongside this page. `ready: false` shows the rendering state.
+const VIDEOS = {
+  "1x1":  { file: "media/achievements-1x1.mp4",  poster: "media/posters/1x1.jpg",  meta: "1:1 · 720 × 720 · H.264 + AAC stereo",   ready: false },
+  "16x9": { file: "media/achievements-16x9.mp4", poster: "media/posters/16x9.jpg", meta: "16:9 · 1280 × 720 · H.264 + AAC stereo", ready: false },
+  "9x16": { file: "media/achievements-9x16.mp4", poster: "media/posters/9x16.jpg", meta: "9:16 · 720 × 1280 · H.264 + AAC stereo", ready: false },
+};
+// Chapter starts on the film clock (seconds), with each chapter's 3D heading.
+const CHAPTERS = [
+  [0.0, "The Idea", ""], [10.8, "Classical Architecture", "ORDER"], [17.0, "Democracy, Law & Institutions", "LAW"],
+  [21.9, "Art & the Renaissance", "BEAUTY"], [28.1, "Scientific Revolution", "REASON"], [34.4, "Industrial Revolution", "POWER"],
+  [40.0, "Electricity & Communication", "CONNECTION"], [44.1, "Medicine", "LIFE"], [48.3, "Flight & Space", "FLIGHT"],
+  [53.8, "The Moonshot · American Century", "USA"], [59.4, "Computing & AI", "INTELLIGENCE · AI"], [64.9, "Knowledge", "KNOWLEDGE"],
+  [69.1, "The New Frontier", "FRONTIER"], [77.4, "Legacy", "ORDER → STARS"], [83.7, "Ideas Build Upon Ideas", "EARTH"],
+];
+const EXTRA = [["assets/audio/narration.mp3", 1317644], ["assets/fonts/LICENSE-cinzel.txt", 4382], ["assets/fonts/LICENSE-cormorant-garamond.txt", 4504], ["assets/fonts/LICENSE-ibm-plex-mono.txt", 5299], ["assets/fonts/LICENSE-inter.txt", 4477], ["assets/fonts/cinzel-700.typeface.json", 26233], ["assets/fonts/cinzel-latin-400-normal.woff2", 14128], ["assets/fonts/cinzel-latin-600-normal.woff2", 15204], ["assets/fonts/cinzel-latin-700-normal.woff2", 15184], ["assets/fonts/cinzel-latin-900-normal.woff2", 14804], ["assets/fonts/cormorant-garamond-latin-400-italic.woff2", 23660], ["assets/fonts/cormorant-garamond-latin-400-normal.woff2", 22876], ["assets/fonts/cormorant-garamond-latin-500-italic.woff2", 23924], ["assets/fonts/cormorant-garamond-latin-500-normal.woff2", 23312], ["assets/fonts/cormorant-garamond-latin-600-italic.woff2", 23784], ["assets/fonts/cormorant-garamond-latin-600-normal.woff2", 23396], ["assets/fonts/ibm-plex-mono-latin-300-normal.woff2", 14748], ["assets/fonts/ibm-plex-mono-latin-400-normal.woff2", 14708], ["assets/fonts/ibm-plex-mono-latin-500-normal.woff2", 14888], ["assets/fonts/inter-latin-200-normal.woff2", 23920], ["assets/fonts/inter-latin-300-normal.woff2", 23916], ["assets/fonts/inter-latin-400-normal.woff2", 23664], ["assets/fonts/inter-latin-600-normal.woff2", 24452], ["vendor/three/LICENSE", 1081], ["vendor/three/addons/environments/RoomEnvironment.js", 4960], ["vendor/three/addons/geometries/RoundedBoxGeometry.js", 6470], ["vendor/three/addons/geometries/TextGeometry.js", 3312], ["vendor/three/addons/loaders/FontLoader.js", 5292], ["vendor/three/addons/math/SimplexNoise.js", 15148], ["vendor/three/addons/postprocessing/EffectComposer.js", 8501], ["vendor/three/addons/postprocessing/MaskPass.js", 4694], ["vendor/three/addons/postprocessing/Pass.js", 4218], ["vendor/three/addons/postprocessing/RenderPass.js", 4280], ["vendor/three/addons/postprocessing/ShaderPass.js", 3228], ["vendor/three/addons/postprocessing/UnrealBloomPass.js", 15397], ["vendor/three/addons/shaders/CopyShader.js", 729], ["vendor/three/addons/shaders/LuminosityHighPassShader.js", 1291], ["vendor/three/addons/utils/BufferGeometryUtils.js", 37712], ["vendor/three/three.core.js", 1458113], ["vendor/three/three.module.js", 662772]];   // bundled into the zip (libraries, fonts, narration), not listed in the browser
+const FILES = /*FILES*/[["README.md", 8564], ["index.html", 3940], ["package.json", 1239], ["src/main.js", 10525], ["src/style.css", 6819], ["src/timeline.js", 7416], ["src/core/engine.js", 23792], ["src/core/explore.js", 8648], ["src/core/player.js", 4363], ["src/core/post.js", 21524], ["src/core/titles.js", 26136], ["src/core/words3d.js", 26083], ["src/scenes/civic.js", 40703], ["src/scenes/classical.js", 35158], ["src/scenes/computing-ai.js", 45803], ["src/scenes/computing.js", 44221], ["src/scenes/electricity.js", 52176], ["src/scenes/finale-earth.js", 12304], ["src/scenes/finale-rig.js", 5950], ["src/scenes/finale.js", 34294], ["src/scenes/flight.js", 78139], ["src/scenes/frontier-assets.js", 128099], ["src/scenes/frontier.js", 61819], ["src/scenes/index.js", 593], ["src/scenes/industrial-gear.js", 8354], ["src/scenes/industrial.js", 66006], ["src/scenes/knowledge.js", 37791], ["src/scenes/medicine.js", 44338], ["src/scenes/montage.js", 43119], ["src/scenes/moonshot-assets.js", 111086], ["src/scenes/moonshot.js", 56984], ["src/scenes/opening.js", 26589], ["src/scenes/placeholder.js", 1014], ["src/scenes/renaissance.js", 38696], ["src/scenes/science.js", 71223], ["src/audio/core.js", 15446], ["src/audio/cues.js", 22551], ["src/audio/instruments.js", 19502], ["src/audio/mastering.js", 8143], ["src/audio/music.js", 67099], ["src/audio/orchestra.js", 24797], ["src/audio/percussion.js", 15792], ["src/audio/reverb.js", 3868], ["src/audio/score.js", 11324], ["src/audio/sfx.js", 41003], ["src/audio/voice.js", 3261], ["src/audio/wav.js", 1307], ["src/lib/hud.js", 5401], ["src/lib/lines.js", 7678], ["src/lib/materials.js", 7155], ["src/lib/math.js", 4666], ["src/lib/noise.js", 2611], ["src/lib/orrery-planets.js", 45503], ["src/lib/palette.js", 719], ["src/lib/particles.js", 9478], ["src/lib/rhythm.js", 822], ["src/lib/text.js", 11213], ["src/lib/textures.js", 9850], ["tools/build-typeface.mjs", 2138], ["tools/narration.py", 2828], ["tools/render.mjs", 8546], ["tools/sheet.py", 690], ["tools/snap.mjs", 3154], ["docs/FACTS.md", 33468], ["docs/SCENE_GUIDE.md", 4493]]/*END*/;
+
+const $ = (id) => document.getElementById(id);
+const video = $("video"), frame = $("frame"), pending = $("pending");
+let fmt = "1x1";
+try { const f = localStorage.getItem("screening-fmt"); if (VIDEOS[f]) fmt = f; } catch {}
+const fmtHash = { square: "1x1", "1x1": "1x1", "16x9": "16x9", landscape: "16x9", "9x16": "9x16", vertical: "9x16" }[location.hash.slice(1)];
+if (fmtHash) fmt = fmtHash;
+
+function setFormat(next, keepTime = true) {
+  const t = keepTime ? video.currentTime : 0, playing = !video.paused;
+  fmt = next;
+  try { localStorage.setItem("screening-fmt", fmt); } catch {}
+  const v = VIDEOS[fmt];
+  document.querySelectorAll(".fmt").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fmt === fmt)));
+  frame.dataset.fmt = fmt;
+  $("vmeta").textContent = v.meta;
+  pending.hidden = v.ready;
+  $("dl-video").disabled = !v.ready;
+  video.hidden = !v.ready;
+  if (!v.ready) { video.removeAttribute("src"); video.load(); return; }
+  video.poster = v.poster;
+  video.src = v.file;
+  video.addEventListener("loadedmetadata", () => { if (t) video.currentTime = t; if (playing) video.play().catch(() => {}); }, { once: true });
+}
+document.querySelectorAll(".fmt").forEach((b) => b.addEventListener("click", () => setFormat(b.dataset.fmt)));
+
+// chapters
+const list = $("chapters");
+const tc = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+CHAPTERS.forEach(([t, title, word], i) => {
+  const li = document.createElement("li");
+  const b = document.createElement("button");
+  b.type = "button"; b.id = `ch-${i}`;
+  b.innerHTML = `<span class="tc">${tc(t)}</span><span class="ch-title"></span>`;
+  b.querySelector(".ch-title").textContent = title;
+  if (word) { const w = document.createElement("span"); w.className = "ch-word"; w.textContent = word; b.querySelector(".ch-title").appendChild(w); }
+  b.addEventListener("click", () => { if (!VIDEOS[fmt].ready) return; video.currentTime = t + 0.01; video.play().catch(() => {}); });
+  li.appendChild(b); list.appendChild(li);
+});
+video.addEventListener("timeupdate", () => {
+  let cur = 0;
+  CHAPTERS.forEach(([t], i) => { if (video.currentTime >= t) cur = i; });
+  list.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
+});
+
+// downloads (the viewer confirms each save)
+// on a normal website files download straight from the browser
+const saveBlob = (blob, filename) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+const downloads = { save: async ({ filename, data }) => { saveBlob(data instanceof Blob ? data : new Blob([data]), filename); return { status: "saved" }; } };
+async function offer(url, filename, note, btn) {
+  if (!downloads) { note.textContent = "Downloading is not available in this view. Open the page in the Claude app or a browser signed in to Claude."; return; }
+  btn.disabled = true; note.textContent = "Preparing the file…";
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const blob = await res.blob();
+    await downloads.save({ filename, data: blob });
+    note.textContent = `Saved ${filename}.`;
+  } catch (e) {
+    note.textContent = e?.code === "declined" ? "Download cancelled." : "The download could not start. Try again in a moment.";
+  } finally { btn.disabled = !VIDEOS[fmt].ready && btn.id === "dl-video"; if (btn.id !== "dl-video") btn.disabled = false; }
+}
+$("dl-video").addEventListener("click", (e) => offer(VIDEOS[fmt].file, `achievements-of-western-civilization-${fmt}.mp4`, $("dl-note"), e.currentTarget));
+// the source zip is assembled here from the published files (the full, runnable project)
+$("dl-zip").addEventListener("click", async (e) => {
+  const btn = e.currentTarget, note = $("zip-note");
+  if (!downloads) { note.textContent = "Downloading is not available in this view. Open the page in the Claude app or a browser signed in to Claude."; return; }
+  if (!window.JSZip) { note.textContent = "The zip tool did not load. Reload the page and try again."; return; }
+  btn.disabled = true;
+  try {
+    const zip = new JSZip(), root = zip.folder("achievements-of-western-civilization");
+    const all = [...FILES, ...EXTRA];
+    let done = 0;
+    await Promise.all(all.map(async ([path]) => {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(path);
+      root.file(path, await res.arrayBuffer());
+      note.textContent = `Collecting files… ${++done} / ${all.length}`;
+    }));
+    note.textContent = "Compressing…";
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    await downloads.save({ filename: "achievements-of-western-civilization-source.zip", data: blob });
+    note.textContent = "Saved the source zip. Serve the folder (for example: npx http-server) and open index.html.";
+  } catch (err) {
+    note.textContent = err?.code === "declined" ? "Download cancelled." : "The zip could not be built. Try again in a moment.";
+  } finally { btn.disabled = false; }
+});
+
+// source browser
+const tree = $("tree");
+const kb = (n) => n > 1024 ? `${(n / 1024).toFixed(n > 10240 ? 0 : 1)} KB` : `${n} B`;
+let lastDir = null, current = null;
+FILES.forEach(([path, size], i) => {
+  const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "project";
+  if (dir !== lastDir) { const d = document.createElement("div"); d.className = "dir"; d.textContent = dir; tree.appendChild(d); lastDir = dir; }
+  const b = document.createElement("button");
+  b.type = "button"; b.id = `f-${i}`; b.dataset.path = path;
+  const name = document.createElement("span"); name.textContent = path.slice(path.lastIndexOf("/") + 1);
+  const sz = document.createElement("span"); sz.className = "sz"; sz.textContent = kb(size);
+  b.append(name, sz);
+  b.addEventListener("click", () => openFile(path, size));
+  tree.appendChild(b);
+});
+async function openFile(path, size) {
+  current = path;
+  tree.querySelectorAll("button").forEach((b) => b.setAttribute("aria-current", String(b.dataset.path === path)));
+  $("path").textContent = path; $("fsize").textContent = kb(size);
+  const code = $("code");
+  code.textContent = "Loading…";
+  try {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(res.status);
+    const text = await res.text();
+    if (current !== path) return;
+    code.textContent = text;
+    code.className = /\.(m?js)$/.test(path) ? "language-javascript" : /\.css$/.test(path) ? "language-css" : /\.html$/.test(path) ? "language-xml" : /\.py$/.test(path) ? "language-python" : /\.md$/.test(path) ? "language-markdown" : "language-plaintext";
+    if (window.hljs && text.length < 120000) window.hljs.highlightElement(code);
+  } catch { code.textContent = "This file could not be loaded. Download the source zip to read it."; }
+}
+$("copy").addEventListener("click", async () => {
+  const text = $("code").textContent;
+  try { await navigator.clipboard.writeText(text); $("copy").textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents($("code")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("copy").textContent = "Selected"; }
+  setTimeout(() => ($("copy").textContent = "Copy"), 1600);
+});
+
+document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+  const el = $(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected"; }
+  setTimeout(() => (b.textContent = "Copy"), 1600);
+}));
+// fact sheet: rendered from docs/FACTS.md; links open in a new tab
+(async () => {
+  const box = $("facts-body");
+  try {
+    const res = await fetch("docs/FACTS.md");
+    if (!res.ok) throw new Error(res.status);
+    const md = await res.text();
+    if (!window.marked) { box.textContent = md; return; }
+    box.innerHTML = window.marked.parse(md);
+    box.querySelectorAll("a[href^='http']").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+  } catch { box.textContent = "The fact sheet could not be loaded. Download the source zip and open docs/FACTS.md."; }
+})();
+setFormat(fmt, false);
+const first = FILES.findIndex(([p]) => p === "src/timeline.js");
+if (first >= 0) openFile(...FILES[first]);
+</script>
+</body>
+</html>
