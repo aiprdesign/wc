@@ -586,7 +586,26 @@ export function create(ctx, segment) {
   const LIM_MICRO = { zoomOut: 1.5, fly: 1.4 }, LIM_STAGE = { zoomOut: 2.2, fly: 1.8 };
   const api = {
     scene, camera, hud: null,
-    explorePosed(cam) { if (api.hud) { cam.updateMatrixWorld(); placeHud(cam); } },
+    explorePosed(cam) {
+      if (api.hud) { cam.updateMatrixWorld(); placeHud(cam); }
+      // a pulled-back / swung camera can end up right against a drifting red cell (a blurred wall of coral
+      // with a hot specular): cells much closer to the viewer than to the film's lens shrink away (update()
+      // re-poses them every frame; cells the film itself passes close by are left alone)
+      if (micro.visible) {
+        let hit = false;
+        for (let i = 0; i < RBC; i++) {
+          const d = rbcData[i];
+          p5.copy(d.drift).multiplyScalar(lastT).add(d.p);
+          const near = Math.min(2.8, 0.9 * p5.distanceTo(camPos));
+          const k = smoothstep(near * 0.4, near, p5.distanceTo(cam.position));
+          if (k >= 1) continue;
+          qm.setFromAxisAngle(d.axis, d.w * lastT).multiply(d.q0);
+          rbc.setMatrixAt(i, m5.compose(p5, qm, s5.setScalar(Math.max(1e-4, d.s * k))));
+          hit = true;
+        }
+        if (hit) rbc.instanceMatrix.needsUpdate = true;
+      }
+    },
     dof: { focus: 5, range: 2.5, amount: 0 },
     bloom: { strength: 0.75 },
     exposure: 1.0,

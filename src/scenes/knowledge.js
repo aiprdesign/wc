@@ -301,7 +301,7 @@ const pageFrag = /* glsl */ `
 uniform sampler2D uAtlas;
 uniform vec3 uLeather[6];
 uniform vec3 uKeyDir, uKeyCol, uRimDir, uRimCol, uCore, uCoreCol, uPixCol;
-uniform float uT, uFog, uCoreK;
+uniform float uT, uFog, uCoreK, uFogStart;
 varying vec2 vUv;
 varying vec3 vN;
 varying vec3 vW;
@@ -383,7 +383,7 @@ void main(){
   col = mix(col, pix, px);
 
   float dist = length(cameraPosition - vW);
-  col *= exp(-max(0.0, dist - 7.0) * uFog);
+  col *= exp(-max(0.0, dist - uFogStart) * uFog);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -492,7 +492,7 @@ export function create(ctx, segment) {
       uKeyDir: { value: new THREE.Vector3(-0.85, 0.55, 0.3) }, uKeyCol: { value: new THREE.Color(1.0, 0.82, 0.62).multiplyScalar(1.3) },
       uRimDir: { value: new THREE.Vector3(0.9, 0.2, -0.45) }, uRimCol: { value: new THREE.Color(0.55, 0.7, 1.0).multiplyScalar(1.1) },
       uCoreCol: { value: new THREE.Color(1.0, 0.72, 0.4).multiplyScalar(1.6) }, uCoreK: { value: 1 },
-      uPixCol: { value: new THREE.Color(0.8, 0.9, 1.0).multiplyScalar(1.0) }, uFog: { value: 0.07 },
+      uPixCol: { value: new THREE.Color(0.8, 0.9, 1.0).multiplyScalar(1.0) }, uFog: { value: 0.07 }, uFogStart: { value: 7 },
     },
     vertexShader: pageVert, fragmentShader: pageFrag,
   });
@@ -658,7 +658,19 @@ export function create(ctx, segment) {
     bloom: { strength: 0.75 },
     exposure: 1,
     update,
+    explorePosed,
   };
+  // Viewer camera: (1) the page globe's depth fade is keyed to the lens distance — pulled back, the globe went
+  // to a dark smudge beside its bright core; the fade now starts that much further out. (2) The warp streaks
+  // are a lens trick (lines laid along the flight axis around the camera): seen off that axis they read as a
+  // wall of parallel sticks, so they fade out as the view turns away from the flight direction.
+  const exF = new THREE.Vector3();
+  let camD = 0;
+  function explorePosed(cam) {
+    pu.uFogStart.value = 7 + Math.max(0, cam.position.distanceTo(CORE) - camD);
+    exF.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    streakMat.uniforms.uOpacity.value *= smoothstep(0.93, 0.985, -exF.z);
+  }
 
   const camKeys = [[0, 6], [1.0, 1.2], [1.95, -5.4], [C_NET, -6.4], [3.02, -11], [3.28, -38], [3.5, -78]];
   const spinQ = new THREE.Quaternion();
@@ -709,6 +721,7 @@ export function create(ctx, segment) {
     camera.rotation.z += Math.sin(t * 1.3) * 0.03 + fwd * Math.sin(t * 3.0) * 0.06;
     camera.fov = 35 + sat((speed - 10) / 140) * 28 + (1 - sat(t / 1.2)) * 4;
     camera.updateProjectionMatrix();
+    camD = camera.position.distanceTo(CORE); pu.uFogStart.value = 7;
 
     streakMat.uniforms.uCamZ.value = cz;
     streakMat.uniforms.uLen.value = Math.min(18, speed * 0.05);

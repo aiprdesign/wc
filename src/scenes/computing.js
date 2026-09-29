@@ -406,7 +406,7 @@ export function create(ctx, segment) {
     // polished lid mirrors the key spot into a white-out from above, so its polish is broadened
     explore(t) {
       if (t >= tSwitch) ai.showBacks();
-      else { floor.scale.setScalar(3); lidM.roughness = 0.45; lidM.envMapIntensity = 0.9; }
+      else { floor.scale.setScalar(3); lidM.roughness = 0.5; lidM.envMapIntensity = 0.35; }
     },
     exploreEnd() { floor.scale.setScalar(1); lidM.roughness = 0.22; lidM.envMapIntensity = 1.3; },
     dof: { focus: 3, range: 1.5, amount: 0 },

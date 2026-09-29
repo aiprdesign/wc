@@ -567,9 +567,23 @@ export function create(ctx, segment) {
 
   // explore: the floor disc (r 40) shows its rim as a false horizon from low angles — spread it out to the
   // far distance while exploring; everything else here is a plan-view motif that holds up from any angle
-  const explore = () => { floor.scale.setScalar(6); };
+  // Explore (not the live camera) also hides the headings and the HUD: in the film a heading is up through
+  // nearly the whole montage (the engine ducks the bloom under it) and the HUD's dim plate darkens the plan
+  // beneath each accent — without them the additive circuit / orbit glows bloom into a grey wash, so the
+  // same duck and dim are applied to the plate itself (update() re-sets both every frame)
+  const explore = () => {
+    floor.scale.setScalar(6);
+    if (ctx.engine?.explore?.active) { self.bloom.strength *= 0.55; self.exposure *= 1 - dim.material.opacity; }
+  };
   const exploreEnd = () => { floor.scale.setScalar(1); };
-  const self = { scene, camera, hud, background: 0x000000, bloom: { strength: 0.8 }, exposure: 1, update, explore, exploreEnd, exploreLimits: { zoomOut: 2.8 } };
+  // (the circuit is a finite lattice: pulled right back it reads as a lit rectangle with its bus lines
+  // ending in mid-air, so that stage keeps a closer window)
+  let lastT = 0;
+  const LIM = { zoomOut: 2.8 }, LIM_CIRCUIT = { zoomOut: 1.8 };
+  const self = {
+    scene, camera, hud, background: 0x000000, bloom: { strength: 0.8 }, exposure: 1, update, explore, exploreEnd,
+    get exploreLimits() { return lastT > C4 - 0.4 && lastT < C5 ? LIM_CIRCUIT : LIM; },
+  };
 
   // ---- camera --------------------------------------------------------------
   const target = new THREE.Vector3();
@@ -580,6 +594,7 @@ export function create(ctx, segment) {
 
   function update(t, info) {
     const T = info.T;
+    lastT = t;
     // rhythm: punches get denser as the montage accelerates
     const div = t < C3 ? 1 : t < C5 ? 2 : 4;
     const beat = pulse(T, { div, decay: div === 1 ? 6 : 9 });

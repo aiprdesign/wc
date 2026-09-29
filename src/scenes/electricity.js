@@ -248,6 +248,7 @@ export function create(ctx, segment) {
   const RW = 0.72, RH0 = 0.56, RR = RW / 2, RDP = 0.36, GR = 0.205, GY = 0.6;
   const grilleC = RD.clone().add(V(0, GY, RDP / 2));
   const tubes = [];
+  const radioFront = [];   // the front panel and everything mounted on it (see explorePosed)
   let cloth;
   {
     const arch = (inset) => { const s = new THREE.Shape(); s.moveTo(-RR + inset, inset); s.lineTo(RR - inset, inset); s.lineTo(RR - inset, RH0); s.absarc(0, RH0, RR - inset, 0, Math.PI, false); s.lineTo(-RR + inset, inset); return s; };
@@ -255,7 +256,7 @@ export function create(ctx, segment) {
     const dialHole = new THREE.Path(); dialHole.absarc(0, 0.2, 0.062, 0, TAU, true); front.holes.push(dialHole);
     const fg = new THREE.ExtrudeGeometry(front, { depth: 0.035, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 3, curveSegments: 48 });
     fg.translate(0, 0, RDP / 2 - 0.035);
-    radio.add(new THREE.Mesh(fg, walnut));
+    const fgM = new THREE.Mesh(fg, walnut); radio.add(fgM); radioFront.push(fgM);
     const shell = arch(0); shell.holes.push(new THREE.Path(arch(0.03).getPoints(48).reverse()));
     const sg = new THREE.ExtrudeGeometry(shell, { depth: RDP - 0.04, bevelEnabled: false, curveSegments: 48 }); sg.translate(0, 0, -RDP / 2);
     radio.add(new THREE.Mesh(sg, walnut));
@@ -265,13 +266,13 @@ export function create(ctx, segment) {
     const clothTex = canvasTex(256, 256, (x, w, h) => { x.fillStyle = '#6b5530'; x.fillRect(0, 0, w, h); for (let i = 0; i < w; i += 3) { x.fillStyle = `rgba(${40 + (i % 9) * 6},${30 + (i % 7) * 4},15,0.45)`; x.fillRect(i, 0, 1, h); x.fillRect(0, i, w, 1); } });
     clothTex.wrapS = clothTex.wrapT = THREE.RepeatWrapping; clothTex.repeat.set(3, 3);
     cloth = new THREE.Mesh(new THREE.CircleGeometry(GR, 64), new THREE.MeshStandardMaterial({ map: clothTex, roughness: 0.95, transparent: true }));
-    cloth.position.set(0, GY, RDP / 2 - 0.04); radio.add(cloth);
-    const bezel = new THREE.Mesh(new THREE.TorusGeometry(GR + 0.004, 0.011, 16, 96), brass); bezel.position.set(0, GY, RDP / 2 + 0.012); radio.add(bezel);
+    cloth.position.set(0, GY, RDP / 2 - 0.04); radio.add(cloth); radioFront.push(cloth);
+    const bezel = new THREE.Mesh(new THREE.TorusGeometry(GR + 0.004, 0.011, 16, 96), brass); bezel.position.set(0, GY, RDP / 2 + 0.012); radio.add(bezel); radioFront.push(bezel);
     for (let i = -2; i <= 2; i++) {
       const hgt = 2 * Math.sqrt(GR * GR - (i * 0.07) ** 2);
-      const bar = new THREE.Mesh(new RoundedBoxGeometry(0.018, hgt, 0.02, 2, 0.006), walnut); bar.position.set(i * 0.07, GY, RDP / 2 - 0.012); radio.add(bar);
+      const bar = new THREE.Mesh(new RoundedBoxGeometry(0.018, hgt, 0.02, 2, 0.006), walnut); bar.position.set(i * 0.07, GY, RDP / 2 - 0.012); radio.add(bar); radioFront.push(bar);
     }
-    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(GR * 0.55, 0.008, 12, 72), walnut); ring2.position.set(0, GY, RDP / 2 - 0.01); radio.add(ring2);
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(GR * 0.55, 0.008, 12, 72), walnut); ring2.position.set(0, GY, RDP / 2 - 0.01); radio.add(ring2); radioFront.push(ring2);
     // tuning dial (amber, back-lit)
     const dialTex = canvasTex(512, 512, (x, w, h) => {
       const g = x.createRadialGradient(256, 256, 20, 256, 256, 256); g.addColorStop(0, '#fff1c8'); g.addColorStop(1, '#e3a24f'); x.fillStyle = g; x.beginPath(); x.arc(256, 256, 256, 0, TAU); x.fill();
@@ -279,10 +280,10 @@ export function create(ctx, segment) {
       for (let i = 0; i <= 40; i++) { const a = Math.PI * 1.15 - (i / 40) * Math.PI * 1.3; const L = i % 5 === 0 ? 34 : 18; x.beginPath(); x.moveTo(256 + Math.cos(a) * 225, 256 - Math.sin(a) * 225); x.lineTo(256 + Math.cos(a) * (225 - L), 256 - Math.sin(a) * (225 - L)); x.stroke(); if (i % 10 === 0) x.fillText(String(55 + i * 2.6 | 0), 256 + Math.cos(a) * 160, 256 - Math.sin(a) * 160); }
       x.font = '500 26px "IBM Plex Mono"'; x.fillText('KC', 256, 330);
     });
-    const tdial = new THREE.Mesh(new THREE.CircleGeometry(0.062, 48), new THREE.MeshBasicMaterial({ map: dialTex, color: new THREE.Color('#ffffff').multiplyScalar(1.5), toneMapped: false })); tdial.position.set(0, 0.2, RDP / 2 - 0.02); radio.add(tdial);
-    const tbez = new THREE.Mesh(new THREE.TorusGeometry(0.064, 0.008, 12, 64), brass); tbez.position.set(0, 0.2, RDP / 2 + 0.01); radio.add(tbez);
-    const needle = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.05, 0.002).translate(0, 0.025, 0), new THREE.MeshBasicMaterial({ color: '#8a1a10' })); needle.position.set(0, 0.2, RDP / 2 - 0.012); radio.add(needle); radio.userData.needle = needle;
-    [-1, 1].forEach((s) => { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.03, 32).rotateX(Math.PI / 2), bakelite); k.position.set(s * 0.2, 0.2, RDP / 2 + 0.015); radio.add(k); });
+    const tdial = new THREE.Mesh(new THREE.CircleGeometry(0.062, 48), new THREE.MeshBasicMaterial({ map: dialTex, color: new THREE.Color('#ffffff').multiplyScalar(1.5), toneMapped: false })); tdial.position.set(0, 0.2, RDP / 2 - 0.02); radio.add(tdial); radioFront.push(tdial);
+    const tbez = new THREE.Mesh(new THREE.TorusGeometry(0.064, 0.008, 12, 64), brass); tbez.position.set(0, 0.2, RDP / 2 + 0.01); radio.add(tbez); radioFront.push(tbez);
+    const needle = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.05, 0.002).translate(0, 0.025, 0), new THREE.MeshBasicMaterial({ color: '#8a1a10' })); needle.position.set(0, 0.2, RDP / 2 - 0.012); radio.add(needle); radio.userData.needle = needle; radioFront.push(needle);
+    [-1, 1].forEach((s) => { const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.03, 32).rotateX(Math.PI / 2), bakelite); k.position.set(s * 0.2, 0.2, RDP / 2 + 0.015); radio.add(k); radioFront.push(k); });
     // chassis + tubes inside
     const chassis = new THREE.Mesh(new THREE.BoxGeometry(RW - 0.08, 0.02, RDP - 0.08), new THREE.MeshStandardMaterial({ color: '#3a3d42', metalness: 1, roughness: 0.45 })); chassis.position.set(0, 0.24, -0.01); radio.add(chassis);
     const glassM = new THREE.MeshPhysicalMaterial({ color: '#dfe8ee', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.4, clearcoat: 1, depthWrite: false });
@@ -564,6 +565,7 @@ export function create(ctx, segment) {
     tele.visible = shot <= 2;
     phone.visible = shot === 3;
     radio.visible = shot === 4; tubeLight.visible = shot === 4;
+    for (let i = 0; i < radioFront.length; i++) radioFront[i].visible = true;
     board.visible = shot === 5;
 
     // ---- camera
@@ -656,6 +658,12 @@ export function create(ctx, segment) {
   function explorePosed(cam) {
     if (!radio.visible) return;
     for (const tb of tubes) { nearFade(tb.gl, cam); nearFade(tb.gl2, cam); }
+    // …and the fly-through passes just behind the grille: an orbit from there swings the lens into the
+    // walnut front panel itself (a frame-filling brown blur) — while the lens is inside the panel's slab the
+    // panel and its fittings step aside
+    exP.copy(cam.position).sub(RD);
+    const inFront = exP.z > RDP / 2 - 0.065 && exP.z < RDP / 2 + 0.05 && Math.abs(exP.x) < RR + 0.05 && exP.y > -0.05 && exP.y < RH0 + RR + 0.05;
+    if (inFront) for (let i = 0; i < radioFront.length; i++) radioFront[i].visible = false;
   }
   function nearFade(sp, cam) {
     sp.getWorldPosition(exP);

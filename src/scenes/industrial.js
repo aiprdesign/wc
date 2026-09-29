@@ -743,14 +743,16 @@ export function create(ctx, segment) {
   const bloom = { strength: 0.6 };
   // explore: complete the sets (see explore() below)
   let exMode = false, lastInfo = null;
-  const LIM_A = { yaw: 0.45, pitchUp: 0.7, zoomOut: 2.4 }, LIM_HALL = {};
+  // (C/D: the cut-away cylinder's lamp and the drain-cock steam are lit for a medium shot — pushed right up to
+  // them they burn into a white haze, so the engine shots don't zoom in as far)
+  const LIM_A = { yaw: 0.45, pitchUp: 0.7, zoomOut: 2.4 }, LIM_ENGINE = { zoomIn: 0.75 }, LIM_HALL = {};
   let lastT = 0;
   const out = {
     scene, camera, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, update, explore, exploreEnd, explorePosed,
     // shot A is a macro a few units off the gear wall: a wide yaw only grazes the wall edge-on (gear rims
     // filling the lens); the engine hall and railway take the default window
     // (0.45: the director already looks at the wall ~35° off square, so a wider swing turns it edge-on to a void)
-    get exploreLimits() { return lastT < tPist ? LIM_A : LIM_HALL; },
+    get exploreLimits() { return lastT < tPist ? LIM_A : lastT < tMach ? LIM_ENGINE : LIM_HALL; },
   };
 
   // clockwork tick: advance one step per beat with an eased, slightly overshooting snap
@@ -894,20 +896,21 @@ export function create(ctx, segment) {
   function explore(t) {
     if (!exMode) { exMode = true; update(t, lastInfo); }
     // the whole wall, seen off-axis, would mirror the key into the lens as a white wash: broaden its highlights
-    // …and so would the hero gear's polished faces and the key itself: off the film's angle the flat steel
-    // faces line up with the key's mirror direction and wash the frame white (restored in exploreEnd)
+    // …and so would the hero gear's polished faces: off the film's angle the flat steel faces mirror the
+    // environment's bright panels (and the key) and wash the frame white (restored in exploreEnd)
     if (t < tPist) {
       wallMat.roughness = Math.max(wallMat.roughness, 0.62);
-      steel.roughness = 0.46; steelPol.roughness = 0.34;
+      steel.roughness = 0.5; steelPol.roughness = 0.34;
       key.intensity *= 0.55;
-    } else { steel.roughness = 0.24; steelPol.roughness = 0.12; }
+      scene.environmentIntensity = 0.08;
+    } else { steel.roughness = 0.24; steelPol.roughness = 0.12; scene.environmentIntensity = 0.18; }
     // sunlit steam seen from below, against its back light, blooms into a lamp-like white disc
     // (and a puff right at the lens — a live zoom-in pushes into the drain-cock blast — is a white-out: thin it sooner)
     steam.material.uniforms.uBack.value.copy(STEAM_BACK).multiplyScalar(0.5);
     steam.material.uniforms.uNear.value.set(1.0, 2.6);
   }
   function exploreEnd() {
-    exMode = false; steel.roughness = 0.24; steelPol.roughness = 0.12;
+    exMode = false; steel.roughness = 0.24; steelPol.roughness = 0.12; scene.environmentIntensity = 0.18;
     steam.material.uniforms.uBack.value.copy(STEAM_BACK); steam.material.uniforms.uNear.value.set(0.35, 1.4);
   }
   // the macro callouts are read-outs pinned to the gears: keep them facing the viewer from any angle
@@ -919,6 +922,9 @@ export function create(ctx, segment) {
       exF.set(0, 0, 1).applyQuaternion(cam.quaternion);                 // toward the camera
       exM.set(-rim.position.x, rim.position.y, -rim.position.z).normalize();
       rim.intensity *= 1 - 0.8 * smoothstep(0.7, 0.93, exF.dot(exM));
+      // …and looking steeply down, the metallic floor plates mirror the environment's bright ceiling panels
+      exF.set(0, 0, -1).applyQuaternion(cam.quaternion);
+      scene.environmentIntensity = 0.18 * (1 - 0.6 * smoothstep(0.5, 0.85, -exF.y));
     }
   }
   const exF = V(0, 0, 0), exM = V(0, 0, 0);
