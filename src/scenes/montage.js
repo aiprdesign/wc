@@ -17,7 +17,6 @@
 // chip, aircraft, rocket, network), dimming the plate beneath them. Beat punches get
 // denser (1/4 → 1/8 → 1/16 notes) as the sequence accelerates.
 import * as THREE from 'three';
-import { mergeGeometries as mergeGeos } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../timeline.js';
 import { TextPlane, FONTS } from '../lib/text.js';
 import { MorphParticles, sampleRing, Dust } from '../lib/particles.js';
@@ -60,15 +59,44 @@ function gearGeometry({ teeth = 12, root = 2.0, tip = 2.4, rimIn = 1.55, hub = 0
   return g;
 }
 
+// Doric shaft as in the temple (classical.js): twenty concave flutes meeting in sharp arrises (each flute its
+// own vertex strip, so the normals break at the arris), a taper, and the hypotrachelion groove at the neck.
+// It stops under the annulets (top = h − 0.06).
 function flutedShaft(r = 0.22, h = 2.6) {
-  const g = new THREE.CylinderGeometry(r * 0.88, r, h, 120, 6, true);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    const a = Math.atan2(z, x), k = 1 - 0.07 * Math.abs(Math.sin(a * 10));
-    p.setX(i, x * k); p.setZ(i, z * k);
+  const FL = 20, M = 6, dA = Math.PI * 2 / FL, top = h - 0.06, neck = h - 0.16;
+  const rad = (y) => r * (1 - 0.12 * y / h) - 0.004 * Math.max(0, Math.min(1, (y - (neck - 0.009)) / 0.003, ((neck + 0.009) - y) / 0.003));
+  const ys = [0, 0.6, 1.2, 1.8, neck - 0.009, neck - 0.006, neck + 0.006, neck + 0.009, top];
+  const pos = [], uv = [], idx = [];
+  for (let f = 0; f < FL; f++) {
+    const base = pos.length / 3;
+    for (const y of ys) {
+      const rr0 = rad(y), depth = rr0 * 0.055;
+      for (let s = 0; s <= M; s++) {
+        const a = -Math.PI + (f + s / M) * dA, t = 2 * s / M - 1, rr = rr0 - depth * (1 - t * t);
+        pos.push(Math.cos(a) * rr, y, Math.sin(a) * rr); uv.push(a / (Math.PI * 2) + 0.5, y / h);
+      }
+    }
+    for (let k = 0; k < ys.length - 1; k++) for (let s = 0; s < M; s++) { const a = base + k * (M + 1) + s, b = a + M + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
   }
-  g.translate(0, h / 2, 0);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+// Capital as in the temple: four annulets stepping out, then the echinus in a taut curve (≈45° flare turning
+// vertical under the abacus). Repeated points keep the fillet edges crisp.
+function doricCapital(rTop, y0, yE0, yE1, rE1) {
+  const pts = [[rTop * 0.6, y0], [rTop + 0.002, y0]];
+  let y = y0; const step = (yE0 - y0) / 4;
+  for (let k = 0; k < 4; k++) { const rr = rTop + 0.004 + k * 0.003; pts.push([rr - 0.002, y], [rr, y + step * 0.3], [rr, y + step * 0.65], [rr - 0.003, y + step]); y += step; }
+  const r0 = rTop + 0.012, dr = rE1 - r0, dh = yE1 - yE0;
+  pts.push([r0, yE0], [r0, yE0]);
+  for (let i = 1; i <= 14; i++) {
+    const u = i / 14, v = 1 - u;
+    pts.push([v * v * v * r0 + 3 * v * v * u * (r0 + 0.55 * dr) + 3 * v * u * u * rE1 + u * u * u * rE1, v * v * v * yE0 + 3 * v * v * u * (yE0 + 0.42 * dh) + 3 * v * u * u * (yE0 + 0.8 * dh) + u * u * u * yE1]);
+  }
+  pts.push([rE1, yE1], [0, yE1]);
+  const g = new THREE.LatheGeometry(pts.map(([x, yy]) => new THREE.Vector2(x, yy)), 64);
   g.computeVertexNormals();
   return g;
 }
@@ -124,26 +152,19 @@ export function create(ctx, segment) {
   const marbleMat = marble({ seed: 3, repeat: 1, color: '#f0e9de', roughness: 0.32 });
   const MARBLE_BASE = marbleMat.color.clone();
   const shaftGeo = flutedShaft(0.22, 2.6);
-  // Doric capital: a cushion-curved echinus (lathe) over three annulets and the necking groove
-  const echinusGeo = new THREE.LatheGeometry([[0.0, -0.08], [0.2, -0.08], [0.212, -0.07], [0.24, -0.045], [0.275, -0.01], [0.3, 0.03], [0.31, 0.06], [0.31, 0.08], [0.0, 0.08]].map(([x, y]) => new THREE.Vector2(x, y)), 48);
-  echinusGeo.translate(0, 2.68, 0);
-  const annuletGeo = (() => {
-    const parts = [0, 1, 2].map((k) => new THREE.TorusGeometry(0.2 - k * 0.002, 0.009, 6, 48).rotateX(Math.PI / 2).translate(0, 2.585 - k * 0.022, 0));
-    const neck = new THREE.CylinderGeometry(0.188, 0.188, 0.012, 48, 1, true).translate(0, 2.47, 0);
-    return mergeGeos([...parts, neck]);
-  })();
+  // Doric capital: four annulets and a cushion-curved echinus (the neck groove is cut in the shaft)
+  const echinusGeo = doricCapital(0.22 * (1 - 0.12 * 2.54 / 2.6), 2.54, 2.6, 2.76, 0.3);
   const abacusGeo = new THREE.BoxGeometry(0.6, 0.12, 0.6); abacusGeo.translate(0, 2.82, 0);
   const shafts = new THREE.InstancedMesh(shaftGeo, marbleMat, NCOL);
   const echini = new THREE.InstancedMesh(echinusGeo, marbleMat, NCOL);
   const abaci = new THREE.InstancedMesh(abacusGeo, marbleMat, NCOL);
-  const annulets = new THREE.InstancedMesh(annuletGeo, marbleMat, NCOL);
   const colGroup = new THREE.Group();
-  colGroup.add(shafts, echini, abaci, annulets);   // (Doric: no base — the shafts stand on the stylobate)
+  colGroup.add(shafts, echini, abaci);   // (Doric: no base — the shafts stand on the stylobate)
   const m4 = new THREE.Matrix4();
   for (let k = 0; k < NCOL; k++) {
     const a = (k / NCOL) * TAU;
     m4.makeRotationY(a).setPosition(Math.cos(a) * RING, 0, -Math.sin(a) * RING);
-    shafts.setMatrixAt(k, m4); echini.setMatrixAt(k, m4); abaci.setMatrixAt(k, m4); annulets.setMatrixAt(k, m4);
+    shafts.setMatrixAt(k, m4); echini.setMatrixAt(k, m4); abaci.setMatrixAt(k, m4);
   }
   const stepMat = marble({ seed: 5, repeat: 2, color: '#6a645b', roughness: 0.45 });
   const steps = new THREE.Group();

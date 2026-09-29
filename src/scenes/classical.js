@@ -20,54 +20,171 @@ const FLUTES = 20;         // Doric flutes
 const GOLD_LINE = '#ffcf85';
 const BLUE_LINE = '#bcd6ff';
 
-// Column profile (radius, y) from base to top of shaft; entasis gives the subtle swell.
+// Greek Doric (Parthenon) column: no base — the fluted shaft stands straight on the stylobate. The shaft is
+// built of drums (hair-line joints), carries a hypotrachelion groove round the neck, and ends under four
+// annulets; the echinus swells out in a taut curve to the square abacus.
+const SHAFT_TOP = 5.5;                  // top of the fluted shaft: the annulets sit on it
+const NECK_Y = 5.28;                    // hypotrachelion (incised groove at the neck)
+const DRUM_JOINTS = [0.52, 1.07, 1.63, 2.18, 2.74, 3.3, 3.85, 4.4, 4.93];   // ten drums
+const ECH_Y0 = 5.556, ECH_Y1 = 5.8;     // echinus (above the annulets), abacus 5.8 – 6.0
+
+const shaftRadius = (y) => { const u = y / SHAFT_TOP; return R * (1 - 0.2 * u) + R * 0.035 * Math.sin(Math.PI * u); };
+
+// Column profile (radius, y) from the stylobate to the top of the shaft; entasis gives the subtle swell.
 function shaftProfile() {
   const pts = [];
-  const y0 = 0.32, y1 = 5.46;
-  for (let i = 0; i <= 36; i++) {
-    const u = i / 36;
-    const r = R * (1 - 0.2 * u) + R * 0.035 * Math.sin(Math.PI * u);
-    pts.push(new THREE.Vector2(r, lerp(y0, y1, u)));
-  }
+  for (let i = 0; i <= 36; i++) { const y = SHAFT_TOP * i / 36; pts.push(new THREE.Vector2(shaftRadius(y), y)); }
   return pts;
 }
 
-// Revolve the profile and carve concave flutes by modulating the radius with angle.
-function columnGeometry(detail = 1) {
-  const radial = FLUTES * 6 * detail;
-  const shaft = new THREE.LatheGeometry(shaftProfile(), radial);
-  const p = shaft.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
-    const a = Math.atan2(z, x), r = Math.hypot(x, z);
-    const flute = 1 - 0.045 * Math.pow(0.5 + 0.5 * Math.cos(a * FLUTES), 0.6);
-    const k = y > 5.3 ? lerp(flute, 1, smoothstep(5.3, 5.46, y)) : flute;
-    p.setXYZ(i, Math.cos(a) * r * k, y, Math.sin(a) * r * k);
+// Radial inset of the drum joints and the neck groove at height y (1 = full radius).
+function shaftInset(y) {
+  let d = 0;
+  for (const j of DRUM_JOINTS) d = Math.max(d, 0.0035 * Math.max(0, 1 - Math.abs(y - j) / 0.006));
+  d = Math.max(d, 0.011 * sat((y - (NECK_Y - 0.013)) / 0.005) * sat(((NECK_Y + 0.013) - y) / 0.005));
+  return d;
+}
+
+// Twenty concave flutes meeting in sharp arrises: every flute is its own strip of vertices, so the normals
+// break at the arris instead of being averaged round it. Cylindrical UVs run continuously round the shaft.
+function shaftGeometry() {
+  const M = 8, dA = Math.PI * 2 / FLUTES;
+  const rows = [];
+  for (let i = 0; i <= 30; i++) rows.push(SHAFT_TOP * i / 30);
+  for (const j of DRUM_JOINTS) rows.push(j - 0.006, j, j + 0.006);
+  rows.push(NECK_Y - 0.013, NECK_Y - 0.008, NECK_Y + 0.008, NECK_Y + 0.013);
+  rows.sort((a, b) => a - b);
+  const ys = rows.filter((y, i) => i === 0 || y - rows[i - 1] > 0.0015);
+  const pos = [], uv = [], idx = [];
+  for (let f = 0; f < FLUTES; f++) {
+    const base = pos.length / 3;
+    for (const y of ys) {
+      const r = shaftRadius(y) - shaftInset(y), depth = r * 0.05;
+      for (let s = 0; s <= M; s++) {
+        const a = -Math.PI + (f + s / M) * dA, t = 2 * s / M - 1, rr = r - depth * (1 - t * t);
+        pos.push(Math.cos(a) * rr, y, Math.sin(a) * rr);
+        uv.push((a / (Math.PI * 2) + 0.5) * 1.2, y / H * 2.2);
+      }
+    }
+    for (let k = 0; k < ys.length - 1; k++) for (let s = 0; s < M; s++) {
+      const a = base + k * (M + 1) + s, b = a + M + 1;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
   }
-  shaft.computeVertexNormals();
-  // Attic base: plinth + torus + scotia-ish ring
-  const plinth = new THREE.BoxGeometry(R * 2.7, 0.14, R * 2.7); plinth.translate(0, 0.07, 0);
-  const torus = new THREE.TorusGeometry(R * 1.08, 0.085, 12, 64); torus.rotateX(Math.PI / 2); torus.translate(0, 0.2, 0);
-  const ring = new THREE.CylinderGeometry(R * 1.02, R * 1.1, 0.1, 64); ring.translate(0, 0.28, 0);
-  // Doric capital: necking, echinus (lathe), abacus
-  const neck = new THREE.CylinderGeometry(R * 0.82, R * 0.82, 0.06, 64); neck.translate(0, 5.49, 0);
-  const echProfile = [];
-  for (let i = 0; i <= 12; i++) { const u = i / 12; echProfile.push(new THREE.Vector2(R * (0.82 + 0.5 * Math.pow(u, 0.7)), 5.52 + u * 0.26)); }
-  const echinus = new THREE.LatheGeometry(echProfile, 64);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Annulets + echinus as one lathe (repeated points give crisp edges), seam placed where the shaft's UVs wrap.
+function capitalGeometry() {
+  const rt = shaftRadius(SHAFT_TOP);
+  const cp = [[0.2, SHAFT_TOP], [rt + 0.003, SHAFT_TOP]];
+  let y = SHAFT_TOP;
+  for (let k = 0; k < 4; k++) {                          // four annulets, each a little fillet stepping out
+    const r = rt + 0.006 + k * 0.004;
+    cp.push([r - 0.003, y], [r, y + 0.004], [r, y + 0.009], [r - 0.004, y + 0.014]);
+    y += 0.014;
+  }
+  const r0 = rt + 0.02, r1 = R * 1.36, dr = r1 - r0, dh = ECH_Y1 - ECH_Y0;
+  cp.push([r0, ECH_Y0], [r0, ECH_Y0]);
+  for (let i = 1; i <= 18; i++) {                        // taut cubic: ~45° flare, turning vertical under the abacus
+    const u = i / 18, v = 1 - u;
+    const bx = v * v * v * r0 + 3 * v * v * u * (r0 + 0.55 * dr) + 3 * v * u * u * r1 + u * u * u * r1;
+    const by = v * v * v * ECH_Y0 + 3 * v * v * u * (ECH_Y0 + 0.42 * dh) + 3 * v * u * u * (ECH_Y0 + 0.8 * dh) + u * u * u * ECH_Y1;
+    cp.push([bx, by]);
+  }
+  cp.push([r1, ECH_Y1], [0, ECH_Y1]);
+  const SEG = 96, g = new THREE.LatheGeometry(cp.map(([r, h]) => new THREE.Vector2(r, h)), SEG, -Math.PI / 2, Math.PI * 2);
+  g.computeVertexNormals();
+  const p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const a = Math.PI - Math.floor(i / cp.length) / SEG * Math.PI * 2; uv.setXY(i, (a / (Math.PI * 2) + 0.5) * 1.2, p.getY(i) / H * 2.2); }
+  return g;
+}
+
+function columnGeometry() {
   const abacus = new THREE.BoxGeometry(R * 2.8, 0.2, R * 2.8); abacus.translate(0, 5.9, 0);
-  // annulets: the three fine rings where the shaft meets the echinus
-  const annulets = [5.53, 5.555, 5.58].map((y, i) => { const a = new THREE.TorusGeometry(R * (0.835 + i * 0.03), 0.009, 6, 64); a.rotateX(Math.PI / 2); a.translate(0, y, 0); return a; });
-  const parts = [shaft, plinth, torus, ring, neck, echinus, abacus, ...annulets].map((g) => {
-    const n = g.toNonIndexed();
-    n.deleteAttribute('uv');
-    return n;
-  });
-  const merged = mergeGeometries(parts);
-  // Cylindrical UVs for the marble texture
-  const pos = merged.attributes.position, uv = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) { uv[i * 2] = (Math.atan2(pos.getZ(i), pos.getX(i)) / (Math.PI * 2) + 0.5) * 1.2; uv[i * 2 + 1] = pos.getY(i) / H * 2.2; }
-  merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  return merged;
+  const p = abacus.attributes.position, n = abacus.attributes.normal, uv = abacus.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, (Math.abs(n.getX(i)) > 0.5 ? p.getZ(i) : p.getX(i)) * 0.5 + 0.5, Math.abs(n.getY(i)) > 0.5 ? p.getZ(i) * 0.5 : p.getY(i) / H * 2.2);
+  return mergeGeometries([shaftGeometry(), capitalGeometry(), abacus]);
+}
+
+// ---- helpers for the merged architectural detail ------------------------------------------------------
+// Every part is normalised to non-indexed position / normal / uv so that hundreds of them merge into a
+// handful of meshes (one per material).
+function prep(g) {
+  const n = g.index ? g.toNonIndexed() : g.clone();
+  for (const k of Object.keys(n.attributes)) if (k !== 'position' && k !== 'normal') n.deleteAttribute(k);
+  if (!n.attributes.normal) n.computeVertexNormals();
+  n.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n.attributes.position.count * 2), 2));
+  n.morphAttributes = {};
+  return n;
+}
+// Box-projected world UVs (per triangle, so the marble grain runs continuously from block to block).
+function worldUV(g, s = 0.12) {
+  const p = g.attributes.position, uv = g.attributes.uv, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
+    const nrm = c.sub(b).cross(a.sub(b)); const ax = Math.abs(nrm.x), ay = Math.abs(nrm.y), az = Math.abs(nrm.z);
+    for (let k = i; k < i + 3; k++) {
+      const x = p.getX(k), y = p.getY(k), z = p.getZ(k);
+      if (ay >= ax && ay >= az) uv.setXY(k, x * s, z * s); else if (ax >= az) uv.setXY(k, z * s, y * s); else uv.setXY(k, x * s, y * s);
+    }
+  }
+  return g;
+}
+// Quads between consecutive cross-sections (arrays of Vector3 of equal length); smooth normals along the
+// profile, a repeated point gives a crisp edge.
+function loft(sections) {
+  const np = sections[0].length, pos = [], idx = [];
+  for (const s of sections) for (const v of s) pos.push(v.x, v.y, v.z);
+  for (let k = 0; k < sections.length - 1; k++) for (let j = 0; j < np - 1; j++) {
+    const a = k * np + j, b = a + np;
+    idx.push(a, b, b + 1, a, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g.toNonIndexed();
+}
+// A moulding run round a rectangle (centred on the origin): profile = [[out, y], ...] listed bottom → top;
+// each side is its own strip with mitred corners.
+function ringMoulding(profile, hx, hz) {
+  const C = [[-1, 1], [1, 1], [1, -1], [-1, -1]];
+  const sec = (c) => profile.map(([o, y]) => new THREE.Vector3(c[0] * (hx + o), y, c[1] * (hz + o)));
+  return mergeGeometries(C.map((c, s) => loft([sec(c), sec(C[(s + 1) % 4])])));
+}
+const dedupe = (pr) => pr.filter((p, i) => i === 0 || p[0] !== pr[i - 1][0] || p[1] !== pr[i - 1][1]);
+// A straight moulding along x (centred), facing +z: closed profile [[out(z), y], ...] plus end caps.
+function runMoulding(profile, len) {
+  const sec = (x) => profile.map(([o, y]) => new THREE.Vector3(x, y, o));
+  const cp = dedupe(profile);
+  const capL = new THREE.ShapeGeometry(new THREE.Shape(cp.map(([o, y]) => new THREE.Vector2(o, y)))); capL.rotateY(-Math.PI / 2); capL.translate(-len / 2, 0, 0);
+  const capR = new THREE.ShapeGeometry(new THREE.Shape(cp.map(([o, y]) => new THREE.Vector2(-o, y)))); capR.rotateY(Math.PI / 2); capR.translate(len / 2, 0, 0);
+  return mergeGeometries([loft([sec(-len / 2), sec(len / 2)]), prep(capL), prep(capR)].map(prep));
+}
+// Palmette (antefix / acroterion): lobed leaves fanning from a pair of volutes.
+function palmetteGeometry(leaves = 9, rt = 0.27, rv = 0.15, depth = 0.04, bevel = false) {
+  const sh = new THREE.Shape(), yc = 0.06, P = (a, r) => [Math.cos(a) * r, yc + Math.sin(a) * r];
+  const a0 = Math.PI * 0.97, a1 = Math.PI * 0.03, da = (a0 - a1) / (leaves - 1);
+  sh.moveTo(-0.1, 0); sh.lineTo(...P(a0 + da * 0.5, rv * 0.8));
+  for (let i = 0; i < leaves; i++) {
+    const a = a0 - i * da, rr = rt * (0.86 + 0.14 * Math.sin(Math.PI * i / (leaves - 1)));
+    sh.quadraticCurveTo(...P(a + da * 0.42, rr * 1.02), ...P(a, rr));
+    sh.quadraticCurveTo(...P(a - da * 0.42, rr * 1.02), ...P(a - da * 0.5, i === leaves - 1 ? rv * 0.8 : rv));
+  }
+  sh.lineTo(0.1, 0); sh.closePath();
+  const leafG = new THREE.ExtrudeGeometry(sh, bevel ? { depth, bevelEnabled: true, bevelThickness: depth * 0.2, bevelSize: depth * 0.15, bevelSegments: 1, curveSegments: 4 } : { depth, bevelEnabled: false, curveSegments: 4 });
+  leafG.translate(0, 0, -depth / 2);
+  const parts = [leafG];
+  for (const sx of [-1, 1]) {                             // the volutes: a scroll disc with a raised eye
+    const v = new THREE.CylinderGeometry(0.045, 0.045, depth * 1.3, 16); v.rotateX(Math.PI / 2); v.translate(sx * 0.085, 0.04, 0); parts.push(v);
+    const e = new THREE.CylinderGeometry(0.018, 0.018, depth * 1.8, 10); e.rotateX(Math.PI / 2); e.translate(sx * 0.085, 0.04, 0); parts.push(e);
+  }
+  const mid = new THREE.BoxGeometry(0.03, rt * 0.7, depth * 1.4); mid.translate(0, yc + rt * 0.3, 0); parts.push(mid);   // the central rib
+  return mergeGeometries(parts.map(prep));
 }
 
 // World-space "build" shader: geometry exists only below uBuild (in world Y, with a
@@ -162,7 +279,7 @@ export function create(ctx, segment) {
   const stoneMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 5 }), color: '#d9d1c4', roughness: 0.5 }), '#ffc680');
 
   // ---------------------------------------------------------------------- hero column
-  const colGeo = columnGeometry(1);
+  const colGeo = columnGeometry();
   const hero = new THREE.Group();
   hero.position.copy(HERO);
   scene.add(hero);
@@ -174,7 +291,7 @@ export function create(ctx, segment) {
 
   // Procedural modelling HUD: the 2D profile, the axis, then the revolve sweep.
   const profilePts = shaftProfile().map((v) => new THREE.Vector3(v.x, v.y, 0));
-  const profile = progressLine([new THREE.Vector3(R * 1.35, 0, 0), new THREE.Vector3(R * 1.35, 0.14, 0), new THREE.Vector3(R * 1.2, 0.28, 0), ...profilePts,
+  const profile = progressLine([...profilePts, new THREE.Vector3(R * 0.86, ECH_Y0, 0),
     new THREE.Vector3(R * 1.3, 5.78, 0), new THREE.Vector3(R * 1.4, 5.8, 0), new THREE.Vector3(R * 1.4, 6.0, 0), new THREE.Vector3(0, 6.0, 0)], { color: GOLD_LINE, intensity: 1.4, head: 0.05 });
   const axis = segmentsLine(Array.from({ length: 26 }, (_, i) => [new THREE.Vector3(0, i * 0.26 - 0.3, 0), new THREE.Vector3(0, i * 0.26 - 0.18, 0)]), { color: GOLD_LINE, intensity: 1.2, orderFn: (a, b, i) => i / 26 * 0.6, stagger: 0.6 });
   hero.add(profile, axis);
@@ -197,8 +314,9 @@ export function create(ctx, segment) {
     }
   }
   const wire = segmentsLine(wireSegs.map(([a, b]) => [a, b]), { color: GOLD_LINE, headColor: '#fff3d6', intensity: 0.75, orderFn: (a, b, i) => wireSegs[i][2] * 0.85, stagger: 0.85 });
-  // capital + base rings as circles
-  const capRings = [0.07, 0.2, 0.28, 5.49, 5.6, 5.78, 5.9].map((y, i) => progressLine(circlePoints(i < 3 ? R * 1.1 : i > 4 ? R * 1.35 : R * 0.9, 64, { plane: 'xz', center: new THREE.Vector3(0, y, 0) }), { color: GOLD_LINE, intensity: 0.9 }));
+  // reference rings: the foot on the stylobate, two drum joints, then the neck groove, annulets, echinus and abacus
+  const capRings = [[0.004, R * 1.04], [DRUM_JOINTS[0], R * 1.03], [DRUM_JOINTS[1], R * 1.02], [NECK_Y, R * 0.9], [ECH_Y0, R * 0.9], [5.78, R * 1.35], [5.9, R * 1.35]]
+    .map(([y, r]) => progressLine(circlePoints(r, 64, { plane: 'xz', center: new THREE.Vector3(0, y, 0) }), { color: GOLD_LINE, intensity: 0.9 }));
   hero.add(wire, ...capRings);
 
   // Anatomy of the order — callouts that face the camera.
@@ -206,7 +324,7 @@ export function create(ctx, segment) {
     ['ABACUS', 5.9, 0.9, 0.35, 'SQUARE SLAB · 1/6 D'],
     ['ECHINUS', 5.62, 1.05, -0.25, 'CUSHION CAPITAL'],
     ['SHAFT · 20 FLUTES', 3.4, 0.95, 0.2, 'ENTASIS · TAPER'],
-    ['ATTIC BASE', 0.2, 0.95, 0.35, 'ROMAN DORIC · TORUS · SCOTIA'],
+    ['NO BASE', 0.2, 0.95, 0.35, 'GREEK DORIC · ON THE STYLOBATE'],
   ].map(([label, y, dx, dy, sub]) => {
     const c = new Callout(label, { dx, dy, size: 0.085, color: '#ffe3b3', sub, intensity: 1.5 });
     c.userData.y = y;
@@ -232,60 +350,193 @@ export function create(ctx, segment) {
 
   const temple = new THREE.Group();
   scene.add(temple);
-  const addBox = (w, h, d, x, y, z, mat = stoneMat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; temple.add(m); return m; };
-  // crepidoma (three steps) — top of the stylobate is y = 0
-  for (let i = 0; i < 3; i++) addBox(15.6 + i * 1.2, 0.3, 12.6 + i * 1.2, 0, -0.15 - i * 0.3, 0);
-  // entablature: architrave, frieze, cornice
-  addBox(15.3, 0.62, 11.9, 0, 6.31, 0);
-  addBox(15.3, 0.62, 11.9, 0, 6.93, 0);
-  addBox(15.9, 0.24, 12.5, 0, 7.36, 0);
-  // triglyphs on front and back frieze
-  const triGeo = new THREE.BoxGeometry(0.36, 0.56, 0.08);
-  let tri = new THREE.InstancedMesh(triGeo, stoneMat, 32);
-  let ti = 0;
-  for (let i = 0; i < 16; i++) {
-    const x = -7 + i * (14 / 15);
-    for (const z of [5.99, -5.99]) { m4.makeTranslation(x, 6.93, z); tri.setMatrixAt(ti++, m4); }
+  // Detail is gathered per material and merged into a few meshes at the end (no instancing: see unInstance).
+  const roofMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 9 }), color: '#cdbfa9', roughness: 0.55, clearcoat: 0.1 }), '#ffc680');
+  // the bedding behind the block joints: darker stone, sharing the stone's build front (and its explore override)
+  const jointMat = withBuild(new THREE.MeshStandardMaterial({ color: '#6f675c', roughness: 0.95 }), '#ffc680');
+  jointMat.userData.build.uBuild = stoneMat.userData.build.uBuild;
+  const cellaMat = withBuild(new THREE.MeshStandardMaterial({ color: '#3b342d', roughness: 0.9 }));
+  const cellaCoreMat = withBuild(new THREE.MeshStandardMaterial({ color: '#16120e', roughness: 0.95 }));
+  const trimMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 5 }), color: '#b3aa9c', roughness: 0.55 }), '#ffc680');
+  cellaCoreMat.userData.build.uBuild = trimMat.userData.build.uBuild = cellaMat.userData.build.uBuild;
+  const P = { stone: [], joint: [], roof: [], cella: [], core: [], trim: [] };
+  const put = (list, g, x = 0, y = 0, z = 0, ry = 0) => { const n = prep(g); if (ry) n.rotateY(ry); n.translate(x, y, z); P[list].push(n); return n; };
+  const box = (list, w, h, d, x, y, z) => put(list, new THREE.BoxGeometry(w, h, d), x, y, z);
+  // a part authored facing +z, placed on one face of the entablature: u runs along the face, d is out from its plane
+  const FACE_Z = 5.95, FACE_X = 7.65;
+  const onFace = (list, g, face, u, y, d) => {
+    if (face === 'F') return put(list, g, u, y, FACE_Z + d, 0);
+    if (face === 'B') return put(list, g, u, y, -FACE_Z - d, Math.PI);
+    if (face === 'R') return put(list, g, FACE_X + d, y, u, Math.PI / 2);
+    return put(list, g, -FACE_X - d, y, u, -Math.PI / 2);
+  };
+  const spans = (a, b, L, off = 0) => {   // cut [a, b] into blocks about L long (first joint at a + off)
+    const out = []; let s = a, e = a + (off > 0.05 ? off : L);
+    while (s < b - 1e-6) { if (b - e < L * 0.4) e = b; out.push([s, Math.min(e, b)]); s = e; e = s + L; }
+    return out;
+  };
+  const GAP = 0.018;
+
+  // ---- crepidoma: three steps of separate blocks; the joints open onto a darker bedding
+  for (let i = 0; i < 3; i++) {
+    const W = 15.6 + i * 1.2, D = 12.6 + i * 1.2, yTop = -0.3 * i, yc = yTop - 0.15;
+    box('joint', W - 0.024, 0.288, D - 0.024, 0, yc - 0.006, 0);
+    const blk = (xa, xb, za, zb) => box('stone', xb - xa - GAP, 0.3, zb - za - GAP, (xa + xb) / 2, yc, (za + zb) / 2);
+    if (i === 0) {
+      // stylobate: a slab under every column (each column centred on its slab), finer paving inside
+      const xe = [-7.8, -6, -4, -2, 0, 2, 4, 6, 7.8], ze = [-6.3, -4.4, -2.2, 0, 2.2, 4.4, 6.3];
+      for (let a = 0; a < xe.length - 1; a++) for (let b = 0; b < ze.length - 1; b++) {
+        const n = a > 0 && a < xe.length - 2 && b > 0 && b < ze.length - 2 ? 2 : 1;
+        for (let p = 0; p < n; p++) for (let q = 0; q < n; q++) blk(lerp(xe[a], xe[a + 1], p / n), lerp(xe[a], xe[a + 1], (p + 1) / n), lerp(ze[b], ze[b + 1], q / n), lerp(ze[b], ze[b + 1], (q + 1) / n));
+      }
+    } else {
+      // lower steps: the exposed tread band, joints staggered from step to step
+      const L = 1.25, off = i === 2 ? L / 2 : 0;
+      for (const sz of [-1, 1]) for (const [a, b] of spans(-W / 2, W / 2, L, off)) blk(a, b, sz > 0 ? D / 2 - 0.6 : -D / 2, sz > 0 ? D / 2 : -D / 2 + 0.6);
+      for (const sx of [-1, 1]) for (const [a, b] of spans(-D / 2 + 0.6, D / 2 - 0.6, L, off)) blk(sx > 0 ? W / 2 - 0.6 : -W / 2, sx > 0 ? W / 2 : -W / 2 + 0.6, a, b);
+    }
   }
-  tri.castShadow = true;
-  tri = unInstance(tri);
-  temple.add(tri);
-  // pediments + roof as one extruded triangular prism
-  const pedShape = new THREE.Shape([new THREE.Vector2(-7.95, 0), new THREE.Vector2(7.95, 0), new THREE.Vector2(0, 1.95)]);
-  const ped = new THREE.ExtrudeGeometry(pedShape, { depth: 12.5, bevelEnabled: false });
-  ped.translate(0, 7.48, -6.25);
-  const pedMesh = new THREE.Mesh(ped, stoneMat);
-  pedMesh.castShadow = true;
-  temple.add(pedMesh);
-  // tympanum recess (darker inset) and cella wall
-  const tymp = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-7.1, 0.12), new THREE.Vector2(7.1, 0.12), new THREE.Vector2(0, 1.66)])), withBuild(new THREE.MeshStandardMaterial({ color: '#6d665d', roughness: 0.8 })));
-  tymp.position.set(0, 7.48, 6.26);
+
+  // ---- architrave: marble beams jointed over the column axes, taenia along the top
+  box('joint', 15.28, 0.62, 11.88, 0, 6.31, 0);
+  {
+    const xe = [-7.65, -5, -3, -1, 1, 3, 5, 7.65], ze = [-5.35, -3.3, -1.1, 1.1, 3.3, 5.35];
+    for (let k = 0; k < xe.length - 1; k++) for (const sz of [-1, 1]) box('stone', xe[k + 1] - xe[k] - GAP, 0.62, 0.6, (xe[k] + xe[k + 1]) / 2, 6.31, sz * (FACE_Z - 0.3));
+    for (let k = 0; k < ze.length - 1; k++) for (const sx of [-1, 1]) box('stone', 0.6, 0.62, ze[k + 1] - ze[k] - GAP, sx * (FACE_X - 0.3), 6.31, (ze[k] + ze[k + 1]) / 2);
+  }
+  put('stone', ringMoulding([[0, 6.56], [0, 6.56], [0.032, 6.56], [0.032, 6.56], [0.032, 6.62], [0.032, 6.62], [0, 6.62]], FACE_X, FACE_Z));
+
+  // ---- frieze: triglyphs over every column axis and every intercolumniation, with corner triglyphs
+  // meeting at the corners; the last few ease outwards (the Doric corner conflict)
+  const TRI_W = 0.36;
+  const frontTri = [0], sideTri = [0];
+  for (let k = 1; k <= 4; k++) frontTri.push(k, -k);
+  for (let s = 1; s <= 3; s++) { const x = 4 + s * (FACE_X - TRI_W / 2 - 4) / 3; frontTri.push(x, -x); }
+  for (let k = 1; k <= 3; k++) sideTri.push(k * 1.1, -k * 1.1);
+  for (let s = 1; s <= 2; s++) { const z = 3.3 + s * (FACE_Z - TRI_W / 2 - 3.3) / 2; sideTri.push(z, -z); }
+  frontTri.sort((a, b) => a - b); sideTri.sort((a, b) => a - b);
+  box('stone', 15.2, 0.62, 11.8, 0, 6.93, 0);                               // frieze core (metope plane)
+  // triglyph: two full glyphs and two half-glyphs (the 12-part rule), grooves stopping under the capital band
+  const triGeo = (() => {
+    const u = TRI_W / 12, gd = 0.022, dd = 0.065, sh = new THREE.Shape();
+    const pts = [[-6 * u, -dd], [-6 * u, -gd], [-5 * u, 0], [-3 * u, 0], [-2 * u, -gd], [-u, 0], [u, 0], [2 * u, -gd], [3 * u, 0], [5 * u, 0], [6 * u, -gd], [6 * u, -dd]];
+    sh.moveTo(...pts[0]); for (const p of pts.slice(1)) sh.lineTo(...p); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false });
+    g.rotateX(Math.PI / 2); g.translate(0, 0.5, 0);                        // shape y → z (the face at z = 0, grooves behind it), extruded up
+    const band = new THREE.BoxGeometry(TRI_W + 0.01, 0.06, 0.085); band.translate(0, 0.53, -0.0275);
+    return mergeGeometries([prep(g), prep(band)]);
+  })();
+  const regula = new THREE.BoxGeometry(TRI_W, 0.025, 0.032);
+  const gutta = new THREE.CylinderGeometry(0.013, 0.016, 0.03, 8); gutta.translate(0, -0.015, 0);
+  const mutule = new THREE.BoxGeometry(TRI_W, 0.03, 0.2);
+  const mGutta = new THREE.CylinderGeometry(0.011, 0.013, 0.022, 7); mGutta.translate(0, -0.011, 0);
+  // metope relief: a low tablet carrying an abstract rosette, alternating with a sunk double frame
+  const reliefA = (w) => {
+    const parts = [new THREE.BoxGeometry(w - 0.12, 0.4, 0.014).translate(0, 0, 0.007)];
+    parts.push(new THREE.CylinderGeometry(0.14, 0.145, 0.018, 32).rotateX(Math.PI / 2).translate(0, 0, 0.023));
+    parts.push(new THREE.TorusGeometry(0.163, 0.011, 6, 40).translate(0, 0, 0.018));
+    parts.push(new THREE.SphereGeometry(0.05, 14, 8).scale(1, 1, 0.5).translate(0, 0, 0.032));
+    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; parts.push(new THREE.SphereGeometry(0.042, 8, 6).scale(0.5, 1, 0.3).translate(0, 0.085, 0).rotateZ(a).translate(0, 0, 0.032)); }
+    return mergeGeometries(parts.map(prep));
+  };
+  const reliefB = (w) => {
+    const parts = [new THREE.BoxGeometry(w - 0.12, 0.4, 0.014).translate(0, 0, 0.007)];
+    for (const [iw, ih, d] of [[w - 0.2, 0.32, 0.024], [w - 0.32, 0.2, 0.034]]) {
+      const t = 0.022;
+      parts.push(new THREE.BoxGeometry(iw, t, d).translate(0, ih / 2 - t / 2, d / 2), new THREE.BoxGeometry(iw, t, d).translate(0, -ih / 2 + t / 2, d / 2));
+      parts.push(new THREE.BoxGeometry(t, ih, d).translate(iw / 2 - t / 2, 0, d / 2), new THREE.BoxGeometry(t, ih, d).translate(-iw / 2 + t / 2, 0, d / 2));
+    }
+    parts.push(new THREE.CylinderGeometry(0.035, 0.035, 0.046, 16).rotateX(Math.PI / 2).translate(0, 0, 0.023));
+    return mergeGeometries(parts.map(prep));
+  };
+  const reliefCache = new Map();
+  const relief = (w, k) => { const key = `${w.toFixed(3)}${k % 2}`; if (!reliefCache.has(key)) reliefCache.set(key, (k % 2 ? reliefB : reliefA)(w)); return reliefCache.get(key); };
+  for (const [faces, list] of [[['F', 'B'], frontTri], [['R', 'L'], sideTri]]) for (const face of faces) {
+    list.forEach((u, k) => {
+      onFace('stone', triGeo, face, u, 6.62, 0.005);
+      onFace('stone', regula, face, u, 6.5475, 0.016);                     // regula under the taenia …
+      for (let g = 0; g < 6; g++) onFace('stone', gutta, face, u + (g - 2.5) * 0.06 * (face === 'B' || face === 'R' ? -1 : 1), 6.535, 0.017);   // … and its six guttae
+      const mut = [u];
+      if (k < list.length - 1) {
+        const c = (u + list[k + 1]) / 2, w = list[k + 1] - u - TRI_W;
+        mut.push(c);
+        onFace('stone', relief(w, k), face, c, 6.87, -0.05);               // metope relief
+      }
+      for (const m of mut) {                                               // mutules over every triglyph and metope, 3 × 6 guttae
+        onFace('stone', mutule, face, m, 7.225, 0.17);
+        for (let r = 0; r < 3; r++) for (let g = 0; g < 6; g++) onFace('stone', mGutta, face, m + (g - 2.5) * 0.06, 7.21, 0.11 + r * 0.06);
+      }
+    });
+  }
+  put('stone', ringMoulding([[0, 7.12], [0, 7.12], [0.028, 7.12], [0.028, 7.12], [0.028, 7.18]], 7.6, 5.9));                        // metope crown
+  put('stone', ringMoulding([[0, 7.18], [0, 7.18], [0.088, 7.18], [0.088, 7.18], [0.088, 7.24]], 7.6, 5.9));                        // frieze band
+
+  // ---- horizontal geison with a hawksbeak crown
+  box('stone', 15.9, 0.2, 12.5, 0, 7.34, 0);
+  box('stone', 15.86, 0.06, 12.46, 0, 7.47, 0);
+  put('stone', ringMoulding([[0, 7.44], [-0.006, 7.447], [0.012, 7.466], [0.016, 7.478], [0.006, 7.49], [0.006, 7.49], [-0.02, 7.5]], 7.95, 6.25));
+
+  // ---- pediments: the tympanum wall recessed behind the raking cornice, which is a geison plus a cyma sima
+  const RISE = 1.95, RUN = 7.95, TH = Math.atan2(RISE, RUN), TAN = RISE / RUN;
+  {
+    const pedShape = new THREE.Shape([new THREE.Vector2(-RUN, 0), new THREE.Vector2(RUN, 0), new THREE.Vector2(0, RISE)]);
+    const ped = new THREE.ExtrudeGeometry(pedShape, { depth: 11.8, bevelEnabled: false });
+    put('stone', ped, 0, 7.48, -5.9);
+    const slopeY = (x) => 7.48 + (RUN - Math.abs(x)) * TAN;
+    const raking = (profile, xa, xb) => loft([xa, xb].map((x) => profile.map(([z, h]) => new THREE.Vector3(x, slopeY(x) + h, z))));
+    const geisonP = [[5.9, -0.24], [6.25, -0.24], [6.25, -0.24], [6.25, -0.045], [6.244, -0.038], [6.262, -0.016], [6.266, -0.004], [6.266, 0], [6.266, 0], [5.9, 0]];
+    const simaP = [[6.05, 0], [6.27, 0], [6.27, 0], [6.27, 0.03], [6.274, 0.06], [6.288, 0.1], [6.312, 0.14], [6.332, 0.18], [6.34, 0.21], [6.342, 0.23], [6.342, 0.26], [6.342, 0.26], [6.05, 0.26], [6.05, 0.26], [6.05, 0]];
+    const rakeCap = (profile, x) => {                                      // closes the raking cornice where it meets the flank
+      profile = dedupe(profile);
+      const sg = Math.sign(x), g = new THREE.ShapeGeometry(new THREE.Shape(profile.map(([z, h]) => new THREE.Vector2(-sg * z, h))));
+      g.rotateY(sg * Math.PI / 2); g.translate(x, slopeY(x), 0); return g;
+    };
+    for (const back of [false, true]) for (const [xa, xb] of [[-8.03, 0], [0, 8.03]]) {
+      const xe = xa < 0 ? xa : xb;
+      const parts = [raking(geisonP, xa, xb), raking(simaP, xa, xb), rakeCap(geisonP, xe), rakeCap(simaP, xe)];
+      for (const g of parts) { if (back) g.rotateY(Math.PI); put('stone', g); }
+    }
+    // lateral sima along the flanks: the eaves gutter, with lion-head spouts
+    const latSima = runMoulding([[-0.15, 7.5], [0, 7.5], [0, 7.53], [0.004, 7.56], [0.018, 7.6], [0.042, 7.64], [0.062, 7.675], [0.071, 7.7], [0.072, 7.73], [-0.15, 7.73]], 12.5);
+    for (const sx of [-1, 1]) put('stone', latSima, sx * RUN, 0, 0, sx * Math.PI / 2);
+    const lion = (() => {
+      const parts = [new THREE.SphereGeometry(0.075, 12, 8).scale(1, 1, 0.45)];
+      parts.push(new THREE.SphereGeometry(0.048, 10, 8).scale(0.9, 1, 0.7).translate(0, -0.005, 0.03));
+      for (const ex of [-1, 1]) parts.push(new THREE.SphereGeometry(0.02, 6, 5).translate(ex * 0.048, 0.05, 0.018));
+      parts.push(new THREE.CylinderGeometry(0.016, 0.019, 0.06, 8).rotateX(Math.PI / 2).translate(0, -0.028, 0.072));
+      return mergeGeometries(parts.map(prep));
+    })();
+    for (const sx of [-1, 1]) for (let m = 0; m < 8; m++) for (const sz of [-1, 1]) put('stone', lion, sx * (RUN + 0.068), 7.615, sz * (0.5 + 2 * m) * 0.39, sx * Math.PI / 2);
+  }
+  // tympanum: the recessed back wall (darker), filling the triangle under the raking geison
+  const tymp = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-(RUN - 0.24 / TAN), 0), new THREE.Vector2(RUN - 0.24 / TAN, 0), new THREE.Vector2(0, RISE - 0.24)])), withBuild(new THREE.MeshStandardMaterial({ color: '#6d665d', roughness: 0.8 })));
+  tymp.position.set(0, 7.48, 5.905);
   temple.add(tymp);
   // (the same recess on the rear pediment, so the temple is finished all the way round)
   const tympBack = new THREE.Mesh(tymp.geometry, tymp.material);
-  tympBack.position.set(0, 7.48, -6.26); tympBack.rotation.y = Math.PI;
+  tympBack.position.set(0, 7.48, -5.905); tympBack.rotation.y = Math.PI;
   temple.add(tympBack);
 
-  // ---- finishing detail: tiled roof, raking cornices, side triglyphs, mutules, antefixes, acroteria
-  const roofMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 9 }), color: '#cdbfa9', roughness: 0.55, clearcoat: 0.1 }), '#ffc680');
+  // ---- roof: marble pan tiles with cover-tile ridges, ridge tiles, antefixes, acroteria
   {
-    // corrugated marble tiling on both slopes: cover-tile ridges across z, stepped courses up the slope
-    const RISE = 1.95, RUN = 7.95, th = Math.atan2(RISE, RUN), slopeLen = Math.hypot(RISE, RUN) + 0.2;
-    const TILE = 0.39, NZ = 34 * 6, COURSES = 13, NU = COURSES * 3, Z0 = -6.4, ZL = 12.8;
+    // corrugated marble tiling on both slopes: cover-tile ridges across z, stepped courses up the slope; the
+    // eaves end inside the lateral sima, the gable ends inside the raking sima
+    const slopeLen = Math.hypot(RISE, RUN) + 0.2;
+    const TILE = 0.39, NZ = 34 * 6, COURSES = 13, NU = COURSES * 3, Z0 = -6.3, ZL = 12.6, D0 = 0.07;
     const parts = [];
     for (const sgn of [-1, 1]) {
       const g = new THREE.PlaneGeometry(1, 1, NZ, NU);
       const p = g.attributes.position, uv = g.attributes.uv;
-      const nx = sgn * Math.sin(th), ny = Math.cos(th);
+      const nx = sgn * Math.sin(TH), ny = Math.cos(TH);
       for (let i = 0; i < p.count; i++) {
         const v = p.getX(i) + 0.5, u = p.getY(i) + 0.5;               // v along z, u from eave (0) to ridge (1)
         const z = Z0 + v * ZL;
-        const d = u * slopeLen - 0.2;                                  // distance up the slope from the eave line
+        const d = D0 + u * (slopeLen - 0.2 - D0);                      // distance up the slope from the eave line
         const c = Math.cos((z / TILE) * Math.PI * 2);
         const ridge = Math.pow(Math.max(0, c), 3) * 0.075;
         const course = (1 - ((u * COURSES) % 1)) * 0.022;               // each course laps over the next
         const off = 0.035 + ridge + course;
-        const x = sgn * (RUN - d * Math.cos(th)), y = 7.48 + d * Math.sin(th);
+        const x = sgn * (RUN - d * Math.cos(TH)), y = 7.48 + d * Math.sin(TH);
         p.setXYZ(i, x + nx * off, y + ny * off, z);
         uv.setXY(i, v * 3, u * 0.7);
       }
@@ -296,60 +547,83 @@ export function create(ctx, segment) {
     const roof = new THREE.Mesh(mergeGeometries(parts), roofMat);
     roof.castShadow = roof.receiveShadow = true;
     temple.add(roof);
-    // ridge cap
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 12.8, 10), roofMat);
-    cap.rotation.x = Math.PI / 2; cap.position.set(0, 9.5, 0); temple.add(cap);
-    // raking cornices framing both pediments
-    for (const z of [6.28, -6.28]) for (const sgn of [-1, 1]) {
-      const len = Math.hypot(RISE, RUN) + 0.25;
-      const rc = new THREE.Mesh(new THREE.BoxGeometry(len, 0.2, 0.34), stoneMat);
-      rc.position.set(sgn * RUN / 2, 7.48 + RISE / 2 + 0.08, z);
-      rc.rotation.z = -sgn * th; rc.castShadow = true; temple.add(rc);
+    // ridge: saddle tiles lapping one over the next, each with a collar
+    const saddle = new THREE.CylinderGeometry(0.12, 0.12, TILE + 0.02, 12, 1, false, -Math.PI / 2, Math.PI); saddle.rotateX(-Math.PI / 2);
+    const collar = new THREE.CylinderGeometry(0.136, 0.136, 0.05, 12, 1, false, -Math.PI / 2, Math.PI); collar.rotateX(-Math.PI / 2);
+    for (let k = 0; k < Math.round(ZL / TILE); k++) { const z = Z0 + (k + 0.5) * (ZL / Math.round(ZL / TILE)); put('roof', saddle, 0, 9.5, z); put('roof', collar, 0, 9.5, z - TILE / 2 + 0.03); }
+    // antefixes on the sima, one in line with every cover-tile row
+    const palmGeo = palmetteGeometry(9, 0.27, 0.15, 0.04, false);
+    for (const sgn of [-1, 1]) for (let k = -15; k <= 15; k++) put('stone', palmGeo, sgn * (RUN - 0.02), 7.73, k * TILE, sgn * Math.PI / 2);
+    // acroteria: a great palmette on the apex, smaller ones at the corners, each on its plinth
+    const acroGeo = palmetteGeometry(11, 0.27, 0.14, 0.05, true); acroGeo.scale(2.6, 2.6, 2.2);
+    for (const sz of [-1, 1]) {
+      const z = sz * 6.19, ry = sz > 0 ? 0 : Math.PI;
+      box('stone', 0.6, 0.18, 0.42, 0, 9.43 + 0.26 + 0.09, z); put('stone', acroGeo, 0, 9.87, z, ry);
+      for (const sx of [-1, 1]) {
+        box('stone', 0.42, 0.14, 0.36, sx * (RUN - 0.02), 7.73 + 0.07, z);
+        const a = acroGeo.clone(); a.scale(0.7, 0.7, 0.7); put('stone', a, sx * (RUN - 0.02), 7.87, z, ry);
+      }
     }
-    // antefixes along both eaves (one per cover-tile row) and acroteria on the apex and corners
-    const palm = new THREE.Shape();
-    palm.moveTo(-0.11, 0);
-    for (let i = 0; i <= 8; i++) { const a = Math.PI * (0.92 - i * 0.105), r = i % 2 ? 0.2 : 0.27; palm.lineTo(Math.cos(a) * r, 0.05 + Math.sin(a) * r); }
-    palm.lineTo(0.11, 0); palm.closePath();
-    const palmGeo = new THREE.ExtrudeGeometry(palm, { depth: 0.04, bevelEnabled: false }); palmGeo.translate(0, 0, -0.02);
-    const nAnte = Math.floor(ZL / TILE);
-    const ante = new THREE.InstancedMesh(palmGeo, stoneMat, nAnte * 2);
-    let ai = 0;
-    for (const sgn of [-1, 1]) for (let k = 0; k < nAnte; k++) {
-      const z = Z0 + (k + 0.5) * TILE + 0.0;
-      m4.makeRotationY(sgn * Math.PI / 2).setPosition(sgn * (RUN + 0.12), 7.5, z);
-      ante.setMatrixAt(ai++, m4);
-    }
-    ante.castShadow = true; temple.add(unInstance(ante));
-    const acroGeo = palmGeo.clone(); acroGeo.scale(2.6, 2.6, 2.2);
-    for (const z of [6.28, -6.28]) {
-      const apex = new THREE.Mesh(acroGeo, stoneMat); apex.position.set(0, 9.55, z); temple.add(apex);
-      for (const sgn of [-1, 1]) { const a = new THREE.Mesh(acroGeo, stoneMat); a.scale.setScalar(0.7); a.position.set(sgn * (RUN + 0.05), 7.62, z); temple.add(a); }
-    }
-  }
-  // triglyphs down the long sides + mutules under the cornice soffit all round
-  {
-    const sideTri = new THREE.InstancedMesh(triGeo, stoneMat, 26);
-    let k = 0;
-    for (let i = 0; i < 13; i++) {
-      const z = -5.6 + i * (11.2 / 12);
-      for (const x of [7.69, -7.69]) { m4.makeRotationY(Math.PI / 2).setPosition(x, 6.93, z); sideTri.setMatrixAt(k++, m4); }
-    }
-    sideTri.castShadow = true; temple.add(unInstance(sideTri));
-    const mutG = new THREE.BoxGeometry(0.34, 0.05, 0.3);
-    const mut = new THREE.InstancedMesh(mutG, stoneMat, 32 + 30 + 26);
-    let mi = 0;
-    for (let i = 0; i < 31; i++) { const x = -7.4 + i * (14.8 / 30); for (const z of [6.08, -6.08]) { if (mi >= 62) break; m4.makeTranslation(x, 7.215, z); mut.setMatrixAt(mi++, m4); } }
-    for (let i = 0; i < 13; i++) { const z = -5.6 + i * (11.2 / 12); for (const x of [7.8, -7.8]) { m4.makeRotationY(Math.PI / 2).setPosition(x, 7.215, z); mut.setMatrixAt(mi++, m4); } }
-    mut.count = mi; temple.add(unInstance(mut));
   }
 
-  const cella = new THREE.Mesh(new THREE.BoxGeometry(9.5, 6, 7.4), withBuild(new THREE.MeshStandardMaterial({ color: '#3b342d', roughness: 0.9 })));
-  cella.position.set(0, 3, -0.6);
-  cella.receiveShadow = true;
-  temple.add(cella);
+  // ---- cella: ashlar coursing over a dark core, antae ending the side walls, a framed doorway
+  {
+    const X = 4.75, ZF = 3.1, ZB = -4.3, T = 0.14;
+    // core (the joints and the door recess open onto it)
+    box('core', 2 * X - 0.024, 5.99, 2.5 - ZB - 0.012, 0, 2.995, (2.5 + ZB + 0.012) / 2);
+    box('core', X - 1.2 - 0.012, 5.99, ZF - 2.5 - 0.012, -(X + 1.2 - 0.012) / 2, 2.995, (ZF - 0.012 + 2.5) / 2);
+    box('core', X - 1.2 - 0.012, 5.99, ZF - 2.5 - 0.012, (X + 1.2 - 0.012) / 2, 2.995, (ZF - 0.012 + 2.5) / 2);
+    box('core', 2.4, 1.79, ZF - 2.5 - 0.012, 0, 5.095, (ZF - 0.012 + 2.5) / 2);
+    // courses: toichobate (moulded base, in trim) 0–0.22, orthostates 0.22–1.22, ten courses to 5.72, wall crown
+    const levels = [[0.22, 1.22, 1.5]];
+    for (let k = 0; k < 10; k++) levels.push([1.22 + k * 0.45, 1.67 + k * 0.45, 0.95]);
+    const DOOR_X = 1.46, DOOR_TOP = 4.82;
+    levels.forEach(([y0, y1, L], k) => {
+      const off = k % 2 ? L / 2 : 0, h = y1 - y0 - GAP, yc = (y0 + y1) / 2;
+      const front = y1 <= DOOR_TOP + 1e-6 ? [[-X, -DOOR_X], [DOOR_X, X]] : [[-X, X]];
+      for (const [a, b] of front) for (const [s, e] of spans(a, b, L, off)) box('cella', e - s - GAP, h, T, (s + e) / 2, yc, ZF - T / 2);
+      for (const [s, e] of spans(-X, X, L, off)) box('cella', e - s - GAP, h, T, (s + e) / 2, yc, ZB + T / 2);
+      for (const sx of [-1, 1]) for (const [s, e] of spans(ZB + T, ZF - T, L, L / 2 - off + 0.01)) box('cella', T, h, e - s - GAP, sx * (X - T / 2), yc, (s + e) / 2);
+      // antae: the side walls run on past the cross walls as pilasters, coursed with them
+      for (const sx of [-1, 1]) for (const [za, zb] of [[ZF, ZF + 0.5], [ZB - 0.5, ZB]]) box('cella', 0.5 - GAP, h, zb - za - GAP, sx * (X - 0.25), yc, (za + zb) / 2);
+    });
+    for (const sx of [-1, 1]) for (const [za, zb] of [[ZF, ZF + 0.5], [ZB - 0.5, ZB]]) {
+      box('core', 0.476, 5.72, zb - za - 0.024, sx * (X - 0.25), 2.86, (za + zb) / 2);
+      // anta capital: fascia, hawksbeak and cavetto, and the moulded anta base
+      const cap = ringMoulding([[0, 5.72], [0.03, 5.75], [0.035, 5.8], [0.012, 5.83], [0.012, 5.83], [0.055, 5.89], [0.065, 5.93], [0.065, 5.93], [0.065, 6.0]], 0.25, (zb - za) / 2);
+      put('trim', cap, sx * (X - 0.25), 0, (za + zb) / 2);
+      put('trim', ringMoulding([[0.05, 0], [0.05, 0], [0.05, 0.14], [0.02, 0.2], [0, 0.22]], 0.25, (zb - za) / 2), sx * (X - 0.25), 0, (za + zb) / 2);
+    }
+    // wall crown (epikranitis) all round, toichobate interrupted by the threshold
+    put('trim', ringMoulding([[0, 5.72], [0.03, 5.75], [0.035, 5.8], [0.012, 5.83], [0.012, 5.83], [0.055, 5.89], [0.065, 5.93], [0.065, 5.93], [0.065, 6.0]], X, (ZF - ZB) / 2), 0, 0, (ZF + ZB) / 2);
+    const toich = [[-0.05, 0], [0.05, 0], [0.05, 0.14], [0.02, 0.2], [0, 0.22], [-0.05, 0.22]];
+    const tl = X - 1.5;
+    put('trim', runMoulding(toich, tl), -(X + 1.5) / 2, 0, ZF); put('trim', runMoulding(toich, tl), (X + 1.5) / 2, 0, ZF);
+    put('trim', runMoulding(toich, 2 * X), 0, 0, ZB, Math.PI);
+    for (const sx of [-1, 1]) put('trim', runMoulding(toich, ZF - ZB), sx * X, 0, (ZF + ZB) / 2, sx * Math.PI / 2);
+    // doorway: threshold, reveals lined in marble, stepped (two-fascia) jambs, lintel and its cornice
+    box('trim', 2.9, 0.06, 0.8, 0, 0.03, 2.9);
+    for (const sx of [-1, 1]) {
+      box('trim', 0.03, 4.2, 0.6, sx * 1.185, 2.1, 2.8);                    // reveal lining
+      box('trim', 0.14, 4.52, 0.075, sx * 1.39, 2.26, ZF + 0.0375);         // outer fascia of the frame
+      box('trim', 0.12, 4.32, 0.045, sx * 1.26, 2.16, ZF + 0.0225);         // inner fascia, stepped back
+    }
+    box('trim', 2.4, 0.03, 0.6, 0, 4.185, 2.8);
+    box('trim', 2.92, 0.2, 0.075, 0, 4.42, ZF + 0.0375);                    // lintel: outer fascia …
+    box('trim', 2.64, 0.12, 0.045, 0, 4.26, ZF + 0.0225);                   // … and inner fascia
+    put('trim', runMoulding([[-0.02, 4.52], [0.06, 4.52], [0.06, 4.52], [0.07, 4.58], [0.1, 4.66], [0.14, 4.72], [0.15, 4.76], [0.15, 4.82], [-0.02, 4.82]], 3.2), 0, 0, ZF);
+  }
+
+  // ---- bake: one mesh per material
+  const meshes = {};
+  for (const [k, mat] of [['stone', stoneMat], ['joint', jointMat], ['roof', roofMat], ['cella', cellaMat], ['core', cellaCoreMat], ['trim', trimMat]]) {
+    const g = worldUV(mergeGeometries(P[k]), k === 'roof' ? 0.2 : 0.065);
+    const m = new THREE.Mesh(g, mat); m.castShadow = m.receiveShadow = true;
+    temple.add(m); meshes[k] = m;
+  }
+  const cella = meshes.cella;
   const cellaDoor = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 4.2), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffae5c').multiplyScalar(0.1), toneMapped: false }));
-  cellaDoor.position.set(0, 2.1, 3.11);
+  cellaDoor.position.set(0, 2.1, 2.505);
   temple.add(cellaDoor);
 
   // ground: dark polished stone that catches the sun
@@ -558,7 +832,10 @@ export function create(ctx, segment) {
 
     // --- the rest of the temple materialises from the ground up when the lights come on
     const templeY = lerp(-1.3, 10, ramp(t, tLit - 0.1, tOver + 0.2, ease.inOutSine));
-    for (const m of [marbleMat, stoneMat, roofMat, cella.material, tymp.material]) m.userData.build.uBuild.value = templeY;
+    // (once the front has passed the roof ridge it runs on up through the apex acroterion, whose palmette rises
+    // above y = 10: everything below is timed exactly as before)
+    const buildY = templeY + 2.5 * ramp(t, tOver + 0.1, tOver + 0.6);
+    for (const m of [marbleMat, stoneMat, roofMat, cella.material, tymp.material]) m.userData.build.uBuild.value = buildY;
     lastTempleY = templeY;
     templeCols.visible = temple.visible = templeY > -1.25;
     cellaDoor.visible = templeY > 2;
