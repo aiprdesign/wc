@@ -28,13 +28,18 @@ async function loadScore() {
 
 async function boot() {
   // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion and
-  // finer shadows. ?ss=2 supersamples (renders at 2× and filters down), ?ao=0/1 overrides AO.
+  // finer shadows. ?ss=2 supersamples (renders at 2× and filters down), ?ao=0/1 overrides AO,
+  // ?shadows=1|2|4 overrides the shadow-map multiplier.
   const quality = QUALITY[params.get('q')] ? params.get('q') : 'medium';
   const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
   const engine = new Engine($('film'), {
     maxWidth: QUALITY[quality], quality,
     supersample: Math.max(1, Math.min(4, parseFloat(params.get('ss') ?? '1') || 1)),
-    fx: { ao: flag('ao'), shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined },
+    fx: {
+      ao: flag('ao'),
+      shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
+      shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
+    },
   });
   window.__film = { engine };
   setStatus('Loading typography…');
