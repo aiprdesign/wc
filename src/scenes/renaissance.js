@@ -27,45 +27,88 @@ const GOLD = '#f2c46e';
 const HUD = '#f3d08a';
 
 // ---------------------------------------------------------------------------
-// Figure: a smooth mannequin silhouette, one set of signed-distance primitives (round cones +
+// Figure: an idealised nude silhouette, one set of signed-distance primitives (round cones +
 // ellipsoids, blended with a smooth minimum) that is both the drawing (its 2D projection, contoured)
-// and the 3D study (the same field in 3D, meshed with surface nets). No face, fingers or muscles:
-// just clean, correctly proportioned outlines (Vitruvius / Leonardo).
-// Feet at y = -1.2, head top at 0.8 (height 2.0 = arm span), navel (circle centre) at y = 0,
-// groin (square centre) at -0.2, chin at 0.55 (head = 1/8), shoulders 0.5 wide (1/4), elbows at
-// ±0.5, wrists at ±0.8, knees at -0.7.
-const SHOULDER = [0.2, 0.447], HIP = [0.09, -0.12];
-const ARM_UP = 0.41, LEG_OUT = 0.3, LEG_B = 0.982;   // second pose: fingertips and soles on the circle
+// and the 3D study (the same field in 3D, meshed with surface nets). No face, hair or anatomical marks:
+// a clean outline with the gentle muscular contours of Leonardo's figure (trapezius, deltoids, pectorals,
+// biceps, forearm, thigh, knee and calf) and legible hands and feet.
+// Proportions (Vitruvius III.1, Leonardo's notes on the sheet), height 2.0 = arm span:
+//   soles y = -1.2, crown 0.8, chin 0.55 (head 1/8), base of neck 0.467 (1/6 to the crown), nipples 0.3
+//   (1/4), navel 0 (the circle's centre), groin -0.2 (half the height: the square's centre), below the knee
+//   -0.7 (1/4 from the sole); shoulders 0.5 wide (1/4), elbows ±0.5 (armpit to elbow 1/8), wrists ±0.8,
+//   fingertips ±1.0 (hand 1/10), foot 0.28 long (1/7).
+// Pose 0 is the square pose (arms level, feet together); pose 1 the circle pose: the legs open until the
+// space between them is an equilateral triangle (30° each) and the arms rise until the middle fingers are
+// level with the crown; fingertips and soles then lie on the circle round the navel.
+const SHOULDER = [0.2, 0.432], HIP = [0.088, -0.15];
+const ARM_UP = 0.468, LEG_OUT = Math.PI / 6, LEG_B = 0.976;
 function figureParts(pose = 0) {
   const P = [];
   const cone = (a, b, ra, rb, k, flat = 1, limb = false) => P.push({ type: 'cone', a, b, ra, rb, flat, k, limb });
-  const ell = (c, r, k, limb = false, ang = 0) => P.push({ type: 'ell', c, r, k, limb, ang });
-  // head (an egg: cranium + jaw) and neck
-  ell([0, 0.676, 0.004], [0.083, 0.117, 0.097], 0);
-  ell([0, 0.622, 0.014], [0.06, 0.066, 0.068], 0.05);
-  cone([0, 0.5, -0.008], [0, 0.61, 0], 0.043, 0.037, 0.035);
-  // trunk (shared by both poses): one smooth profile from the neck over sloping shoulders (±0.25),
-  // a V-shaped chest, a gentle waist at the navel and the hips down to the groin
+  const ell = (c, r, k, limb = false, ang = 0, yaw = 0) => P.push({ type: 'ell', c, r, k, limb, ang, yaw });
+  // head: cranium and jaw (an egg from the side), small ears, the neck
+  ell([0, 0.693, -0.006], [0.079, 0.107, 0.1], 0);
+  ell([0, 0.617, 0.02], [0.056, 0.068, 0.07], 0.05);
+  for (const s of [1, -1]) ell([s * 0.076, 0.648, -0.008], [0.011, 0.026, 0.017], 0.012);
+  cone([0, 0.47, -0.012], [0, 0.6, -0.012], 0.05, 0.041, 0.035, 0.95);
+  // trunk: one smooth profile (half-width seen head-on, half-depth) from the neck over the chest, a
+  // tapered waist above the navel, the iliac crest and hips, closing under the groin
   P.push({ ...profilePrim(
-    [-0.25, -0.22, -0.18, -0.13, -0.07, 0.0, 0.08, 0.16, 0.25, 0.33, 0.38, 0.405, 0.43, 0.455, 0.478, 0.497, 0.517, 0.537, 0.575],
-    [0.04, 0.11, 0.15, 0.165, 0.163, 0.148, 0.141, 0.153, 0.172, 0.188, 0.2, 0.225, 0.243, 0.247, 0.232, 0.195, 0.125, 0.062, 0.036],
-    [0.04, 0.066, 0.082, 0.092, 0.095, 0.09, 0.085, 0.09, 0.1, 0.104, 0.1, 0.092, 0.082, 0.074, 0.066, 0.058, 0.05, 0.046, 0.04], 0.04), limb: false });
+    [-0.25, -0.2, -0.15, -0.09, -0.03, 0.03, 0.09, 0.16, 0.23, 0.3, 0.36, 0.41, 0.45, 0.48, 0.51, 0.535],
+    [0.09, 0.148, 0.168, 0.172, 0.164, 0.144, 0.133, 0.141, 0.158, 0.172, 0.184, 0.179, 0.15, 0.1, 0.056, 0.042],
+    [0.07, 0.092, 0.1, 0.1, 0.097, 0.093, 0.09, 0.095, 0.104, 0.108, 0.104, 0.094, 0.08, 0.064, 0.05, 0.044], 0.035), limb: false });
+  for (const s of [1, -1]) {
+    // trunk surface forms: pectorals, shoulder blades, buttocks
+    ell([s * 0.078, 0.312, 0.052], [0.08, 0.056, 0.045], 0.04, false, s * -0.12);
+    ell([s * 0.085, 0.33, -0.058], [0.07, 0.075, 0.04], 0.04);
+    ell([s * 0.072, -0.15, -0.046], [0.076, 0.086, 0.052], 0.045);
+    // trapezius: the long slope from the neck to the point of the shoulder
+    const ta = pose === 0 ? 0 : s * ARM_UP * 0.3;
+    const tr = (x, y) => { const c = Math.cos(ta), sn = Math.sin(ta), dx = x * s - SHOULDER[0] * s, dy = y - SHOULDER[1]; return [SHOULDER[0] * s + dx * c - dy * sn, SHOULDER[1] + dx * sn + dy * c]; };
+    cone([s * 0.03, 0.525, -0.02], [...tr(0.19, 0.452), -0.012], 0.03, 0.036, 0.04, 0.72);
+  }
   const rot = (px, py, cx, cy, a) => { const c = Math.cos(a), s = Math.sin(a), dx = px - cx, dy = py - cy; return [cx + dx * c - dy * s, cy + dx * s + dy * c]; };
   for (const s of [1, -1]) {
-    // arm, drawn for the right side (x > 0) then mirrored; the pose rotates it about the shoulder
-    const aa = pose === 0 ? 0 : ARM_UP * s, la = pose === 0 ? 0 : LEG_OUT * s;
+    // limbs, modelled for the right side (x > 0) then mirrored; the pose turns them about shoulder and hip
+    // (in the square pose the heels stay close but the legs part a little, as Leonardo draws them)
+    const aa = pose === 0 ? 0 : ARM_UP * s, la = (pose === 0 ? 0.04 : LEG_OUT) * s;
     const A = (x, y, z = 0) => { const [rx, ry] = rot(x * s, y, SHOULDER[0] * s, SHOULDER[1], aa); return [rx, ry, z]; };
-    const lk = pose === 0 ? 1 : LEG_B;   // (Leonardo: spreading the legs lowers the body a little)
+    const lk = pose === 0 ? 1 : LEG_B;   // (Leonardo: opening the legs lowers the figure a little)
     const L = (x, y, z = 0) => { const [rx, ry] = rot(x * s, HIP[1] + (y - HIP[1]) * lk, HIP[0] * s, HIP[1], la); return [rx, ry, z]; };
-    cone(A(0.2, 0.447), A(0.5, 0.45), 0.05, 0.036, 0.04, 0.95, true);                // upper arm
-    cone(A(0.5, 0.45), A(0.795, 0.452), 0.036, 0.023, 0.025, 0.95, true);            // forearm
-    ell(A(0.868, 0.452), [0.062, 0.031, 0.016], 0.022, true, aa);                     // hand: a simple mitten
-    cone(A(0.81, 0.452), A(0.975, 0.455), 0.025, 0.018, 0.02, 0.6, true);
-    cone(L(0.09, -0.12), L(0.074, -0.69), 0.072, 0.042, 0.03, 0.92, true);           // thigh
-    cone(L(0.074, -0.69), L(0.062, -1.12), 0.042, 0.024, 0.03, 0.95, true);           // shin
-    ell(L(0.079, -0.84), [0.043, 0.13, 0.047], 0.04, true, la);                          // calf line
-    const tx = 0.062 + 0.13 * Math.sin(0.5);
-    cone(L(0.062, -1.157, -0.025), L(tx, -1.176, 0.13 * Math.cos(0.5) - 0.025), 0.03, 0.024, 0.025, 1, true);    // foot, turned out
+    const aEll = (c, r, k, ang = 0) => ell(A(...c), r, k, true, s * ang + aa);
+    const lEll = (c, r, k, ang = 0, yaw = 0) => ell(L(...c), r, k, true, s * ang + la, s * yaw);
+    // arm (palm forward, thumb up): deltoid cap, upper arm with biceps and triceps, the forearm swelling
+    // below the elbow and flattening to the wrist
+    aEll([0.232, 0.43, 0], [0.075, 0.056, 0.058], 0.035, -0.12);
+    cone(A(0.2, 0.43), A(0.5, 0.434), 0.051, 0.035, 0.035, 0.95, true);
+    aEll([0.37, 0.441, 0.008], [0.09, 0.041, 0.043], 0.03);
+    aEll([0.34, 0.419, -0.01], [0.1, 0.039, 0.041], 0.03);
+    cone(A(0.5, 0.434), A(0.79, 0.44), 0.037, 0.023, 0.025, 0.74, true);
+    aEll([0.575, 0.443, 0], [0.09, 0.043, 0.034], 0.03);
+    // hand: palm, four fingers fanning slightly from the knuckles (middle finger to x = 1.0), the thumb
+    aEll([0.85, 0.44, 0], [0.056, 0.042, 0.016], 0.02);
+    for (const [dy, len, r] of [[0.027, 0.083, 0.0098], [0.009, 0.098, 0.0104], [-0.009, 0.09, 0.0098], [-0.026, 0.07, 0.0088]]) {
+      const b = 0.9, y = 0.44 + dy;
+      cone(A(b - 0.012, y), A(b + len - r, y + dy * 0.28), r, r * 0.78, 0.007, 0.9, true);
+    }
+    cone(A(0.812, 0.458, 0.006), A(0.872, 0.497, 0.012), 0.0135, 0.0092, 0.012, 0.9, true);
+    // leg: thigh with the outer quadriceps, the inner vastus above the knee and the adductors, the
+    // kneecap, the shin with the two heads of the calf (the inner one lower), the ankle bones
+    cone(L(0.095, -0.13), L(0.07, -0.64), 0.078, 0.046, 0.035, 0.95, true);
+    lEll([0.122, -0.32, 0.012], [0.052, 0.17, 0.062], 0.04, 0.04);
+    lEll([0.05, -0.27, -0.004], [0.052, 0.11, 0.062], 0.04);
+    lEll([0.052, -0.56, 0.016], [0.034, 0.066, 0.04], 0.045, -0.1);
+    lEll([0.07, -0.645, 0.034], [0.026, 0.032, 0.016], 0.03);
+    cone(L(0.07, -0.66), L(0.062, -1.125), 0.043, 0.024, 0.03, 0.95, true);
+    lEll([0.092, -0.79, -0.016], [0.033, 0.105, 0.046], 0.05, 0.05);
+    lEll([0.048, -0.83, -0.016], [0.036, 0.115, 0.046], 0.05, -0.06);
+    lEll([0.086, -1.13, -0.002], [0.014, 0.018, 0.016], 0.012);
+    lEll([0.04, -1.12, 0.002], [0.014, 0.018, 0.016], 0.012);
+    // foot, turned out: heel, instep and the toes, 0.28 from heel to toe
+    const to = 0.32, fx = (d) => 0.062 + d * Math.sin(to), fz = (d) => d * Math.cos(to);
+    lEll([fx(-0.035), -1.165, fz(-0.035)], [0.031, 0.034, 0.04], 0.02, 0, to);
+    lEll([fx(0.05), -1.162, fz(0.05)], [0.036, 0.034, 0.09], 0.03, 0, to);
+    lEll([fx(0.165), -1.186, fz(0.165)], [0.042, 0.015, 0.058], 0.02, 0, to);
   }
   return P;
 }
@@ -226,10 +269,11 @@ export function create(ctx, segment) {
   goldGroup.add(gRect, gDiv, gSpiral, gDiag);
 
   // ---------------------------------------------------------------- the sketch (procedural strokes)
-  const partsA = figureParts(0), partsB = figureParts(1);
+  // the figure stands in Leonardo's circle pose (legs open, fingertips level with the crown); the square pose
+  // (arms level, feet together) is the lighter second drawing of the limbs and the 3D ghost
+  const partsA = figureParts(1), partsB = figureParts(0);
   const bodyA = sdfBody(partsA);
   const fA = bodyA.field2;                                   // the drawing's silhouette = the 3D body seen head-on
-  const fTorso = sdfBody(partsA.filter((p) => !p.limb)).field2;
   const fLimbsB = sdfBody(partsB.filter((p) => p.limb)).field2;
   const BX0 = -1.1, BX1 = 1.1, BY0 = -1.3, BY1 = 0.9;
   const wob = (amp, freq, seed) => (x, y) => fA(x, y) + amp * noise2(x * freq + seed, y * freq - seed * 0.7);
@@ -248,8 +292,8 @@ export function create(ctx, segment) {
   // third, loose pass slightly outside the form
   const segC = contour((x, y) => fA(x, y) - 0.007 + 0.006 * noise2(x * 11 + 9, y * 11), BX0, BX1, BY0, BY1, 0.009);
   const strokesC = segmentsLine(segC.filter(() => R() < 0.55), inkOpts(CHALK, 0.32, { orderFn: (a, b) => radialOrder(a, b) * 0.7 + R() * 0.1, stagger: 0.8 }));
-  // second pose (arms raised, legs apart) — limbs only, outside the torso
-  const segP = contour((x, y) => fLimbsB(x, y) + 0.004 * noise2(x * 6, y * 6 + 3), BX0, BX1, BY0, BY1, 0.0085, (x, y) => fTorso(x, y) > 0.004);
+  // second pose (arms level, feet together): limbs only, outside the main figure
+  const segP = contour((x, y) => fLimbsB(x, y) + 0.004 * noise2(x * 6, y * 6 + 3), BX0, BX1, BY0, BY1, 0.0085, (x, y) => fA(x, y) > 0.004);
   const strokesP = segmentsLine(segP, inkOpts(CHALK, 0.4, { orderFn: (a, b) => radialOrder(a, b) * 0.75 + R() * 0.05, stagger: 0.85 }));
 
   // hatching driven by a fake 3D normal: light from the upper left
@@ -329,15 +373,15 @@ export function create(ctx, segment) {
   const figGroup = new THREE.Group();
   scene.add(figGroup);
   // the same field meshed in 3D: one smooth, seamless skin (surface nets, gradient normals)
-  const figGeo = meshBody(bodyA, [-1.02, -1.22, -0.12], [1.02, 0.82, 0.13], 0.0085);
+  const figGeo = meshBody(bodyA, [-1.0, -1.23, -0.15], [1.0, 0.86, 0.24], 0.0085);
   // a silhouette, not a portrait: near-black form defined only by its gold rim light
   const figMat = new THREE.MeshStandardMaterial({ color: '#0d0b09', roughness: 0.85, metalness: 0, transparent: true, opacity: 0 });
   const figMesh = new THREE.Mesh(figGeo, figMat);
   const figRim = new THREE.Mesh(figGeo, fresnel({ color: '#ffc877', intensity: 2.0, power: 2.2, opacity: 0 }));
   figGroup.add(figMesh, figRim);
-  // Leonardo's second pose (arms raised, legs spread onto the circle): a faint rim-lit ghost of the limbs,
-  // the same pose the drawing sketches in lighter lines
-  const ghostGeo = meshBody(sdfBody(partsB.filter((p) => p.limb)), [-1.0, -1.22, -0.1], [1.0, 0.84, 0.13], 0.011);
+  // Leonardo's second pose (arms level, feet together, fingertips on the square): a faint rim-lit ghost of
+  // the limbs, the same pose the drawing sketches in lighter lines
+  const ghostGeo = meshBody(sdfBody(partsB.filter((p) => p.limb)), [-1.03, -1.23, -0.12], [1.03, 0.56, 0.24], 0.011);
   const figGhost = new THREE.Mesh(ghostGeo, fresnel({ color: '#ffc877', intensity: 1.1, power: 2.0, opacity: 0 }));
   figGhost.renderOrder = 1;                                  // after the dark body, so its depth hides the ghost's roots
   figGroup.add(figGhost);

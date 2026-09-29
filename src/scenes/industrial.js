@@ -404,6 +404,102 @@ export function create(ctx, segment) {
     add(govSpin, new THREE.CylinderGeometry(0.07, 0.07, 0.06, 20), brassPol, 0, 0.3, 0);
   }
 
+  // governor linkage and drive: links from the ball arms down to the sliding sleeve, the sleeve's lever and the
+  // throttle rod down the column; a bevel gearbox under the spindle, turned by a flat belt from a pulley on the
+  // end of the crankshaft (the governor senses the engine's speed through it)
+  const nutG = new THREE.CylinderGeometry(0.035, 0.035, 0.03, 6);
+  const beltM = new THREE.MeshStandardMaterial({ color: '#3a2618', roughness: 0.75, metalness: 0, bumpMap: surfaceTexture('cast', 512, 41), bumpScale: 0.15 });
+  const govPulley = new THREE.Group();
+  {
+    const linkY0 = 0.74, sleeveY = 0.3;
+    for (const s of [-1, 1]) {
+      const a = s * 0.62, mid = V(-Math.sin(a) * 0.25, linkY0 - Math.cos(a) * 0.25, 0), sl = V(s * 0.075, sleeveY + 0.02, 0);
+      const len = mid.distanceTo(sl), link = add(govSpin, new THREE.CylinderGeometry(0.01, 0.01, len, 8), steelPol2, (mid.x + sl.x) / 2, (mid.y + sl.y) / 2, 0);
+      link.quaternion.setFromUnitVectors(V(0, 1, 0), mid.clone().sub(sl).normalize());
+      for (const p of [mid, sl]) add(govSpin, new THREE.SphereGeometry(0.018, 12, 8), brassPol, p.x, p.y, p.z);
+    }
+    // sleeve lever (pivoted on a bracket on the column) and the throttle rod to the stop valve on the steam main
+    add(gov, new THREE.BoxGeometry(0.05, 0.16, 0.05), maroon, 0.2, 3.32, 0);
+    const lever = add(gov, new THREE.BoxGeometry(0.46, 0.035, 0.03), steelPol2, 0.08, 3.76, 0.1); lever.rotation.z = -0.12;
+    add(gov, new THREE.BoxGeometry(0.03, 0.44, 0.03), steelPol2, 0.3, 3.52, 0.1);
+    add(gov, alongZ(new THREE.CylinderGeometry(0.02, 0.02, 0.12, 10)), brassPol, 0.3, 3.74, 0.1);
+    add(gov, new THREE.CylinderGeometry(0.012, 0.012, 2.2, 8), steelPol2, 0.3, 2.2, 0.1);                  // throttle rod
+    add(gov, new THREE.BoxGeometry(0.1, 0.1, 0.1), brassPol, 0.3, 1.08, 0.1);                              // throttle valve body on the column
+    // bevel gearbox under the spindle, its cross shaft and pulley
+    add(gov, new THREE.BoxGeometry(0.3, 0.24, 0.3), maroon, 0, 3.24, 0);
+    add(gov, new THREE.BoxGeometry(0.34, 0.03, 0.34), brassPol, 0, 3.37, 0);
+    for (const [x, z] of [[-0.13, -0.13], [0.13, -0.13], [-0.13, 0.13], [0.13, 0.13]]) add(gov, nutG, brassPol, x, 3.395, z);
+    const gpz = 0.65;                                                     // pulley plane, world z = crankshaft end
+    add(gov, alongZ(new THREE.CylinderGeometry(0.03, 0.03, gpz + 0.1, 12)), steelPol2, 0, 3.24, (gpz + 0.1) / 2);
+    add(gov, alongZ(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16)), brassPol, 0, 3.24, 0.2);             // bearing
+    govPulley.position.set(0, 3.24, gpz); gov.add(govPulley);
+    add(govPulley, alongZ(new THREE.CylinderGeometry(0.2, 0.2, 0.09, 40)), iron);
+    add(govPulley, alongZ(new THREE.CylinderGeometry(0.06, 0.06, 0.13, 16)), steel);
+    for (let k = 0; k < 4; k++) { const sp = add(govPulley, new THREE.BoxGeometry(0.28, 0.03, 0.03), iron); sp.rotation.z = (k / 4) * Math.PI; }
+  }
+  // crankshaft pulley and the open flat belt up to the governor pulley (tangent runs + wrap arcs)
+  {
+    const cz = ENG[0].z + 0.55, gz = gov.position.z + 0.65;             // (both at world z ≈ 4.9)
+    const e0 = engines[0].parts.crank, cpz = cz - ENG[0].z;
+    const cpul = new THREE.Group(); cpul.position.set(0, 0, cpz); e0.add(cpul);
+    add(cpul, alongZ(new THREE.CylinderGeometry(0.34, 0.34, 0.1, 48)), iron);
+    add(cpul, alongZ(new THREE.CylinderGeometry(0.1, 0.1, 0.14, 20)), steel);
+    for (let k = 0; k < 3; k++) { const sp = add(cpul, new THREE.BoxGeometry(0.5, 0.05, 0.04), iron); sp.rotation.z = (k / 3) * Math.PI; }
+    const A = new THREE.Vector2(XC, YC), B = new THREE.Vector2(gov.position.x, 3.24), rA = 0.345, rB = 0.205;
+    const d = B.clone().sub(A), L = d.length(), ang = Math.atan2(d.y, d.x), off = Math.acos((rA - rB) / L);
+    const pts = [];
+    const arc = (c, r, a0, a1, n) => { for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * (i / n); pts.push(V(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r, 0)); } };
+    arc(A, rA, ang + off, ang + TAU - off, 40);                           // wraps the far side of the big pulley
+    arc(B, rB, ang - off, ang + off, 20);                                 // …and the far side of the small one
+    pts.push(pts[0].clone());
+    const beltPath = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+    const beltShape = new THREE.Shape([[-0.004, -0.04], [0.004, -0.04], [0.004, 0.04], [-0.004, 0.04]].map(([x, y]) => new THREE.Vector2(x, y)));
+    const belt = new THREE.Mesh(new THREE.ExtrudeGeometry(beltShape, { steps: 160, extrudePath: beltPath }), beltM);
+    belt.position.z = (cz + gz) / 2; machine.add(belt);
+  }
+  // valve gear (near engine): an eccentric on an outboard extension of the crankshaft (carried by its own
+  // bearing pedestal) and its rod back to a drive pin on the Corliss wrist plate; links from the plate's arms
+  // rock the steam valves in their bonnets
+  const ECC = 0.13, EZ = 0.8;
+  const eccRod = new THREE.Group(); engines[0].parts.g.add(eccRod);
+  const valveLinks = [];
+  {
+    const g0 = engines[0].parts.g, crank0 = engines[0].parts.crank;
+    add(crank0, alongZ(new THREE.CylinderGeometry(0.12, 0.12, 0.62, 24)), steelPol2, 0, 0, 0.78);         // shaft extension
+    add(crank0, alongZ(new THREE.CylinderGeometry(0.24, 0.24, 0.12, 40)), forged, ECC, 0, EZ);             // eccentric sheave
+    add(g0, new THREE.BoxGeometry(0.4, YC - 0.2, 0.22), maroon, XC, (YC - 0.2) / 2, 1.0);                  // outboard pedestal
+    add(g0, new THREE.BoxGeometry(0.62, 0.06, 0.36), maroon, XC, 0.03, 1.0);
+    add(g0, alongZ(new THREE.CylinderGeometry(0.22, 0.22, 0.28, 32)), brassPol, XC, YC, 1.0);
+    add(g0, new THREE.CylinderGeometry(0.04, 0.06, 0.16, 16), brassPol, XC, YC + 0.28, 1.0);              // oil cup
+    for (const dx of [-0.16, 0.16]) add(g0, nutG, steelPol2, XC + dx, YC + 0.2, 1.0);
+    add(eccRod, new THREE.TorusGeometry(0.265, 0.035, 10, 40), brassPol, 0, 0, 0);                         // strap
+    for (const s of [-1, 1]) add(eccRod, new THREE.BoxGeometry(0.1, 0.06, 0.08), brassPol, 0, s * 0.28, 0); // strap lugs
+    const rodBar = add(eccRod, alongX(new THREE.CylinderGeometry(0.028, 0.028, 1, 12)), forged, -0.5, 0, 0); // unit length, scaled in update
+    eccRod.userData = { rodBar };
+    add(engines[0].wrist, alongZ(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 12)), brassPol, 0, -0.2, 0.06);   // drive pin
+    const cx = (CYL.x0 + CYL.x1) / 2, vy = YC + CYL.r + 0.12;
+    for (const bx of [CYL.x0 + 0.25, CYL.x1 - 0.25]) {
+      add(g0, alongZ(new THREE.CylinderGeometry(0.03, 0.03, 0.36, 12)), steelPol2, bx, vy, 0.6);            // valve spindle
+      add(g0, alongZ(new THREE.CylinderGeometry(0.05, 0.05, 0.05, 16)), steelPol2, bx, vy, 0.77);           // crank boss
+      const link = add(g0, alongX(new THREE.CylinderGeometry(0.014, 0.014, 1, 8)), steelPol2, 0, 0, 0.77);
+      valveLinks.push({ link, bx, vy, tip: bx < cx ? [Math.cos(2.6) * 0.4, Math.sin(2.6) * 0.4] : [Math.cos(0.5) * 0.4, Math.sin(0.5) * 0.4] });
+    }
+  }
+  // drain cocks under each cylinder end (the blasts of steam at 27.3 come out of these) and bolted caps
+  for (const e of ENG) {
+    const g = engines.find((u) => u.e === e).parts.g;
+    for (const x of [CYL.x0 + 0.35, CYL.x1 - 0.35]) {
+      add(g, new THREE.CylinderGeometry(0.022, 0.022, 0.2, 10), copperM, x, 1.42, 0.45);
+      add(g, new THREE.SphereGeometry(0.045, 14, 10), brassPol, x, 1.32, 0.45);
+      add(g, alongZ(new THREE.CylinderGeometry(0.022, 0.028, 0.1, 12)), brassPol, x, 1.32, 0.52);
+      const h = add(g, new THREE.BoxGeometry(0.16, 0.018, 0.018), steelPol2, x + 0.07, 1.36, 0.45); h.rotation.z = 0.35;
+    }
+    // hex nuts on the main bearing cap and cylinder pedestal
+    const bz = e.z > ZC ? -0.62 : 0.62;
+    for (const dx of [-0.24, 0.24]) for (const dz of [-0.17, 0.17]) add(g, nutG, steelPol2, XC + dx, YC - 0.04 + 0.33, bz + dz);
+    for (const dx of [-0.8, -0.3, 0.3, 0.8]) { const n = add(g, nutG, steelPol2, (CYL.x0 + CYL.x1) / 2 + dx, 1.25, 0.41); n.rotation.x = Math.PI / 2; }
+  }
+
   // Lancashire boiler, front end toward camera: riveted shell on brick seating, two furnace doors,
   // pressure gauge, water glasses, stop valve, safety valve, whistle and a stack at the back
   const BO = { x: -8.9, y: 2.15, z0: -4.2, z1: 4.6, r: 1.65 };
@@ -826,6 +922,24 @@ export function create(ctx, segment) {
     }
     fly.rotation.z = theta;
     govSpin.rotation.y = theta * 2.0;
+    govPulley.rotation.z = theta * (0.345 / 0.205);                  // driven by the open belt from the crankshaft
+    {
+      // eccentric rod: from the sheave centre (turning with the near crank) to the wrist plate's drive pin
+      const th0 = theta + engines[0].e.ph, wr = engines[0].wrist, rz = wr.rotation.z, ur = eccRod.userData;
+      const ex = XC + ECC * Math.cos(th0), ey = YC + ECC * Math.sin(th0);
+      const wx = wr.position.x + 0.2 * Math.sin(rz), wy = wr.position.y - 0.2 * Math.cos(rz);
+      eccRod.position.set(ex, ey, EZ);
+      const dxr = ex - wx, dyr = ey - wy, lr = Math.hypot(dxr, dyr);
+      eccRod.rotation.z = Math.atan2(dyr, dxr);
+      ur.rodBar.scale.set(lr - 0.26, 1, 1); ur.rodBar.position.x = -(lr - 0.26) / 2 - 0.26;
+      // valve links: wrist-plate arm tip → valve crank
+      for (const v of valveLinks) {
+        const tx = wr.position.x + v.tip[0] * Math.cos(rz) - v.tip[1] * Math.sin(rz), ty = wr.position.y + v.tip[0] * Math.sin(rz) + v.tip[1] * Math.cos(rz);
+        const lx = v.bx - tx, ly = v.vy - ty;
+        v.link.position.set((v.bx + tx) / 2, (v.vy + ty) / 2, 0.77);
+        v.link.rotation.z = Math.atan2(ly, lx); v.link.scale.set(Math.hypot(lx, ly), 1, 1);
+      }
+    }
     const on2 = ramp(t, tPist - 0.3, tPist);
     const flick = 0.82 + 0.1 * Math.sin(T * 23.0) + 0.08 * Math.sin(T * 37.0 + 1.3);
     ember.position.set(BO.x, 1.5, BO.z1 + 0.9);

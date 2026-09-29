@@ -45,11 +45,11 @@ export function sdRoundCone3(px, py, pz, p) {
 }
 
 // ellipsoid (iq's bound), and its 2D projection (an ellipse)
-// (ang: rotation of the ellipsoid about z)
-export function sdEllipsoid3(px, py, pz, c, r, ang = 0) {
-  let x = px - c[0], y = py - c[1];
-  const z = pz - c[2];
+// (ang: rotation of the ellipsoid about z; yaw: a rotation about y applied first, e.g. a foot turned out)
+export function sdEllipsoid3(px, py, pz, c, r, ang = 0, yaw = 0) {
+  let x = px - c[0], y = py - c[1], z = pz - c[2];
   if (ang) { const cs = Math.cos(ang), sn = Math.sin(ang), u = x * cs + y * sn; y = -x * sn + y * cs; x = u; }
+  if (yaw) { const cs = Math.cos(yaw), sn = Math.sin(yaw), u = x * cs - z * sn; z = x * sn + z * cs; x = u; }
   const k0 = Math.hypot(x / r[0], y / r[1], z / r[2]);
   const k1 = Math.hypot(x / (r[0] * r[0]), y / (r[1] * r[1]), z / (r[2] * r[2]));
   return k1 < 1e-9 ? -Math.min(r[0], r[1], r[2]) : k0 * (k0 - 1) / k1;
@@ -109,16 +109,19 @@ function sdProfile(px, py, pz, p) {
 // Primitive list → fields. Each primitive: { type: 'cone', a:[x,y,z], b:[x,y,z], ra, rb, flat, k }
 // or { type: 'ell', c:[x,y,z], r:[rx,ry,rz], ang, k }. k = blend radius with what came before.
 // field2(x, y): the silhouette seen along z (same blends), field3(x, y, z): the solid.
+// (a yawed ellipsoid's shadow along z is still an ellipse: its x radius widens to hypot(rx cos, rz sin))
+const ellR2 = (p) => (p.yaw ? [Math.hypot(p.r[0] * Math.cos(p.yaw), p.r[2] * Math.sin(p.yaw)), p.r[1]] : p.r);
 function bbox2(p) {
   if (p.type === 'prof') return [-p.wMax, p.y0, p.wMax, p.y1];
-  if (p.type === 'ell') { const m = p.ang ? Math.max(p.r[0], p.r[1]) : 0, ex = m || p.r[0], ey = m || p.r[1]; return [p.c[0] - ex, p.c[1] - ey, p.c[0] + ex, p.c[1] + ey]; }
+  if (p.type === 'ell') { const r = ellR2(p), m = p.ang ? Math.max(r[0], r[1]) : 0, ex = m || r[0], ey = m || r[1]; return [p.c[0] - ex, p.c[1] - ey, p.c[0] + ex, p.c[1] + ey]; }
   const r = Math.max(p.ra, p.rb);
   return [Math.min(p.a[0], p.b[0]) - r, Math.min(p.a[1], p.b[1]) - r, Math.max(p.a[0], p.b[0]) + r, Math.max(p.a[1], p.b[1]) + r];
 }
-export const sdPrim3 = (p, x, y, z) => (p.type === 'ell' ? sdEllipsoid3(x, y, z, p.c, p.r, p.ang) : p.type === 'prof' ? sdProfile(x, y, z, p) : sdRoundCone3(x, y, z, p));
+export const sdPrim3 = (p, x, y, z) => (p.type === 'ell' ? sdEllipsoid3(x, y, z, p.c, p.r, p.ang, p.yaw) : p.type === 'prof' ? sdProfile(x, y, z, p) : sdRoundCone3(x, y, z, p));
 export function sdfBody(prims) {
   const boxes = prims.map(bbox2);
-  const d2 = (p, x, y) => (p.type === 'ell' ? sdEllipse2(x, y, p.c, p.r, p.ang) : p.type === 'prof' ? sdProfile(x, y, 0, p) : sdRoundCone2(x, y, p.a[0], p.a[1], p.b[0], p.b[1], p.ra, p.rb));
+  const r2 = prims.map((p) => (p.type === 'ell' ? ellR2(p) : null));
+  const d2 = (p, x, y, i) => (p.type === 'ell' ? sdEllipse2(x, y, p.c, r2[i], p.ang) : p.type === 'prof' ? sdProfile(x, y, 0, p) : sdRoundCone2(x, y, p.a[0], p.a[1], p.b[0], p.b[1], p.ra, p.rb));
   const d3 = sdPrim3;
   const field2 = (x, y) => {
     let d = 1e9;
@@ -126,7 +129,7 @@ export function sdfBody(prims) {
       const b = boxes[i], k = prims[i].k ?? 0;
       const ox = Math.max(b[0] - x, 0, x - b[2]), oy = Math.max(b[1] - y, 0, y - b[3]);
       if (ox * ox + oy * oy > (d + k) * (d + k) && ox + oy > 0 && d < 1e8) continue;   // too far to change the blend
-      d = smin(d, d2(prims[i], x, y), k);
+      d = smin(d, d2(prims[i], x, y, i), k);
     }
     return d;
   };
