@@ -218,12 +218,14 @@ function setupUI(player, score, explorer, experience, ambient) {
     clearTimeout(hideTimer);
     if (!stay) hideTimer = setTimeout(() => { if (playing()) { controls.classList.remove('show'); body.classList.add('hide-cursor'); } }, 2200);
   }
-  addEventListener('pointermove', () => { if (intro.classList.contains('hidden') && !body.classList.contains('recording')) showControls(); });
+  const wake = () => { if (intro.classList.contains('hidden') && !body.classList.contains('recording')) showControls(); };
+  addEventListener('pointermove', wake);
+  addEventListener('pointerdown', wake);   // phones: a tap brings the controls back
 
   addEventListener('keydown', async (e) => {
     if (e.target.closest?.('button') && (e.key === ' ' || e.key === 'Enter')) return;
     const k = e.key.toLowerCase();
-    if (k === ' ') { e.preventDefault(); if (!intro.classList.contains('hidden')) begin(player); else await toggle(); syncPlaying(); showControls(); }
+    if (k === ' ') { e.preventDefault(); if (!intro.classList.contains('hidden')) { if (HASH_EXPERIENCE) enterExperience(); else begin(player); } else await toggle(); syncPlaying(); showControls(); }
     else if (k === 'arrowright') { seek(currentTime() + 2); showControls(); }
     else if (k === 'arrowleft') { seek(currentTime() - 2); showControls(); }
     else if (k === 'm') $('btn-mute').click();
@@ -284,6 +286,7 @@ function setupUI(player, score, explorer, experience, ambient) {
   // back to the film at the same moment (playing on, with its soundtrack, if the flight was playing)
   const exitExperience = () => {
     if (!exp.active) return;
+    resumeAfterExplore = false;
     if (explorer.active) setExplore(false);
     const wasPlaying = exp.playing;
     const t = exp.exit();

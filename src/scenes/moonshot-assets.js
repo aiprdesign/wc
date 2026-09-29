@@ -1290,6 +1290,7 @@ export function buildSuitBoot(M, { modern = false, dust = null, dustK = 0.8, hi 
   const soleParts = [soleG];
   if (!modern) for (let i = 0; i < 16; i++) {
     const z = -0.165 + i * 0.022, w = Math.max(0.03, widthAt(z) * 2 - 0.012);
+    if (widthAt(z) < 0.005) continue;                                    // the end bars fall past the toe / heel: they would float off the sole
     soleParts.push(placeGeo(new RoundedBoxGeometry(w, 0.013, 0.0114, 1, 0.003), [0, 0.0055, z]));
   } else for (let i = 0; i < 9; i++) {
     const z = -0.16 + i * 0.04, w = Math.max(0.03, widthAt(z) * 2 - 0.014);
