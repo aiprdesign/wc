@@ -443,7 +443,7 @@ export function create(ctx, segment) {
     // sits above the centred 3D swap word (ORBITS) instead of across it
     const g = new THREE.Group(); g.position.set(SQ ? 0 : -1.2, SQ ? 1.15 : 0.5, 0); g.userData.k = SQ ? 1.4 : 1;
     const eq = new TextPlane('F = G · m₁m₂ / r²', { font: FONTS.serif, italic: true, weight: 500, height: 0.24, color: '#fff1d6', intensity: 1.35, soft: 0.1 });
-    const sub = new TextPlane('PRINCIPIA MATHEMATICA · LIBER III · 1687', { font: FONTS.mono, height: 0.038, letterSpacing: 0.3, color: '#e8dcc4', intensity: 1.0 });
+    const sub = new TextPlane('MODERN FORM · NEWTON, PRINCIPIA 1687', { font: FONTS.mono, height: 0.038, letterSpacing: 0.3, color: '#e8dcc4', intensity: 1.0 });
     sub.position.set(0, -0.24, 0);
     const rule = segmentsLine([[HV(-eq.worldWidth / 2 + 0.1, -0.16), HV(eq.worldWidth / 2 - 0.1, -0.16)]], { color: '#e8dcc4', intensity: 0.9, orderFn: () => 0, stagger: 0 });
     g.add(eq, sub, rule);

@@ -118,7 +118,7 @@ function buildPageAtlas(seed = 7) {
       g.fillStyle = ink; g.font = `600 44px "${FONTS.serif}"`;
       spaced('PRINCIPIA', x0 + CW / 2, y0 + 210, 6);
       g.font = `italic 400 22px "${FONTS.serif}"`;
-      spaced('Mathematica Naturalis', x0 + CW / 2, y0 + 250, 1);
+      spaced('Mathematica', x0 + CW / 2, y0 + 250, 1);
       g.strokeStyle = 'rgba(42,32,23,0.7)';
       g.beginPath(); g.moveTo(x0 + CW / 2 - 80, y0 + 285); g.lineTo(x0 + CW / 2 + 80, y0 + 285); g.stroke();
       // ornament: compass rose

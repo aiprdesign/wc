@@ -208,7 +208,7 @@ export function create(ctx, segment) {
     const numTex = canvasTex(512, 512, (x, w, h) => {
       x.fillStyle = '#f1ece0'; x.beginPath(); x.arc(256, 256, 256, 0, TAU); x.fill();
       x.fillStyle = '#1a1a1a'; x.font = '600 44px "Inter"'; x.textAlign = 'center'; x.textBaseline = 'middle';
-      for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const d = String((i + 1) % 10); x.fillText(d, 256 + Math.cos(a) * 190, 256 - Math.sin(a) * 190); x.font = '400 18px "Inter"'; x.fillText(['', 'ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PRS', 'TUV', 'WXY', 'OPER'][i + 1 > 9 ? 9 : i + 1] ?? '', 256 + Math.cos(a) * 150, 256 - Math.sin(a) * 150); x.font = '600 44px "Inter"'; }
+      for (let i = 0; i < 10; i++) { const a = -Math.PI / 3 - 0.2 - i * (TAU * 0.083); const d = String((i + 1) % 10); x.fillText(d, 256 + Math.cos(a) * 190, 256 - Math.sin(a) * 190); x.font = '400 18px "Inter"'; x.fillText(['', 'ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PRS', 'TUV', 'WXY', 'OPER'][i] ?? '', 256 + Math.cos(a) * 150, 256 - Math.sin(a) * 150); x.font = '600 44px "Inter"'; }
     });
     const plateN = new THREE.Mesh(new THREE.CircleGeometry(0.088, 64), new THREE.MeshStandardMaterial({ map: numTex, color: '#a39d91', roughness: 0.8 })); dial.add(plateN);
     const ws = new THREE.Shape(); ws.absarc(0, 0, 0.088, 0, TAU, false);

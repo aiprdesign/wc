@@ -11,8 +11,8 @@ import { ramp, ease, sat, lerp } from '../lib/math.js';
 // Headings per segment. Dates are the milestones each chapter shows.
 const CHAPTERS = {
   classical:   { n: 'I',    era: 'c. 500 BC — AD 400',          heading: 'THE FOUNDATIONS',        story: 'Athens and Rome gave the world proportion, engineering and the citizen.' },
-  civic:       { n: 'II',   era: '507 BC · 1215 · 1689',        heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.' },
-  renaissance: { n: 'III',  era: '1400 — 1600',                 heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.' },
+  civic:       { n: 'II',   era: '508/7 BC · 1215 · 1689',      heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.' },
+  renaissance: { n: 'III',  era: 'c. 1400 — 1600',              heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.' },
   science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.' },
   industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.' },
   electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.' },
@@ -21,7 +21,7 @@ const CHAPTERS = {
   moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
   computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.' },
   frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.' },
-  knowledge:   { n: 'XI',   era: '1450 — TODAY',                heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
+  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
 };
 
 // The one word that defines each chapter — shown huge, SaaS-keynote style, before the heading.
@@ -37,7 +37,7 @@ const SWAPS = [['mColumns', 'Order.'], ['mGears', 'Motion.'], ['mOrbits', 'Orbit
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.25, end: 3.0, text: 'Every achievement begins as an idea.' },
-  { start: 55.9, end: 60.2, text: 'Standing on the shoulders of giants.', cite: 'ISAAC NEWTON · 1675', low: true },
+  { start: 55.9, end: 60.2, text: 'Standing on the shoulders of giants.', cite: 'NEWTON TO HOOKE · 1675/6', low: true },
 ];
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');

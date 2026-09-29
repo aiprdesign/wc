@@ -160,7 +160,7 @@ function engrave(parts) {
     ctx2.font = `600 ${58}px "${FONTS.display}"`; ctx2.textAlign = 'center';
     ctx2.fillText('DE HVMANI CORPORIS FABRICA', W * 0.5, H * 0.075);
     ctx2.font = `italic 500 ${40}px "${FONTS.serif}"`;
-    ctx2.fillText('Liber sextus · De corde, vitae principio', W * 0.5, H * 0.125);
+    ctx2.fillText('Liber sextus · De corde et pulmone', W * 0.5, H * 0.125);
     ctx2.beginPath(); ctx2.moveTo(W * 0.2, H * 0.155); ctx2.lineTo(W * 0.8, H * 0.155); ctx2.stroke();
     // labels with leader lines (anchors in heart-local coordinates)
     ctx2.font = `italic 500 ${32}px "${FONTS.serif}"`;

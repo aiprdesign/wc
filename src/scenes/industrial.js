@@ -713,8 +713,8 @@ export function create(ctx, segment) {
 
   // ---- HUD ---------------------------------------------------------------------
   const hud = ctx.makeHUD();
-  const hudT = new TextPlane('WATT · STEAM ENGINE · 1769', { font: FONTS.mono, height: 0.034, letterSpacing: 0.32, color: '#ffd9b8', intensity: 0.95 });
-  const hudS = new TextPlane('60 RPM · 3.4 BAR · 40 HP', { font: FONTS.mono, height: 0.026, letterSpacing: 0.3, color: '#ffd9b8', intensity: 0.7 });
+  const hudT = new TextPlane('TWIN MILL ENGINE · 19TH C.', { font: FONTS.mono, height: 0.034, letterSpacing: 0.32, color: '#ffd9b8', intensity: 0.95 });
+  const hudS = new TextPlane('LANCASHIRE BOILER · 1844', { font: FONTS.mono, height: 0.026, letterSpacing: 0.3, color: '#ffd9b8', intensity: 0.7 });
   hudT.position.set(-ctx.aspect + 0.16 + hudT.worldWidth / 2, -0.8, 0);
   hudS.position.set(-ctx.aspect + 0.16 + hudS.worldWidth / 2, -0.87, 0);
   hud.scene.add(hudT, hudS);

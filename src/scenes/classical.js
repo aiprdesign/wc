@@ -169,10 +169,10 @@ export function create(ctx, segment) {
 
   // Anatomy of the order — callouts that face the camera.
   const partCallouts = [
-    ['ABACUS', 5.9, 0.9, 0.35, 'SQUARE SLAB · 0.28 D'],
+    ['ABACUS', 5.9, 0.9, 0.35, 'SQUARE SLAB · 1/6 D'],
     ['ECHINUS', 5.62, 1.05, -0.25, 'CUSHION CAPITAL'],
-    ['SHAFT · 20 FLUTES', 3.4, 0.95, 0.2, 'ENTASIS 1/35'],
-    ['ATTIC BASE', 0.2, 0.95, 0.35, 'TORUS · SCOTIA · PLINTH'],
+    ['SHAFT · 20 FLUTES', 3.4, 0.95, 0.2, 'ENTASIS · TAPER'],
+    ['ATTIC BASE', 0.2, 0.95, 0.35, 'ROMAN DORIC · TORUS · SCOTIA'],
   ].map(([label, y, dx, dy, sub]) => {
     const c = new Callout(label, { dx, dy, size: 0.085, color: '#ffe3b3', sub, intensity: 1.5 });
     c.userData.y = y;
@@ -430,7 +430,7 @@ export function create(ctx, segment) {
   pedLabel.position.set(4, 8.4, 0.05);
   const pedArc = progressLine(circlePoints(2.6, 24, { start: Math.PI, end: Math.PI - 0.239, center: V(7.95, 7.48) }), { color: BLUE_LINE, intensity: 1.4 });
   const colDim = new Dimension(V(8.4, 0), V(8.4, 6), 'H = 7 D', { size: 0.34, tick: 0.25, color: '#cfe0ff' });
-  const bayDim = new Dimension(V(-1, -0.6), V(1, -0.6), '2.0 m · INTERCOLUMNIATION', { size: 0.26, tick: 0.18, color: '#cfe0ff' });
+  const bayDim = new Dimension(V(-1, -0.6), V(1, -0.6), 'AXIAL SPACING · 2.4 D', { size: 0.26, tick: 0.18, color: '#cfe0ff' });
   overlay.add(loadLabel, pedLabel, pedArc, colDim, bayDim);
 
   // Roman arch diagram beside the temple: voussoirs, keystone, thrust line

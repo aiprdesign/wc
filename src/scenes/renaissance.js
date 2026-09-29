@@ -369,7 +369,7 @@ export function create(ctx, segment) {
     tp.position.set(0, y, 0.001); tp.scale.x = -1;
     sketch.add(tp); hand.push(tp);
   };
-  handLine('Vitruvio architecto mette nella sua opera d’architectura', 1.42);
+  handLine('Vetruvio architecto mecte nella sua opera d’architectura', 1.42);
   handLine('che le misure dell’omo sono dalla natura distribuite', 1.3);
   handLine('tanto apre l’omo nelle braccia quanto è la sua altezza', -1.4);
   hand.forEach((h) => { h.material.uniforms.uColor.value.set('#4a2812'); });
@@ -407,7 +407,7 @@ export function create(ctx, segment) {
   const dimW = new Dimension(V(-1.0, 1.02, 0), V(1.0, 1.02, 0), '1.000', { color: HUD, size: 0.07, tick: 0.06, intensity: 1.5 });
   const dimN = new Dimension(V(1.32, -1.2, 0), V(1.32, 0.0, 0), '0.618', { color: HUD, size: 0.07, tick: 0.06, intensity: 1.5 });
   const dimN2 = new Dimension(V(1.32, 0.0, 0), V(1.32, 0.8, 0), '0.382', { color: HUD, size: 0.07, tick: 0.06, intensity: 1.5 });
-  const callRatio = new Callout('1 : 1.618', { dx: 0.75, dy: -0.35, size: 0.1, color: HUD, sub: 'UMBILICUS · SECTIO AUREA', intensity: 1.6 });
+  const callRatio = new Callout('1 : 1.618', { dx: 0.75, dy: -0.35, size: 0.1, color: HUD, sub: 'SECTIO AUREA · OVERLAY', intensity: 1.6 });
   callRatio.position.set(0.02, 0.0, 0.1);
   const callProp = new Callout('PROPORTIO', { dx: 0.85, dy: 0.22, size: 0.11, color: HUD, sub: 'HOMO AD CIRCULUM ET QUADRATUM', intensity: 1.6 });
   callProp.position.set(0.09, 0.72, 0.1);

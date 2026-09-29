@@ -392,10 +392,10 @@ export function create(ctx, segment) {
   const SHOTS = [
     { t: tShut, end: tHub - 0.06, main: 'SPACE SHUTTLE · 1981', sub: 'STS-1 · COLUMBIA · FIRST FLIGHT 12 APRIL 1981' },
     { t: tHub + 0.02, end: tGen - 0.06, main: 'HUBBLE · 1990', sub: 'SPACE TELESCOPE · DEPLOYED FROM DISCOVERY · STS-31' },
-    { t: tGen + 0.02, end: tWebb - 0.06, main: 'HUMAN GENOME · 2003', sub: 'HUMAN GENOME PROJECT · 3 BILLION BASE PAIRS READ' },
+    { t: tGen + 0.02, end: tWebb - 0.06, main: 'HUMAN GENOME · 2003', sub: 'HUMAN GENOME PROJECT · COMPLETED APRIL 2003' },
     { t: tWebb + 0.02, end: tRov - 0.06, main: 'JAMES WEBB · 2021', sub: '18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021' },
     { t: tRov + 0.02, end: tArt - 0.06, main: 'MARS · PERSEVERANCE & INGENUITY · 2021', sub: 'JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET' },
-    { t: tArt + 0.02, end: tVis - 0.05, main: 'ARTEMIS · RETURNING TO THE MOON', sub: 'CREWED LUNAR EXPLORATION PROGRAM' },
+    { t: tArt + 0.02, end: tVis - 0.05, main: 'ARTEMIS · RETURNING TO THE MOON', sub: 'ARTEMIS II · CREWED LUNAR FLYBY · APRIL 2026' },
     { t: tVis + 0.02, end: DUR - 0.3 },
   ];
   // captions: one per milestone; the vision (07) carries three short beats under one index
@@ -422,7 +422,7 @@ export function create(ctx, segment) {
   const CS = 0.03 * UI;
   const callHeli = new Callout('INGENUITY · 1.8 KG', { dx: 0.3 * UI, dy: 0.2 * UI, size: CS, color: ICE, intensity: 1.2, sub: 'FIRST FLIGHT · 19 APRIL 2021' });
   const callRover = new Callout('PERSEVERANCE', { dx: -0.3 * UI, dy: 0.26 * UI, size: CS, color: ICE, intensity: 1.1 });
-  const callEarth = new Callout('EARTH', { dx: -0.26 * UI, dy: 0.14 * UI, size: CS, color: ICE, intensity: 1.2, sub: '225 MILLION KM' });
+  const callEarth = new Callout('EARTH', { dx: -0.26 * UI, dy: 0.14 * UI, size: CS, color: ICE, intensity: 1.2, sub: 'AVG. 225 MILLION KM' });
   hud.scene.add(callHeli, callRover, callEarth);
 
   // ================================================================ animation

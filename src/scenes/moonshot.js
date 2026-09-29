@@ -460,7 +460,7 @@ export function create(ctx, segment) {
   const compTx = dLab('COMP\nACTY', 0.02, 0.46, { ...LBL, height: 0.016, lineHeight: 1.0 });
   const seps = segmentsLine([0.3, 0.19, 0.082].map((y) => [V3(0.0, y, 0), V3(0.72, y, 0)]), { color: GREEN, intensity: 0.45, orderFn: () => 0, stagger: 0 });
   dskyHud.add(seps);
-  const regLab = ['ALT · FT', 'ALT RATE · FT/S', 'FWD VEL · FT/S'].map((str, i) => dLab(str, 0.37, 0.235 - i * 0.108, { height: 0.017, intensity: 0.75, letterSpacing: 0.14 }));
+  const regLab = ['FWD VEL · FT/S', 'ALT RATE · FT/S', 'ALT · FT'].map((str, i) => dLab(str, 0.37, 0.235 - i * 0.108, { height: 0.017, intensity: 0.75, letterSpacing: 0.14 }));
   const progLamp = dBox(0.62, 0.575, 0.1, 0.04, AMBER, 1.4);
   const progLampTx = dLab('PROG', 0.637, 0.575, { ...LBL, height: 0.018 });
   const dFrame = new BracketFrame(0.9, 0.76, { len: 0.05, color: '#bfe8cc', intensity: 0.8 }); dFrame.position.set(0.38, 0.28, 0); dskyHud.add(dFrame);
@@ -748,9 +748,14 @@ export function create(ctx, segment) {
           d.writeNumber(2, 2, 5); d.writeNumber(4, 2, 9);
           d.writeNumber(6, 6, 1202, true); d.setDigit(6, SEG.blank);
           for (let i = 12; i < 24; i++) d.setDigit(i, SEG.blank);
+        } else if (prog === 68) {
+          // P68 after touchdown: V06 N43, the LM's position (lat +000.67°, long +023.47°, as in the cabin glimpse)
+          d.writeNumber(2, 2, 6); d.writeNumber(4, 2, 43);
+          d.writeNumber(6, 6, 67, true); d.writeNumber(12, 6, 2347, true); d.writeNumber(18, 6, 0, true);
         } else {
-          d.writeNumber(2, 2, 6); d.writeNumber(4, 2, prog >= 66 ? 60 : 63);
-          d.writeNumber(6, 6, altFt, true); d.writeNumber(12, 6, rate, true); d.writeNumber(18, 6, vel * 7.5, true);
+          // Noun 60 register layout: R1 forward velocity, R2 altitude rate, R3 altitude
+          d.writeNumber(2, 2, 6); d.writeNumber(4, 2, 60);
+          d.writeNumber(6, 6, vel * 7.5, true); d.writeNumber(12, 6, rate, true); d.writeNumber(18, 6, altFt, true);
         }
         const blink = alarm && Math.floor(T * 10) % 2 === 0;
         for (let i = 0; i < 24; i++) d.setColor(i, i >= 6 && i < 12 && alarm ? amber : green, (blink && i >= 6 && i < 12 ? 0.35 : 1) * (i >= 6 && i < 12 && alarm ? 1.5 : 1.35));
