@@ -135,3 +135,4 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
   .controls .time.dim, #btn-explore .lbl-long { display: none; }
 }
 @media (max-width: 360px) { .controls #time { display: none; } }
+.controls #btn-explore { display: inline-flex; align-items: center; }

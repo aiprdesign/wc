@@ -7,7 +7,7 @@
 //   air     band-passed noise, a quiet wind that moves with the filter LFO
 //   swell   swell() at chapter changes: a soft bloom of the current chord, never a beat
 // Everything goes through one long procedural hall (reverb.js) and a gentle master compressor.
-// The graph is built on first start() (which must run inside a user gesture: mobile unlock), then
+// The graph is built on the first play() (which must run inside a user gesture: mobile unlock), then
 // events are scheduled a few seconds ahead of the audio clock. pause() suspends the context, so
 // the music resumes exactly where it stopped.
 import { makeImpulse } from './reverb.js';

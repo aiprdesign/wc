@@ -116,11 +116,12 @@ export class LiveCam {
     const a = this.amount, drone = this.droneOn;
     if (a < 1e-4 && !drone) { this._unhook(inst); return; }
     const L = inst.exploreLimits ?? {}, B = drone ? DRONE : LIVE;
-    const lim = this.lim = {
+    let lim = this.lim = {
       yaw: Math.min(B.yaw, L.yaw ?? B.yaw), pitchDown: Math.min(B.pitchDown, L.pitchDown ?? B.pitchDown),
       pitchUp: Math.min(B.pitchUp, L.pitchUp ?? B.pitchUp),
       zoomIn: Math.max(B.zoomIn, L.zoomIn ?? B.zoomIn), zoomOut: Math.min(B.zoomOut, L.zoomOut ?? B.zoomOut),
     };
+    if (drone) lim = this._glideLimits(inst, lim);
     let dYaw = 0, dPitch = 0, dZoom = 1;
     if (drone) {
       // the drone's own move, scaled into this shot's window (a margin short of its edges)
@@ -165,6 +166,20 @@ export class LiveCam {
     cam.updateMatrixWorld();
     inst._liveFocus = d > 0 ? cam.getWorldPosition(this._F).distanceTo(C) / d : zoom;   // depth of field follows the new distance
     if (hooks) { try { inst.explorePosed?.(cam); } catch { /* scene hook */ } }
+  }
+
+  // Drone: a scene's window can change mid-shot (its limits often switch with a camera cheat); the
+  // drone's window glides to the new one over ~1 s instead of snapping (fresh sequences start exact).
+  _glideLimits(inst, lim) {
+    const now = this.prev;
+    let g = inst._droneLim;
+    if (!g || now - g.at > 1000) g = inst._droneLim = { ...lim, at: now };
+    else {
+      const k = 1 - Math.exp(-(now - g.at) / 450);
+      for (const key of ['yaw', 'pitchDown', 'pitchUp', 'zoomIn', 'zoomOut']) g[key] += (lim[key] - g[key]) * k;
+      g.at = now;
+    }
+    return g;
   }
 
   // Engine hook, before a sequence's update: hand the camera back exactly as the director left it.
