@@ -204,6 +204,7 @@ export class Engine {
 
   // Fit the canvas to the window at the film aspect (letterbox / pillarbox via CSS).
   resize() {
+    if (this.pinned) return;   // exporting: the canvas holds the export size (see pin)
     const vw = window.innerWidth, vh = window.innerHeight;
     let cw = vw, ch = vw / OUTPUT_ASPECT;
     if (ch > vh) { ch = vh; cw = vh * OUTPUT_ASPECT; }
@@ -216,6 +217,7 @@ export class Engine {
 
   // Drop render resolution one step (used when the GPU can't hold frame rate).
   degrade() {
+    if (this.pinned) return false;
     const steps = [1920, 1600, 1280, 1024, 800];
     const next = steps.find((s) => s < this.outW);
     if (!next) return false;
@@ -223,6 +225,28 @@ export class Engine {
     this.resize();
     console.info(`[engine] render width lowered to ${this.outW}px to keep playback smooth`);
     return true;
+  }
+
+  // Video export (core/export.js): hold the canvas at exactly w × h until unpin(): window resizes and
+  // adaptive degrade() stand down. Optionally raise the realism for the export (supersampling,
+  // ambient occlusion, veiling glare); unpin() puts every setting back and refits the window.
+  pin(w, h, { supersample, ao, glare } = {}) {
+    if (!this.pinned) this._unpin = { maxWidth: this.maxWidth, supersample: this.supersample, ao: this.fx.ao, glare: this.fx.glare };
+    this.pinned = true;
+    if (supersample != null) this.supersample = Math.max(1, Math.min(4, supersample));
+    if (ao != null) this.fx.ao = ao;
+    if (glare != null) this.fx.glare = glare;
+    this.outW = 0;   // force a rebuild of every target, even at the same size
+    this.setSize(w, h);
+  }
+
+  unpin() {
+    if (!this.pinned) return;
+    const s = this._unpin;
+    this.pinned = false;
+    this.maxWidth = s.maxWidth; this.supersample = s.supersample; this.fx.ao = s.ao; this.fx.glare = s.glare;
+    this.outW = 0;
+    this.resize();
   }
 
   // (w, h) is the delivered canvas size; with supersampling every internal target is N× larger and
