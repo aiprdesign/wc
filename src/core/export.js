@@ -194,6 +194,7 @@ export async function exportVideo(engine, audio, opts = {}) {
   canvas.addEventListener('webglcontextlost', onLost);
   const onAbort = () => fail(abortError());
   signal?.addEventListener('abort', onAbort);
+  if (signal?.aborted) onAbort();   // cancelled while the muxer was loading
   const closeAll = () => {
     for (const enc of [venc, aenc]) { try { if (enc && enc.state !== 'closed') enc.close(); } catch { /* closed */ } }
   };
