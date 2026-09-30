@@ -53,17 +53,17 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
-        totalEmissiveRadiance += uTint * (band * 0.08 + uFlash * 0.25);`)
+        totalEmissiveRadiance += uTint * (band * 0.14 + uFlash * 0.25);`)
       // soft highlight knee: letters stay crisp under the bloom threshold instead of hazing out
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
           if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
-        gl_FragColor.rgb += uTint * band * uShine * 0.12;
+        gl_FragColor.rgb += uTint * band * uShine * 0.24;
         // per-letter shine: a brief bright flare on this letter alone (past the knee, so it reads)
         gl_FragColor.rgb += uTint * uLShine * (0.26 + 0.1 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v7';
+  m.customProgramCacheKey = () => 'word3d-v8';
   return m;
 }
 
@@ -388,19 +388,26 @@ export class Words3D {
       it.dust.visible = it.dust.u.opacity > 0.01;
       // light sweep crosses the word once, after the letters stand
       // the sheen band and the glint ride along with the letter-by-letter shine
-      const sweepStart = shine0;
-      const sweepP = ramp(t, sweepStart - shineDur * 0.3, sweepStart + (n - 1) * shineSlot + shineDur * 1.3);
-      it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, sweepP);
+      const sweepStart = shine0, sweepEnd = sweepStart + (n - 1) * shineSlot + shineDur * 1.3;
+      const sweepP = ramp(t, sweepStart - shineDur * 0.3, sweepEnd);
+      // …then, through the hold, a slower second highlight glides across the metal (as the last word's
+      // highlights roll over it during the zoom), so every heading keeps catching the light
+      const holdEnd = Math.max(sweepEnd + 0.5, outStart - it.t0 - 0.05);
+      const holdP = ramp(t, sweepEnd + 0.05, holdEnd);
+      const first = Math.sin(Math.PI * sweepP), second = 0.6 * Math.sin(Math.PI * holdP);
+      const inFirst = sweepP < 1;
+      it.shared.uSweep.value = lerp(-it.width / 2 - 1.2, it.width / 2 + 1.2, inFirst ? sweepP : holdP);
+      it.shared.uSweepW.value = inFirst ? 0.45 : 0.8;
       // first show: the sweep is a real shine — bright band plus a star glint on its leading edge
-      const shine = Math.sin(Math.PI * sweepP) * fade;
+      const shine = Math.max(first, second) * fade;
       it.shared.uShine.value = shine;
       it.glint.visible = shine > 0.02;
       it.glint.position.x = it.shared.uSweep.value;
-      it.glint.scale.setScalar((0.1 + 0.12 * shine) * (1 + 0.15 * Math.sin(t * 40)));
-      it.glint.material.opacity = shine * 0.3;
+      it.glint.scale.setScalar((0.12 + 0.18 * shine) * (1 + 0.15 * Math.sin(t * 40)));
+      it.glint.material.opacity = shine * (inFirst ? 0.55 : 0.35);
       it.glint.material.rotation = t * 1.5;
       it.light.position.x = it.shared.uSweep.value;
-      it.light.intensity = Math.sin(Math.PI * sweepP) * 0.5 * k * k * fade;
+      it.light.intensity = shine * 1.0 * k * k;
       // plinth shoots out from the centre with the letters, retracts into it as they leave
       const pp = Math.max(0.0001, ramp(t, 0.05, inDur + n * st * 0.8, ease.outExpo) * (1 - ramp(T, outStart - 0.05, outStart + outDur * 0.8, ease.inOutCubic)));
       it.plinth.forEach((p) => { p.progress = pp; p.opacity = (0.65 + 0.35 * beat) * fade; });
