@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES } from '../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, timeWarp } from '../lib/math.js';
-import { marbleTexture } from '../lib/textures.js';
+import { marbleTexture, canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { progressLine, segmentsLine, circlePoints } from '../lib/lines.js';
 import { lightShaft } from '../lib/materials.js';
 import { Dust } from '../lib/particles.js';
@@ -499,27 +499,39 @@ export function create(ctx, segment) {
     // lateral sima along the flanks: the eaves gutter, with lion-head spouts
     const latSima = runMoulding([[-0.15, 7.5], [0, 7.5], [0, 7.53], [0.004, 7.56], [0.018, 7.6], [0.042, 7.64], [0.062, 7.675], [0.071, 7.7], [0.072, 7.73], [-0.15, 7.73]], 12.5);
     for (const sx of [-1, 1]) put('stone', latSima, sx * RUN, 0, 0, sx * Math.PI / 2);
-    const lion = (() => {                                                  // lion-head spout: a ruff of mane locks round
-      const parts = [new THREE.CylinderGeometry(0.066, 0.074, 0.026, 14).rotateX(Math.PI / 2)];   // the face, a heavy brow,
-      for (let k = 0; k < 14; k++) {                                       // a jutting muzzle, and the open jaws of the spout
-        const a = (k + 0.5) * Math.PI * 2 / 14;
-        parts.push(new THREE.SphereGeometry(0.022, 6, 4).scale(1, 1.25, 0.7).rotateZ(a - Math.PI / 2).translate(Math.cos(a) * 0.07, Math.sin(a) * 0.07, 0.006));
+    const lion = (() => {                                                  // lion-head spout: a swept-back mane, broad
+      const parts = [new THREE.SphereGeometry(0.074, 16, 10).scale(1, 0.95, 0.32)];                               // brow, jutting muzzle
+      for (let k = 0; k < 10; k++) {                                       // and the open jaws of the spout
+        const a = (k + 0.5) * Math.PI * 2 / 10;
+        parts.push(new THREE.SphereGeometry(0.03, 6, 4).scale(0.7, 1.3, 0.45).rotateZ(a - Math.PI / 2).translate(Math.cos(a) * 0.058, Math.sin(a) * 0.058 + 0.004, 0.008));
       }
-      parts.push(new THREE.SphereGeometry(0.046, 12, 8).scale(1, 0.95, 0.62).translate(0, 0.004, 0.018));        // face
-      parts.push(new THREE.BoxGeometry(0.066, 0.012, 0.016).translate(0, 0.022, 0.044));                           // brow
+      parts.push(new THREE.SphereGeometry(0.05, 14, 10).scale(1, 1.02, 0.7).translate(0, 0.006, 0.022));         // face
+      parts.push(new THREE.CylinderGeometry(0.012, 0.012, 0.07, 8).rotateZ(Math.PI / 2).scale(1, 1, 1.2).translate(0, 0.026, 0.05));   // brow ridge
       for (const ex of [-1, 1]) {
-        parts.push(new THREE.SphereGeometry(0.012, 6, 4).translate(ex * 0.043, 0.047, 0.018));                     // ears
-        parts.push(new THREE.SphereGeometry(0.019, 8, 6).scale(1, 0.8, 0.9).translate(ex * 0.015, -0.012, 0.05));  // cheeks / whisker pads
+        parts.push(new THREE.SphereGeometry(0.014, 6, 4).scale(1, 1.2, 0.6).translate(ex * 0.046, 0.05, 0.02));    // ears
+        parts.push(new THREE.SphereGeometry(0.021, 8, 6).scale(1, 0.85, 0.95).translate(ex * 0.016, -0.014, 0.058));   // whisker pads
       }
-      parts.push(new THREE.SphereGeometry(0.016, 8, 6).scale(1, 0.8, 1).translate(0, 0.004, 0.058));              // nose
-      parts.push(new THREE.CylinderGeometry(0.013, 0.017, 0.05, 10, 1, true).rotateX(Math.PI / 2).translate(0, -0.03, 0.068));   // spout
-      parts.push(new THREE.BoxGeometry(0.03, 0.008, 0.03).translate(0, -0.047, 0.056));                            // lower jaw
+      parts.push(new THREE.BoxGeometry(0.022, 0.034, 0.03).translate(0, 0.006, 0.066));                            // nose bridge
+      parts.push(new THREE.SphereGeometry(0.014, 8, 6).scale(1.2, 0.8, 1).translate(0, -0.004, 0.08));            // nose
+      parts.push(new THREE.CylinderGeometry(0.014, 0.018, 0.06, 10, 1, true).rotateX(Math.PI / 2 + 0.25).translate(0, -0.038, 0.075));   // spout
+      parts.push(new THREE.SphereGeometry(0.02, 8, 6).scale(1, 0.45, 1).translate(0, -0.056, 0.058));              // lower jaw
       return mergeGeometries(parts.map(prep));
     })();
     for (const sx of [-1, 1]) for (let m = 0; m < 8; m++) for (const sz of [-1, 1]) put('stone', lion, sx * (RUN + 0.068), 7.615, sz * (0.5 + 2 * m) * 0.39, sx * Math.PI / 2);
   }
-  // tympanum: the recessed back wall (darker), filling the triangle under the raking geison
-  const tymp = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-(RUN - 0.24 / TAN), 0), new THREE.Vector2(RUN - 0.24 / TAN, 0), new THREE.Vector2(0, RISE - 0.24)])), withBuild(new THREE.MeshStandardMaterial({ color: '#6d665d', roughness: 0.8 })));
+  // tympanum: the recessed back wall (darker), filling the triangle under the raking geison, laid in ashlar
+  // courses (the shape's UVs are in metres: one texture tile = two 0.45 m courses of 1.6 m blocks, staggered)
+  const tympMap = (() => {
+    const c = mkCanvas(512, 256), g = c.getContext('2d');
+    g.fillStyle = '#e8e2d8'; g.fillRect(0, 0, 512, 256);
+    for (let i = 0; i < 900; i++) { const v = 200 + ((i * 97) % 55); g.fillStyle = `rgba(${v},${v - 6},${v - 14},0.25)`; g.fillRect((i * 173) % 512, (i * 59) % 256, 3 + (i % 7), 2 + (i % 5)); }
+    g.fillStyle = '#6a6258';
+    for (const y of [0, 127]) g.fillRect(0, y, 512, 3);
+    for (const [x, y0] of [[0, 0], [256, 0], [128, 128], [384, 128]]) g.fillRect(x, y0, 3, 128);
+    return toTexture(c, { repeat: true });
+  })();
+  tympMap.repeat.set(1 / 3.2, 1 / 0.9);
+  const tymp = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-(RUN - 0.24 / TAN), 0), new THREE.Vector2(RUN - 0.24 / TAN, 0), new THREE.Vector2(0, RISE - 0.24)])), withBuild(new THREE.MeshStandardMaterial({ color: '#77706a', map: tympMap, roughness: 0.8 })));
   tymp.position.set(0, 7.48, 5.905);
   temple.add(tymp);
   // (the same recess on the rear pediment, so the temple is finished all the way round)
@@ -637,7 +649,7 @@ export function create(ctx, segment) {
   // ---- bake: one mesh per material
   const meshes = {};
   for (const [k, mat] of [['stone', stoneMat], ['joint', jointMat], ['roof', roofMat], ['cella', cellaMat], ['core', cellaCoreMat], ['trim', trimMat]]) {
-    const g = worldUV(mergeGeometries(P[k]), k === 'roof' ? 0.2 : 0.065);
+    const g = worldUV(mergeGeometries(P[k]), k === 'roof' ? 0.2 : 0.12);
     const m = new THREE.Mesh(g, mat); m.castShadow = m.receiveShadow = true;
     temple.add(m); meshes[k] = m;
   }

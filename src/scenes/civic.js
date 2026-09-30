@@ -351,14 +351,6 @@ function balustrade(L, h, pitch = h * 0.42) {
   for (const sx of [-1, 1]) out.push(new THREE.BoxGeometry(h * 0.34, h * 1.08, h * 0.36).translate(sx * (L / 2 - h * 0.17), h * 0.54, 0));
   return out;
 }
-// Aisle stairs up a stepped hemicycle: half-height steps in the back half of every tread, along each angle.
-function aisleSteps(parts, r0, steps, run, rise, x0, z0, phis) {
-  for (const phi of phis) for (let i = 0; i < steps - 1; i++) {
-    const r = r0 + i * run + run * 0.75;
-    parts.push([new THREE.BoxGeometry(run * 0.62, rise / 2, run / 2), x0 + Math.sin(phi) * r, (i + 1) * rise + rise / 4, z0 + Math.cos(phi) * r, phi]);
-  }
-}
-
 // The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
 // headings (engine.headingsHidden), dropping the duck with them; the explore hook puts it back.
 function headingDuck(ctx, inst, T) {
@@ -430,7 +422,6 @@ export function create(ctx, segment) {
   const greekMat = withDissolve(new THREE.MeshPhysicalMaterial({ color: '#e9e0d0', roughness: 0.42, clearcoat: 0.2, emissive: '#000000', side: THREE.DoubleSide }), '#ffc070', 'greek');
   const hemi = hemicycleGeometry(1.1, 7, 0.3, 0.14);
   const greekParts = [[hemi, 0, 0, 0]];
-  aisleSteps(greekParts, 1.1, 7, 0.3, 0.14, 0, 0, [Math.PI * 0.62, Math.PI * 0.81, Math.PI, Math.PI * 1.19, Math.PI * 1.38]);
   greekParts.push([new THREE.CylinderGeometry(0.42, 0.5, 0.36, 24), 0, 0.18, 0.2]);     // bema
   greekParts.push([lathe([[0.5, 0.36], [0.46, 0.36], [0.46, 0.39], [0.44, 0.4], [0, 0.4]], 24), 0, 0, 0.2]);   // its moulded rim
   for (let k = 0; k < 3; k++) greekParts.push([new THREE.BoxGeometry(0.5 - k * 0.1, 0.12, 0.14), 0, 0.06 + k * 0.12, 0.72 - k * 0.1]);   // speakers' steps
@@ -648,9 +639,12 @@ export function create(ctx, segment) {
     put(new THREE.CylinderGeometry(0.011, 0.013, 0.18, 6), x, 4.05, z); put(new THREE.BoxGeometry(0.034, 0.02, 0.034), x, 4.15, z, a);
   }
   put(lathe([[0, 4.16], [0.27, 4.16], [0.27, 4.19], [0.29, 4.2], [0.29, 4.215], [0, 4.215]], 32), 0, 0, -1.9);
-  // hemicycle of the chamber in front, with its aisle stairs
+  // hemicycle of the chamber in front, a curved desk rail along every tier
   put(hemicycleGeometry(0.7, 5, 0.22, 0.09), 0, 0, 2.55, 0);
-  aisleSteps(parlParts, 0.7, 5, 0.22, 0.09, 0, 2.55, [Math.PI * 0.7, Math.PI, Math.PI * 1.3]);
+  for (let i = 0; i < 5; i++) {
+    const r = 0.7 + i * 0.22 + 0.05, y = (i + 1) * 0.09;
+    put(new THREE.LatheGeometry([[r - 0.012, y], [r + 0.012, y], [r + 0.012, y + 0.04], [r + 0.02, y + 0.045], [r + 0.02, y + 0.052], [r - 0.02, y + 0.052], [r - 0.02, y + 0.045], [r - 0.012, y + 0.04], [r - 0.012, y]].map(([a, b]) => new THREE.Vector2(a, b)), 48, Math.PI / 2, Math.PI), 0, 0, 2.55);
+  }
   const parlGeo = bakeParts(parlParts);
   const parl = new THREE.Mesh(parlGeo, parlMat);
   scene.add(parl);
