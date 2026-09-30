@@ -50,9 +50,9 @@ async function loadScore() {
 
 async function boot() {
   restoreHash();
-  // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion and
-  // finer shadows. ?ss=2 supersamples (renders at 2× and filters down), ?ao=0/1 overrides AO,
-  // ?shadows=1|2|4 overrides the shadow-map multiplier.
+  // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion,
+  // finer contact-hardening shadows, veiling glare and finer bokeh. ?ss=2 supersamples (renders at
+  // 2× and filters down), ?ao=0/1 overrides AO, ?shadows=1|2|4 overrides the shadow-map multiplier.
   const quality = QUALITY[params.get('q')] ? params.get('q') : 'medium';
   const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
   const xrs = await xrReady;
@@ -63,7 +63,10 @@ async function boot() {
       ao: flag('ao'),
       shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
       shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
+      // realism A/B switches (see README): per-scene IBL, surface detail, tone mapper,
+      // contact-hardening shadows, veiling glare
       sceneEnv: flag('env'), detail: flag('detail'), tonemap: params.get('tm') ?? undefined,
+      softShadows: flag('pcss'), glare: flag('glare') === false ? 0 : flag('glare') ? 0.04 : undefined,
     },
     // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
     xr: xrs.vr || xrs.ar ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,

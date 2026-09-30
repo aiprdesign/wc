@@ -67,9 +67,9 @@ export function surfaceDetailTexture() { return (detailTex ??= makeDetailTexture
 // scenes are authored in metres), scratch strength and grime. Shared uniforms (one set per family),
 // so the whole film can be tuned at once: SURFACE.metal.value.set(…).
 const FAMILY = {
-  metal:    { albedo: 0.16, rough: 1.0, bump: 0.00003, scratch: 0.8, grime: 0.25 },
-  polished: { albedo: 0.12, rough: 0.7, bump: 0.00002, scratch: 0.25, grime: 0.18 },
-  matte:    { albedo: 0.22, rough: 0.35, bump: 0.0007, scratch: 0.0, grime: 0.28 },
+  metal:    { albedo: 0.12, rough: 1.0, bump: 0.00003, scratch: 0.8, grime: 0.2 },
+  polished: { albedo: 0.1, rough: 0.7, bump: 0.00002, scratch: 0.25, grime: 0.15 },
+  matte:    { albedo: 0.15, rough: 0.35, bump: 0.0007, scratch: 0.0, grime: 0.18 },
 };
 // per set: a = (albedo, rough, bump, scratch), g = grime, k = pattern scale (1 = the metre-based default;
 // larger = finer, for parts modelled larger than life)
@@ -116,7 +116,7 @@ function inject(sh, u) {
   vec3 sdW = abs(vSdN); sdW = sdW * sdW; sdW *= sdW; sdW /= max(dot(sdW, vec3(1.0)), 1e-5);
   vec4 sdF = sdTri(vSdP * (uSdScale.x * uSdK), sdW);       // fine: ~35 cm tile (grain, scratches)
   vec4 sdB = sdTri(vSdP * (uSdScale.y * uSdK), sdW);       // broad: ~3 m tile (smudges, weathering)
-  float sdSmudge = sdB.g * 0.65 + sdF.g * 0.35;
+  float sdSmudge = sdB.g * 0.4 + sdF.g * 0.6;
   float sdGrime = smoothstep(0.5, 0.9, sdB.b * 0.55 + sdB.g * 0.45);
   diffuseColor.rgb *= 1.0 + uSd.x * ((sdSmudge - 0.5) * 1.3 + (sdF.r - 0.5) * 0.7);
   diffuseColor.rgb *= 1.0 - uSdGrime * sdGrime;`)
@@ -145,7 +145,7 @@ function inject(sh, u) {
 // charcoal and fresh snow). Partial metalness is what makes CG read as plastic: a grey dielectric
 // with a tinted, half-strength mirror on top. Metals become fully metallic (keeping their
 // specular colour, lifted to a real metal's minimum reflectance); dielectrics lose the fake
-// metal and keep their diffuse brightness. Maps and vertex colours are left alone.
+// metal and keep their diffuse brightness; nothing is whiter than snow. Maps and vertex colours are left alone.
 const lumOf = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 export function physicalize(m) {
   if (!m?.isMeshStandardMaterial || m.userData?.noPhys || m.userData?.physDone) return;
@@ -171,8 +171,9 @@ export function physicalize(m) {
     const MIN_F0 = 0.16;   // darkest real metals (weathered iron, gunmetal) reflect ~50%; keep some of the look's darkness
     if (plain && L > 1e-5 && L < MIN_F0) m.color.multiplyScalar(MIN_F0 / L);
   } else if (plain && L > 1e-5) {
-    if (L < 0.02) m.color.multiplyScalar(0.02 / L);          // charcoal, soot, black paint ≈ 2–4 %
-    else if (L > 0.85) m.color.multiplyScalar(0.85 / L);     // nothing but fresh snow is whiter
+    // nothing but fresh snow is whiter. (No floor for dark albedos: the film's limbo sets are
+    // deliberately near-black floors that fall off into darkness; lifting them to charcoal lit them up.)
+    if (L > 0.85) m.color.multiplyScalar(0.85 / L);
   }
 }
 
@@ -198,17 +199,26 @@ export function addSurfaceDetail(m) {
   return true;
 }
 
+// Sets / backdrops (anything over ~20 m across: ground discs, limbo floors, back walls) get a much
+// quieter pattern: at that size the broad smudges read as clouds of dirt, and those surfaces are
+// meant to fall away into darkness.
+const BIG = 20;
 export function addSurfaceDetailToScene(root, { phys = true } = {}) {
-  const seen = new Set();
+  const size = new Map();
+  root.updateMatrixWorld(true);
   root.traverse((o) => {
-    if (!(o.isMesh || o.isInstancedMesh || o.isBatchedMesh) || o.isSprite) return;
-    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-      if (!m || seen.has(m)) continue;
-      seen.add(m);
-      if (!o.geometry?.attributes?.normal) continue;
-      if (phys) physicalize(m);
-      addSurfaceDetail(m);
-    }
+    if (!(o.isMesh || o.isInstancedMesh || o.isBatchedMesh) || o.isSprite || !o.geometry?.attributes?.normal) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    const r = 2 * (o.geometry.boundingSphere?.radius ?? 0) * o.matrixWorld.getMaxScaleOnAxis();
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m) size.set(m, Math.max(size.get(m) ?? 0, Number.isFinite(r) ? r : 0));
   });
-  return seen.size;
+  for (const [m, d] of size) {
+    if (phys) physicalize(m);
+    if (d > BIG && !m.userData?.detail && m.isMeshStandardMaterial) {
+      const fam = familyOf(m), p = FAMILY[fam];
+      m.userData.detail = { albedo: p.albedo * 0.3, rough: p.rough * 0.35, bump: p.bump * 0.6, scratch: p.scratch * 0.3, grime: p.grime * 0.2 };
+    }
+    addSurfaceDetail(m);
+  }
+  return size.size;
 }

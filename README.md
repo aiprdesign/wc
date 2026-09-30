@@ -32,11 +32,29 @@ chapter · `m` mute · `f` fullscreen · `r` record (MP4 where the browser suppo
 | `#16x9` | 16:9 frame |
 | `#9x16` (or `?aspect=9:16`) | 9:16 vertical frame |
 | `#2x3` (or `?aspect=2:3`) | 2:3 vertical frame |
-| `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920). `high` and `ultra` also add ambient occlusion and 2× shadow-map resolution |
+| `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920). `high` and `ultra` also add the heavier realism features (see **Picture realism** below) |
 | `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
 | `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
+| `?env=0` · `?detail=0` · `?pcss=0` · `?glare=0` · `?tm=agx` / `?tm=neutral` | A/B switches: per-scene lighting environments · surface detail · contact-hardening shadows · veiling glare · tone mapper (default ACES) |
 | `?novo` | no narrator · `?noaudio` silent |
 | `#experience` (or `?experience`) | opens in **Experience mode** (below); with a format: `#square&experience`, `#9x16&experience`, `#16x9&experience` |
+
+### Picture realism
+
+What each quality level renders (the light features cost next to nothing and are on everywhere,
+including VR / AR, which draws the scenes directly):
+
+| Feature | low / medium (default) | high / ultra, cinematic renders |
+|---|---|---|
+| **Per-scene image-based lighting**: each sequence's studio environment is re-lit in the colour of its own key and rim lights (warm marble chapters reflect warm light, electric ones cool), built once at load (`src/lib/environment.js`) | ✓ (128 px) | ✓ (256 px, sharper reflections) |
+| **Surface detail** on every lit material: procedural roughness variation (smudges, polish, wear), albedo mottling and grime, micro-relief and fine scratches on metal, from one cached 256² texture sampled tri-planar in each part's own space (`src/lib/surface.js`) | ✓ | ✓ |
+| **Physically plausible materials**: metals fully metallic with a real metal's minimum reflectance, no half-metal "plastic", no albedo whiter than snow; honed (not lacquered) marble | ✓ | ✓ |
+| Lateral chromatic aberration only towards the frame edges; ACES tone mapping and the film's grade | ✓ | ✓ |
+| Screen-space ambient occlusion (contact shadows) | – | ✓ |
+| Shadow maps at 2× resolution with **contact-hardening soft shadows** (penumbrae widen with the distance to the occluder, sized by the light's angular radius; `src/lib/softshadows.js`) | – | ✓ |
+| **Veiling glare**: 4 % of the light spread wide by the lens, energy-conserving | – | ✓ |
+| Depth-of-field bokeh with 56 instead of 28 taps | – | ✓ |
+| Motion blur, supersampling (`tools/render.mjs --preset cinematic`) | – | offline only |
 
 ### Experience mode
 
@@ -111,7 +129,7 @@ real-time playback can't afford:
 |---|---|
 | `--mb 8` | **motion blur**: each frame integrates 8 sub-frames across a 180° shutter (`--shutter` to change) in linear HDR, before bloom and grade. Exact, because every sequence is a pure function of time; very fast moves get extra sub-frames so streaks stay smooth, and sub-frames across a hard cut are dropped |
 | `--ss 2` | **supersampling**: rendered at 2× and filtered down with a tent filter: clean edges, stable fine detail, finer grain |
-| `--q high` | **ambient occlusion** (contact shadows from the depth buffer) and **2× shadow maps** with soft PCF (`ultra` above 2560 px wide) |
+| `--q high` | **ambient occlusion** (contact shadows from the depth buffer), **2× shadow maps** with contact-hardening soft shadows, veiling glare and finer bokeh (`ultra` above 2560 px wide; see **Picture realism**) |
 
 `--preset draft` (the default for a bare `node tools/render.mjs`) turns them off for fast
 previews. Explicit flags override the preset, e.g. `--preset cinematic --mb 12`. The cinematic

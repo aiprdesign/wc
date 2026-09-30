@@ -14,7 +14,8 @@
 //                        averaged in linear HDR before bloom and grade (sequences are pure functions of
 //                        time, so it is exact and deterministic; sub-frames across a hard cut are dropped)
 //   --ss N               supersampling: render at N× and filter down (cleaner edges, finer detail)
-//   --q low|medium|high|ultra   render quality; high/ultra add ambient occlusion and 2× shadow maps
+//   --q low|medium|high|ultra   render quality; high/ultra add ambient occlusion, 2× contact-hardening
+//                        soft shadows, veiling glare and finer bokeh (README: Picture realism)
 // Explicit flags override the preset (e.g. --preset cinematic --mb 12).
 // Or simply: npm run render:1x1 / render:16x9 / render:9x16 / render:all (cinematic preset),
 // npm run render:draft:1x1 … for quick drafts.
