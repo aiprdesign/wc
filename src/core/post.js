@@ -221,10 +221,14 @@ export const TransitionShader = {
     // Some GPUs produce NaN/Inf from edge-case maths in scene shaders; left alone, bloom
     // smears a single bad pixel into black blocks across the frame. Scrub it here.
     vec3 safe(vec3 c){ return (any(isnan(c)) || any(isinf(c))) ? vec3(0.0) : clamp(c, 0.0, 64.0); }
+    // Radial zoom blur. 16 taps, each pixel's taps offset by its own interleaved-gradient jitter: with a few
+    // fixed taps, thin dark lines against a bright plate (telegraph wires in the fog) were copied at wide
+    // gaps and read as rows of dark dashes; jittered they melt into a smooth streak.
     vec3 zoomBlur(sampler2D t, vec2 uv, float scale, float blur){
       vec2 c = vec2(0.5); vec3 acc = vec3(0.0);
-      for (int i = 0; i < 10; i++) { float k = scale * (1.0 + blur * float(i) / 10.0); acc += safe(texture2D(t, c + (uv - c) / k).rgb); }
-      return acc / 10.0;
+      float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      for (int i = 0; i < 16; i++) { float k = scale * (1.0 + blur * (float(i) + j) / 16.0); acc += safe(texture2D(t, c + (uv - c) / k).rgb); }
+      return acc / 16.0;
     }
     vec3 spectrum(float x){ return clamp(abs(mod(x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
     void main(){
