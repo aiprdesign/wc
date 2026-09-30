@@ -64,7 +64,7 @@ function gearGeometry({ teeth = 12, root = 2.0, tip = 2.4, rimIn = 1.55, hub = 0
 // It stops under the annulets (top = h − 0.06).
 function flutedShaft(r = 0.22, h = 2.6) {
   const FL = 20, M = 6, dA = Math.PI * 2 / FL, top = h - 0.06, neck = h - 0.16;
-  const rad = (y) => r * (1 - 0.12 * y / h) - 0.004 * Math.max(0, Math.min(1, (y - (neck - 0.009)) / 0.003, ((neck + 0.009) - y) / 0.003));
+  const rad = (y) => r * (1 - 0.12 * y / h) + r * 0.03 * Math.sin(Math.PI * y / top) - 0.004 * Math.max(0, Math.min(1, (y - (neck - 0.009)) / 0.003, ((neck + 0.009) - y) / 0.003));
   const ys = [0, 0.6, 1.2, 1.8, neck - 0.009, neck - 0.006, neck + 0.006, neck + 0.009, top];
   const pos = [], uv = [], idx = [];
   for (let f = 0; f < FL; f++) {
@@ -153,7 +153,7 @@ export function create(ctx, segment) {
   const MARBLE_BASE = marbleMat.color.clone();
   const shaftGeo = flutedShaft(0.22, 2.6);
   // Doric capital: four annulets and a cushion-curved echinus (the neck groove is cut in the shaft)
-  const echinusGeo = doricCapital(0.22 * (1 - 0.12 * 2.54 / 2.6), 2.54, 2.6, 2.76, 0.3);
+  const echinusGeo = doricCapital(0.22 * (1 - 0.12 * 2.54 / 2.6), 2.54, 2.6, 2.76, 0.291);   // echinus just inside the abacus edge, as in the temple
   const abacusGeo = new THREE.BoxGeometry(0.6, 0.12, 0.6); abacusGeo.translate(0, 2.82, 0);
   const shafts = new THREE.InstancedMesh(shaftGeo, marbleMat, NCOL);
   const echini = new THREE.InstancedMesh(echinusGeo, marbleMat, NCOL);

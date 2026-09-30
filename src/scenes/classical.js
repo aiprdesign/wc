@@ -40,7 +40,7 @@ function shaftProfile() {
 // Radial inset of the drum joints and the neck groove at height y (1 = full radius).
 function shaftInset(y) {
   let d = 0;
-  for (const j of DRUM_JOINTS) d = Math.max(d, 0.0035 * Math.max(0, 1 - Math.abs(y - j) / 0.006));
+  for (const j of DRUM_JOINTS) d = Math.max(d, 0.005 * Math.max(0, 1 - Math.abs(y - j) / 0.006));
   d = Math.max(d, 0.011 * sat((y - (NECK_Y - 0.013)) / 0.005) * sat(((NECK_Y + 0.013) - y) / 0.005));
   return d;
 }
@@ -499,11 +499,21 @@ export function create(ctx, segment) {
     // lateral sima along the flanks: the eaves gutter, with lion-head spouts
     const latSima = runMoulding([[-0.15, 7.5], [0, 7.5], [0, 7.53], [0.004, 7.56], [0.018, 7.6], [0.042, 7.64], [0.062, 7.675], [0.071, 7.7], [0.072, 7.73], [-0.15, 7.73]], 12.5);
     for (const sx of [-1, 1]) put('stone', latSima, sx * RUN, 0, 0, sx * Math.PI / 2);
-    const lion = (() => {
-      const parts = [new THREE.SphereGeometry(0.075, 12, 8).scale(1, 1, 0.45)];
-      parts.push(new THREE.SphereGeometry(0.048, 10, 8).scale(0.9, 1, 0.7).translate(0, -0.005, 0.03));
-      for (const ex of [-1, 1]) parts.push(new THREE.SphereGeometry(0.02, 6, 5).translate(ex * 0.048, 0.05, 0.018));
-      parts.push(new THREE.CylinderGeometry(0.016, 0.019, 0.06, 8).rotateX(Math.PI / 2).translate(0, -0.028, 0.072));
+    const lion = (() => {                                                  // lion-head spout: a ruff of mane locks round
+      const parts = [new THREE.CylinderGeometry(0.066, 0.074, 0.026, 14).rotateX(Math.PI / 2)];   // the face, a heavy brow,
+      for (let k = 0; k < 14; k++) {                                       // a jutting muzzle, and the open jaws of the spout
+        const a = (k + 0.5) * Math.PI * 2 / 14;
+        parts.push(new THREE.SphereGeometry(0.022, 6, 4).scale(1, 1.25, 0.7).rotateZ(a - Math.PI / 2).translate(Math.cos(a) * 0.07, Math.sin(a) * 0.07, 0.006));
+      }
+      parts.push(new THREE.SphereGeometry(0.046, 12, 8).scale(1, 0.95, 0.62).translate(0, 0.004, 0.018));        // face
+      parts.push(new THREE.BoxGeometry(0.066, 0.012, 0.016).translate(0, 0.022, 0.044));                           // brow
+      for (const ex of [-1, 1]) {
+        parts.push(new THREE.SphereGeometry(0.012, 6, 4).translate(ex * 0.043, 0.047, 0.018));                     // ears
+        parts.push(new THREE.SphereGeometry(0.019, 8, 6).scale(1, 0.8, 0.9).translate(ex * 0.015, -0.012, 0.05));  // cheeks / whisker pads
+      }
+      parts.push(new THREE.SphereGeometry(0.016, 8, 6).scale(1, 0.8, 1).translate(0, 0.004, 0.058));              // nose
+      parts.push(new THREE.CylinderGeometry(0.013, 0.017, 0.05, 10, 1, true).rotateX(Math.PI / 2).translate(0, -0.03, 0.068));   // spout
+      parts.push(new THREE.BoxGeometry(0.03, 0.008, 0.03).translate(0, -0.047, 0.056));                            // lower jaw
       return mergeGeometries(parts.map(prep));
     })();
     for (const sx of [-1, 1]) for (let m = 0; m < 8; m++) for (const sz of [-1, 1]) put('stone', lion, sx * (RUN + 0.068), 7.615, sz * (0.5 + 2 * m) * 0.39, sx * Math.PI / 2);
@@ -519,28 +529,38 @@ export function create(ctx, segment) {
 
   // ---- roof: marble pan tiles with cover-tile ridges, ridge tiles, antefixes, acroteria
   {
-    // corrugated marble tiling on both slopes: cover-tile ridges across z, stepped courses up the slope; the
-    // eaves end inside the lateral sima, the gable ends inside the raking sima
+    // marble roof tiles on both slopes, course by course: flat pan tiles with a cover tile of rounded section
+    // over every joint, each course lapping over the one below (a true butt step, not a ramp); the eaves end
+    // inside the lateral sima, the gable ends inside the raking sima
     const slopeLen = Math.hypot(RISE, RUN) + 0.2;
-    const TILE = 0.39, NZ = 34 * 6, COURSES = 13, NU = COURSES * 3, Z0 = -6.3, ZL = 12.6, D0 = 0.07;
+    const TILE = 0.39, COURSES = 13, Z0 = -6.3, ZL = 12.6, D0 = 0.07, NZ = Math.round(ZL / TILE) * 16, LAP = 0.024, CW = 0.068, CH = 0.07;
+    const across = (z) => {                                               // tile surface height over the pan plane at z
+      const ph = z / TILE - Math.round(z / TILE), dz = Math.abs(ph) * TILE;   // distance from the nearest cover-tile axis
+      return dz < CW ? CH * Math.sqrt(1 - (dz / CW) ** 2) : -0.008 * Math.sin(Math.PI * (dz - CW) / (TILE / 2 - CW));
+    };
     const parts = [];
     for (const sgn of [-1, 1]) {
-      const g = new THREE.PlaneGeometry(1, 1, NZ, NU);
-      const p = g.attributes.position, uv = g.attributes.uv;
-      const nx = sgn * Math.sin(TH), ny = Math.cos(TH);
-      for (let i = 0; i < p.count; i++) {
-        const v = p.getX(i) + 0.5, u = p.getY(i) + 0.5;               // v along z, u from eave (0) to ridge (1)
-        const z = Z0 + v * ZL;
-        const d = D0 + u * (slopeLen - 0.2 - D0);                      // distance up the slope from the eave line
-        const c = Math.cos((z / TILE) * Math.PI * 2);
-        const ridge = Math.pow(Math.max(0, c), 3) * 0.075;
-        const course = (1 - ((u * COURSES) % 1)) * 0.022;               // each course laps over the next
-        const off = 0.035 + ridge + course;
-        const x = sgn * (RUN - d * Math.cos(TH)), y = 7.48 + d * Math.sin(TH);
-        p.setXYZ(i, x + nx * off, y + ny * off, z);
-        uv.setXY(i, v * 3, u * 0.7);
+      const nx = sgn * Math.sin(TH), ny = Math.cos(TH), dl = (slopeLen - 0.2 - D0) / COURSES;
+      const at = (d, z, off) => new THREE.Vector3(sgn * (RUN - d * Math.cos(TH)) + nx * off, 7.48 + d * Math.sin(TH) + ny * off, z);
+      const pos = [], uv = [], idx = [];
+      const strip = (rowA, rowB, out) => {                                // quads between two rows, wound to face `out`
+        const b = pos.length / 3;
+        for (const r of [rowA, rowB]) for (const v of r) { pos.push(v.x, v.y, v.z); uv.push(v.z * 0.24, v.y * 0.3); }
+        const n = rowA.length, e1 = rowB[0].clone().sub(rowA[0]), e2 = rowA[1].clone().sub(rowA[0]), flip = e1.cross(e2).dot(out) < 0;
+        for (let j = 0; j < n - 1; j++) { const a = b + j, c = b + n + j; if (flip) idx.push(a, a + 1, c, c, a + 1, c + 1); else idx.push(a, c, a + 1, c, c + 1, a + 1); }
+      };
+      const OUT = new THREE.Vector3(nx, ny, 0), DOWN = new THREE.Vector3(sgn * Math.cos(TH), -Math.sin(TH), 0);
+      for (let c = 0; c < COURSES; c++) {
+        const d0 = D0 + c * dl, d1 = d0 + dl;
+        const zs = Array.from({ length: NZ + 1 }, (_, i) => Z0 + ZL * i / NZ);
+        // each tile tilts: its butt stands proud of the course below by LAP, its head tucks under the next course
+        const butt0 = zs.map((z) => at(d0, z, 0.028 + across(z))), butt1 = zs.map((z) => at(d0, z, 0.03 + LAP + across(z)));
+        const head = zs.map((z) => at(d1 + 0.001, z, 0.03 + across(z)));
+        strip(butt0, butt1, DOWN);
+        strip(butt1.map((v) => v.clone()), head, OUT);
       }
-      if (sgn > 0) g.index.array.reverse();                            // keep the faces pointing outward
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
       g.computeVertexNormals();
       parts.push(g);
     }

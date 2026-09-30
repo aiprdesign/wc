@@ -127,18 +127,56 @@ function drawLegal(ctx, W, H, seed, withBg) {
   }
   ctx.lineWidth = W * 0.002;
   ctx.beginPath(); ctx.moveTo(W * 0.5, H * 0.22); ctx.lineTo(W * 0.5, H * 0.86); ctx.stroke();
-  // seal
-  const sx = W * 0.5, sy = H * 0.92, sr = W * 0.085;
-  if (withBg) {
-    const g = ctx.createRadialGradient(sx - sr * 0.3, sy - sr * 0.3, sr * 0.1, sx, sy, sr);
-    g.addColorStop(0, '#b3302a'); g.addColorStop(1, '#5e1210');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(40,6,4,0.8)';
+  // ruled double border with a running meander (Greek key) band at head and foot, and corner rosettes
+  ctx.lineWidth = W * 0.004; ctx.strokeRect(W * 0.045, H * 0.03, W * 0.91, H * 0.94);
+  ctx.lineWidth = W * 0.0015; ctx.strokeRect(W * 0.06, H * 0.04, W * 0.88, H * 0.92);
+  const key = (y, s) => {
+    ctx.lineWidth = W * 0.0022; ctx.beginPath();
+    for (let x = W * 0.09; x < W * 0.91 - s; x += s) { ctx.moveTo(x, y + s * 0.8); ctx.lineTo(x, y); ctx.lineTo(x + s * 0.8, y); ctx.lineTo(x + s * 0.8, y + s * 0.6); ctx.lineTo(x + s * 0.3, y + s * 0.6); ctx.lineTo(x + s * 0.3, y + s * 0.3); ctx.lineTo(x + s * 0.55, y + s * 0.3); ctx.moveTo(x, y + s * 0.8); ctx.lineTo(x + s, y + s * 0.8); }
+    ctx.stroke();
+  };
+  key(H * 0.198 + W * 0.006, W * 0.026); key(H * 0.862, W * 0.026);
+  for (const [cx, cy] of [[W * 0.06, H * 0.04], [W * 0.94, H * 0.04], [W * 0.06, H * 0.96], [W * 0.94, H * 0.96]]) {
+    ctx.beginPath(); ctx.arc(cx, cy, W * 0.012, 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 8; k++) { const q = k * Math.PI / 4; ctx.beginPath(); ctx.arc(cx + Math.cos(q) * W * 0.02, cy + Math.sin(q) * W * 0.02, W * 0.006, 0, Math.PI * 2); ctx.fill(); }
   }
-  ctx.lineWidth = W * 0.005;
-  ctx.beginPath(); ctx.arc(sx, sy, sr * 0.72, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = withBg ? 'rgba(40,6,4,0.85)' : ink; ctx.textAlign = 'center';
-  ctx.font = `700 ${W * 0.045}px "${FONTS.display}"`; ctx.fillText('LEX', sx, sy + W * 0.004);
+  // witnesses' subscriptions either side of the seal
+  ctx.font = `600 ${W * 0.024}px "${FONTS.display}"`; ctx.textAlign = 'center';
+  for (const sx of [0.24, 0.76]) {
+    ctx.fillText(sx < 0.5 ? 'TESTES' : 'SIGNATORES', W * sx, H * 0.9);
+    ctx.lineWidth = W * 0.0025; ctx.beginPath();
+    for (let k = 0; k < 2; k++) { const y = H * (0.925 + k * 0.022); ctx.moveTo(W * (sx - 0.12), y); for (let j = 1; j <= 12; j++) ctx.lineTo(W * (sx - 0.12 + j * 0.02), y + Math.sin(j * 2.1 + seed + k * 3) * H * 0.005 - (j % 3 === 0 ? H * 0.006 : 0)); }
+    ctx.stroke();
+  }
+  // seal: two silk tapes running out beneath a wax seal with an irregular poured edge, a raised rim, a
+  // beaded ring, a laurel wreath and the legend
+  const sx = W * 0.5, sy = H * 0.915, sr = W * 0.085, rs = rng(seed * 7 + 3);
+  const tape = (dir) => { ctx.beginPath(); ctx.moveTo(sx + dir * sr * 0.2, sy); ctx.lineTo(sx + dir * sr * 1.35, sy + sr * 0.62); ctx.lineTo(sx + dir * sr * 1.15, sy + sr * 0.7); ctx.lineTo(sx + dir * sr * 1.12, sy + sr * 0.95); ctx.lineTo(sx + dir * sr * 0.8, sy + sr * 0.72); ctx.lineTo(sx - dir * sr * 0.1, sy + sr * 0.2); ctx.closePath(); };
+  for (const dir of [-1, 1]) { tape(dir); if (withBg) { ctx.fillStyle = '#7a1f1a'; ctx.fill(); ctx.strokeStyle = 'rgba(40,6,4,0.7)'; ctx.lineWidth = W * 0.002; ctx.stroke(); } else { ctx.lineWidth = W * 0.003; ctx.stroke(); } }
+  const lobes = Array.from({ length: 7 }, () => rs() * Math.PI * 2);
+  ctx.beginPath();
+  for (let k = 0; k <= 72; k++) { const q = k / 72 * Math.PI * 2; let rr = sr * (1 + 0.035 * Math.sin(q * 5 + lobes[0]) + 0.025 * Math.sin(q * 9 + lobes[1])); for (const l of lobes.slice(2)) rr += sr * 0.06 * Math.max(0, Math.cos(q - l)) ** 12; k ? ctx.lineTo(sx + Math.cos(q) * rr, sy + Math.sin(q) * rr) : ctx.moveTo(sx + Math.cos(q) * rr, sy + Math.sin(q) * rr); }
+  ctx.closePath();
+  if (withBg) {
+    const g = ctx.createRadialGradient(sx - sr * 0.3, sy - sr * 0.3, sr * 0.1, sx, sy, sr * 1.1);
+    g.addColorStop(0, '#c23a30'); g.addColorStop(0.6, '#8e1d17'); g.addColorStop(1, '#4e0f0c');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,190,170,0.35)'; ctx.lineWidth = W * 0.004;                     // raised rim catching the light
+    ctx.beginPath(); ctx.arc(sx, sy, sr * 0.8, Math.PI * 1.05, Math.PI * 1.75); ctx.stroke();
+    ctx.strokeStyle = 'rgba(40,6,4,0.8)';
+  } else { ctx.lineWidth = W * 0.004; ctx.stroke(); }
+  const deep = withBg ? 'rgba(40,6,4,0.85)' : ink;
+  ctx.lineWidth = W * 0.005; ctx.strokeStyle = deep;
+  ctx.beginPath(); ctx.arc(sx, sy, sr * 0.76, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = deep;
+  for (let k = 0; k < 28; k++) { const q = k / 28 * Math.PI * 2; ctx.beginPath(); ctx.arc(sx + Math.cos(q) * sr * 0.66, sy + Math.sin(q) * sr * 0.66, sr * 0.035, 0, Math.PI * 2); ctx.fill(); }
+  for (const dir of [-1, 1]) for (let k = 0; k < 6; k++) {                                   // laurel sprays
+    const q = Math.PI / 2 + dir * (0.5 + k * 0.32), lx = sx + Math.cos(q) * sr * 0.5, ly = sy + Math.sin(q) * sr * 0.5;
+    ctx.save(); ctx.translate(lx, ly); ctx.rotate(q + dir * 0.9); ctx.beginPath(); ctx.ellipse(0, 0, sr * 0.1, sr * 0.04, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${W * 0.04}px "${FONTS.display}"`; ctx.fillText('LEX', sx, sy - sr * 0.08);
+  ctx.font = `600 ${W * 0.022}px "${FONTS.display}"`; ctx.fillText('S·P·Q·R', sx, sy + sr * 0.24);
 }
 function legalDoc(seed) {
   const W = 512, H = 768;
@@ -188,6 +226,137 @@ function bakeParts(list) {
     n.scale(sx, sy, sz); n.rotateY(ry); n.translate(x, y, z);
     return n;
   }));
+}
+
+// ---- architectural detail -------------------------------------------------------------------------------
+// Every part below is baked with the rest of its building into one mesh per material (bakeParts), so the
+// detail costs draw calls nothing.
+const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+// Fluted shaft from y = 0 to h: concave flutes meeting in sharp arrises (each flute its own vertex strip, so
+// the normals break at the arris), a taper from r0 to r1 and a slight entasis.
+function flutedShaft(r0, r1, h, flutes = 20, M = 3) {
+  const rows = [0, 0.33, 0.66, 1], dA = Math.PI * 2 / flutes, pos = [], uv = [], idx = [];
+  for (let f = 0; f < flutes; f++) {
+    const b = pos.length / 3;
+    for (const u of rows) {
+      const r = lerp(r0, r1, u) + r0 * 0.02 * Math.sin(Math.PI * u), dep = r * 0.07;
+      for (let s = 0; s <= M; s++) { const a = (f + s / M) * dA, t = 2 * s / M - 1, rr = r - dep * (1 - t * t); pos.push(Math.cos(a) * rr, u * h, Math.sin(a) * rr); uv.push(a / (Math.PI * 2), u); }
+    }
+    for (let k = 0; k < rows.length - 1; k++) for (let s = 0; s < M; s++) { const a = b + k * (M + 1) + s, c = a + M + 1; idx.push(a, c, a + 1, c, c + 1, a + 1); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+const bez = (p0, p1, p2, p3, u) => { const v = 1 - u; return v * v * v * p0 + 3 * v * v * u * p1 + 3 * v * u * u * p2 + u * u * u * p3; };
+// Greek Doric capital on a shaft top of radius rt at y0: annulets, a taut echinus, the square abacus.
+function doricCapital(rt, y0, h, abW) {
+  const hA = h * 0.36, e0 = y0 + h * 0.14, e1 = y0 + h - hA, r0 = rt * 1.07, r1 = abW * 0.48;
+  const pts = [[0, y0], [rt, y0], [rt * 1.035, y0 + h * 0.03], [rt * 1.035, y0 + h * 0.06], [rt * 1.055, y0 + h * 0.09], [rt * 1.055, y0 + h * 0.12], [r0, e0]];
+  for (let i = 1; i <= 6; i++) { const u = i / 6; pts.push([bez(r0, r0 + 0.55 * (r1 - r0), r1, r1, u), bez(e0, e0 + 0.42 * (e1 - e0), e0 + 0.8 * (e1 - e0), e1, u)]); }
+  pts.push([0, e1]);
+  return [lathe(pts, 16), new THREE.BoxGeometry(abW, hA, abW).translate(0, e1 + hA / 2, 0)];
+}
+// Corinthian capital on a shaft top of radius rt at y0: the bell (kalathos) with two rows of eight acanthus
+// leaves curling out, corner volutes, and the abacus with concave sides and its fleurons.
+function corinthianCapital(rt, y0, h) {
+  const parts = [], hb = h * 0.84, top = y0 + hb, hA = h - hb;
+  parts.push(lathe([[0, y0], [rt * 1.07, y0], [rt * 1.07, y0 + h * 0.05], [rt, y0 + h * 0.07], [rt * 1.02, y0 + h * 0.35], [rt * 1.1, y0 + h * 0.62], [rt * 1.22, y0 + h * 0.8], [rt * 1.3, top], [0, top]], 16));
+  for (const [row, hh, off] of [[0, 0.4, 0], [1, 0.64, 0.5]]) for (let k = 0; k < 8; k++) {
+    const a = (k + off) / 8 * Math.PI * 2, L = h * hh, w = rt * 0.66;
+    const lf = new THREE.BoxGeometry(w, L, rt * 0.12, 1, 3, 1), p = lf.attributes.position;
+    for (let i = 0; i < p.count; i++) { const v = p.getY(i) / L + 0.5; p.setX(i, p.getX(i) * (1 - 0.6 * v * v)); p.setZ(i, p.getZ(i) + rt * 0.32 * v * v * v); }
+    lf.computeVertexNormals();
+    lf.translate(0, L / 2 + y0 + h * 0.06, rt * (row ? 1.0 : 1.04)); lf.rotateY(a);
+    parts.push(lf);
+  }
+  for (let k = 0; k < 4; k++) {                                               // corner volutes (helices)
+    const a = Math.PI / 4 + k * Math.PI / 2;
+    parts.push(new THREE.TorusGeometry(rt * 0.16, rt * 0.07, 4, 10).translate(0, top - h * 0.1, rt * 1.36).rotateY(a));
+  }
+  const s = rt * 1.55, c = rt * 1.3, e = s * 0.2, q = 2 * c - s, sh = new THREE.Shape();
+  sh.moveTo(s, -(s - e)); sh.quadraticCurveTo(q, 0, s, s - e); sh.lineTo(s - e, s); sh.quadraticCurveTo(0, q, -(s - e), s); sh.lineTo(-s, s - e);
+  sh.quadraticCurveTo(-q, 0, -s, -(s - e)); sh.lineTo(-(s - e), -s); sh.quadraticCurveTo(0, -q, s - e, -s); sh.closePath();
+  const ab = new THREE.ExtrudeGeometry(sh, { depth: hA, bevelEnabled: false, curveSegments: 6 }); ab.rotateX(-Math.PI / 2); ab.translate(0, top, 0);
+  parts.push(ab);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; parts.push(new THREE.SphereGeometry(rt * 0.13, 6, 4).translate(Math.sin(a) * c, top + hA * 0.5, Math.cos(a) * c)); }
+  return parts;
+}
+// Attic base (square plinth, torus, scotia, torus) under a shaft of radius r, from y0 to y0 + h.
+function atticBase(r, y0, h) {
+  const hp = h * 0.32, y1 = y0 + hp, t = h - hp, P = [[0, y1]];
+  for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + i / 5 * Math.PI; P.push([r * 1.14 + Math.cos(a) * t * 0.2, y1 + t * 0.2 + Math.sin(a) * t * 0.2]); }
+  P.push([r * 1.05, y1 + t * 0.42], [r * 0.99, y1 + t * 0.52], [r * 1.04, y1 + t * 0.62]);
+  for (let i = 0; i <= 4; i++) { const a = -Math.PI / 2 + i / 4 * Math.PI; P.push([r * 1.05 + Math.cos(a) * t * 0.13, y1 + t * 0.75 + Math.sin(a) * t * 0.13]); }
+  P.push([r * 1.01, y0 + h], [0, y0 + h]);
+  return [new THREE.BoxGeometry(r * 2.75, hp, r * 2.75).translate(0, y0 + hp / 2, 0), lathe(P, 16)];
+}
+// Quads between consecutive cross-sections; a moulding run round a rectangle (profile [[out, y], ...] bottom → top).
+function loft(sections) {
+  const np = sections[0].length, pos = [], idx = [];
+  for (const s of sections) for (const v of s) pos.push(v.x, v.y, v.z);
+  for (let k = 0; k < sections.length - 1; k++) for (let j = 0; j < np - 1; j++) { const a = k * np + j, b = a + np; idx.push(a, b, b + 1, a, b + 1, a + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g.toNonIndexed();
+}
+function ringMoulding(profile, hx, hz) {
+  const C = [[-1, 1], [1, 1], [1, -1], [-1, -1]];
+  const sec = (c) => profile.map(([o, y]) => new THREE.Vector3(c[0] * (hx + o), y, c[1] * (hz + o)));
+  return mergeGeometries(C.map((c, s) => loft([sec(c), sec(C[(s + 1) % 4])])));
+}
+// Window facing +z, centred on the origin: a glazed pane with glazing bars, a moulded surround (architrave),
+// a sill on brackets, and a head: 'tri' (pediment), 'seg' (segmental pediment), 'flat' (cornice), 'arch'
+// (round-headed, with a keystone). Returns { frame: [geos], glass: [geos] }.
+function windowUnit(w, h, head = 'flat') {
+  const f = Math.max(0.01, w * 0.13), d = 0.012, frame = [], glass = [];
+  const bx = (W, H, D, x, y, z) => frame.push(new THREE.BoxGeometry(W, H, D).translate(x, y, z));
+  if (head === 'arch') {
+    const sh = new THREE.Shape(); sh.moveTo(-w / 2, -h / 2); sh.lineTo(w / 2, -h / 2); sh.lineTo(w / 2, h / 2 - w / 2); sh.absarc(0, h / 2 - w / 2, w / 2, 0, Math.PI, false); sh.closePath();
+    glass.push(new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: false, curveSegments: 8 }));
+    const ring = new THREE.Shape(); ring.absarc(0, h / 2 - w / 2, w / 2 + f, 0, Math.PI, false); ring.lineTo(-w / 2, h / 2 - w / 2); ring.absarc(0, h / 2 - w / 2, w / 2, Math.PI, 0, true); ring.closePath();
+    frame.push(new THREE.ExtrudeGeometry(ring, { depth: d, bevelEnabled: false, curveSegments: 8 }));
+    for (const sx of [-1, 1]) bx(f, h - w / 2, d, sx * (w / 2 + f / 2), -w / 4, d / 2);
+    bx(f * 1.1, f * 1.6, d * 1.5, 0, h / 2 + f * 0.5, d * 0.75);                                    // keystone
+    bx(w * 0.05, h - w / 2, 0.006, 0, -w / 4, 0.006);
+  } else {
+    glass.push(new THREE.BoxGeometry(w, h, 0.004).translate(0, 0, 0.002));
+    bx(w + 2 * f, f, d, 0, h / 2 + f / 2, d / 2); bx(w + 2 * f, f, d, 0, -h / 2 - f / 2, d / 2);
+    for (const sx of [-1, 1]) bx(f, h, d, sx * (w / 2 + f / 2), 0, d / 2);
+    bx(w * 0.06, h, 0.006, 0, 0, 0.006); for (const k of [-1, 1]) bx(w, w * 0.05, 0.006, 0, k * h / 6, 0.006);   // glazing bars
+    const yh = h / 2 + f, W = w + 2 * f + 0.02;
+    bx(W - 0.01, f * 0.9, d * 0.8, 0, yh + f * 0.45, d * 0.4);                                       // frieze
+    bx(W, f * 0.7, d * 2.2, 0, yh + f * 1.25, d * 1.1);                                              // cornice
+    if (head === 'tri' || head === 'seg') {
+      const sh = new THREE.Shape(), rise = W * (head === 'tri' ? 0.24 : 0.2);
+      sh.moveTo(-W / 2, 0); sh.lineTo(W / 2, 0);
+      if (head === 'tri') sh.lineTo(0, rise); else sh.quadraticCurveTo(0, rise * 2, -W / 2, 0);
+      sh.closePath();
+      frame.push(new THREE.ExtrudeGeometry(sh, { depth: d * 2.2, bevelEnabled: false, curveSegments: 6 }).translate(0, yh + f * 1.6, 0));
+    }
+    bx(w + 2 * f + 0.024, f * 0.8, d * 2.6, 0, -h / 2 - f - f * 0.4, d * 1.3);                      // sill
+    for (const sx of [-1, 1]) bx(f * 0.7, f * 1.3, d * 1.8, sx * (w / 2 + f * 0.4), -h / 2 - f - f * 1.4, d * 0.9);   // brackets
+  }
+  return { frame, glass };
+}
+// Baluster (a vase-turned post) of height h; a balustrade along x (centred) of length L: plinth, balusters,
+// rail, with a pedestal at each end.
+const balusterGeo = (h) => lathe([[0, 0], [h * 0.17, 0], [h * 0.17, h * 0.08], [h * 0.1, h * 0.13], [h * 0.2, h * 0.36], [h * 0.09, h * 0.62], [h * 0.07, h * 0.72], [h * 0.12, h * 0.78], [h * 0.12, h * 0.86], [h * 0.16, h * 0.9], [h * 0.16, h], [0, h]], 6);
+function balustrade(L, h, pitch = h * 0.42) {
+  const out = [], bal = balusterGeo(h * 0.72), n = Math.max(2, Math.round((L - h * 0.5) / pitch));
+  out.push(new THREE.BoxGeometry(L, h * 0.14, h * 0.3).translate(0, h * 0.07, 0));
+  for (let i = 0; i < n; i++) out.push(bal.clone().translate(-L / 2 + h * 0.25 + (i + 0.5) * (L - h * 0.5) / n, h * 0.14, 0));
+  out.push(new THREE.BoxGeometry(L, h * 0.14, h * 0.32).translate(0, h * 0.93, 0));
+  for (const sx of [-1, 1]) out.push(new THREE.BoxGeometry(h * 0.34, h * 1.08, h * 0.36).translate(sx * (L / 2 - h * 0.17), h * 0.54, 0));
+  return out;
+}
+// Aisle stairs up a stepped hemicycle: half-height steps in the back half of every tread, along each angle.
+function aisleSteps(parts, r0, steps, run, rise, x0, z0, phis) {
+  for (const phi of phis) for (let i = 0; i < steps - 1; i++) {
+    const r = r0 + i * run + run * 0.75;
+    parts.push([new THREE.BoxGeometry(run * 0.62, rise / 2, run / 2), x0 + Math.sin(phi) * r, (i + 1) * rise + rise / 4, z0 + Math.cos(phi) * r, phi]);
+  }
 }
 
 // The bloom duck the film applies while a chapter heading is up (core/words3d.js). Explore hides the
@@ -260,32 +429,51 @@ export function create(ctx, segment) {
   const marbleMap = marbleTexture({ seed: 12 });
   const greekMat = withDissolve(new THREE.MeshPhysicalMaterial({ color: '#e9e0d0', roughness: 0.42, clearcoat: 0.2, emissive: '#000000', side: THREE.DoubleSide }), '#ffc070', 'greek');
   const hemi = hemicycleGeometry(1.1, 7, 0.3, 0.14);
-  const colG = new THREE.CylinderGeometry(0.075, 0.09, 1.35, 16);
   const greekParts = [[hemi, 0, 0, 0]];
+  aisleSteps(greekParts, 1.1, 7, 0.3, 0.14, 0, 0, [Math.PI * 0.62, Math.PI * 0.81, Math.PI, Math.PI * 1.19, Math.PI * 1.38]);
   greekParts.push([new THREE.CylinderGeometry(0.42, 0.5, 0.36, 24), 0, 0.18, 0.2]);     // bema
-  greekParts.push([new THREE.BoxGeometry(8.2, 0.16, 1.3), 0, 0.08, -4.1]);              // stylobate
-  for (let i = 0; i < 15; i++) greekParts.push([colG, -3.85 + i * 0.55, 0.16 + 0.675, -3.75]);
-  greekParts.push([new THREE.BoxGeometry(8.1, 0.2, 0.3), 0, 1.61, -3.75]);             // architrave
-  greekParts.push([new THREE.BoxGeometry(8.3, 0.1, 1.4), 0, 1.76, -4.1]);              // roof slab
-  greekParts.push([new THREE.BoxGeometry(8.2, 1.6, 0.12), 0, 0.96, -4.72]);             // back wall
-  // dressing: capitals + bases on the colonnade, a second step, frieze blocks, a lean-to tiled roof,
-  // end walls, and the speakers' steps up to the bema
+  greekParts.push([lathe([[0.5, 0.36], [0.46, 0.36], [0.46, 0.39], [0.44, 0.4], [0, 0.4]], 24), 0, 0, 0.2]);   // its moulded rim
+  for (let k = 0; k < 3; k++) greekParts.push([new THREE.BoxGeometry(0.5 - k * 0.1, 0.12, 0.14), 0, 0.06 + k * 0.12, 0.72 - k * 0.1]);   // speakers' steps
+  // the stoa: a Doric colonnade on a three-stepped crepidoma, fluted shafts without bases, annulets, echinus and
+  // abacus; architrave with taenia and regulae, a triglyph frieze, a geison with mutules and a sima; a lean-to
+  // roof of pan and cover tiles with antefixes along the eaves; back wall and end walls with antae
+  [[8.6, 0.055, 1.75, 0.0275, -4.08], [8.4, 0.055, 1.55, 0.0825, -4.1], [8.2, 0.05, 1.35, 0.135, -4.1]].forEach(([w, h, d, y, z]) => greekParts.push([new THREE.BoxGeometry(w, h, d), 0, y, z]));
   {
-    const capG = new THREE.BoxGeometry(0.21, 0.05, 0.21), echG = new THREE.CylinderGeometry(0.105, 0.078, 0.05, 16), baseG = new THREE.CylinderGeometry(0.11, 0.115, 0.05, 16);
-    for (let i = 0; i < 15; i++) {
-      const x = -3.85 + i * 0.55;
-      greekParts.push([capG, x, 1.485, -3.75], [echG, x, 1.44, -3.75], [baseG, x, 0.185, -3.75]);
+    const shaftG = flutedShaft(0.09, 0.072, 1.24, 20, 3), capG = doricCapital(0.072, 1.24, 0.11, 0.21);
+    for (let i = 0; i < 15; i++) { const x = -3.85 + i * 0.55; greekParts.push([shaftG, x, 0.16, -3.75]); for (const g of capG) greekParts.push([g, x, 0.16, -3.75]); }
+    greekParts.push([new THREE.BoxGeometry(8.1, 0.09, 0.24), 0, 1.555, -3.77]);                 // architrave
+    greekParts.push([new THREE.BoxGeometry(8.12, 0.015, 0.25), 0, 1.6075, -3.765]);             // taenia
+    greekParts.push([new THREE.BoxGeometry(8.08, 0.105, 0.2), 0, 1.6675, -3.8]);                // frieze (metope plane)
+    const tri = [], regula = new THREE.BoxGeometry(0.12, 0.012, 0.012), gutta = new THREE.CylinderGeometry(0.005, 0.006, 0.01, 5);
+    for (const gx of [-0.04, 0, 0.04]) tri.push(new THREE.BoxGeometry(0.026, 0.1, 0.022).translate(gx, 0, 0));      // glyph bars
+    for (const sx of [-1, 1]) tri.push(new THREE.BoxGeometry(0.01, 0.1, 0.018).translate(sx * 0.055, 0, 0));        // half-glyphs
+    tri.push(new THREE.BoxGeometry(0.13, 0.014, 0.026).translate(0, 0.052, 0));                                     // capital band
+    for (let i = 0; i < 29; i++) {
+      const x = -3.85 + i * 0.275;
+      for (const g of tri) greekParts.push([g, x, 1.665, -3.69]);
+      greekParts.push([regula, x, 1.594, -3.644]);
+      for (let k = 0; k < 6; k++) greekParts.push([gutta, x - 0.05 + k * 0.02, 1.583, -3.644]);
+      greekParts.push([new THREE.BoxGeometry(0.1, 0.012, 0.08), x, 1.719, -3.6], [new THREE.BoxGeometry(0.1, 0.012, 0.08), x + 0.1375, 1.719, -3.6]);   // mutules
     }
-    greekParts.push([new THREE.BoxGeometry(8.6, 0.08, 1.7), 0, 0.04, -4.05]);            // euthynteria step
-    const triG = new THREE.BoxGeometry(0.12, 0.16, 0.04);
-    for (let i = 0; i < 29; i++) greekParts.push([triG, -3.85 + i * 0.275, 1.61, -3.585]);
-    const roof = new THREE.BoxGeometry(8.5, 0.06, 1.62); roof.rotateX(0.2);
+    greekParts.push([new THREE.BoxGeometry(8.3, 0.055, 0.42), 0, 1.752, -3.76]);                // geison
+    greekParts.push([new THREE.BoxGeometry(8.32, 0.02, 0.02), 0, 1.786, -3.55]);                // hawksbeak crown
+    greekParts.push([new THREE.BoxGeometry(8.3, 0.1, 1.1), 0, 1.76, -4.25]);                    // ceiling
+    const roof = new THREE.BoxGeometry(8.5, 0.05, 1.62); roof.rotateX(0.2);
     greekParts.push([roof, 0, 1.97, -4.12], [new THREE.BoxGeometry(8.2, 0.42, 0.12), 0, 1.96, -4.72]);
-    for (const x of [-4.06, 4.06]) greekParts.push([new THREE.BoxGeometry(0.12, 1.6, 1.1), x, 0.96, -4.2]);
-    for (let k = 0; k < 3; k++) greekParts.push([new THREE.BoxGeometry(0.5 - k * 0.1, 0.12, 0.14), 0, 0.06 + k * 0.12, 0.72 - k * 0.1]);
+    const cover = new THREE.CylinderGeometry(0.02, 0.02, 1.62, 6, 1, false, -Math.PI / 2, Math.PI); cover.rotateX(-Math.PI / 2); cover.rotateX(0.2);
+    const ante = new THREE.ExtrudeGeometry((() => { const sh = new THREE.Shape(); sh.moveTo(-0.028, 0); sh.lineTo(0.028, 0); for (let k = 0; k <= 6; k++) { const a = k / 6 * Math.PI; sh.lineTo(Math.cos(a) * (k % 2 ? 0.03 : 0.042), 0.012 + Math.sin(a) * (k % 2 ? 0.03 : 0.042)); } sh.closePath(); return sh; })(), { depth: 0.006, bevelEnabled: false });
+    for (let i = 0; i < 70; i++) {
+      const x = -4.19 + i * (8.38 / 69);
+      greekParts.push([cover, x, 1.997, -4.12]);
+      greekParts.push([ante, x, 1.8, -3.325]);
+    }
+    for (const x of [-4.06, 4.06]) {
+      greekParts.push([new THREE.BoxGeometry(0.12, 1.6, 1.1), x, 0.96, -4.2]);
+      greekParts.push([new THREE.BoxGeometry(0.16, 1.24, 0.16), x, 0.78, -3.7]);                // anta
+      greekParts.push([new THREE.BoxGeometry(0.19, 0.06, 0.19), x, 1.43, -3.7]);                // anta capital
+    }
   }
   const greekGeo = bakeParts(greekParts);
-  greekGeo.computeVertexNormals();
   const greek = new THREE.Mesh(greekGeo, greekMat);
   scene.add(greek);
 
@@ -314,93 +502,196 @@ export function create(ctx, segment) {
   // ---------------------------------------------------------------- Parliament (dome, drum, portico, hemicycle)
   const parlMat = withDissolve(new THREE.MeshPhysicalMaterial({ color: '#efe7da', roughness: 0.34, clearcoat: 0.3, emissive: '#000000', side: THREE.DoubleSide }), '#ffd08a', 'parl');
   const domeGoldMat = withDissolve(new THREE.MeshStandardMaterial({ color: '#d9a85a', metalness: 1, roughness: 0.42, emissive: '#000000', envMapIntensity: 0.6 }), '#ffe0a0', 'dome');
-  const parlParts = [
-    [new THREE.BoxGeometry(3.4, 0.95, 2.6), 0, 0.475, -1.9],
-    [new THREE.BoxGeometry(3.6, 0.08, 2.8), 0, 0.99, -1.9],
-    [new THREE.BoxGeometry(1.9, 0.7, 2.0), -2.6, 0.35, -2.0],
-    [new THREE.BoxGeometry(1.9, 0.7, 2.0), 2.6, 0.35, -2.0],
-    [new THREE.BoxGeometry(2.05, 0.07, 2.12), -2.6, 0.735, -2.0],
-    [new THREE.BoxGeometry(2.05, 0.07, 2.12), 2.6, 0.735, -2.0],
-    [new THREE.BoxGeometry(7.4, 0.08, 2.9), 0, 0.04, -1.9],
-    [new THREE.BoxGeometry(2.0, 0.1, 0.5), 0, 0.05, 0.55],
-    [new THREE.BoxGeometry(1.8, 0.1, 0.4), 0, 0.15, 0.5],
-    [new THREE.BoxGeometry(1.6, 0.1, 0.3), 0, 0.25, 0.45],
-    [new THREE.CylinderGeometry(1.62, 1.7, 0.22, 48), 0, 1.14, -1.9],
-    [new THREE.CylinderGeometry(1.2, 1.2, 0.95, 48), 0, 1.72, -1.9],
-    [new THREE.CylinderGeometry(1.62, 1.62, 0.16, 48), 0, 2.28, -1.9],
-    [new THREE.CylinderGeometry(1.28, 1.34, 0.28, 48), 0, 2.5, -1.9],
-    // portico (ground level, so the drum colonnade stays visible above it)
-    [new THREE.BoxGeometry(2.2, 0.1, 0.9), 0, 0.3, -0.25],
-    [new THREE.BoxGeometry(2.2, 0.14, 0.9), 0, 1.02, -0.25],
-  ];
-  for (let i = 0; i < 6; i++) parlParts.push([new THREE.CylinderGeometry(0.055, 0.065, 0.62, 14), -0.9 + i * 0.36, 0.66, 0.1]);
-  for (const sx of [-1, 1]) for (let i = 0; i < 7; i++) parlParts.push([new THREE.BoxGeometry(0.07, 0.56, 0.05), sx * (1.8 + i * 0.26), 0.36, -0.98]);
-  for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) parlParts.push([new THREE.BoxGeometry(0.16, 0.26, 0.04), sx * (0.55 + i * 0.28), 0.62, -0.58]);
-  const ped = new THREE.CylinderGeometry(0.62, 0.62, 2.3, 3, 1); ped.rotateZ(Math.PI / 2); ped.scale(1, 0.42, 0.75);
-  parlParts.push([ped, 0, 1.22, -0.25]);
-  // dressing: portico capitals + bases, cornices and parapets on the blocks, wing end pavilions,
-  // a balustrade rhythm along the main roof, and a lantern colonnade on top of the dome
-  {
-    const capG = new THREE.BoxGeometry(0.15, 0.04, 0.15), baseG = new THREE.CylinderGeometry(0.08, 0.085, 0.04, 14);
-    for (let i = 0; i < 6; i++) { const x = -0.9 + i * 0.36; parlParts.push([capG, x, 0.95, 0.1], [baseG, x, 0.37, 0.1]); }
-    parlParts.push([new THREE.BoxGeometry(3.7, 0.06, 2.9), 0, 0.935, -1.9]);                // main cornice
-    for (const z of [-0.53, -3.27]) parlParts.push([new THREE.BoxGeometry(3.5, 0.04, 0.07), 0, 1.05, z], [new THREE.BoxGeometry(3.5, 0.03, 0.08), 0, 1.155, z]);   // balustrade plinth + rail
-    for (const sx of [-1, 1]) {
-      parlParts.push([new THREE.BoxGeometry(2.1, 0.05, 2.15), sx * 2.6, 0.66, -2.0]);        // wing cornice
-      parlParts.push([new THREE.BoxGeometry(0.55, 0.9, 2.2), sx * 3.45, 0.45, -2.0]);        // end pavilions
-      parlParts.push([new THREE.BoxGeometry(0.62, 0.06, 2.28), sx * 3.45, 0.93, -2.0]);
-      parlParts.push([new THREE.BoxGeometry(0.62, 0.16, 0.08), sx * 3.45, 1.02, -0.9]);      // pavilion pediment block
-      for (let i = 0; i < 4; i++) parlParts.push([new THREE.BoxGeometry(0.07, 0.62, 0.06), sx * (3.25 + i * 0.13), 0.42, -0.88]);
+  // the drum colonnade's angles are set by the closing camera (the letters of REPRESENTATION land on it)
+  const DRUM_C = V(0, 1.72, -1.9), DRUM_R = 1.46, NCOL = 22;
+  const camP = new THREE.Vector3(), camL = new THREE.Vector3();
+  camAt(DUR, camP, camL);
+  const viewAng = Math.atan2(camP.x - DRUM_C.x, camP.z - DRUM_C.z);
+  const colAng = (i) => viewAng + ((i + 0.5) / NCOL) * Math.PI * 2 - Math.PI;
+
+  // A neoclassical parliament: rusticated base course, piano nobile with pilasters and pedimented windows,
+  // entablatures with dentil cornices and balustrades; a hexastyle Corinthian portico with its pediment and
+  // stairs; wings and end pavilions; the drum (stepped podium, colonnade, arched windows, entablature,
+  // balustrade, attic), the ribbed gilded dome and a glazed lantern with its cupola and finial.
+  const parlParts = [], wins = [];
+  const put = (g, x = 0, y = 0, z = 0, ry = 0) => parlParts.push([g, x, y, z, ry]);
+  const putAll = (gs, x = 0, y = 0, z = 0, ry = 0) => { for (const g of gs) put(g, x, y, z, ry); };
+  const box = (w, h, d, x, y, z) => put(new THREE.BoxGeometry(w, h, d), x, y, z);
+  const winAt = (u, x, y, z, ry = 0) => { putAll(u.frame, x, y, z, ry); for (const g of u.glass) wins.push([g, x, y, z, ry]); };
+  // entablature profile [[out, y], ...] from yb, h high: two-fascia architrave, frieze, dentil band, corona, cyma
+  const entab = (yb, h) => { const k = (v) => yb + v * h; return [[0, k(0)], [0.005, k(0)], [0.005, k(0.18)], [0.008, k(0.2)], [0.008, k(0.38)], [0.003, k(0.42)], [0.003, k(0.64)], [0.014, k(0.72)], [0.014, k(0.72)], [0.044, k(0.78)], [0.048, k(0.8)], [0.048, k(0.9)], [0.054, k(0.94)], [0.058, k(1)], [0, k(1)]]; };
+  const dentilG = new THREE.BoxGeometry(0.011, 0.012, 0.012);
+  const dentilRing = (cx, cz, hx, hz, y, sides) => {
+    const n = (L) => Math.max(1, Math.round(L / 0.024)), o = 0.009;
+    for (const sd of sides) {
+      const along = sd === 'F' || sd === 'B', L = 2 * (along ? hx : hz), c = n(L);
+      for (let i = 0; i < c; i++) {
+        const u = -L / 2 + (i + 0.5) * L / c;
+        if (sd === 'F') put(dentilG, cx + u, y, cz + hz + o); else if (sd === 'B') put(dentilG, cx + u, y, cz - hz - o);
+        else put(dentilG, cx + (sd === 'R' ? hx + o : -hx - o), y, cz + u, Math.PI / 2);
+      }
     }
-    const postG = new THREE.CylinderGeometry(0.016, 0.022, 0.075, 6);
-    for (let i = 0; i < 24; i++) for (const z of [-0.53, -3.27]) parlParts.push([postG, -1.62 + i * (3.24 / 23), 1.105, z]);
-    const lanCol = new THREE.CylinderGeometry(0.016, 0.018, 0.2, 6);
-    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; parlParts.push([lanCol, Math.sin(a) * 0.2, 4.0, -1.9 + Math.cos(a) * 0.2]); }
+  };
+  const plinthRing = (hx, hz, x, z, y0 = 0.08) => put(ringMoulding([[0.028, y0], [0.028, y0 + 0.032], [0.012, y0 + 0.042], [0.012, y0 + 0.05], [0, y0 + 0.06]], hx, hz), x, 0, z);
+  const pilaster = (x, z, y0, y1, w = 0.05, ry = 0) => {
+    const d = 0.016, g = [new THREE.BoxGeometry(w + 0.012, 0.02, d + 0.008).translate(0, y0 + 0.01, (d + 0.008) / 2), new THREE.BoxGeometry(w, y1 - y0 - 0.05, d).translate(0, (y0 + y1) / 2 - 0.005, d / 2),
+      new THREE.BoxGeometry(w + 0.016, 0.012, d + 0.01).translate(0, y1 - 0.024, (d + 0.01) / 2), new THREE.BoxGeometry(w + 0.024, 0.014, d + 0.014).translate(0, y1 - 0.007, (d + 0.014) / 2)];
+    putAll(g, x, 0, z, ry);
+  };
+  // raking cornice + roof slopes of a pediment over [-hw, hw] at yb (front face at zf, depth dz back from it)
+  const pediment = (cx, yb, zf, hw, rise, dz) => {
+    const sh = new THREE.Shape([new THREE.Vector2(-hw + 0.02, 0), new THREE.Vector2(hw - 0.02, 0), new THREE.Vector2(0, rise - 0.01)]);
+    put(new THREE.ExtrudeGeometry(sh, { depth: dz, bevelEnabled: false }), cx, yb, zf - 0.018 - dz);          // tympanum (recessed)
+    const th = Math.atan2(rise, hw), L = Math.hypot(hw, rise) + 0.05;
+    for (const sg of [-1, 1]) {
+      const at = (g, oy, oz) => { g.rotateZ(-sg * th); put(g, cx + sg * hw / 2, yb + rise / 2 + oy / Math.cos(th), zf + oz); };
+      at(new THREE.BoxGeometry(L, 0.028, dz + 0.06), 0.022, -dz / 2 + 0.02);                                   // raking geison + roof slope
+      at(new THREE.BoxGeometry(L, 0.022, 0.03), 0.048, 0.035);                                                 // raking sima
+      at(new THREE.BoxGeometry(L, 0.012, 0.014), 0.002, 0.012);                                                // bed moulding
+    }
+    for (const [x, y, s] of [[0, rise + 0.07, 1], [-hw, 0.05, 0.7], [hw, 0.05, 0.7]]) {                       // acroteria
+      put(new THREE.BoxGeometry(0.06 * s, 0.035 * s, 0.05 * s), cx + x, yb + y, zf + 0.02);
+      put(new THREE.SphereGeometry(0.03 * s, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.4, 0.5), cx + x, yb + y + 0.017 * s, zf + 0.02);
+    }
+  };
+
+  // podium of the whole building, with a moulded edge
+  box(7.4, 0.08, 2.9, 0, 0.04, -1.9);
+  put(ringMoulding([[0.02, 0], [0.02, 0.058], [0.008, 0.07], [0, 0.08]], 3.7, 1.45), 0, 0, -1.9);
+  // --- main block
+  box(3.4, 0.95, 2.6, 0, 0.475, -1.9);
+  box(3.4, 0.05, 2.6, 0, 0.97, -1.9);
+  plinthRing(1.7, 1.3, 0, -1.9);
+  put(ringMoulding([[0, 0.43], [0.01, 0.435], [0.01, 0.45], [0.004, 0.455], [0, 0.46]], 1.7, 1.3), 0, 0, -1.9);   // string course
+  put(ringMoulding(entab(0.845, 0.15), 1.7, 1.3), 0, 0, -1.9);
+  dentilRing(0, -1.9, 1.7, 1.3, 0.845 + 0.68 * 0.15, 'FLR');
+  {
+    const up = [windowUnit(0.12, 0.2, 'tri'), windowUnit(0.12, 0.2, 'seg')], low = windowUnit(0.11, 0.15, 'flat');
+    for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) {
+      const x = sx * (0.5 + i * 0.26);
+      winAt(up[i % 2], x, 0.64, -0.6); winAt(low, x, 0.27, -0.6);
+    }
+    for (let i = 0; i < 4; i++) for (const sx of [-1, 1]) pilaster(sx * (0.63 + i * 0.26), -0.6, 0.46, 0.845);
+    for (const sx of [-1, 1]) pilaster(sx * 1.655, -0.6, 0.46, 0.845, 0.07);
+    winAt(windowUnit(0.26, 0.44, 'arch'), 0, 0.57, -0.6);                                                    // great door behind the portico
   }
-  parlParts.push([hemicycleGeometry(0.7, 5, 0.22, 0.09), 0, 0, 2.55, 0]);
+  // balustrade round the main roof
+  for (const [L, x, z, ry] of [[3.3, 0, -0.63, 0], [3.3, 0, -3.17, 0], [2.5, 1.67, -1.9, Math.PI / 2], [2.5, -1.67, -1.9, Math.PI / 2]]) putAll(balustrade(L, 0.1), x, 0.995, z, ry);
+  // --- portico: stylobate, six Corinthian columns (and two returns) on Attic bases, entablature, pediment, stairs
+  box(2.2, 0.1, 0.9, 0, 0.3, -0.25);
+  put(ringMoulding([[0.01, 0.25], [0.01, 0.33], [0.004, 0.34], [0, 0.35]], 1.1, 0.45), 0, 0, -0.25);
+  {
+    const col = [...atticBase(0.046, 0.35, 0.035), flutedShaft(0.046, 0.039, 0.5, 24, 3).translate(0, 0.385, 0), ...corinthianCapital(0.039, 0.885, 0.105)];
+    for (let i = 0; i < 6; i++) putAll(col, -0.9 + i * 0.36, 0, 0.1);
+    for (const sx of [-1, 1]) putAll(col, sx * 0.9, 0, -0.3);
+  }
+  put(ringMoulding(entab(0.99, 0.13), 1.06, 0.4), 0, 0, -0.24);
+  box(2.12, 0.13, 0.8, 0, 1.055, -0.24);                                                                      // coffered soffit block
+  for (let i = 0; i < 5; i++) for (const k of [0, 1]) box(0.28, 0.012, 0.28, -0.72 + i * 0.36, 0.985, -0.04 - k * 0.36);   // coffers
+  dentilRing(0, -0.24, 1.06, 0.4, 0.99 + 0.68 * 0.13, 'FLR');
+  pediment(0, 1.12, 0.218, 1.12, 0.3, 0.84);
+  for (let k = 0; k < 5; k++) { const h = 0.07 * (k + 1), d = 0.08 * (5 - k); box(2.0, h, d, 0, h / 2, 0.2 + d / 2); }   // stairs
+  for (const sx of [-1, 1]) {                                                                                 // cheek blocks with urns
+    box(0.14, 0.42, 0.44, sx * 1.07, 0.21, 0.42); box(0.17, 0.03, 0.47, sx * 1.07, 0.435, 0.42);
+    put(lathe([[0, 0], [0.03, 0], [0.03, 0.01], [0.015, 0.02], [0.04, 0.055], [0.036, 0.075], [0.02, 0.085], [0.024, 0.09], [0, 0.092]], 10), sx * 1.07, 0.45, 0.42);
+  }
+  // --- wings
+  for (const sx of [-1, 1]) {
+    const cx = sx * 2.6;
+    box(1.9, 0.7, 2.0, cx, 0.35, -2.0); box(1.9, 0.02, 2.0, cx, 0.71, -2.0);
+    plinthRing(0.95, 1.0, cx, -2.0);
+    put(ringMoulding(entab(0.6, 0.12), 0.95, 1.0), cx, 0, -2.0);
+    dentilRing(cx, -2.0, 0.95, 1.0, 0.6 + 0.68 * 0.12, 'FB');
+    const up = [windowUnit(0.1, 0.18, 'tri'), windowUnit(0.1, 0.18, 'seg')], low = windowUnit(0.09, 0.08, 'flat');
+    for (let i = 0; i < 5; i++) { const x = sx * (1.93 + i * 0.26); winAt(up[i % 2], x, 0.4, -1.0); winAt(low, x, 0.2, -1.0); }
+    for (let i = 0; i < 6; i++) pilaster(sx * (1.8 + i * 0.26), -1.0, 0.14, 0.6, 0.045);
+    putAll(balustrade(1.8, 0.09), cx, 0.72, -1.03);
+  }
+  // --- end pavilions: engaged Corinthian columns framing a round-headed window, pediment
+  {
+    const col = [...atticBase(0.03, 0.14, 0.025), flutedShaft(0.03, 0.026, 0.545, 20, 3).translate(0, 0.165, 0), ...corinthianCapital(0.026, 0.71, 0.07)];
+    const arch = windowUnit(0.12, 0.32, 'arch'), low = windowUnit(0.1, 0.09, 'flat');
+    for (const sx of [-1, 1]) {
+      const cx = sx * 3.45;
+      box(0.55, 0.9, 2.2, cx, 0.45, -2.0); box(0.55, 0.01, 2.2, cx, 0.905, -2.0);
+      plinthRing(0.275, 1.1, cx, -2.0);
+      put(ringMoulding(entab(0.78, 0.13), 0.275, 1.1), cx, 0, -2.0);
+      dentilRing(cx, -2.0, 0.275, 1.1, 0.78 + 0.68 * 0.13, sx > 0 ? 'FR' : 'FL');
+      for (const dx of [-0.12, 0.12]) putAll(col, cx + dx, 0, -0.875);
+      for (const dx of [-0.245, 0.245]) pilaster(cx + dx, -0.9, 0.14, 0.78, 0.04);
+      winAt(arch, cx, 0.5, -0.9); winAt(low, cx, 0.235, -0.9);
+      pediment(cx, 0.91, -0.842, 0.33, 0.12, 0.3);
+    }
+  }
+  // --- drum: stepped podium, wall with arched windows between the columns, entablature, balustrade, attic
+  put(lathe([[0, 1.03], [1.72, 1.03], [1.72, 1.09], [1.7, 1.1], [1.68, 1.1], [1.68, 1.16], [1.66, 1.17], [1.64, 1.17], [1.64, 1.25], [0, 1.25]], 72), 0, 0, -1.9);
+  put(new THREE.CylinderGeometry(1.2, 1.2, 0.95, 72), 0, 1.72, -1.9);
+  put(lathe([[0, 2.2], [1.54, 2.2], [1.54, 2.23], [1.55, 2.232], [1.55, 2.255], [1.545, 2.26], [1.545, 2.3], [1.56, 2.31], [1.56, 2.31], [1.62, 2.33], [1.625, 2.335], [1.625, 2.35], [1.63, 2.355], [1.63, 2.36], [0, 2.36]], 96), 0, 0, -1.9);
+  put(lathe([[0, 2.36], [1.35, 2.36], [1.35, 2.39], [1.33, 2.4], [1.3, 2.4], [1.3, 2.6], [1.33, 2.61], [1.345, 2.625], [1.345, 2.64], [0, 2.64]], 96), 0, 0, -1.9);   // attic
+  {
+    const dw = windowUnit(0.11, 0.4, 'arch'), aw = windowUnit(0.07, 0.08, 'flat'), bal = balusterGeo(0.065);
+    for (let i = 0; i < NCOL; i++) {
+      const a = colAng(i) + Math.PI / NCOL;
+      winAt(dw, Math.sin(a) * 1.198, 1.7, -1.9 + Math.cos(a) * 1.198, a);
+      winAt(aw, Math.sin(a) * 1.298, 2.49, -1.9 + Math.cos(a) * 1.298, a);
+    }
+    for (let i = 0; i < 120; i++) { const a = i / 120 * Math.PI * 2; put(dentilG, Math.sin(a) * 1.554, 2.303, -1.9 + Math.cos(a) * 1.554, a); }
+    for (let i = 0; i < 90; i++) { const a = (i + 0.5) / 90 * Math.PI * 2; put(bal, Math.sin(a) * 1.58, 2.375, -1.9 + Math.cos(a) * 1.58); }
+    put(lathe([[1.55, 2.36], [1.61, 2.36], [1.61, 2.375], [1.55, 2.375]], 96), 0, 0, -1.9);                   // balustrade plinth
+    put(lathe([[1.555, 2.44], [1.605, 2.44], [1.608, 2.45], [1.605, 2.458], [1.555, 2.458], [1.555, 2.44]], 96), 0, 0, -1.9);   // rail
+  }
+  // --- lantern: base, glazed core ringed by colonnettes, entablature (the cupola and finial are gilded)
+  put(lathe([[0, 3.84], [0.34, 3.84], [0.34, 3.9], [0.32, 3.91], [0.3, 3.91], [0.3, 3.96], [0, 3.96]], 32), 0, 0, -1.9);
+  wins.push([new THREE.CylinderGeometry(0.17, 0.17, 0.2, 20), 0, 4.06, -1.9]);
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2, x = Math.sin(a) * 0.24, z = -1.9 + Math.cos(a) * 0.24;
+    put(new THREE.CylinderGeometry(0.011, 0.013, 0.18, 6), x, 4.05, z); put(new THREE.BoxGeometry(0.034, 0.02, 0.034), x, 4.15, z, a);
+  }
+  put(lathe([[0, 4.16], [0.27, 4.16], [0.27, 4.19], [0.29, 4.2], [0.29, 4.215], [0, 4.215]], 32), 0, 0, -1.9);
+  // hemicycle of the chamber in front, with its aisle stairs
+  put(hemicycleGeometry(0.7, 5, 0.22, 0.09), 0, 0, 2.55, 0);
+  aisleSteps(parlParts, 0.7, 5, 0.22, 0.09, 0, 2.55, [Math.PI * 0.7, Math.PI, Math.PI * 1.3]);
   const parlGeo = bakeParts(parlParts);
-  parlGeo.computeVertexNormals();
   const parl = new THREE.Mesh(parlGeo, parlMat);
   scene.add(parl);
   // windows: warm-lit glazing set into the facades (dissolves with the building)
   const winMat = withDissolve(new THREE.MeshStandardMaterial({ color: '#1a120b', roughness: 0.25, metalness: 0.2, emissive: new THREE.Color('#ffb45a'), emissiveIntensity: 0.55 }), '#ffd08a', 'win');
   winMat.userData.dissolve.uDissolve = parlMat.userData.dissolve.uDissolve;   // one dissolve front for the whole building
-  {
-    const wins = [], wG = new THREE.BoxGeometry(0.13, 0.22, 0.02), wS = new THREE.BoxGeometry(0.11, 0.16, 0.02);
-    for (let i = 0; i < 5; i++) for (const sx of [-1, 1]) wins.push([wG, sx * (0.55 + i * 0.28), 0.62, -0.555], [wS, sx * (0.55 + i * 0.28), 0.25, -0.59]);
-    for (const sx of [-1, 1]) for (let i = 0; i < 6; i++) wins.push([wS, sx * (1.93 + i * 0.26), 0.4, -0.99]);
-    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) wins.push([wS, sx * (3.31 + i * 0.13), 0.45, -0.885]);
-    const d = new THREE.BoxGeometry(0.32, 0.5, 0.02); wins.push([d, 0, 0.6, -0.585]);    // great door behind the portico
-    const winGeo = bakeParts(wins); winGeo.computeVertexNormals();
-    parl.add(new THREE.Mesh(winGeo, winMat));
-  }
+  parl.add(new THREE.Mesh(bakeParts(wins), winMat));
+  // the gilded dome: sixteen raised ribs, a ring at its springing, the lantern's cupola and finial
   const domeParts = [];
-  const domeG = new THREE.SphereGeometry(1.3, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2);
-  domeParts.push([domeG, 0, 2.62, -1.9]);
-  domeParts.push([new THREE.CylinderGeometry(0.16, 0.18, 0.42, 16), 0, 4.1, -1.9]);
-  domeParts.push([new THREE.SphereGeometry(0.17, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0, 4.3, -1.9]);
+  domeParts.push([new THREE.SphereGeometry(1.3, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2), 0, 2.62, -1.9]);
+  const RIB_H = 0.024;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2, T = V(Math.cos(a), 0, -Math.sin(a)), w = 0.022, secs = [];
+    const prof = [[w, 0], [w, RIB_H * 0.8], [w * 0.5, RIB_H], [-w * 0.5, RIB_H], [-w, RIB_H * 0.8], [-w, 0]];
+    for (let k = 0; k <= 24; k++) {
+      const e = (k / 24) * 1.34, N = V(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e));
+      secs.push(prof.map(([u, o]) => N.clone().multiplyScalar(1.297 + o).addScaledVector(T, u)));
+    }
+    domeParts.push([loft(secs), 0, 2.62, -1.9]);
+  }
+  domeParts.push([new THREE.TorusGeometry(1.302, 0.02, 6, 96).rotateX(Math.PI / 2), 0, 2.655, -1.9]);
+  domeParts.push([new THREE.SphereGeometry(0.22, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.1, 1), 0, 4.215, -1.9]);
+  domeParts.push([lathe([[0, 4.45], [0.03, 4.45], [0.02, 4.48], [0.04, 4.52], [0.02, 4.56], [0.008, 4.6], [0.004, 4.68], [0, 4.7]], 12), 0, 0, -1.9]);
   const domeGeo = bakeParts(domeParts);
-  domeGeo.computeVertexNormals();
   const dome = new THREE.Mesh(domeGeo, domeGoldMat);
   scene.add(dome);
-  // Gilded ribs traced over the dome as it materialises
+  // Gilded ribs traced over the dome as it materialises (riding on the raised ribs)
+  const RIB_R = 1.297 + RIB_H + 0.005;
   const ribs = [];
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2, pts = [];
-    for (let k = 0; k <= 24; k++) { const e = (k / 24) * Math.PI / 2; pts.push(V(Math.sin(a) * Math.cos(e) * 1.315, 2.62 + Math.sin(e) * 1.315, -1.9 + Math.cos(a) * Math.cos(e) * 1.315)); }
+    for (let k = 0; k <= 24; k++) { const e = (k / 24) * Math.PI / 2; pts.push(V(Math.sin(a) * Math.cos(e) * RIB_R, 2.62 + Math.sin(e) * RIB_R, -1.9 + Math.cos(a) * Math.cos(e) * RIB_R)); }
     const l = progressLine(pts, { color: '#ffd28a', headColor: '#fff4dc', intensity: 1.4, head: 0.06 });
     scene.add(l); ribs.push(l);
   }
-  // Drum colonnade (the letters of REPRESENTATION become these columns)
-  const DRUM_C = V(0, 1.72, -1.9), DRUM_R = 1.46, NCOL = 22;
+  // Drum colonnade (the letters of REPRESENTATION become these columns): Corinthian, fluted, on Attic bases
   const drumCols = [];
-  const drumColGeo = new THREE.CylinderGeometry(0.055, 0.065, 0.95, 14); drumColGeo.translate(0, 0.475, 0);
+  const drumColGeo = mergeGeometries([...atticBase(0.064, 0, 0.05), flutedShaft(0.062, 0.052, 0.8, 24, 3).translate(0, 0.05, 0), ...corinthianCapital(0.052, 0.85, 0.1)].map((g) => (g.index ? g.toNonIndexed() : g)));
   const drumColMat = new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f3ecdf', roughness: 0.3, clearcoat: 0.3, emissive: new THREE.Color('#ffc57a'), emissiveIntensity: 0 });
-  const camP = new THREE.Vector3(), camL = new THREE.Vector3();
-  camAt(DUR, camP, camL);
-  const viewAng = Math.atan2(camP.x - DRUM_C.x, camP.z - DRUM_C.z);
   for (let i = 0; i < NCOL; i++) {
-    const a = viewAng + ((i + 0.5) / NCOL) * Math.PI * 2 - Math.PI;
+    const a = colAng(i);
     const m = new THREE.Mesh(drumColGeo, drumColMat);
     m.position.set(DRUM_C.x + Math.sin(a) * DRUM_R, 1.25, DRUM_C.z + Math.cos(a) * DRUM_R);
     scene.add(m);
