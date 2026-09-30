@@ -61,6 +61,15 @@ export class Engine {
     }
     this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.renderer.setClearColor(0x000000, 1);
+    // GLSL pow(x, y) is undefined for x < 0: real GPUs return NaN, which the final scrub turns black, while
+    // software renderers return 0. Many effect shaders compute pow(1 - t, k) with t overshooting 1 by a
+    // hair at a rim (a light cone's base, a fade's end), which drew broken black arcs on some computers.
+    // Clamp every pow base at 0 in every shader the film compiles, at the source.
+    {
+      const gl = this.renderer.getContext(), src = gl.shaderSource.bind(gl);
+      const POW = '#define pow(a, b) pow(max((a), 0.0), (b))\n';
+      gl.shaderSource = (sh, code) => src(sh, code.startsWith('#version') ? code.replace(/^(#version[^\n]*\n)/, `$1${POW}`) : POW + code);
+    }
     // a shader that fails to compile on this GPU leaves its objects undrawn (missing geometry, missing
     // rays): log it, drop the optional surface detail (the usual culprit on tight GPUs), recompile all
     this.renderer.debug.onShaderError = (gl, program, vs, fs) => {

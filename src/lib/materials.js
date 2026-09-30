@@ -72,7 +72,7 @@ export function lightShaft({ length = 10, radiusTop = 0.3, radiusBottom = 3, col
     fragmentShader: /* glsl */ `uniform vec3 uColor; uniform float uIntensity, uTime; varying float vH; varying vec3 vN; varying vec3 vV; varying vec3 vP;
       void main(){
         float facing = pow(abs(dot(normalize(vN), normalize(vV))), 1.6);
-        float along = pow(1.0 - vH, 1.3) * smoothstep(0.0, 0.08, vH);
+        float along = pow(max(1.0 - vH, 0.0), 1.3) * smoothstep(0.0, 0.08, vH);   // (vH overshoots 1 at the rim: pow(<0) is NaN on GPUs)
         float streak = 0.8 + 0.2 * sin(atan(vP.z, vP.x) * 23.0 + uTime * 0.3) * sin(atan(vP.z, vP.x) * 7.0 - uTime * 0.2);
         gl_FragColor = vec4(uColor * uIntensity * facing * along * streak, 1.0);
       }`,
