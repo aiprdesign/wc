@@ -50,7 +50,11 @@ export const DofShader = {
       if (c0 * uMaxBlur < 0.5) { gl_FragColor = base; return; }
       vec2 px = 1.0 / uResolution;
       vec3 acc = base.rgb; float wsum = 1.0;
-      const int N = 28; const float GA = 2.39996323;
+      // high quality: a denser spiral (smoother, rounder bokeh discs)
+      #ifndef DOF_TAPS
+        #define DOF_TAPS 28
+      #endif
+      const int N = DOF_TAPS; const float GA = 2.39996323;
       for (int i = 1; i < N; i++) {
         float r = sqrt(float(i) / float(N));
         float a = float(i) * GA;
@@ -361,8 +365,8 @@ export const FinalShader = {
       vec2 uv = vUv;
       vec2 d = (uv - 0.5);
       float r2 = dot(d * vec2(uAspect, 1.0), d * vec2(uAspect, 1.0));
-      // radial chromatic aberration (stronger towards edges)
-      vec2 ca = d * uCA * (0.4 + r2 * 1.5);
+      // lateral chromatic aberration: none on the optical axis, growing towards the frame edges
+      vec2 ca = d * uCA * r2 * 1.7;
       vec3 col = vec3(samp(uv + ca).r, samp(uv).g, samp(uv - ca).b);
       if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
       col *= uExposure;

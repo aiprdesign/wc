@@ -15,6 +15,9 @@ import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
+import { addSurfaceDetailToScene } from '../lib/surface.js';
+import { sceneLights, buildSceneEnvironment } from '../lib/environment.js';
+import { installSoftShadows, encodeShadow } from '../lib/softshadows.js';
 
 const shaderMat = (def) => new THREE.ShaderMaterial({
   uniforms: THREE.UniformsUtils.clone(def.uniforms), vertexShader: def.vertexShader, fragmentShader: def.fragmentShader,
@@ -32,7 +35,16 @@ export class Engine {
       ao: fx.ao ?? hq,                              // screen-space ambient occlusion
       shadowScale: fx.shadowScale ?? (hq ? 2 : 1),  // shadow-map resolution multiplier
       shutter: fx.shutter ?? 180,                   // motion-blur shutter angle (degrees)
+      // light (every quality level): per-sequence image-based lighting and procedural micro-surface
+      // detail on every lit material (see lib/environment.js, lib/surface.js)
+      sceneEnv: fx.sceneEnv ?? true,
+      detail: fx.detail ?? true,
+      tonemap: fx.tonemap ?? 'aces',
+      // high: contact-hardening (PCSS-style) shadow filtering, see lib/softshadows.js
+      softShadows: fx.softShadows ?? hq,
     };
+    if (this.fx.softShadows && !installSoftShadows()) this.fx.softShadows = false;
+    this.quality = quality;
     this.supersample = Math.max(1, Math.min(4, supersample || 1));
     // xr: this device offers VR / AR (core/xr.js). The context is then made XR-compatible up front
     // (no context loss on entering a session) and, for headsets, multisampled: the XR framebuffer
@@ -93,7 +105,12 @@ export class Engine {
       // Warm up: run one update mid-segment and compile its shaders so playback never hitches.
       try {
         const dur = seg.end - seg.start;
-        for (const u of [0, dur * 0.5, dur]) inst.update(u, this.info(seg.start + u, seg, 0));
+        const peak = new Map();   // brightest each light gets (many fade in): sizes the environment's softboxes
+        for (const u of [0, dur * 0.25, dur * 0.5, dur * 0.75, dur]) {
+          inst.update(u, this.info(seg.start + u, seg, 0));
+          inst.scene.traverse((o) => { if (o.isLight) peak.set(o, Math.max(peak.get(o) ?? 0, o.intensity)); });
+        }
+        this.realism(inst, peak);
         this.upgradeShadows(inst);
         await r.compileAsync(inst.scene, inst.camera);
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
@@ -102,6 +119,19 @@ export class Engine {
     }
     // 3D chapter words live inside each sequence's scene (built after every scene exists)
     this.words3d = new Words3D(this);
+  }
+
+  // Realism pass over a freshly built sequence: its own image-based lighting (replacing the shared
+  // studio room) and micro-surface detail on its lit materials. Sequences opt out with
+  // `inst.sceneEnv = false` or steer the environment with `inst.envLook` (see lib/environment.js).
+  realism(inst, peak) {
+    const sc = inst.scene;
+    if (this.fx.sceneEnv && inst.sceneEnv !== false && sc.environment === this.env) {
+      const hq = this.quality === 'high' || this.quality === 'ultra';
+      const tex = buildSceneEnvironment(this.renderer, sceneLights(sc, peak), { size: hq ? 256 : 128, look: inst.envLook ?? {} });
+      if (tex) { sc.environment = tex; inst._sceneEnv = tex; }
+    }
+    if (this.fx.detail) addSurfaceDetailToScene(sc);
   }
 
   /** The chapter heading isn't on screen (exploring, or headings off): scenes then apply the
@@ -122,6 +152,7 @@ export class Engine {
       const f = n / sz.x;
       sz.set(n, m);
       o.shadow.radius = (o.shadow.radius ?? 1) * Math.max(1, f * 0.75);
+      if (this.fx.softShadows) encodeShadow(o);   // penumbra sized by the light and the occluder distance
       o.shadow.map?.dispose(); o.shadow.map = null;
       o.shadow._upgraded = true;
     });
@@ -177,6 +208,7 @@ export class Engine {
 
     if (!this.dofQuad) {
       this.dofQuad = new FullScreenQuad(shaderMat(DofShader));
+      if (this.quality === 'high' || this.quality === 'ultra') this.dofQuad.material.defines = { DOF_TAPS: 56 };
       this.transQuad = new FullScreenQuad(shaderMat(TransitionShader));
       this.finalQuad = new FullScreenQuad(shaderMat(FinalShader));
       this.aoQuad = new FullScreenQuad(shaderMat(AoShader));
@@ -203,6 +235,7 @@ export class Engine {
     fu.uSS.value = this.ss;
     fu.uSrcTexel.value.set(1 / w, 1 / h);
     this.finalQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
+    fu.uTonemap.value = { agx: 1, neutral: 2 }[this.fx.tonemap] ?? 0;
     this.transQuad.material.uniforms.uAspect.value = OUTPUT_ASPECT;
   }
 

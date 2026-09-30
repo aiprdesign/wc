@@ -98,6 +98,7 @@ export function create(ctx, segment) {
   sunL.shadow.mapSize.set(4096, 4096);
   Object.assign(sunL.shadow.camera, { left: -70, right: 70, top: 26, bottom: -26, near: 1, far: 1000 });
   sunL.shadow.bias = -0.0004; sunL.shadow.normalBias = 0.04;
+  sunL.userData.angularRadius = 0.27;   // no atmosphere: the true solar disc, razor-sharp lunar shadows (soft-shadow quality)
   scene.add(sunL, sunL.target);
   const earthshine = new THREE.HemisphereLight('#9fb8e0', '#000000', 0.06); worldL.add(earthshine);
 

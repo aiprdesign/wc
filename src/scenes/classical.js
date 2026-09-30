@@ -273,8 +273,10 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------------- materials
   const marbleMap = marbleTexture({ seed: 2 });
-  const marbleMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f3ede2', roughness: 0.34, clearcoat: 0.25, clearcoatRoughness: 0.4 }), '#ffc680');
-  const heroMarble = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f5efe4', roughness: 0.3, clearcoat: 0.35, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), '#ffd9a0');
+  // honed marble, not lacquer: no clearcoat layer (it read as plastic); a soft sheen stands in for the
+  // light that scatters just under a marble surface. Surface detail (lib/surface.js) adds the polish variation.
+  const marbleMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f3ede2', roughness: 0.4, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color('#fff0dc') }), '#ffc680');
+  const heroMarble = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f5efe4', roughness: 0.36, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color('#fff0dc'), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), '#ffd9a0');
   const heroClay = withBuild(new THREE.MeshStandardMaterial({ color: '#b9a48c', roughness: 0.95 }), '#ff9f4a');
   const stoneMat = withBuild(new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 5 }), color: '#d9d1c4', roughness: 0.5 }), '#ffc680');
 

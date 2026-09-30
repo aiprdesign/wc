@@ -153,7 +153,7 @@ export function create(ctx, segment) {
   const brass = brassMat({ roughness: 0.34, lathe: true });   // broader highlights: the macro DOF turned tight ones into blown orange bokeh
   const iron = ironMat();
   const ironDark = ironMat({ color: '#34373b', roughness: 0.7 });
-  const paint = new THREE.MeshStandardMaterial({ color: '#2a1d17', metalness: 0.5, roughness: 0.55, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.4 });
+  const paint = new THREE.MeshStandardMaterial({ color: '#2a1d17', metalness: 0, roughness: 0.55, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.4 });
   const pistonM = steelMat({ roughness: 0.3, color: '#8d959d', lathe: false });
   const forged = new THREE.MeshStandardMaterial({ color: '#6d737a', metalness: 1, roughness: 0.38, roughnessMap: surfaceTexture('cast'), bumpMap: surfaceTexture('cast'), bumpScale: 0.3 });
   const copperM = new THREE.MeshStandardMaterial({ color: '#c77a4a', metalness: 1, roughness: 0.3 });
@@ -506,7 +506,7 @@ export function create(ctx, segment) {
   const boiler = new THREE.Group(); boiler.position.set(BO.x, BO.y, 0); scene.add(boiler);
   const boilerLen = BO.z1 - BO.z0;
   {
-    const shellMat = new THREE.MeshPhysicalMaterial({ color: '#2d2926', metalness: 0.6, roughness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.4, bumpMap: surfaceTexture('cast', 512, 12), bumpScale: 0.3 });
+    const shellMat = new THREE.MeshPhysicalMaterial({ color: '#2d2926', metalness: 0, roughness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.4, bumpMap: surfaceTexture('cast', 512, 12), bumpScale: 0.3 });
     add(boiler, alongZ(new THREE.CylinderGeometry(BO.r, BO.r, boilerLen, 96, 1, true)), shellMat, 0, 0, (BO.z0 + BO.z1) / 2);
     add(boiler, new THREE.BoxGeometry(BO.r * 2 + 0.5, BO.y - 0.7, boilerLen - 0.4), new THREE.MeshStandardMaterial({ color: '#3a2a22', roughness: 0.9, bumpMap: surfaceTexture('cast', 512, 5), bumpScale: 1 }), 0, -BO.y + (BO.y - 0.7) / 2, (BO.z0 + BO.z1) / 2);
     // front plate (slightly dished), steel band and rivet rings

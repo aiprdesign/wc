@@ -6,7 +6,9 @@ import { marbleTexture, brushedMetalTexture } from './textures.js';
 export function marble({ seed = 0, repeat = 1, color = '#ffffff', roughness = 0.32 } = {}) {
   const map = marbleTexture({ seed });
   map.repeat.set(repeat, repeat);
-  return new THREE.MeshPhysicalMaterial({ map, color, roughness, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.35, sheen: 0.2, sheenColor: new THREE.Color('#fff4e0') });
+  // honed stone: no clearcoat (a lacquer layer is what makes CG marble read as plastic); sheen for the soft,
+  // just-under-the-surface glow of marble at grazing angles
+  return new THREE.MeshPhysicalMaterial({ map, color, roughness: Math.max(roughness, 0.36), metalness: 0, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color('#fff0dc') });
 }
 export const clay = (color = '#c7b29a') => new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0 });
 export const bronze = (roughness = 0.38) => new THREE.MeshStandardMaterial({ color: '#b07a45', metalness: 1, roughness });

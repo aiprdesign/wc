@@ -63,6 +63,7 @@ async function boot() {
       ao: flag('ao'),
       shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
       shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
+      sceneEnv: flag('env'), detail: flag('detail'), tonemap: params.get('tm') ?? undefined,
     },
     // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
     xr: xrs.vr || xrs.ar ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,
