@@ -41,7 +41,7 @@ const chroma = (c, k = 1) => { const l = lum(c); return l > 1e-5 ? c.clone().mul
  * when the scene has no usable key light (it then keeps the default studio).
  * look: { tint (0..1, how strongly panels and walls take the lights' colour; default 0.5) }
  */
-export function buildSceneEnvironment(renderer, lights, { size = 128, look = {} } = {}) {
+export function buildSceneEnvironment(renderer, lights, { size = 128, look = {}, pmrem = null } = {}) {
   const keys = lights.filter((l) => !l.hemi && l.E > 0).sort((a, b) => b.E - a.E);
   if (!keys.length) return null;
   const tint = look.tint ?? 0.5;
@@ -65,9 +65,9 @@ export function buildSceneEnvironment(renderer, lights, { size = 128, look = {} 
   });
   // (turning the room so its main softbox sits behind the key light was tried: it doubles the key's
   // highlight, which is already an analytic light, and made marble and steel look lacquered)
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const tex = pmrem.fromScene(room, 0.04, 0.1, 100, { size }).texture;
-  pmrem.dispose();
+  const gen = pmrem ?? new THREE.PMREMGenerator(renderer);
+  const tex = gen.fromScene(room, 0.04, 0.1, 100, { size }).texture;
+  if (!pmrem) gen.dispose();
   room.dispose();
   return tex;
 }

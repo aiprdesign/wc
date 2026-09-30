@@ -527,6 +527,7 @@ void main() {
 
     // pose the sequence exactly as the film does (live / drone offsets never apply in XR)
     e.live?.restore?.(inst);
+    e.ensureEnvironment?.(inst);   // its image-based lighting, built on first use
     const eye = r.xr.getCamera().cameras[0];
     const S0 = Math.exp(this.follow.lnS.x);
     const info = e.info(T, inst.segment, dt);

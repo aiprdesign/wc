@@ -6,9 +6,11 @@
 //   · scratches            — fine directional wear on metals
 // One small tileable noise texture (cached, shared) is sampled tri-planar in the object's own
 // space (scaled to world size, so it never swims on moving parts and needs no UVs). The family of
-// each material (metal / polished / matte) sets how strong each cue is. Cost: six fetches of a
-// 256² texture per lit pixel, the same at every quality level. Opt out with
-// `material.userData.noDetail = true`; tune with `material.userData.detail = { albedo, rough, bump, scratch }`.
+// each material (metal / polished / matte) sets how strong each cue is. Cost: at the default
+// quality ONE fetch of a 256² texture per lit pixel (projected along the surface's dominant axis)
+// driving colour and roughness; at high / ultra a full tri-planar blend at two scales (six
+// fetches) and the micro-relief bump as well. Opt out with
+// `material.userData.noDetail = true`; tune with `material.userData.detail = { albedo, rough, bump, scratch, grime, scale }`.
 import * as THREE from 'three';
 
 let detailTex = null;
@@ -102,9 +104,21 @@ uniform sampler2D tSurfDetail; uniform vec4 uSd; uniform float uSdGrime, uSdK; u
 varying vec3 vSdP; varying vec3 vSdN;
 vec4 sdTri(vec3 p, vec3 w){
   return texture2D(tSurfDetail, p.yz) * w.x + texture2D(tSurfDetail, p.zx + vec2(0.37, 0.61)) * w.y + texture2D(tSurfDetail, p.xy + vec2(0.71, 0.13)) * w.z;
+}
+// one fetch: the projection along the dominant axis of the part's own normal
+vec4 sdOne(vec3 p, vec3 n){
+  vec3 a = abs(n);
+  vec2 uv = a.x > a.y && a.x > a.z ? p.yz : a.y > a.z ? p.zx + vec2(0.37, 0.61) : p.xy + vec2(0.71, 0.13);
+  return texture2D(tSurfDetail, uv);
 }`;
 
+// 'high': tri-planar at two scales (six fetches); 'lite' (default): one fetch. Set by the engine
+// before any sequence is built (it is part of every program's cache key).
+let HQ = false;
+export function setSurfaceQuality(q) { HQ = q === 'high'; }
+
 function inject(sh, u) {
+  if (HQ) sh.fragmentShader = '#define SD_HQ\n' + sh.fragmentShader;
   sh.uniforms.tSurfDetail = { value: surfaceDetailTexture() };
   sh.uniforms.uSd = u.a; sh.uniforms.uSdGrime = u.g; sh.uniforms.uSdK = u.k; sh.uniforms.uSdScale = SURFACE_SCALE;
   sh.vertexShader = sh.vertexShader
@@ -113,11 +127,17 @@ function inject(sh, u) {
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', `#include <common>${FRAG_PARS}`)
     .replace('#include <color_fragment>', `#include <color_fragment>
-  vec3 sdW = abs(vSdN); sdW = sdW * sdW; sdW *= sdW; sdW /= max(dot(sdW, vec3(1.0)), 1e-5);
-  vec4 sdF = sdTri(vSdP * (uSdScale.x * uSdK), sdW);       // fine: ~35 cm tile (grain, scratches)
-  vec4 sdB = sdTri(vSdP * (uSdScale.y * uSdK), sdW);       // broad: ~3 m tile (smudges, weathering)
-  float sdSmudge = sdB.g * 0.4 + sdF.g * 0.6;
-  float sdGrime = smoothstep(0.5, 0.9, sdB.b * 0.55 + sdB.g * 0.45);
+  #ifdef SD_HQ
+    vec3 sdW = abs(vSdN); sdW = sdW * sdW; sdW *= sdW; sdW /= max(dot(sdW, vec3(1.0)), 1e-5);
+    vec4 sdF = sdTri(vSdP * (uSdScale.x * uSdK), sdW);       // fine: ~35 cm tile (grain, scratches)
+    vec4 sdB = sdTri(vSdP * (uSdScale.y * uSdK), sdW);       // broad: ~3 m tile (smudges, weathering)
+    float sdSmudge = sdB.g * 0.4 + sdF.g * 0.6;
+    float sdGrime = smoothstep(0.5, 0.9, sdB.b * 0.55 + sdB.g * 0.45);
+  #else
+    vec4 sdF = sdOne(vSdP * (uSdScale.x * uSdK), vSdN);       // one fetch: grain, smudges, grime, scratches
+    float sdSmudge = sdF.g;
+    float sdGrime = smoothstep(0.5, 0.9, sdF.b * 0.55 + sdF.g * 0.45);
+  #endif
   diffuseColor.rgb *= 1.0 + uSd.x * ((sdSmudge - 0.5) * 1.3 + (sdF.r - 0.5) * 0.7);
   diffuseColor.rgb *= 1.0 - uSdGrime * sdGrime;`)
     .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
@@ -125,6 +145,7 @@ function inject(sh, u) {
   roughnessFactor += uSd.w * sdF.a * 0.22;
   roughnessFactor = clamp(roughnessFactor, 0.02, 1.0);`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  #ifdef SD_HQ
   {
     // micro-relief as a bump (Mikkelsen's surface gradient, unnormalised: slopes are physical)
     float sdH = (sdF.r - 0.5) * uSd.z - sdF.a * (uSd.z * uSd.w * 0.6);
@@ -134,15 +155,16 @@ function inject(sh, u) {
     vec3 grad = sign(det) * (dFdx(sdH) * R1 + dFdy(sdH) * R2);
     vec3 nb = abs(det) * normal - grad;
     if (dot(nb, nb) > 1e-20 && abs(det) > 1e-14) normal = normalize(nb);
-  }`)
+  }
+  #endif`)
     .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
   #ifdef USE_CLEARCOAT
     material.clearcoatRoughness = clamp(material.clearcoatRoughness * (0.7 + 0.6 * sdSmudge) + sdF.a * 0.08, 0.02, 1.0);
   #endif`);
 }
 
-// Physically plausible parameters (a material is a metal or it is not; albedos live between
-// charcoal and fresh snow). Partial metalness is what makes CG read as plastic: a grey dielectric
+// Physically plausible parameters (a material is a metal or it is not; nothing is whiter than
+// fresh snow). Partial metalness is what makes CG read as plastic: a grey dielectric
 // with a tinted, half-strength mirror on top. Metals become fully metallic (keeping their
 // specular colour, lifted to a real metal's minimum reflectance); dielectrics lose the fake
 // metal and keep their diffuse brightness; nothing is whiter than snow. Maps and vertex colours are left alone.
@@ -193,7 +215,7 @@ export function addSurfaceDetail(m) {
   const baseKey = () => { const cur = m.onBeforeCompile; m.onBeforeCompile = prev; try { return prevKey.call(m); } finally { m.onBeforeCompile = cur; } };
   m.onBeforeCompile = function (sh, r) { prev?.call(this, sh, r); inject(sh, u); };
   const tag = '|sd1';
-  m.customProgramCacheKey = () => baseKey() + tag;
+  m.customProgramCacheKey = () => baseKey() + tag + (HQ ? 'h' : 'l');
   m.userData.sdDone = true;
   m.needsUpdate = true;
   return true;

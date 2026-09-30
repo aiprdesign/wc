@@ -15,9 +15,8 @@ import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
-import { addSurfaceDetailToScene } from '../lib/surface.js';
+import { addSurfaceDetailToScene, setSurfaceQuality } from '../lib/surface.js';
 import { sceneLights, buildSceneEnvironment } from '../lib/environment.js';
-import { installSoftShadows, encodeShadow } from '../lib/softshadows.js';
 
 const shaderMat = (def) => new THREE.ShaderMaterial({
   uniforms: THREE.UniformsUtils.clone(def.uniforms), vertexShader: def.vertexShader, fragmentShader: def.fragmentShader,
@@ -30,23 +29,27 @@ export class Engine {
     this.maxWidth = maxWidth;
     this.pixelRatio = pixelRatio;
     const hq = quality === 'high' || quality === 'ultra';
+    // 'lite': phones, tablets and weak GPUs (main.js decides): the lightest path that still keeps the look
+    const lite = quality === 'lite';
     // realism features: heavy ones only at high quality (real-time at medium stays as it was)
     this.fx = {
       ao: fx.ao ?? hq,                              // screen-space ambient occlusion
       shadowScale: fx.shadowScale ?? (hq ? 2 : 1),  // shadow-map resolution multiplier
+      shadowCap: lite ? 1024 : 4096,                // largest shadow map (phones: 1024)
+      msaa: lite ? 2 : 4,                           // multisampling of the scene plates
       shutter: fx.shutter ?? 180,                   // motion-blur shutter angle (degrees)
-      // light (every quality level): per-sequence image-based lighting and procedural micro-surface
-      // detail on every lit material (see lib/environment.js, lib/surface.js)
-      sceneEnv: fx.sceneEnv ?? true,
+      // light: per-sequence image-based lighting (built lazily, the first time a sequence is drawn;
+      // not on phones) and procedural micro-surface detail on every lit material (one texture fetch;
+      // tri-planar at high). See lib/environment.js, lib/surface.js.
+      sceneEnv: fx.sceneEnv ?? !lite,
       detail: fx.detail ?? true,
       tonemap: fx.tonemap ?? 'aces',
-      // high: contact-hardening (PCSS-style) shadow filtering, see lib/softshadows.js
-      softShadows: fx.softShadows ?? hq,
       // high: veiling glare, the lens's own wide, energy-conserving scatter (share of the light)
       glare: fx.glare ?? (hq ? 0.04 : 0),
     };
-    if (this.fx.softShadows && !installSoftShadows()) this.fx.softShadows = false;
+    setSurfaceQuality(hq ? 'high' : 'lite');
     this.quality = quality;
+    this.envSize = hq ? 256 : 128;   // every environment (shared and per-sequence) has one size: swapping never recompiles
     this.supersample = Math.max(1, Math.min(4, supersample || 1));
     // xr: this device offers VR / AR (core/xr.js). The context is then made XR-compatible up front
     // (no context loss on entering a session) and, for headsets, multisampled: the XR framebuffer
@@ -79,9 +82,12 @@ export class Engine {
   // Build shared resources and every sequence. `modules` maps segment id → scene module.
   async init(modules, onProgress = () => {}) {
     const r = this.renderer;
-    const pmrem = new THREE.PMREMGenerator(r);
-    this.env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    // one PMREM generator for the shared studio and every per-sequence environment (its blur
+    // shaders compile once)
+    this.pmrem = new THREE.PMREMGenerator(r);
+    const room = new RoomEnvironment();
+    this.env = this.pmrem.fromScene(room, 0.04, 0.1, 100, { size: this.envSize }).texture;
+    room.dispose();
 
     this.ctx = {
       THREE, renderer: r, env: this.env, palette: PALETTE, font3D: getFont3D(), aspect: FILM_ASPECT,
@@ -128,12 +134,22 @@ export class Engine {
   // `inst.sceneEnv = false` or steer the environment with `inst.envLook` (see lib/environment.js).
   realism(inst, peak) {
     const sc = inst.scene;
-    if (this.fx.sceneEnv && inst.sceneEnv !== false && sc.environment === this.env) {
-      const hq = this.quality === 'high' || this.quality === 'ultra';
-      const tex = buildSceneEnvironment(this.renderer, sceneLights(sc, peak), { size: hq ? 256 : 128, look: inst.envLook ?? {} });
-      if (tex) { sc.environment = tex; inst._sceneEnv = tex; }
-    }
+    // the environment itself is built the first time the sequence is drawn (ensureEnvironment):
+    // only its lights are read here, while their peak intensities are known
+    if (this.fx.sceneEnv && inst.sceneEnv !== false && sc.environment === this.env) inst._envLights = sceneLights(sc, peak);
     if (this.fx.detail) addSurfaceDetailToScene(sc);
+  }
+
+  // Per-sequence environment, on first use (a single PMREM of the re-lit studio: a few ms, and the
+  // same texture size as the shared studio the shaders were compiled with, so nothing recompiles).
+  ensureEnvironment(inst) {
+    const L = inst._envLights;
+    if (!L) return;
+    inst._envLights = null;
+    try {
+      const tex = buildSceneEnvironment(this.renderer, L, { size: this.envSize, look: inst.envLook ?? {}, pmrem: this.pmrem });
+      if (tex && inst.scene.environment === this.env) { inst.scene.environment = tex; inst._sceneEnv = tex; }
+    } catch (e) { console.warn('[engine] environment failed for', inst.segment?.id, e); }
   }
 
   /** The chapter heading isn't on screen (exploring, or headings off): scenes then apply the
@@ -145,8 +161,19 @@ export class Engine {
   // in the world but lose the stair-stepping and shimmer of coarse texels.
   upgradeShadows(inst) {
     const k = this.fx.shadowScale;
-    if (!(k > 1)) return;
-    const cap = Math.min(4096, this.renderer.capabilities.maxTextureSize);
+    const cap = Math.min(this.fx.shadowCap, this.renderer.capabilities.maxTextureSize);
+    if (!(k > 1)) {
+      // no upgrade: only hold every map under the cap (phones: 1024², a 4096² map alone is 64 MB)
+      inst.scene.traverse((o) => {
+        if (!o.isLight || !o.castShadow || !o.shadow) return;
+        const sz = o.shadow.mapSize;
+        if (sz.x <= cap && sz.y <= cap) return;
+        const f = cap / Math.max(sz.x, sz.y);
+        sz.set(Math.max(1, Math.round(sz.x * f)), Math.max(1, Math.round(sz.y * f)));
+        o.shadow.map?.dispose(); o.shadow.map = null;
+      });
+      return;
+    }
     inst.scene.traverse((o) => {
       if (!o.isLight || !o.castShadow || !o.shadow || o.shadow._upgraded) return;
       const sz = o.shadow.mapSize;
@@ -154,7 +181,6 @@ export class Engine {
       const f = n / sz.x;
       sz.set(n, m);
       o.shadow.radius = (o.shadow.radius ?? 1) * Math.max(1, f * 0.75);
-      if (this.fx.softShadows) encodeShadow(o);   // penumbra sized by the light and the occluder distance
       o.shadow.map?.dispose(); o.shadow.map = null;
       o.shadow._upgraded = true;
     });
@@ -202,11 +228,13 @@ export class Engine {
     };
     [this.rtA, this.rtB, this.dofA, this.dofB, this.comp, this.accum, this.aoRaw, this.aoBlur].forEach((rt) => rt?.dispose());
     this.accum = null;   // motion-blur buffer: created on first use
-    const msaa = this.ss >= 2 ? 2 : 4;   // supersampling already resolves edges; spare the memory
+    const msaa = this.ss >= 2 ? 2 : this.fx.msaa;   // supersampling already resolves edges; spare the memory
     this.rtA = mkRT(true, msaa); this.rtB = mkRT(true, msaa);
     this.dofA = mkRT(false, 0); this.dofB = mkRT(false, 0); this.comp = mkRT(false, 0);
     const aw = Math.max(1, Math.round(w / 2)), ah = Math.max(1, Math.round(h / 2));
-    this.aoRaw = mkRT(false, 0, aw, ah); this.aoBlur = mkRT(false, 0, aw, ah);
+    // ambient-occlusion buffers only when AO is on (1×1 placeholders keep the uniforms valid)
+    this.aoRaw = this.fx.ao ? mkRT(false, 0, aw, ah) : mkRT(false, 0, 1, 1);
+    this.aoBlur = this.fx.ao ? mkRT(false, 0, aw, ah) : mkRT(false, 0, 1, 1);
     // veiling-glare mip chain (high quality only): 1/2 … 1/64
     this.glareDown?.forEach((rt) => rt.dispose()); this.glareUp?.forEach((rt) => rt.dispose());
     this.glareDown = []; this.glareUp = [];
@@ -288,6 +316,7 @@ export class Engine {
 
   renderInstance(inst, T, dt, rt, dofRT) {
     const r = this.renderer;
+    this.ensureEnvironment(inst);
     const info = this.info(T, inst.segment, dt);
     this.live?.restore?.(inst);   // undo last frame's live / drone offset (no-op when there was none)
     try {

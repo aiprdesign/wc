@@ -14,7 +14,20 @@ import { loadSceneModules } from './scenes/index.js';
 import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE, OUTPUT_ASPECT } from './timeline.js';
 
 const params = new URLSearchParams(location.search);
-const QUALITY = { low: 1280, medium: 1920, high: 2560, ultra: 3840 };
+const QUALITY = { lite: 1280, low: 1280, medium: 1920, high: 2560, ultra: 3840 };
+// Phones, tablets and weak GPUs get the 'lite' path unless a ?q= is given: capped at 1280 px and
+// pixel ratio ≤ 1.5, 2× MSAA, shadow maps ≤ 1024², the shared studio environment only, one-fetch
+// surface detail, no AO / glare. (A phone's full-quality film ran out of GPU memory.)
+const LITE_DEVICE = (() => {
+  try {
+    const mm = (q) => globalThis.matchMedia?.(q).matches;
+    const touchOnly = mm('(pointer: coarse)') && !mm('(any-pointer: fine)');
+    const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    const lowMem = navigator.deviceMemory != null && navigator.deviceMemory <= 4;
+    const fewCores = navigator.hardwareConcurrency != null && navigator.hardwareConcurrency <= 2;
+    return touchOnly || mobileUA || lowMem || fewCores;
+  } catch { return false; }
+})();
 const $ = (id) => document.getElementById(id);
 
 const intro = $('intro'), controls = $('controls'), status = $('status');
@@ -51,27 +64,49 @@ async function loadScore() {
 async function boot() {
   restoreHash();
   // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion,
-  // finer contact-hardening shadows, veiling glare and finer bokeh. ?ss=2 supersamples (renders at
+  // finer shadows, veiling glare and finer bokeh. ?ss=2 supersamples (renders at
   // 2× and filters down), ?ao=0/1 overrides AO, ?shadows=1|2|4 overrides the shadow-map multiplier.
-  const quality = QUALITY[params.get('q')] ? params.get('q') : 'medium';
+  const quality = QUALITY[params.get('q')] ? params.get('q') : LITE_DEVICE ? 'lite' : 'medium';
   const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
   const xrs = await xrReady;
   const engine = new Engine($('film'), {
     maxWidth: QUALITY[quality], quality,
+    // phones: at most 1.5 device pixels per CSS pixel (a 3× screen at full density quadruples the fill)
+    ...(quality === 'lite' ? { pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) } : {}),
     supersample: Math.max(1, Math.min(4, parseFloat(params.get('ss') ?? '1') || 1)),
     fx: {
       ao: flag('ao'),
       shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
       shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
-      // realism A/B switches (see README): per-scene IBL, surface detail, tone mapper,
-      // contact-hardening shadows, veiling glare
+      // realism A/B switches (see README): per-scene IBL, surface detail, tone mapper, veiling glare
       sceneEnv: flag('env'), detail: flag('detail'), tonemap: params.get('tm') ?? undefined,
-      softShadows: flag('pcss'), glare: flag('glare') === false ? 0 : flag('glare') ? 0.04 : undefined,
+      glare: flag('glare') === false ? 0 : flag('glare') ? 0.04 : undefined,
     },
     // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
     xr: xrs.vr || xrs.ar ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,
   });
   window.__film = { engine };
+  // If the GPU driver resets (context lost) — also while the sequences are still loading, which is
+  // where a phone runs out of memory — reload at the same moment one quality step lighter. Two
+  // resets in a row (or one at the lightest level) stop the reloading and say so instead of looping.
+  let player = null, experience = null;
+  $('film').addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    player?.pause();
+    experience?.pause();
+    const cur = params.get('q') ?? quality;
+    const lost = (parseInt(params.get('lost') ?? '0', 10) || 0) + 1;
+    const q = { ultra: 'high', high: 'medium', medium: 'lite', low: 'lite' }[cur];
+    intro.classList.remove('hidden', 'ready');
+    if (!q || lost > 2) { setStatus('The graphics driver reset and the film could not recover on this device. Close other tabs and reload to try again.'); return; }
+    const url = new URL(location.href);
+    const tNow = player ? (experience?.active ? experience.t : player.time) : 0;
+    url.searchParams.set('t', (tNow / TIME_SCALE).toFixed(2));   // ?t= is story time
+    url.searchParams.set('q', q);
+    url.searchParams.set('lost', String(lost));
+    setStatus('The graphics driver reset. Reloading at a lighter quality…');
+    setTimeout(() => location.replace(url), 600);
+  });
   setStatus('Loading typography…');
   await loadFonts();
   setLoad(0.1);
@@ -84,11 +119,10 @@ async function boot() {
   setStatus('Composing score…');
   const score = await scorePromise;
   setLoad(1);
-  const player = new Player(engine, score?.buffer ?? null);
+  player = new Player(engine, score?.buffer ?? null);
   const explorer = new Explorer(engine, $('film'));
   // EXPERIENCE: slow-motion drone flythrough with a live ambient score (no narration)
   const ambient = params.has('noaudio') ? null : new Ambient();
-  let experience = null;
   const nowT = () => (experience?.active ? experience.t : player.time);
   addEventListener('resize', () => { engine.resize(); if (!player.playing && !experience?.playing) engine.render(nowT(), 0); });
   // live camera: drag / scroll / pinch to look around while the film plays (not while exploring)
@@ -99,20 +133,6 @@ async function boot() {
   });
   engine.live = live;
   experience = new Experience(engine, { live, ambient, onTick: (t) => player.onTick(t) });
-  // If the GPU driver resets (context lost), reload at the same moment at a lighter quality.
-  $('film').addEventListener('webglcontextlost', (e) => {
-    e.preventDefault();
-    player.pause();
-    const tNow = nowT();
-    experience.pause();
-    const q = { ultra: 'high', high: 'medium', medium: 'low' }[params.get('q') ?? 'medium'] ?? 'low';
-    const url = new URL(location.href);
-    url.searchParams.set('t', (tNow / TIME_SCALE).toFixed(2));   // ?t= is story time
-    url.searchParams.set('q', q);
-    setStatus('The graphics driver reset. Reloading at a lighter quality…');
-    intro.classList.remove('hidden', 'ready');
-    setTimeout(() => location.replace(url), 600);
-  });
   window.__film.player = player;
   window.__film.explore = (filmT, view) => { explorer.view(filmT, view); return filmT; };   // automation: explore views
   window.__film.exploreExit = () => explorer.exit();
