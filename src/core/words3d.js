@@ -60,10 +60,11 @@ function letterMaterial(era, env, shared, invert = false) {
           if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
         gl_FragColor.rgb += uTint * band * uShine * 0.24;
-        // per-letter shine: a brief bright flare on this letter alone (past the knee, so it reads)
-        gl_FragColor.rgb += uTint * uLShine * (0.26 + 0.1 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
+        // per-letter shine: the letter flares white-hot as the shine front passes over it (like the closing
+        // line's typing edge), well past the knee so it blooms, then settles back to its gold
+        gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v8';
+  m.customProgramCacheKey = () => 'word3d-v9';
   return m;
 }
 
@@ -373,7 +374,9 @@ export class Words3D {
         const hit = land > 0 ? Math.exp(-land * 16) : 0;
         l.mesh.scale.set((1 + 0.08 * hit) * (1 - kout * 0.4), (1 - 0.06 * hit) * (1 - kout * 0.4), (1 - kout * 0.4));
         // each letter shines in turn, fast
-        const sh = Math.sin(Math.PI * sat((t - shine0 - l.i * shineSlot) / shineDur));
+        // (a fast rise as the front reaches the letter, then a slower settle, like a typed letter cooling)
+        const sx = (t - shine0 - l.i * shineSlot) / shineDur;
+        const sh = sx <= 0 ? 0 : sx < 0.22 ? sx / 0.22 : Math.exp(-(sx - 0.22) * 3.2);
         l.mat.userData.u.uFlash.value = hit * 0.3 + sh * 0.5;
         l.mat.userData.u.uLShine.value = sh * fade;
         l.mat.opacity = fade * sat(u * 5) * (1 - kout);
