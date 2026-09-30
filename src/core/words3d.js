@@ -8,6 +8,7 @@
 // across the metal while a real light spills onto the surroundings, then the letters
 // fall back like dominoes and clear.
 import * as THREE from 'three';
+import { addSurfaceDetail } from '../lib/surface.js';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
 import { pulse } from '../lib/rhythm.js';
 import { WORDS, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
@@ -24,13 +25,12 @@ import { ease, sat, lerp, ramp } from '../lib/math.js';
 // 'invert' flips contrast for bright plates — dark lacquered letters over a light halo.
 export const LAYOUT = {};   // every heading is centred and gold (user direction); kept as a hook for per-chapter layout
 
-// Material per era: satin gold → bronze → brushed steel → satin chrome.
+// Heading material (kept as a per-era table so a later era could vary the finish).
 const ERAS = [
-  // 60-30-10: the words are the film's 10% accent — one signature gold, finish evolving by era
-  [20, { color: '#c99a3e', roughness: 0.42, env: 0.55, light: '#ffcf8a' }],   // hand-worked gold
-  [29, { color: '#c99a3e', roughness: 0.36, env: 0.55, light: '#ffc978' }],
-  [39, { color: '#cfa244', roughness: 0.3, env: 0.5, light: '#ffd79a' }],
-  [99, { color: '#d4a84a', roughness: 0.26, env: 0.45, light: '#ffe0b0' }],  // polished gold
+  // 60-30-10: the words are the film's 10% accent — one signature gold
+  // every heading is cast in the same gold as the opening title's 3D letters (opening.js goldMat): a warm
+  // #e9b964 metal, satin roughness, hammered micro-surface (lib/surface.js) and a low inner glow — gold bars
+  [99, { color: '#e9b964', roughness: 0.38, env: 0.55, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.22 }],
 ];
 const eraOf = (T) => ERAS.find(([t]) => T < t)[1];
 
@@ -39,7 +39,7 @@ function letterMaterial(era, env, shared, invert = false) {
     // inverted: near-black lacquer with a satin sheen; the gold survives on the bevels via the sweep tint
     color: invert ? '#15120f' : era.color, metalness: invert ? 0.55 : 1, roughness: invert ? 0.3 : era.roughness,
     envMap: env, envMapIntensity: invert ? 0.35 : era.env,
-    emissive: new THREE.Color(era.color).multiplyScalar(0.0), transparent: true, fog: false,
+    emissive: new THREE.Color(invert ? '#000000' : era.glow), emissiveIntensity: invert ? 0 : era.glowI, transparent: true, fog: false,
   });
   const u = { ...shared, uFlash: { value: 0 }, uLShine: { value: 0 } };
   m.userData.u = u;
@@ -64,7 +64,9 @@ function letterMaterial(era, env, shared, invert = false) {
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v9';
+  m.customProgramCacheKey = () => 'word3d-v10';
+  // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
+  if (!invert) addSurfaceDetail(m);
   return m;
 }
 
