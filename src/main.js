@@ -175,9 +175,9 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   $('play').addEventListener('click', () => { begin(player); syncPlaying(); });
   $('btn-play').addEventListener('click', toggle);
   $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); ambient?.setMuted(player.muted); body.classList.toggle('muted', player.muted); });
-  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16']];
+  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16'], ['2x3', '2:3']];
   // intro: mark the format in use (arriving with #experience, a format keeps it: #square&experience)
-  const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16' }[OUTPUT_ASPECT] ?? 'wide';
+  const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16', [2 / 3]: '2x3' }[OUTPUT_ASPECT] ?? 'wide';
   document.querySelectorAll('.formats-pick a').forEach((a) => {
     a.setAttribute('aria-current', String(a.dataset.fmt === curHash));
     if (HASH_EXPERIENCE) a.setAttribute('href', `#${a.dataset.fmt}&experience`);
@@ -340,12 +340,39 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   body.classList.toggle('has-vr', !!xrs?.vr);
   body.classList.toggle('has-ar', !!xrs?.ar);
   if (HASH_XR) body.classList.add(`xr-link-${HASH_XR}`);
+  // VR / AR how-to: opened from the start screen's link, or by a VR / AR button where this browser
+  // can't open that session (no headset / ARCore, iPhone Safari, an embedded preview)
+  const PAGES = 'https://aiprdesign.github.io/wc/';
+  const embedded = (() => { try { return window.top !== window; } catch { return true; } })();
+  const filmUrl = embedded || !/^https?:$/.test(location.protocol) ? PAGES : location.origin + location.pathname;
+  const help = $('xr-help');
+  const showHelpTab = (tab) => {
+    help.querySelectorAll('[data-xh]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.xh === tab)));
+    help.querySelectorAll('[data-xh-panel]').forEach((p) => { p.hidden = p.dataset.xhPanel !== tab; });
+  };
+  const openHelp = (tab = 'vr') => {
+    const yes = (k) => (xrs?.[k] ? '<b>ready</b>' : '<i>not on this device</i>');
+    $('xh-status').innerHTML = `This browser: VR ${yes('vr')} · AR ${yes('ar')}${embedded ? ' · this page is embedded, so open the film\u2019s own address' : ''}`;
+    help.querySelectorAll('.xh-url').forEach((el) => { el.textContent = filmUrl; });
+    showHelpTab(tab);
+    if (help.showModal) help.showModal(); else help.setAttribute('open', '');
+  };
+  help.querySelectorAll('[data-xh]').forEach((b) => b.addEventListener('click', () => showHelpTab(b.dataset.xh)));
+  help.querySelectorAll('.xh-copy').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(filmUrl); b.textContent = 'Copied'; } catch { b.textContent = 'Copy failed'; }
+    setTimeout(() => { b.textContent = 'Copy link'; }, 1600);
+  }));
+  if (!xrs?.vr) { const t = $('play-vr')?.querySelector('.pe-sub'); if (t) t.textContent = 'Needs a VR headset · tap for how-to'; }
+  if (!xrs?.ar) { const t = $('play-ar')?.querySelector('.pe-sub'); if (t) t.textContent = 'Needs an AR phone · tap for how-to'; }
+  $('xr-help-link')?.addEventListener('click', () => openHelp(xrs?.ar && !xrs?.vr ? 'ar' : 'vr'));
   const startXR = (mode) => {
     if (xr.active) { xr.stop(); return; }
+    if (!xrs?.[mode === VR ? 'vr' : 'ar']) { openHelp(mode === VR ? 'vr' : 'ar'); return; }
     if (explorer.active) setExplore(false);
     xr.start(mode).catch((e) => {
       console.warn('[xr] could not start', e);
       setStatus(`${mode === VR ? 'VR' : 'AR'} could not start: ${e?.message ?? e}`);
+      openHelp(mode === VR ? 'vr' : 'ar');
     });
   };
   for (const [id, mode] of [['play-vr', VR], ['play-ar', AR], ['btn-vr', VR], ['btn-ar', AR]]) $(id)?.addEventListener('click', () => startXR(mode));

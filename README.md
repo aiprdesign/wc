@@ -31,6 +31,7 @@ chapter · `m` mute · `f` fullscreen · `r` record (MP4 where the browser suppo
 | `#square` | 1:1 frame |
 | `#16x9` | 16:9 frame |
 | `#9x16` (or `?aspect=9:16`) | 9:16 vertical frame |
+| `#2x3` (or `?aspect=2:3`) | 2:3 vertical frame |
 | `?q=low` / `?q=high` / `?q=ultra` | 1280 / 2560 / 3840 px (default 1920). `high` and `ultra` also add ambient occlusion and 2× shadow-map resolution |
 | `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
 | `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
@@ -58,10 +59,11 @@ unchanged.
 ### VR and AR (WebXR)
 
 **Watch in VR** rides the director's camera in a headset; **View in AR** turns the current shot
-into a tabletop diorama in your room. The buttons (start screen and player bar) appear only where
-the browser offers a WebXR session: **VR** on Meta Quest Browser, Pico, Apple Vision Pro (visionOS 2
+into a tabletop diorama in your room. The start-screen buttons always show; where the browser can't
+open that session they open a how-to panel (devices, steps, controls, a copy-link button). The
+player-bar VR / AR buttons appear only where the browser offers a WebXR session: **VR** on Meta Quest Browser, Pico, Apple Vision Pro (visionOS 2
 Safari, `immersive-vr`) and desktop Chrome/Edge with a headset; **AR** on Android Chrome with ARCore
-and Quest 3 passthrough. iPhone Safari has no WebXR, so the buttons stay hidden there. WebXR needs
+and Quest 3 passthrough. iPhone Safari has no WebXR, so there the buttons open the how-to. WebXR needs
 a secure page (https or `localhost`) and is blocked inside embedded viewers such as the claude.ai
 artifact frame: open the film from its own address (e.g. GitHub Pages). `#vr` / `#ar` (also
 `?vr` / `?ar`) put the button forward on the start screen; a tap still starts the session.
@@ -89,8 +91,9 @@ npm install              # once
 npm run render:1x1       # → renders/1x1/achievements-of-western-civilization-1x1.mp4   (1080 × 1080)
 npm run render:16x9      # → renders/16x9/…-16x9.mp4                                     (1920 × 1080)
 npm run render:9x16      # → renders/9x16/…-9x16.mp4                                     (1080 × 1920)
-npm run render:all       # all three, one after another
-npm run render:draft:1x1 # quick preview (also :16x9, :9x16): no motion blur or supersampling
+npm run render:2x3       # → renders/2x3/…-2x3.mp4                                       (1080 × 1620)
+npm run render:all       # all four, one after another
+npm run render:draft:1x1 # quick preview (also :16x9, :9x16, :2x3): no motion blur or supersampling
 ```
 
 Each frame is rendered deterministically (identical to real-time playback, never a dropped

@@ -40,6 +40,7 @@
           <span class="pe-text"><span class="pe-title">View in AR</span><span class="pe-sub">A tabletop diorama in your room</span></span>
         </button>
       </div>
+      <button id="xr-help-link" class="xr-help-link" type="button">How to watch in VR &amp; AR</button>
       <p class="hint">Sound on · 108 seconds</p>
       <nav class="formats-pick" aria-label="Choose a frame format">
         <span>Format</span>
@@ -47,6 +48,7 @@
         <a href="#square" data-fmt="square">1:1 square</a>
         <a href="#16x9" data-fmt="16x9">16:9 landscape</a>
         <a href="#9x16" data-fmt="9x16">9:16 vertical</a>
+        <a href="#2x3" data-fmt="2x3">2:3 vertical</a>
       </nav>
       <a class="guide-card" href="guide.html">
         <span class="gc-text">
@@ -86,7 +88,7 @@
     <button id="btn-vr" class="fmt xr-btn" title="Watch in VR (WebXR headset)" aria-label="Watch in VR">VR</button>
     <button id="btn-ar" class="fmt xr-btn" title="View as an AR tabletop diorama (WebXR)" aria-label="View in AR">AR</button>
     <button id="btn-explore" class="fmt" title="Explore the 3D scene (e)" aria-label="Explore the 3D scene" aria-pressed="false"><span class="lbl-long">Explore&nbsp;</span>3D</button>
-    <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16" aria-label="Change frame format">2.39</button>
+    <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16 · 2:3" aria-label="Change frame format">2.39</button>
     <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
   </nav>
   <div id="rec-badge" class="rec-badge">● REC</div>
@@ -114,6 +116,57 @@
       <button type="button" data-xr="exit">Exit AR</button>
     </div>
   </div>
+
+  <dialog id="xr-help" class="xr-help" aria-labelledby="xr-help-h">
+    <form method="dialog" class="xh-close-row"><button class="xh-close" aria-label="Close">✕</button></form>
+    <h2 id="xr-help-h">Watch in VR &amp; AR</h2>
+    <p class="xh-status" id="xh-status"></p>
+    <div class="xh-tabs" role="tablist">
+      <button type="button" role="tab" data-xh="vr" aria-selected="true">VR headset</button>
+      <button type="button" role="tab" data-xh="ar" aria-selected="false">AR on a table</button>
+    </div>
+    <section class="xh-panel" data-xh-panel="vr">
+      <p class="xh-lead">Ride the film's camera inside every scene, with the soundtrack and narration.</p>
+      <h3>What you need</h3>
+      <p>A VR headset with a WebXR browser: Meta Quest 2 / 3 / 3S / Pro (Meta Quest Browser), Pico 4, Apple Vision Pro (Safari, visionOS 2), or a PC headset with Chrome or Edge.</p>
+      <h3>How to start</h3>
+      <ol>
+        <li>Put the headset on and open its web browser.</li>
+        <li>Go to <span class="xh-url"></span> <button type="button" class="xh-copy">Copy link</button></li>
+        <li>Wait for the film to load, then choose <strong>Watch in VR</strong> and allow the immersive view.</li>
+        <li>Want the slow-motion flythrough without narration? Start <strong>Experience mode</strong> first, then press <strong>VR</strong> in the player bar.</li>
+      </ol>
+      <h3>Controls</h3>
+      <ul class="xh-keys">
+        <li><kbd>Trigger · A / X</kbd> <span>play / pause</span></li>
+        <li><kbd>Thumbstick ← →</kbd> <span>skip 5 seconds</span></li>
+        <li><kbd>Grip</kbd> <span>leave VR</span></li>
+        <li><kbd>Pinch</kbd> <span>play / pause on Vision Pro</span></li>
+      </ul>
+      <p class="xh-tip">Sit or stand still: the camera glides for you and cuts fade through black. Chapter headings float ahead of you.</p>
+    </section>
+    <section class="xh-panel" data-xh-panel="ar" hidden>
+      <p class="xh-lead">Put each scene on your table as a small model in a glass case, and walk around it while the film plays.</p>
+      <h3>What you need</h3>
+      <p>An Android phone with Chrome and Google Play Services for AR (ARCore), or a Meta Quest 3 / 3S with passthrough.</p>
+      <h3>How to start</h3>
+      <ol>
+        <li>Open <span class="xh-url"></span> <button type="button" class="xh-copy">Copy link</button> in Chrome (or the Quest browser).</li>
+        <li>Wait for the film to load, turn the sound on, then choose <strong>View in AR</strong> and allow the camera.</li>
+        <li>Point the phone at a table and move it slowly until a gold ring sits on the surface.</li>
+        <li>Tap to place the film. Tap again anywhere to move it.</li>
+        <li>Walk around the model to look from any side. Use the on-screen <strong>play / pause</strong> and <strong>Exit AR</strong> buttons.</li>
+      </ol>
+      <h3>On Quest 3</h3>
+      <ul class="xh-keys">
+        <li><kbd>Trigger</kbd> <span>place / move the model</span></li>
+        <li><kbd>A / X</kbd> <span>play / pause</span></li>
+        <li><kbd>Grip</kbd> <span>leave AR</span></li>
+      </ul>
+      <p class="xh-tip">Works best on a plain, well-lit table with some texture (wood, cloth), not glass or a glossy white top.</p>
+    </section>
+    <p class="xh-note"><strong>iPhone and iPad:</strong> Safari does not support WebXR yet, so VR and AR cannot start there. Watch the film or Experience mode instead. <strong>Embedded previews</strong> (such as the claude.ai page) block VR and AR, so open the film's own web address.</p>
+  </dialog>
 
   <script type="module" src="src/main.js"></script>
 </body>

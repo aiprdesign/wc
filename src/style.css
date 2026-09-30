@@ -137,9 +137,11 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 @media (max-width: 360px) { .controls #time { display: none; } }
 .controls #btn-explore { display: inline-flex; align-items: center; }
 
-/* VR / AR (WebXR): buttons only where the browser offers a session (body.has-vr / .has-ar) */
+/* VR / AR (WebXR): the start-screen buttons always show (where the browser can't open a session they
+   open the how-to instead); the player-bar buttons only where a session is on offer (body.has-vr / .has-ar) */
 #intro .play-xr, .controls .xr-btn { display: none; }
-.has-vr #intro.ready .play-vr, .has-ar #intro.ready .play-ar { display: inline-flex; }
+#intro.ready .play-vr, #intro.ready .play-ar { display: inline-flex; }
+body:not(.has-vr) #intro .play-vr, body:not(.has-ar) #intro .play-ar { opacity: 0.72; }
 .has-vr .controls #btn-vr, .has-ar .controls #btn-ar { display: inline-flex; align-items: center; }
 .xr-link-vr .play-vr, .xr-link-ar .play-ar { border-color: var(--gold); background: rgba(226, 195, 138, 0.14); }
 .xr-on .controls, .xr-on .explore-hint { display: none; }
@@ -153,3 +155,31 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 .xr-bar svg { width: 18px; height: 18px; fill: var(--gold); }
 .xr-overlay .i-pause, .xr-overlay.xr-playing .i-play { display: none; }
 .xr-overlay.xr-playing .i-pause { display: block; }
+
+/* VR & AR how-to */
+.xr-help-link { display: none; margin: 10px auto 0; background: none; border: 0; color: var(--gold); font: inherit; font-size: 12px; letter-spacing: 0.08em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+#intro.ready .xr-help-link { display: block; }
+.xr-help { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; padding: 22px 26px 20px; border: 1px solid rgba(226, 195, 138, 0.35); border-radius: 14px; background: #120f0c; color: #e9e1d4; font-size: 14px; line-height: 1.55; }
+.xr-help::backdrop { background: rgba(0, 0, 0, 0.72); }
+.xr-help h2 { margin: 0 0 4px; font-family: 'Cinzel', serif; font-weight: 500; font-size: 20px; letter-spacing: 0.06em; color: var(--gold-hi, #f1d9a8); }
+.xr-help h3 { margin: 14px 0 4px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold, #e2c38a); font-weight: 500; }
+.xr-help p, .xr-help ol, .xr-help ul { margin: 0 0 6px; }
+.xr-help ol { padding-left: 20px; }
+.xr-help li { margin: 3px 0; }
+.xh-close-row { position: sticky; top: 0; float: right; margin: -8px -12px 0 0; }
+.xh-close { background: none; border: 0; color: #bfb5a6; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+.xh-status { font-size: 12px; color: #bfb5a6; }
+.xh-status b { color: #9fdc9f; font-weight: 500; } .xh-status i { color: #e0a58a; font-style: normal; }
+.xh-tabs { display: flex; gap: 6px; margin: 12px 0 6px; }
+.xh-tabs button { flex: 1; padding: 8px 10px; border-radius: 999px; border: 1px solid rgba(226, 195, 138, 0.35); background: transparent; color: #e9e1d4; font: inherit; font-size: 13px; cursor: pointer; }
+.xh-tabs button[aria-selected="true"] { background: rgba(226, 195, 138, 0.16); border-color: var(--gold, #e2c38a); color: var(--gold-hi, #f1d9a8); }
+.xh-lead { color: #d8cdbb; }
+.xh-url { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--gold-hi, #f1d9a8); word-break: break-all; }
+.xh-copy { margin-left: 6px; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(226, 195, 138, 0.4); background: transparent; color: var(--gold, #e2c38a); font: inherit; font-size: 11px; cursor: pointer; }
+.xh-keys { list-style: none; padding: 0; display: grid; gap: 4px; }
+.xh-keys li { display: flex; gap: 10px; align-items: baseline; }
+.xh-keys kbd { flex: none; min-width: 150px; font-family: inherit; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(233, 225, 212, 0.25); background: rgba(233, 225, 212, 0.06); }
+.xh-keys span { color: #cfc5b6; }
+.xh-tip, .xh-note { font-size: 12.5px; color: #bfb5a6; }
+.xh-note { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(233, 225, 212, 0.12); }
+@media (max-width: 480px) { .xh-keys kbd { min-width: 118px; } .xr-help { padding: 18px 16px; } }

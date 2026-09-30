@@ -191,7 +191,12 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
         <a class="btn" href="./#square" >Play live · 1:1</a>
         <a class="btn ghost" href="./#16x9">16:9</a>
         <a class="btn ghost" href="./#9x16">9:16</a>
+        <a class="btn ghost" href="./#2x3">2:3</a>
         <a class="btn ghost" href="./">2.39 scope</a>
+      </div>
+      <div class="links">
+        <a class="btn ghost" href="./#experience">Experience mode</a>
+        <a class="btn ghost" href="#vrar">VR &amp; AR how-to</a>
       </div>
     </div>
     <div class="card">
@@ -204,6 +209,34 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
         <dt>Render</dt><dd>Headless Chromium, 30 fps, open-matte from a 2.39 master</dd>
       </dl>
     </div>
+  </section>
+
+  <section class="guide" aria-labelledby="vrar-h" id="vrar">
+    <h2 id="vrar-h" style="margin:0">Watch in VR &amp; AR</h2>
+    <p class="tip">The real-time film also runs in a VR headset and as an AR model on your table (WebXR). Open the film's own address on the device: <code class="inline">https://aiprdesign.github.io/wc/</code>. Embedded previews such as the claude.ai page block VR and AR. <strong style="color: var(--gold-hi); font-weight: 500;">iPhone and iPad:</strong> Safari has no WebXR yet, so use the normal film or Experience mode there.</p>
+    <ol class="steps">
+      <li><div>
+        <h3>VR · what you need</h3>
+        <p>A headset with a WebXR browser: Meta Quest 2 / 3 / 3S / Pro (Meta Quest Browser), Pico 4, Apple Vision Pro (Safari, visionOS 2), or a PC headset with Chrome or Edge.</p>
+      </div></li>
+      <li><div>
+        <h3>VR · start it</h3>
+        <p>Put the headset on, open its browser and go to the address above. When the film has loaded, choose <strong>Watch in VR</strong> and allow the immersive view. For the slow-motion flythrough without narration, start <strong>Experience mode</strong> first, then press <strong>VR</strong> in the player bar.</p>
+      </div></li>
+      <li><div>
+        <h3>VR · controls</h3>
+        <p><strong>Trigger</strong> or <strong>A / X</strong> plays and pauses, the <strong>thumbstick</strong> left / right skips 5 seconds, <strong>grip</strong> leaves VR, and on Vision Pro a <strong>pinch</strong> plays and pauses. Sit or stand still: the camera glides for you, cuts fade through black, and chapter headings float ahead of you.</p>
+      </div></li>
+      <li><div>
+        <h3>AR · what you need</h3>
+        <p>An Android phone with Chrome and Google Play Services for AR (ARCore), or a Meta Quest 3 / 3S with passthrough.</p>
+      </div></li>
+      <li><div>
+        <h3>AR · place the film</h3>
+        <p>Open the address above in Chrome, turn the sound on and choose <strong>View in AR</strong>, then allow the camera. Point at a table and move the phone slowly until a gold ring sits on the surface, then tap to place the film: each shot appears as a small model in a glass case. Tap again to move it, and walk around it to see it from any side. Use the on-screen <strong>play / pause</strong> and <strong>Exit AR</strong> buttons. On Quest 3: trigger places, A / X plays and pauses, grip leaves AR.</p>
+      </div></li>
+    </ol>
+    <p class="tip">Tip: AR finds surfaces best on a plain, well-lit table with some texture (wood, cloth), not glass or a glossy white top. If a button says it needs a headset or an AR phone, this device or browser can't open that mode; tapping it shows these steps.</p>
   </section>
 
   <section class="facts" aria-labelledby="facts-h" id="facts">
@@ -249,6 +282,8 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
           <tr><td><code>#square</code></td><td>Square 1:1 frame</td></tr>
           <tr><td><code>#16x9</code></td><td>Landscape 16:9 frame</td></tr>
           <tr><td><code>#9x16</code></td><td>Vertical 9:16 frame for phones (also <code>?aspect=9:16</code>)</td></tr>
+          <tr><td><code>#2x3</code></td><td>Vertical 2:3 frame (also <code>?aspect=2:3</code>)</td></tr>
+          <tr><td><code>#experience</code></td><td>Opens Experience mode (combine with a format: <code>#2x3&amp;experience</code>)</td></tr>
           <tr><td><code>#wide</code> or nothing</td><td>The original 2.39 widescreen frame</td></tr>
           <tr><td><code>?q=high</code> or <code>?q=ultra</code></td><td>Sharper picture on a strong graphics card (use <code>?q=low</code> on slower computers)</td></tr>
           <tr><td><code>?novo</code></td><td>Plays without the narrator</td></tr>
@@ -259,7 +294,7 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
     <p class="tip">Combine options with <code class="inline">&amp;</code>, for example <code class="inline">http://localhost:8080/?q=high#9x16</code>. In the player, Space plays and pauses, F goes full screen, M mutes, R records a video (MP4 in Chrome, Edge and Safari), and the buttons save the soundtrack as WAV and switch the frame format.</p>
     <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">Look around while it plays:</strong> the film is interactive. Drag to orbit the camera, scroll or pinch to zoom, double-click to recentre; it glides back to the director's view a few seconds after you let go.</p>
     <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">Experience mode:</strong> a slow-motion flythrough with no narration. Press Experience mode on the start screen (or open the film with <code class="inline">#experience</code>, e.g. <code class="inline">#square&amp;experience</code>). A drone camera glides around every shot at 0.35&times; speed (the speed button cycles 0.35&times;, 0.5&times;, 1&times; and 0.25&times;) to an ambient score made live in the browser, and it loops. Drag to steer, scroll or pinch to zoom, press Esc to return to the film.</p>
-    <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">VR and AR:</strong> on a headset or AR phone the start screen shows <strong>Watch in VR</strong> and <strong>View in AR</strong>. VR works in Meta Quest Browser, Pico, Apple Vision Pro (visionOS 2) and Chrome or Edge with a headset; AR works in Android Chrome with ARCore and on Quest 3 with passthrough. iPhone Safari has no WebXR, so the buttons do not appear there. WebXR is blocked inside embedded previews such as the claude.ai artifact, so open the film from its own web address (for example the GitHub Pages site, or a local server). In VR you ride the camera: trigger plays and pauses, the thumbstick seeks, grip exits. In AR, point at a table and tap to place the film as a small model; tap again to move it.</p>
+    <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">VR and AR:</strong> press <strong>Watch in VR</strong> or <strong>View in AR</strong> on the start screen. See <a href="#vrar">Watch in VR &amp; AR</a> above for devices, steps and controls.</p>
     <p class="tip"><strong style="color: var(--gold-hi); font-weight: 500;">Explore in 3D:</strong> pause anywhere and press <code class="inline">E</code> (or the Explore 3D button) to step into the frozen scene. Drag to look around, scroll or pinch to zoom, right-drag to pan, fly with W A S D and R / F, double-click to reset, and press E or Esc to return.</p>
     <h3 style="font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: .28em; text-transform: uppercase; color: var(--gold-hi); margin: 18px 0 0;">Render the MP4 videos yourself</h3>
     <p class="tip">Your own computer renders the videos much faster than a cloud machine, because it uses your graphics card. You need <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> (version 18 or newer). Everything else installs with one command.</p>
@@ -274,7 +309,8 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
         <div class="cmd"><pre id="c6">npm run render:1x1</pre><button class="copy" type="button" data-copy="c6">Copy</button></div>
         <div class="cmd"><pre id="c7">npm run render:16x9</pre><button class="copy" type="button" data-copy="c7">Copy</button></div>
         <div class="cmd"><pre id="c8">npm run render:9x16</pre><button class="copy" type="button" data-copy="c8">Copy</button></div>
-        <span class="or">or all three in a row</span>
+        <div class="cmd"><pre id="c8b">npm run render:2x3</pre><button class="copy" type="button" data-copy="c8b">Copy</button></div>
+        <span class="or">or all four in a row</span>
         <div class="cmd"><pre id="c9">npm run render:all</pre><button class="copy" type="button" data-copy="c9">Copy</button></div>
         <p>Browser windows open and close by themselves while it renders: that is how it reaches your graphics card, so leave them alone. The terminal shows progress and the time left.</p>
       </div></li>
