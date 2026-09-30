@@ -21,6 +21,9 @@ import { ease, sat, lerp, ramp } from '../lib/math.js';
 
 // The words and their kick-in timing live in lib/headings.js (the score reads them too).
 
+const DOF_KEYS = ['focus', 'range', 'amount'];
+const DOF_RACK_IN = 0.3;   // s of story time for the rack focus onto a heading to engage fully
+
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
 // 'invert' flips contrast for bright plates — dark lacquered letters over a light halo.
 export const LAYOUT = {};   // every heading is centred and gold (user direction); kept as a hook for per-chapter layout
@@ -86,6 +89,7 @@ export class Words3D {
     this.engine = engine;
     this.items = [];
     const inst = (id) => engine.instances.get(id);
+    for (const i of engine.instances.values()) this.trackDof(i);   // before build(): see trackDof
     for (const seg of SEGMENTS) {
       const dur = seg.end - seg.start;
       const lay = LAYOUT[seg.id] ?? {};
@@ -148,23 +152,46 @@ export class Words3D {
     others.forEach((it) => (it.group.visible = true));
   }
 
-  // Explore mode: this sequence's headings are hidden.
-  hideAll(inst) { this.baseDof(inst); for (const it of this.items) if (it.inst === inst) { it.group.visible = false; it.light.intensity = 0; } }
+  // Explore mode (or headings off): this sequence's headings are hidden, and its lens is the scene's own.
+  hideAll(inst) { this.settleDof(inst, null); for (const it of this.items) if (it.inst === inst) { it.group.visible = false; it.light.intensity = 0; } }
 
-  // The rack focus onto a heading is layered on the scene's own depth of field for one frame only.
-  // Many scenes never set some of dof.focus / range / amount in update() (civic: "never blurs"), so
-  // a rack written into them would stick: after the heading, and when any earlier moment was
-  // rendered again (scrubbing back; the video export), the plate came out blurred. Each field still
-  // holding what the rack wrote last time (the scene didn't touch it) goes back to the scene's value.
-  baseDof(inst) {
+  // DEPTH OF FIELD, as a pure function of time. The rack focus onto a heading is layered on the
+  // scene's own dof, but many scenes leave some of focus / range / amount alone in update() (civic
+  // never sets range or amount: "never blurs"). Written straight into dof, the rack used to stay
+  // in those fields, so the picture depended on what had been rendered before: played through, civic
+  // kept the heading's lens after LAW; rendered again at an earlier moment (scrubbing back, the video
+  // export) its plate came out blurred where it had been sharp. Now every field is tracked: a value
+  // the scene wrote this frame is the base; a field it left alone takes, as a function of time only,
+  // what playback from the start leaves there: its initial value, or, once a heading's rack has fully
+  // engaged, that rack's lens (focus on the word, range 0.35 × its distance, amount ≥ 0.35), as it
+  // always looked when the film is played through.
+  trackDof(inst) {
     const d = inst.dof;
-    if (!d) return;
-    const w = inst._dofRack, b = inst._dofScene ??= {};
-    for (const k of ['focus', 'range', 'amount']) {
-      if (w && d[k] === w[k]) d[k] = b[k];
-      b[k] = d[k];
+    if (!d || inst._dofT) return;
+    const v = {}, init = {}, wrote = new Set();
+    for (const k of DOF_KEYS) {
+      v[k] = init[k] = d[k];
+      Object.defineProperty(d, k, { get: () => v[k], set: (x) => { v[k] = x; wrote.add(k); }, enumerable: true, configurable: true });
     }
-    inst._dofRack = null;
+    inst._dofT = { v, init, wrote };
+  }
+
+  // Before this frame's rack: the fields the scene didn't write since the last frame get their
+  // time-based value (at story time T; null: no heading has shown, the initial values).
+  settleDof(inst, T) {
+    const s = inst._dofT;
+    if (!s) return null;
+    let held = null;
+    if (T != null) {
+      for (const it of this.items) {
+        if (it.inst !== inst || it.noFocus || T < it.t0 + DOF_RACK_IN) continue;
+        held ??= { ...s.init };
+        held.focus = it.d; held.range = it.d * 0.35; held.amount = Math.max(held.amount ?? 0, 0.35);
+      }
+    }
+    for (const k of DOF_KEYS) if (!s.wrote.has(k)) s.v[k] = (held ?? s.init)[k];
+    s.wrote.clear();
+    return s.v;
   }
 
   // Engine hook during a 'letter' transition: the counter triangle in uv (lens already set).
@@ -238,7 +265,7 @@ export class Words3D {
     const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
     const plinthR = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
     plinthL.position.y = plinthR.position.y = -capH / 2 - 0.12;
-    group.add(plinthL, plinthR);
+    // (the underline is retired at the user's request: the objects stay for the timing code but are never drawn)
     const plinth = [plinthL, plinthR];
     // contrast backing: a soft, near-opaque dark glow behind gold letters (bright scene plates
     // are HDR, so only a nearly solid core keeps the word legible) — or a warm light halo behind
@@ -312,7 +339,7 @@ export class Words3D {
   apply(inst, T) {
     const [pos, camPos, fwd] = this._v, [quat, camQuat] = this._q;
     inst._wordsDuck = 0;   // 0..1: how much the scene's bloom yields while a heading is up (engine reads it)
-    this.baseDof(inst);
+    const dof = this.settleDof(inst, T);   // (the rack below writes past the scene's tracking)
     for (const it of this.items) {
       if (it.inst !== inst) continue;
       const on = T > it.t0 && T < it.t1 + (it.swap ? 0.12 : 0.5);
@@ -453,12 +480,11 @@ export class Words3D {
       }
       inst._wordsDuck = Math.max(inst._wordsDuck, it.back.material.uniforms.uO.value);
       // rack focus onto the lettering while it is up
-      if (inst.dof && !it.noFocus) {
-        const w = sat(t / 0.3) * (1 - sat((T - outStart) / 0.35));
-        inst.dof.focus = lerp(inst.dof.focus, it.d, w);
-        inst.dof.range = lerp(inst.dof.range ?? 2, it.d * 0.35, w);
-        inst.dof.amount = Math.max(inst.dof.amount ?? 0, 0.35 * w);
-        inst._dofRack = { focus: inst.dof.focus, range: inst.dof.range, amount: inst.dof.amount };
+      if (dof && !it.noFocus) {
+        const w = sat(t / DOF_RACK_IN) * (1 - sat((T - outStart) / 0.35));
+        dof.focus = lerp(dof.focus, it.d, w);
+        dof.range = lerp(dof.range ?? 2, it.d * 0.35, w);
+        dof.amount = Math.max(dof.amount ?? 0, 0.35 * w);
       }
     }
   }
