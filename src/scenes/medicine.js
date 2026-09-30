@@ -463,6 +463,9 @@ export function create(ctx, segment) {
   const satin = (opts) => {
     const m = new THREE.MeshPhysicalMaterial({ roughness: 0.44, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.32, sheen: 0.7, sheenRoughness: 0.45, sheenColor: new THREE.Color('#ff8f7a'), envMapIntensity: 0.6, transparent: true, opacity: 0, ...opts });
     m.userData.rim = { value: 0 };
+    // living tissue, not moulded plastic: mottled colour, wet / drier patches in the gloss and a fine
+    // fibrous relief (lib/surface.js; the organ is modelled far larger than life, hence the finer scale)
+    m.userData.detail = { albedo: 0.26, rough: 0.8, bump: 0.00008, scratch: 0, grime: 0.16, scale: 5 };
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uRim = m.userData.rim;
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uRim;')

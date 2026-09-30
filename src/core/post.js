@@ -176,6 +176,36 @@ export const AoApplyShader = {
     }`,
 };
 
+// Veiling glare: a mip chain (13-tap downsample, then tent upsample-accumulate), after Jimenez's
+// "next-generation post" bloom. The result is a normalised wide blur of the whole HDR frame.
+export const GlareDownShader = {
+  uniforms: { tInput: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tInput; uniform vec2 uTexel; varying vec2 vUv;
+    vec3 s(vec2 o){ vec3 c = texture2D(tInput, vUv + o * uTexel).rgb; return (any(isnan(c)) || any(isinf(c))) ? vec3(0.0) : min(c, vec3(64.0)); }
+    void main(){
+      vec3 a = s(vec2(-2, 2)), b = s(vec2(0, 2)), c = s(vec2(2, 2)), d = s(vec2(-2, 0)), e = s(vec2(0)), f = s(vec2(2, 0));
+      vec3 g = s(vec2(-2, -2)), h = s(vec2(0, -2)), i = s(vec2(2, -2)), j = s(vec2(-1, 1)), k = s(vec2(1, 1)), l = s(vec2(-1, -1)), m = s(vec2(1, -1));
+      vec3 o = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;
+      gl_FragColor = vec4(o, 1.0);
+    }`,
+};
+export const GlareUpShader = {
+  uniforms: { tInput: { value: null }, tLow: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) }, uMix: { value: 0.85 } },
+  vertexShader: fsVert,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tInput, tLow; uniform vec2 uTexel; uniform float uMix; varying vec2 vUv;
+    void main(){
+      vec2 t = uTexel;
+      vec3 up = (texture2D(tLow, vUv + vec2(-t.x, t.y)).rgb + texture2D(tLow, vUv + vec2(t.x, t.y)).rgb + texture2D(tLow, vUv + vec2(-t.x, -t.y)).rgb + texture2D(tLow, vUv + vec2(t.x, -t.y)).rgb) * 0.0625
+              + (texture2D(tLow, vUv + vec2(0.0, t.y)).rgb + texture2D(tLow, vUv + vec2(0.0, -t.y)).rgb + texture2D(tLow, vUv + vec2(t.x, 0.0)).rgb + texture2D(tLow, vUv + vec2(-t.x, 0.0)).rgb) * 0.125
+              + texture2D(tLow, vUv).rgb * 0.25;
+      // each level keeps some of its own detail and takes the wider level's blur: a long, smooth tail
+      gl_FragColor = vec4(mix(texture2D(tInput, vUv).rgb, up, uMix), 1.0);
+    }`,
+};
+
 // Motion-blur accumulation: adds one sub-frame (linear HDR) with weight uWeight (additive blend).
 export const AccumShader = {
   uniforms: { tInput: { value: null }, uWeight: { value: 1 } },
@@ -295,13 +325,14 @@ export const FinalShader = {
   uniforms: {
     tInput: { value: null }, uExposure: { value: 1 }, uWarmth: { value: 1 }, uTime: { value: 0 },
     uGrain: { value: 0.05 }, uVignette: { value: 0.55 }, uCA: { value: 0.0025 }, uFade: { value: 1 },
+    tGlare: { value: null }, uGlare: { value: 0 },
     uResolution: { value: null }, uAspect: { value: 2.39 }, uHarmony: { value: 0.85 },
     uSS: { value: 1 }, uSrcTexel: { value: new THREE.Vector2(1, 1) }, uTonemap: { value: 0 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
     uniform float uHarmony; uniform int uTonemap;
-    uniform sampler2D tInput; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
+    uniform sampler2D tInput, tGlare; uniform float uGlare; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
     varying vec2 vUv;
     // supersampled input (uSS > 1): a separable (1,3,3,1) tent over the source texels under this
     // output pixel — four bilinear taps, smoother than a box and free of ringing
@@ -369,6 +400,9 @@ export const FinalShader = {
       vec2 ca = d * uCA * r2 * 1.7;
       vec3 col = vec3(samp(uv + ca).r, samp(uv).g, samp(uv - ca).b);
       if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+      // veiling glare (high quality): a small, energy-conserving share of every pixel's light spread
+      // wide across the frame, as a real lens scatters it (haloes around hot sources, no threshold)
+      if (uGlare > 0.0) col = mix(col, texture2D(tGlare, uv).rgb, uGlare);
       col *= uExposure;
       // era colour temperature before tonemapping (white balance)
       float w = clamp(uWarmth, -1.0, 1.0);

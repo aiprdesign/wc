@@ -67,9 +67,9 @@ export function surfaceDetailTexture() { return (detailTex ??= makeDetailTexture
 // scenes are authored in metres), scratch strength and grime. Shared uniforms (one set per family),
 // so the whole film can be tuned at once: SURFACE.metal.value.set(…).
 const FAMILY = {
-  metal:    { albedo: 0.16, rough: 1.0, bump: 0.0002, scratch: 0.8, grime: 0.25 },
-  polished: { albedo: 0.12, rough: 0.9, bump: 0.0003, scratch: 0.25, grime: 0.18 },
-  matte:    { albedo: 0.22, rough: 0.35, bump: 0.0009, scratch: 0.0, grime: 0.28 },
+  metal:    { albedo: 0.16, rough: 1.0, bump: 0.00003, scratch: 0.8, grime: 0.25 },
+  polished: { albedo: 0.12, rough: 0.7, bump: 0.00002, scratch: 0.25, grime: 0.18 },
+  matte:    { albedo: 0.22, rough: 0.35, bump: 0.0007, scratch: 0.0, grime: 0.28 },
 };
 // per set: a = (albedo, rough, bump, scratch), g = grime, k = pattern scale (1 = the metre-based default;
 // larger = finer, for parts modelled larger than life)

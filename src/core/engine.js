@@ -10,7 +10,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { SEGMENTS, DURATION, TIME_SCALE, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
-import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApplyShader, AccumShader, TRANSITION_MODES } from './post.js';
+import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApplyShader, AccumShader, GlareDownShader, GlareUpShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
@@ -42,6 +42,8 @@ export class Engine {
       tonemap: fx.tonemap ?? 'aces',
       // high: contact-hardening (PCSS-style) shadow filtering, see lib/softshadows.js
       softShadows: fx.softShadows ?? hq,
+      // high: veiling glare, the lens's own wide, energy-conserving scatter (share of the light)
+      glare: fx.glare ?? (hq ? 0.04 : 0),
     };
     if (this.fx.softShadows && !installSoftShadows()) this.fx.softShadows = false;
     this.quality = quality;
@@ -205,6 +207,15 @@ export class Engine {
     this.dofA = mkRT(false, 0); this.dofB = mkRT(false, 0); this.comp = mkRT(false, 0);
     const aw = Math.max(1, Math.round(w / 2)), ah = Math.max(1, Math.round(h / 2));
     this.aoRaw = mkRT(false, 0, aw, ah); this.aoBlur = mkRT(false, 0, aw, ah);
+    // veiling-glare mip chain (high quality only): 1/2 … 1/64
+    this.glareDown?.forEach((rt) => rt.dispose()); this.glareUp?.forEach((rt) => rt.dispose());
+    this.glareDown = []; this.glareUp = [];
+    if (this.fx.glare > 0) {
+      for (let i = 1; i <= 6; i++) {
+        const gw = Math.max(1, Math.round(w / 2 ** i)), gh = Math.max(1, Math.round(h / 2 ** i));
+        this.glareDown.push(mkRT(false, 0, gw, gh)); if (i < 6) this.glareUp.push(mkRT(false, 0, gw, gh));
+      }
+    }
 
     if (!this.dofQuad) {
       this.dofQuad = new FullScreenQuad(shaderMat(DofShader));
@@ -219,6 +230,8 @@ export class Engine {
       const am = shaderMat(AccumShader);
       Object.assign(am, { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor });
       this.accumQuad = new FullScreenQuad(am);
+      this.glareDownQuad = new FullScreenQuad(shaderMat(GlareDownShader));
+      this.glareUpQuad = new FullScreenQuad(shaderMat(GlareUpShader));
       this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.7, 0.55, 0.82);
     }
     this.bloom.setSize(w, h);
@@ -505,11 +518,33 @@ export class Engine {
     return { T, exposure, harmony };
   }
 
+  // Veiling glare of a linear HDR image into glareUp[0] (half resolution); false when off.
+  renderGlare(tex) {
+    if (!(this.fx.glare > 0) || this.glareDown.length < 6) return false;
+    const r = this.renderer, dq = this.glareDownQuad, uq = this.glareUpQuad;
+    let src = tex, sw = this.width, sh = this.height;
+    for (const rt of this.glareDown) {
+      dq.material.uniforms.tInput.value = src; dq.material.uniforms.uTexel.value.set(1 / sw, 1 / sh);
+      r.setRenderTarget(rt); dq.render(r);
+      src = rt.texture; sw = rt.width; sh = rt.height;
+    }
+    let low = this.glareDown[5];
+    for (let i = 4; i >= 0; i--) {
+      const u = uq.material.uniforms;
+      u.tInput.value = this.glareDown[i].texture; u.tLow.value = low.texture; u.uTexel.value.set(1 / low.width, 1 / low.height);
+      r.setRenderTarget(this.glareUp[i]); uq.render(r);
+      low = this.glareUp[i];
+    }
+    return true;
+  }
+
   // Final grade of a linear HDR image to the canvas (and downscale when supersampling).
   grade(tex, { T, exposure, harmony }) {
     const r = this.renderer;
     const fu = this.finalQuad.material.uniforms;
     fu.tInput.value = tex;
+    fu.uGlare.value = this.renderGlare(tex) ? this.fx.glare : 0;
+    fu.tGlare.value = this.glareUp[0]?.texture ?? null;
     fu.uExposure.value = exposure;
     fu.uWarmth.value = warmthAt(T);
     fu.uHarmony.value = FinalShader.uniforms.uHarmony.value * Math.min(1, Math.max(0, harmony));
