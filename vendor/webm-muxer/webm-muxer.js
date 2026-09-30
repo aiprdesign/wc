@@ -1033,6 +1033,10 @@ createTracks_fn = function() {
       { id: 131 /* TrackType */, data: AUDIO_TRACK_TYPE },
       { id: 134 /* CodecID */, data: __privateGet(this, _options).audio.codec },
       __privateGet(this, _audioCodecPrivate),
+      // [wc patch] Opus: the encoder's pre-skip as CodecDelay (ns; block timestamps include it, so the
+      // decoded audio starts at 0) and the recommended 80 ms SeekPreRoll
+      __privateGet(this, _options).audio.codecDelay ? { id: 22186 /* CodecDelay */, data: Math.round(__privateGet(this, _options).audio.codecDelay) } : null,
+      __privateGet(this, _options).audio.seekPreRoll ? { id: 22203 /* SeekPreRoll */, data: Math.round(__privateGet(this, _options).audio.seekPreRoll) } : null,
       { id: 225 /* Audio */, data: [
         { id: 181 /* SamplingFrequency */, data: new EBMLFloat32(__privateGet(this, _options).audio.sampleRate) },
         { id: 159 /* Channels */, data: __privateGet(this, _options).audio.numberOfChannels },

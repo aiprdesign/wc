@@ -216,8 +216,38 @@ var mvhd = (creationTime, tracks) => {
 };
 var trak = (track, creationTime) => box("trak", null, [
   tkhd(track, creationTime),
+  edts(track),
   mdia(track, creationTime)
 ]);
+// [wc patch] Edit list for an audio track given `audio.trim = { duration }` (seconds): the Opus pre-skip
+// (read from the encoder's OpusHead, as ISO/IEC 23003-5 / ffmpeg do) is cut from the start and the
+// track presents exactly `duration`, so decoded audio starts at 0 and ends with the video.
+var edts = (track) => {
+  const trim = track.info.trim;
+  if (!trim || track.info.type !== "audio")
+    return null;
+  let mediaTime = trim.mediaTime ?? 0;
+  const description = track.info.decoderConfig?.description;
+  if (trim.mediaTime == null && track.info.codec === "opus" && description?.byteLength >= 18) {
+    const view2 = ArrayBuffer.isView(description) ? new DataView(description.buffer, description.byteOffset, description.byteLength) : new DataView(description);
+    mediaTime = Math.round(view2.getUint16(10, true) * track.timescale / 48e3);
+  }
+  const last = lastPresentedSample(track.samples);
+  const available = last ? last.presentationTimestamp + last.duration - mediaTime / track.timescale : 0;
+  const duration = intoTimescale(Math.max(0, Math.min(trim.duration ?? Infinity, available)), GLOBAL_TIMESCALE);
+  return box("edts", null, [
+    fullBox("elst", 0, 0, [
+      u32(1),
+      // Entry count
+      u32(duration),
+      // Segment duration (movie timescale)
+      i32(mediaTime),
+      // Media time (track timescale)
+      fixed_16_16(1)
+      // Media rate
+    ])
+  ]);
+};
 var tkhd = (track, creationTime) => {
   let lastSample = lastPresentedSample(track.samples);
   let durationInGlobalTimescale = intoTimescale(
@@ -1590,6 +1620,8 @@ prepareTracks_fn = function() {
         codec: __privateGet(this, _options).audio.codec,
         numberOfChannels: __privateGet(this, _options).audio.numberOfChannels,
         sampleRate: __privateGet(this, _options).audio.sampleRate,
+        trim: __privateGet(this, _options).audio.trim ?? null,
+        // [wc patch] see edts
         decoderConfig: null
       },
       timescale: __privateGet(this, _options).audio.sampleRate,

@@ -168,16 +168,19 @@ export class Words3D {
   trackDof(inst) {
     const d = inst.dof;
     if (!d || inst._dofT) return;
-    const v = {}, init = {}, wrote = new Set();
+    const v = {}, scene = {}, init = {}, wrote = new Set();
     for (const k of DOF_KEYS) {
-      v[k] = init[k] = d[k];
-      Object.defineProperty(d, k, { get: () => v[k], set: (x) => { v[k] = x; wrote.add(k); }, enumerable: true, configurable: true });
+      v[k] = scene[k] = init[k] = d[k];
+      Object.defineProperty(d, k, { get: () => v[k], set: (x) => { v[k] = scene[k] = x; wrote.add(k); }, enumerable: true, configurable: true });
     }
-    inst._dofT = { v, init, wrote };
+    // "written" means written by the latest update() (whoever calls it: the engine, Explore, build())
+    const update = inst.update;
+    inst.update = function (...a) { wrote.clear(); return update.apply(this, a); };
+    inst._dofT = { v, scene, init, wrote };
   }
 
-  // Before this frame's rack: the fields the scene didn't write since the last frame get their
-  // time-based value (at story time T; null: no heading has shown, the initial values).
+  // Before this frame's rack: the scene's own lens at story time T (null: as if no heading had shown).
+  // Idempotent: safe to call again for the same update.
   settleDof(inst, T) {
     const s = inst._dofT;
     if (!s) return null;
@@ -189,8 +192,7 @@ export class Words3D {
         held.focus = it.d; held.range = it.d * 0.35; held.amount = Math.max(held.amount ?? 0, 0.35);
       }
     }
-    for (const k of DOF_KEYS) if (!s.wrote.has(k)) s.v[k] = (held ?? s.init)[k];
-    s.wrote.clear();
+    for (const k of DOF_KEYS) s.v[k] = s.wrote.has(k) ? s.scene[k] : (held ?? s.init)[k];
     return s.v;
   }
 

@@ -23,6 +23,7 @@ export function formatLabel(aspect = OUTPUT_ASPECT) {
 }
 
 const even = (v) => Math.max(2, 2 * Math.round(v / 2));
+const OPUS_PRESKIP_NS = (312 / 48000) * 1e9;
 
 // Export size for a resolution class. 720 / 1080 fit the frame inside a 16:9 box (1280×720 /
 // 1920×1080), or a 9:16 box for vertical formats, as the render scripts do: 2.39 → 1920×804,
@@ -173,14 +174,17 @@ export async function exportVideo(engine, audio, opts = {}) {
     muxer = new Muxer({
       target: new StreamTarget(target), fastStart: false, firstTimestampBehavior: 'offset',
       video: { codec: video.mux, width, height, frameRate: fps },
-      audio: aCodec ? { codec: aCodec.mux, numberOfChannels: channels, sampleRate: aCodec.sampleRate } : undefined,
+      // an edit list trims the encoder's lead-in (Opus pre-skip) and the last packet's padding: the
+      // audio presents exactly the video's N / fps seconds, from 0
+      audio: aCodec ? { codec: aCodec.mux, numberOfChannels: channels, sampleRate: aCodec.sampleRate, trim: { duration: N / fps } } : undefined,
     });
   } else {
     const { Muxer, StreamTarget } = await import('webm-muxer');
     muxer = new Muxer({
       target: new StreamTarget(target), type: 'webm', firstTimestampBehavior: 'offset',
       video: { codec: video.mux, width, height, frameRate: fps },
-      audio: aCodec ? { codec: 'A_OPUS', numberOfChannels: channels, sampleRate: aCodec.sampleRate } : undefined,
+      // Opus pre-skip (libopus look-ahead: 312 samples at 48 kHz) as CodecDelay: decoded audio starts at 0
+      audio: aCodec ? { codec: 'A_OPUS', numberOfChannels: channels, sampleRate: aCodec.sampleRate, codecDelay: OPUS_PRESKIP_NS, seekPreRoll: 80e6 } : undefined,
     });
   }
 
