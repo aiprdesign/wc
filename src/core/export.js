@@ -109,28 +109,47 @@ async function resample(buffer, rate, channels) {
   return ctx.startRendering();
 }
 
-// The muxers write mostly in order, then patch a few header bytes (sizes, duration) at the end:
-// collect positioned writes into Blob parts, overwriting in place when a write lands inside them.
-class ByteSink {
-  constructor() { this.parts = []; this.size = 0; }
+// The muxers write mostly in order, then patch a few bytes behind the write head (a cluster's size
+// when it closes; the file's sizes, duration and index at the end). ByteSink collects positioned
+// writes; every `foldBytes` the written run is folded into a Blob, which the browser may keep out of
+// the page's memory (on disk), so a long export at 1080p doesn't hold hundreds of MB in the tab.
+// A patch that lands in a folded run is kept aside and spliced in when the file is assembled.
+export class ByteSink {
+  constructor(foldBytes = 16 << 20) { this.foldBytes = foldBytes; this.reset(); }
+  reset() { this.folded = []; this.foldedEnd = 0; this.patches = []; this.parts = []; this.partBytes = 0; this.size = 0; }
   write(data, pos) {
-    const d = new Uint8Array(data);   // own copy: the muxer may reuse its buffer
-    let end = pos + d.length;
-    if (pos > this.size) { this.parts.push({ pos: this.size, data: new Uint8Array(pos - this.size) }); this.size = pos; }
+    let d = new Uint8Array(data);   // own copy: the muxer may reuse its buffer
+    if (pos < this.foldedEnd) {      // (partly) behind the folded run: remember it as a patch
+      const n = Math.min(d.length, this.foldedEnd - pos);
+      this.patches.push({ pos, data: d.slice(0, n) });
+      if (n === d.length) return;
+      d = d.subarray(n); pos += n;
+    }
+    const end = pos + d.length;
+    if (pos > this.size) { this.push(this.size, new Uint8Array(pos - this.size)); }
     if (pos < this.size) {
       for (const p of this.parts) {
         const a = Math.max(pos, p.pos), b = Math.min(end, p.pos + p.data.length);
         if (a < b) p.data.set(d.subarray(a - pos, b - pos), a - p.pos);
       }
       if (end <= this.size) return;
-      this.parts.push({ pos: this.size, data: d.subarray(this.size - pos) });
-      this.size = end;
-      return;
+      d = d.subarray(this.size - pos); pos = this.size;
     }
-    this.parts.push({ pos, data: d });
-    this.size = end;
+    this.push(pos, d);
+    if (this.partBytes >= this.foldBytes) this.fold();
   }
-  blob(type) { return new Blob(this.parts.map((p) => p.data), { type }); }
+  push(pos, data) { this.parts.push({ pos, data }); this.partBytes += data.length; this.size = pos + data.length; }
+  fold() {
+    if (!this.parts.length) return;
+    this.folded.push(new Blob(this.parts.map((p) => p.data)));
+    this.foldedEnd = this.size;
+    this.parts = []; this.partBytes = 0;
+  }
+  blob(type) {
+    let whole = new Blob([...this.folded, ...this.parts.map((p) => p.data)]);
+    for (const { pos, data } of this.patches) whole = new Blob([whole.slice(0, pos), data, whole.slice(pos + data.length)]);
+    return new Blob([whole], { type });
+  }
 }
 
 // A task boundary that background tabs don't throttle (unlike setTimeout / rAF): keeps the page
@@ -142,7 +161,7 @@ const abortError = () => new DOMException('Export cancelled', 'AbortError');
  * Render and encode film time [from, to) at `fps` into a video Blob.
  * engine: the film Engine; audio: the soundtrack AudioBuffer (or null for a silent file).
  * opts: { width, height, fps = 30, from = 0, to = FILM_DURATION, hq = false, signal, onProgress, onStart,
- *         container: 'mp4' (testing: VP9 in MP4 where H.264 can't be encoded) }
+ *         container: 'mp4' (testing: VP9 in MP4 where H.264 can't be encoded), foldBytes (testing: ByteSink) }
  * Returns { blob, ext, container, video, audio, frames, width, height, fps, seconds }.
  * The caller pins nothing: this pins the engine at width × height for the export and unpins it after.
  */
@@ -166,7 +185,7 @@ export async function exportVideo(engine, audio, opts = {}) {
   const pcm = aCodec ? await resample(audio, aCodec.sampleRate, channels) : null;
   if (signal?.aborted) throw abortError();
 
-  const sink = new ByteSink();
+  const sink = new ByteSink(opts.foldBytes);
   const target = { onData: (data, position) => sink.write(data, position) };
   let muxer;
   if (video.container === 'mp4') {
@@ -268,7 +287,7 @@ export async function exportVideo(engine, audio, opts = {}) {
     throw failure ?? e;
   } finally {
     closeAll();
-    sink.parts = [];   // release the partial file on cancel / error (a finished file lives on in its Blob)
+    sink.reset();   // release the partial file on cancel / error (a finished file lives on in its Blob)
     canvas.removeEventListener('webglcontextlost', onLost);
     signal?.removeEventListener('abort', onAbort);
     engine.unpin();
@@ -278,16 +297,17 @@ export async function exportVideo(engine, audio, opts = {}) {
 // ---------------------------------------------------------------------------------------------
 // Dialog: format, resolution, frame rate, high quality, estimate → Start; then a progress modal
 // (frame i / N, %, elapsed, ETA, Cancel) over the canvas itself, which shows each frame as it renders.
-// ctx: { engine, getAudio: () => AudioBuffer|null, canStart: () => string|null (a reason not to),
-//        prepare: () => restore (quiet the live film; restore puts it back), download(blob, name),
-//        onContextLost: (reload) => void }
+// ctx: { engine, getAudio: () => AudioBuffer|null, narration: bool (false: ?novo), isMuted: () => bool,
+//        inExperience: () => bool, canStart: () => string|null (a reason not to),
+//        prepare: () => restore (quiet the live film; restore puts it back), download(blob, name) }
+// (a lost GPU context mid-export: main.js calls contextLost(reload))
 export class ExportDialog {
   constructor(ctx) {
     this.ctx = ctx;
     this.active = false;
     this.el = document.getElementById('export-dlg');
     const q = (s) => this.el.querySelector(s);
-    this.$ = { fmt: q('[data-x="fmt"]'), res: q('[data-x="res"]'), fps: q('[data-x="fps"]'), hq: q('[data-x="hq"]'), est: q('[data-x="est"]'), note: q('[data-x="note"]'), warn: q('[data-x="warn"]'), start: q('[data-x="start"]'), setup: q('[data-x="setup"]'), run: q('[data-x="run"]'), bar: q('[data-x="bar"]'), count: q('[data-x="count"]'), time: q('[data-x="time"]'), codec: q('[data-x="codec"]'), cancel: q('[data-x="cancel"]'), close: q('[data-x="close"]'), msg: q('[data-x="msg"]'), done: q('[data-x="done"]') };
+    this.$ = { fmt: q('[data-x="fmt"]'), res: q('[data-x="res"]'), fps: q('[data-x="fps"]'), hq: q('[data-x="hq"]'), est: q('[data-x="est"]'), note: q('[data-x="note"]'), sound: q('[data-x="sound"]'), warn: q('[data-x="warn"]'), start: q('[data-x="start"]'), setup: q('[data-x="setup"]'), run: q('[data-x="run"]'), bar: q('[data-x="bar"]'), count: q('[data-x="count"]'), time: q('[data-x="time"]'), codec: q('[data-x="codec"]'), cancel: q('[data-x="cancel"]'), close: q('[data-x="close"]'), msg: q('[data-x="msg"]'), done: q('[data-x="done"]') };
     this.$.start.addEventListener('click', () => this.start());
     this.$.cancel.addEventListener('click', () => this.cancel());
     for (const k of ['res', 'fps', 'hq']) this.$[k].addEventListener('change', () => this.refresh());
@@ -305,7 +325,6 @@ export class ExportDialog {
     this.mode('setup');
     this.$.fmt.textContent = formatLabel();
     const lite = this.ctx.engine.quality === 'lite';
-    this.$.res.value = '720';
     this.$.warn.textContent = '';
     this.$.msg.textContent = '';
     this.$.start.disabled = !!why;
@@ -314,6 +333,12 @@ export class ExportDialog {
       this.$.start.disabled = true;
       this.$.msg.innerHTML = 'This browser can’t encode video inside the page (WebCodecs is missing: Safari before 16.4, Firefox before 130). Use a current Chrome, Edge, Safari or Firefox, or render the film frame-perfect on a computer with <code>npm run render:16x9</code> (or <code>render:1x1</code>, <code>render:9x16</code>, <code>render:2x3</code>; see tools/render.mjs).';
     }
+    // what the file will sound like: the loaded soundtrack (narration unless ?novo), never the mute state
+    const audio = this.ctx.getAudio?.() ?? null;
+    this.$.sound.textContent = !audio ? 'None: the film was loaded without sound'
+      : !hasAudioCodecs() ? 'None: this browser can’t encode audio (the video is silent)'
+        : `${this.ctx.narration === false ? 'The score without narration (?novo)' : 'The soundtrack with narration'}${this.ctx.isMuted?.() ? ', although the player is muted' : ''}`;
+    this.$.note.textContent = this.ctx.inExperience?.() ? 'Experience mode is a live flythrough: the export is the film itself (its camera, headings and soundtrack), from the first frame to the last.' : '';
     this.lite = lite;
     this.show();
     this.measure();
@@ -374,7 +399,7 @@ export class ExportDialog {
   }
 
   // The export itself (also window.__film.exportVideo). Resolves with the result, or null when cancelled.
-  async run({ width, height, fps = 30, hq = false, from = 0, to = FILM_DURATION, name, download = true, container } = {}) {
+  async run({ width, height, fps = 30, hq = false, from = 0, to = FILM_DURATION, name, download = true, container, foldBytes } = {}) {
     if (this.active) throw new Error('An export is already running.');
     if (!hasWebCodecs()) throw new Error('WebCodecs is not available in this browser.');
     this.active = true;
@@ -393,7 +418,7 @@ export class ExportDialog {
     let lastUI = 0;
     try {
       const r = await exportVideo(this.ctx.engine, audio, {
-        width, height, fps, hq, from, to, container, signal: this.abort.signal,
+        width, height, fps, hq, from, to, container, foldBytes, signal: this.abort.signal,
         onStart: (info) => {
           this.$.codec.textContent = `${info.width}×${info.height} · ${info.fps} fps · ${info.video}${info.audio ? ` + ${info.audio}` : ' · no sound (this browser can’t encode audio)'} · ${info.container.toUpperCase()}${hq ? ' · high quality' : ''}`;
         },

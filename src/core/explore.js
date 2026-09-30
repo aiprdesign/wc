@@ -31,7 +31,9 @@ export class Explorer {
   enter(filmT) {
     const e = this.engine, T = filmT / TIME_SCALE;
     this.filmT = filmT;
-    this.inst = e.mainInstance(T);
+    const inst = e.mainInstance(T);
+    if (this.active) { if (this.inst !== inst) this.handBack(); else this.restoreCamera(); }   // re-entered (scrubbing)
+    this.inst = inst;
     const info = e.info(T, this.inst.segment, 0);
     try { this.inst.update(info.t, info); } catch { /* the scene reports its own errors */ }
     const cam = this.inst.camera;
@@ -52,13 +54,33 @@ export class Explorer {
 
   exit() {
     if (!this.active) return;
-    try { this.inst.exploreEnd?.(); } catch { /* scene hook */ }
+    this.handBack();
     this.active = false;
     this.engine.explore = null;
     this.keys.clear();
     this.pointers.clear();
     this.canvas.classList.remove('exploring');
     this.engine.render(this.filmT, 0);
+  }
+
+  // Leaving a sequence: its scene hooks undo their set dressing, and its camera gets the director's pose back.
+  handBack() {
+    const inst = this.inst;
+    if (!inst) return;
+    try { inst.exploreEnd?.(); } catch { /* scene hook */ }
+    this.restoreCamera();
+    if (this._director) this._director.inst = null;
+  }
+
+  // (also the engine's hook before each update while exploring: the scene poses from the director's
+  // camera, never from the rig's)
+  restoreCamera() {
+    const inst = this.inst, d = this._director;
+    if (!inst || d?.inst !== inst) return;
+    const cam = inst.camera;
+    cam.position.copy(d.p); cam.quaternion.copy(d.q); cam.up.copy(d.up);
+    if (cam.isPerspectiveCamera && cam.fov !== d.fov) { cam.fov = d.fov; cam.updateProjectionMatrix(); }
+    cam.updateMatrixWorld();
   }
 
   // Back to the film's own framing (orbiting around what it was looking at).
@@ -87,7 +109,11 @@ export class Explorer {
   // Engine hook, after the sequence's update: complete the set, then pose the camera.
   prepare(t) {
     try { this.inst.explore?.(t); } catch (e) { if (!this._warned) { console.warn('[explore] scene hook failed', e); this._warned = true; } }
-    this.apply(this.inst.camera);
+    // the director's pose this frame: exit() hands it back, so a scene that doesn't set its whole
+    // camera every frame (its up vector, its lens) never inherits the explore rig's pose
+    const cam = this.inst.camera, d = this._director ??= { inst: null, p: new THREE.Vector3(), q: new THREE.Quaternion(), up: new THREE.Vector3(), fov: 0 };
+    d.inst = this.inst; d.p.copy(cam.position); d.q.copy(cam.quaternion); d.up.copy(cam.up); d.fov = cam.fov;
+    this.apply(cam);
     // after posing: scenes can turn camera-facing labels / billboards toward the explore camera
     try { this.inst.explorePosed?.(this.inst.camera); } catch { /* scene hook */ }
   }

@@ -368,6 +368,7 @@ export class Engine {
     this.ensureEnvironment(inst);
     const info = this.info(T, inst.segment, dt);
     this.live?.restore?.(inst);   // undo last frame's live / drone offset (no-op when there was none)
+    if (this.explore?.active && this.explore.inst === inst) this.explore.restoreCamera();   // likewise the explore rig's pose
     try {
       inst.update(info.t, info);
     } catch (e) {

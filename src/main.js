@@ -425,6 +425,9 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   const exporter = new ExportDialog({
     engine,
     getAudio: () => player.buffer ?? null,   // the loaded soundtrack (with narration unless ?novo); mute doesn't apply
+    narration: !params.has('novo'),
+    isMuted: () => player.muted,
+    inExperience: () => exp.active,
     canStart: () => (body.classList.contains('recording') ? 'A live recording is running: let it finish first.' : xr.active ? 'Leave VR / AR first.' : null),
     download,
     prepare: () => {
