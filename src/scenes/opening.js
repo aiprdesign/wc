@@ -809,7 +809,9 @@ export function create(ctx, segment) {
       sparksT.tick(t, info.height);
 
       // HUD streak: both hits (the film centres the burst and the title on the frame)
-      streakU.uI.value = 1.5 * (aI >= 0 ? Math.exp(-aI * 4.5) : 0.25 * pre) + 1.2 * slam ** 4.5 + 0.1 * cut / 0.004;
+      // (the slam's streak is a quick, thin flash: a slow, wide one sat behind the title as a flat stripe)
+      streakU.uI.value = 1.5 * (aI >= 0 ? Math.exp(-aI * 4.5) : 0.25 * pre) + 0.7 * (aS >= 0 ? Math.exp(-aS * 24) : 0) + 0.1 * cut / 0.004;
+      streak.scale.y = aS >= 0 ? 0.2 : 0.42;
       streak.scale.x = FILM_ASPECT * (1.6 + 1.1 * Math.exp(-Math.max(0, Math.min(aI >= 0 ? aI : 9, aS >= 0 ? aS : 9)) * 3));
       streak.visible = streakU.uI.value > 0.003;
 
