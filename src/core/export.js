@@ -289,7 +289,9 @@ export class ExportDialog {
     for (const k of ['res', 'fps', 'hq']) this.$[k].addEventListener('change', () => this.refresh());
     // Esc while exporting doesn't drop the work: only Cancel does (a forced close still cancels cleanly)
     this.el.addEventListener('cancel', (e) => { if (this.active) e.preventDefault(); });
-    this.el.addEventListener('close', () => { if (this.active) this.cancel(); });
+    // (a close event arrives a task late: one left over from closing the dialog before this export
+    // started finds it open again, and is ignored)
+    this.el.addEventListener('close', () => { if (this.active && !this.el.open) this.cancel(); });
     this._perFrame = null;
   }
 
@@ -329,14 +331,14 @@ export class ExportDialog {
     try {
       const gl = e.renderer.getContext(), px = new Uint8Array(4), T = e.lastT * TIME_SCALE || 10;
       const times = [];
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 4; k++) {
         const t0 = performance.now();
         e.render(T, 0);
         gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
         times.push(performance.now() - t0);
       }
-      times.sort((a, b) => a - b);
-      this._perFrame = { ms: times[1], px: e.outW * e.outH };
+      times.shift();   // the first can include one-off work (a scene's lighting built on first use)
+      this._perFrame = { ms: Math.min(...times), px: e.outW * e.outH };
     } catch { this._perFrame = null; }
   }
 

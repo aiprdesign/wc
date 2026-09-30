@@ -149,7 +149,23 @@ export class Words3D {
   }
 
   // Explore mode: this sequence's headings are hidden.
-  hideAll(inst) { for (const it of this.items) if (it.inst === inst) { it.group.visible = false; it.light.intensity = 0; } }
+  hideAll(inst) { this.baseDof(inst); for (const it of this.items) if (it.inst === inst) { it.group.visible = false; it.light.intensity = 0; } }
+
+  // The rack focus onto a heading is layered on the scene's own depth of field for one frame only.
+  // Many scenes never set some of dof.focus / range / amount in update() (civic: "never blurs"), so
+  // a rack written into them would stick: after the heading, and when any earlier moment was
+  // rendered again (scrubbing back; the video export), the plate came out blurred. Each field still
+  // holding what the rack wrote last time (the scene didn't touch it) goes back to the scene's value.
+  baseDof(inst) {
+    const d = inst.dof;
+    if (!d) return;
+    const w = inst._dofRack, b = inst._dofScene ??= {};
+    for (const k of ['focus', 'range', 'amount']) {
+      if (w && d[k] === w[k]) d[k] = b[k];
+      b[k] = d[k];
+    }
+    inst._dofRack = null;
+  }
 
   // Engine hook during a 'letter' transition: the counter triangle in uv (lens already set).
   letterWindow(inst, uniforms) {
@@ -296,6 +312,7 @@ export class Words3D {
   apply(inst, T) {
     const [pos, camPos, fwd] = this._v, [quat, camQuat] = this._q;
     inst._wordsDuck = 0;   // 0..1: how much the scene's bloom yields while a heading is up (engine reads it)
+    this.baseDof(inst);
     for (const it of this.items) {
       if (it.inst !== inst) continue;
       const on = T > it.t0 && T < it.t1 + (it.swap ? 0.12 : 0.5);
@@ -441,6 +458,7 @@ export class Words3D {
         inst.dof.focus = lerp(inst.dof.focus, it.d, w);
         inst.dof.range = lerp(inst.dof.range ?? 2, it.d * 0.35, w);
         inst.dof.amount = Math.max(inst.dof.amount ?? 0, 0.35 * w);
+        inst._dofRack = { focus: inst.dof.focus, range: inst.dof.range, amount: inst.dof.amount };
       }
     }
   }
