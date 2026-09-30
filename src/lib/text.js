@@ -207,10 +207,10 @@ export function textPoints(text, n, opts = {}) {
 
 // ---------------------------------------------------------------------------
 // Extruded 3D lettering in Cinzel Bold. Returns a centred BufferGeometry.
-export function textGeometry3D(text, { size = 1, depth = 0.25, bevel = 0.02, curveSegments = 6 } = {}) {
+export function textGeometry3D(text, { size = 1, depth = 0.25, bevel = 0.02, curveSegments = 6, bevelSegments = 3 } = {}) {
   const geo = new TextGeometry(text, {
     font: font3D, size, depth, curveSegments,
-    bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.7, bevelSegments: 3,
+    bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.7, bevelSegments,
   });
   geo.computeBoundingBox();
   const bb = geo.boundingBox;
@@ -219,7 +219,7 @@ export function textGeometry3D(text, { size = 1, depth = 0.25, bevel = 0.02, cur
 }
 
 // Per-letter 3D glyphs laid out as a line: [{ geometry, char, x }] (x = centre offset).
-export function letters3D(text, { size = 1, depth = 0.25, bevel = 0.02, tracking = 0.08 } = {}) {
+export function letters3D(text, { size = 1, depth = 0.25, bevel = 0.02, tracking = 0.08, curveSegments = 6, bevelSegments = 3 } = {}) {
   const glyphs = font3D.data.glyphs;
   const res = font3D.data.resolution;
   const out = [];
@@ -227,7 +227,7 @@ export function letters3D(text, { size = 1, depth = 0.25, bevel = 0.02, tracking
   for (const ch of text) {
     const g = glyphs[ch] || glyphs['?'];
     const adv = ((g ? g.ha : 500) / res) * size + tracking * size;
-    if (ch !== ' ' && g) out.push({ geometry: textGeometry3D(ch, { size, depth, bevel }), char: ch, x: x + adv / 2 });
+    if (ch !== ' ' && g) out.push({ geometry: textGeometry3D(ch, { size, depth, bevel, curveSegments, bevelSegments }), char: ch, x: x + adv / 2 });
     x += adv;
   }
   const total = x - tracking * size;

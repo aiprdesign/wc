@@ -47,9 +47,19 @@ function letterMaterial(era, env, shared, invert = false) {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nuniform mat4 uWordInv; varying vec3 vWordPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;\nvWordN = normalize(mat3(uWordInv * modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine; uniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine; uniform vec3 uTint;')
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        // gold-bar finish in the word's own space: brushed faces (fine horizontal streaks), mirror-polished
+        // bevels that catch every highlight, and slightly darker, rougher cast sides
+        { float nz = abs(normalize(vWordN).z);
+          float face = smoothstep(0.93, 0.99, nz), side = 1.0 - smoothstep(0.15, 0.45, nz), bev = 1.0 - face - side;
+          float brush = fract(sin(floor(vWordPos.y * 900.0) * 91.7) * 4375.85) * 0.5 + 0.5 * fract(sin(floor(vWordPos.y * 260.0 + vWordPos.x * 3.0) * 13.1) * 917.3);
+          roughnessFactor = clamp(face * (0.26 + 0.14 * brush) + max(bev, 0.0) * 0.1 + side * 0.46, 0.05, 1.0); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.78, 1.0, smoothstep(0.15, 0.6, nz)); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
@@ -64,7 +74,7 @@ function letterMaterial(era, env, shared, invert = false) {
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v10';
+  m.customProgramCacheKey = () => 'word3d-v11';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
   if (!invert) addSurfaceDetail(m);
   return m;
@@ -189,7 +199,7 @@ export class Words3D {
       uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() },
       uTint: { value: new THREE.Color(era.color).lerp(new THREE.Color('#ffffff'), 0.55) },
     };
-    const glyphs = letters3D(text, { size: 1, depth: 0.32, bevel: 0.035, tracking: 0.1 });
+    const glyphs = letters3D(text, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 10, bevelSegments: 5 });
     const group = new THREE.Group();
     let capH = 0;
     const letters = glyphs.map((g, i) => {
