@@ -8,6 +8,7 @@ import { Explorer } from './core/explore.js';
 import { LiveCam } from './core/live.js';
 import { Experience } from './core/experience.js';
 import { XRMode, xrSupport, VR, AR } from './core/xr.js';
+import { ExportDialog } from './core/export.js';
 import { Ambient } from './audio/ambient.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
@@ -83,7 +84,9 @@ async function boot() {
       glare: flag('glare') === false ? 0 : flag('glare') ? 0.04 : undefined,
     },
     // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
-    xr: xrs.vr || xrs.ar ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,
+    // an XR-ready context up front only on headsets: on Android AR phones asking for it before the film
+    // loads could stall start-up. There the context is made XR-compatible when the AR session starts.
+    xr: (xrs.vr || xrs.ar) && !/Android|iPhone|iPad/i.test(navigator.userAgent) ? { antialias: xrs.vr && !/Mobile/i.test(navigator.userAgent) } : null,
   });
   window.__film = { engine };
   // If the GPU driver resets (context lost) — also while the sequences are still loading, which is
@@ -94,6 +97,15 @@ async function boot() {
     e.preventDefault();
     player?.pause();
     experience?.pause();
+    // mid-export: the export stops and says so; the reload waits until its dialog is closed
+    const exporter = window.__film?.exporter;
+    if (exporter?.active) { exporter.contextLost(reloadLighter); return; }
+    // entering AR / VR on a phone: making the context XR-compatible may reset it once; the browser
+    // restores it and the session carries on, so don't reload the page under it
+    if (window.__film?.engine?.xrStarting) return;
+    reloadLighter();
+  });
+  const reloadLighter = () => {
     const cur = params.get('q') ?? quality;
     const lost = (parseInt(params.get('lost') ?? '0', 10) || 0) + 1;
     const q = { ultra: 'high', high: 'medium', medium: 'lite', low: 'lite' }[cur];
@@ -106,7 +118,7 @@ async function boot() {
     url.searchParams.set('lost', String(lost));
     setStatus('The graphics driver reset. Reloading at a lighter quality…');
     setTimeout(() => location.replace(url), 600);
-  });
+  };
   setStatus('Loading typography…');
   await loadFonts();
   setLoad(0.1);
@@ -124,7 +136,7 @@ async function boot() {
   // EXPERIENCE: slow-motion drone flythrough with a live ambient score (no narration)
   const ambient = params.has('noaudio') ? null : new Ambient();
   const nowT = () => (experience?.active ? experience.t : player.time);
-  addEventListener('resize', () => { engine.resize(); if (!player.playing && !experience?.playing) engine.render(nowT(), 0); });
+  addEventListener('resize', () => { if (engine.pinned) return; engine.resize(); if (!player.playing && !experience?.playing) engine.render(nowT(), 0); });
   // live camera: drag / scroll / pinch to look around while the film plays (not while exploring)
   const live = new LiveCam(engine, $('film'), {
     isBlocked: () => explorer.active,
@@ -160,6 +172,10 @@ async function boot() {
   window.__film.enterExperience = ui.enterExperience;
   window.__film.exitExperience = ui.exitExperience;
   window.__film.xr = ui.xr;
+  window.__film.exporter = ui.exporter;
+  // frame-perfect export of film time [from, to) (automation / debugging; the dialog exports the whole film):
+  //   await __film.exportVideo({ from: 10, to: 13, width: 640, fps: 30, hq: false, download: true })
+  window.__film.exportVideo = (o = {}) => ui.exporter.run(o);
   if (params.has('autoplay')) { if (HASH_EXPERIENCE) ui.enterExperience(); else begin(player); }
 }
 
@@ -215,7 +231,7 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
     download(score.encodeWav(score.buffer), 'achievements-of-western-civilization-score.wav');
   });
   $('btn-rec').addEventListener('click', async () => {
-    if (body.classList.contains('recording') || exp.active) return;
+    if (body.classList.contains('recording') || exp.active || exporter.active) return;
     body.classList.add('recording', 'playing');
     intro.classList.add('hidden');
     await player.record((blob, ext = 'webm') => { body.classList.remove('recording'); download(blob, `achievements-of-western-civilization.${ext}`); });
@@ -262,6 +278,7 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
     else if (k === 'm') $('btn-mute').click();
     else if (k === 'f') $('btn-fs').click();
     else if (k === 'r') $('btn-rec').click();
+    else if (k === 'x') exporter.open();
     else if (k === 's' && exp.active) $('btn-speed').click();
     else if (k === 'h') controls.classList.toggle('show');
     else if (/^[0-9]$/.test(k)) { seek(SEGMENTS[Math.min(+k, SEGMENTS.length - 1)].start * TIME_SCALE + 0.01); showControls(); }
@@ -401,7 +418,47 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   };
   for (const [id, mode] of [['play-vr', VR], ['play-ar', AR], ['btn-vr', VR], ['btn-ar', AR]]) $(id)?.addEventListener('click', () => startXR(mode));
   if (HASH_XR && xrs?.[HASH_XR]) setTimeout(() => $(`play-${HASH_XR}`)?.focus(), 0);
-  return { enterExperience, exitExperience, xr };
+
+  // EXPORT VIDEO (frame-perfect, offline): core/export.js. The live film is quieted for the export
+  // (paused; no Explore, no live-camera or drone offset, no Experience clean picture: the normal
+  // film is exported) and put back exactly as it was afterwards.
+  const exporter = new ExportDialog({
+    engine,
+    getAudio: () => player.buffer ?? null,   // the loaded soundtrack (with narration unless ?novo); mute doesn't apply
+    canStart: () => (body.classList.contains('recording') ? 'A live recording is running: let it finish first.' : xr.active ? 'Leave VR / AR first.' : null),
+    download,
+    prepare: () => {
+      const live = engine.live;
+      const s = { exp: exp.active, clean: engine.clean, headings: engine.headings, introShown: !intro.classList.contains('hidden') };
+      if (explorer.active) setExplore(false);
+      if (exp.active) exp.pause(); else player.pause();
+      s.t = exp.active ? exp.t : player.time;
+      syncPlaying();
+      // the director's camera: undo the last live / drone offset, hand hooked scenes back, and hold
+      // the offset at zero for the export (the viewer's pose and the drone's flight resume after)
+      for (const inst of engine.instances.values()) live?.restore(inst);
+      live?.unhookAll();
+      engine.live = { tick() {}, apply(inst) { inst._liveFocus = 1; }, restore() {} };
+      engine.clean = false;
+      engine.headings = true;
+      intro.classList.add('hidden');
+      controls.classList.remove('show');
+      return () => {
+        engine.live = live;
+        engine.clean = s.clean;
+        engine.headings = s.headings;
+        if (s.exp) exp.render(); else player.seek(s.t);
+        if (s.introShown) intro.classList.remove('hidden');
+        else showControls(true);
+        syncPlaying();
+      };
+    },
+  });
+  $('btn-export').addEventListener('click', () => exporter.open());
+  $('export-link').addEventListener('click', () => exporter.open());
+  // while the export dialog is open, the film's keyboard shortcuts stand down (Space would play)
+  addEventListener('keydown', (e) => { if (exporter.el.open) e.stopImmediatePropagation(); }, true);
+  return { enterExperience, exitExperience, xr, exporter };
 }
 
 function download(blob, name) {
@@ -419,3 +476,8 @@ boot().catch((e) => {
   console.error(e);
   setStatus(`Could not start: ${e.message}`);
 });
+// any uncaught error while the film is still loading is shown on the loading screen (so a stalled
+// progress bar on a phone always says why)
+const bootError = (msg) => { if (!window.__film?.ready) setStatus(`Could not start: ${msg}`); };
+addEventListener('error', (e) => bootError(e.message || String(e.error)));
+addEventListener('unhandledrejection', (e) => bootError(e.reason?.message || String(e.reason)));

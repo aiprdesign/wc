@@ -24,7 +24,26 @@ npm start            # serves the folder and opens http://localhost:8080
 ```
 
 Press **Play film** with sound on. Controls: `space` play/pause · `←/→` seek · `0–9` jump to a
-chapter · `m` mute · `f` fullscreen · `r` record (MP4 where the browser supports it, else WebM) · `h` toggle controls.
+chapter · `m` mute · `f` fullscreen · `r` record live (MP4 where the browser supports it, else WebM) · `x` export video
+(frame-perfect, below) · `h` toggle controls.
+
+### Export video (frame-perfect)
+
+Live recording (`r`) captures the screen while the film plays, so a slow device drops frames.
+**Export video** (the download-arrow button in the player bar, *Download as video* on the start
+screen, or `x`) renders the film offline instead: frame by frame at a fixed 30 fps (24 / 60
+optional), not in real time. Every frame is rendered and encoded, so none are skipped however slow
+the device is. It exports the current frame format at 720p (default), 1080p or screen size.
+*High quality* adds 8-sub-frame motion blur and 2× supersampling, which is much slower. The
+soundtrack is always included (with narration unless `?novo`). Experience mode exports the normal
+film. The file is `achievements-of-western-civilization-<format>-<720p|1080p>.mp4`.
+
+It uses WebCodecs: H.264 + AAC (or Opus) in MP4, or VP9 / VP8 + Opus in WebM where the browser
+can't encode H.264 (muxed with the vendored `vendor/mp4-muxer`, `vendor/webm-muxer`, MIT). It
+works in Chrome / Edge 94+, Safari 16.4+ (silent where Safari has no audio encoder) and
+Firefox 130+. Where WebCodecs is missing, the dialog points to `npm run render:*` below, the
+frame-perfect offline renderer. For automation, `await __film.exportVideo({ from, to, width })`
+exports a time range.
 
 | Add to the address | Effect |
 |---|---|
@@ -126,8 +145,9 @@ frame), the score and narration are written to WAV, and ffmpeg muxes an H.264 MP
 scripts pass `--gpu`, which opens browser windows so Chromium uses your graphics card: leave
 them alone until they close. Without `--gpu` Chromium renders in software, which works
 anywhere but is far slower. More options (`--fps`, `--workers`, `--from/--to`, `--ffmpeg`)
-are listed at the top of `tools/render.mjs`. In the browser you can also press `r` to record
-a real-time `.mp4` (or `.webm` in browsers that cannot record MP4).
+are listed at the top of `tools/render.mjs`. In the browser, **Export video** (`x`) renders a
+frame-perfect MP4 without Node (see *Export video* above); `r` records a real-time `.mp4` (or `.webm`), which
+can drop frames on slow devices.
 
 The `render:*` scripts use the **cinematic** preset (`--preset cinematic`), which adds what
 real-time playback can't afford:
@@ -171,11 +191,13 @@ src/timeline.js       master timeline: segments, transitions, cue sheet, BPM, er
 src/core/engine.js    renders any time T: sequences → HDR targets → AO + DOF → transition → bloom → [motion blur] → grade
 src/core/post.js      depth of field, 6 transition shaders, ACES film grade (CA, vignette, grain)
 src/core/player.js    audio-clock transport, seeking, MP4/WebM recording
+src/core/export.js    frame-perfect in-browser video export (WebCodecs → MP4 / WebM) and its dialog
 src/audio/            procedural score + sound design, pre-rendered in an OfflineAudioContext
 src/scenes/<id>.js    one module per sequence (see docs/SCENE_GUIDE.md)
 src/lib/              motion-design toolkit: typography, particles, line reveals, HUD, materials, textures
 tools/                headless frame capture, contact sheets, offline MP4 render, typeface builder
 vendor/three/         three.js r186 (MIT)
+vendor/mp4-muxer/     mp4-muxer 5.2.2 (MIT) · vendor/webm-muxer/  webm-muxer 5.1.4 (MIT): used by the video export
 assets/fonts/         Cinzel, Cormorant Garamond, IBM Plex Mono, Inter (SIL OFL)
 ```
 

@@ -287,13 +287,16 @@ export class XRMode {
     r.xr.enabled = true;
     r.xr.cameraAutoUpdate = false;
     r.xr.setReferenceSpaceType('local');
+    e.xrStarting = true;
     try {
       await r.xr.setSession(session);
     } catch (err) {
+      e.xrStarting = false;
       this._restore();
       session.end().catch(() => {});
       throw err;
     }
+    e.xrStarting = false;
     session.addEventListener('end', this._end);
     session.addEventListener('select', this._select);
     session.addEventListener('squeeze', this._squeeze);

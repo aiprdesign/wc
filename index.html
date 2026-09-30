@@ -7,7 +7,7 @@
   <meta name="description" content="A 60-second real-time cinematic motion-design study: 3D, particles, typography, VFX and procedural sound, rendered live in WebGL." />
   <link rel="stylesheet" href="src/style.css" />
   <script type="importmap">
-    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/", "mp4-muxer": "./vendor/mp4-muxer/mp4-muxer.js", "webm-muxer": "./vendor/webm-muxer/webm-muxer.js" } }
   </script>
 </head>
 <body>
@@ -40,7 +40,10 @@
           <span class="pe-text"><span class="pe-title">View in AR</span><span class="pe-sub">A tabletop diorama in your room</span></span>
         </button>
       </div>
-      <button id="xr-help-link" class="xr-help-link" type="button">How to watch in VR &amp; AR</button>
+      <div class="intro-links">
+        <button id="xr-help-link" class="xr-help-link" type="button">How to watch in VR &amp; AR</button>
+        <button id="export-link" class="xr-help-link export-link" type="button" title="Render the film to a video file, frame by frame: no dropped frames, however slow this device is">Download as video (frame-perfect)</button>
+      </div>
       <p class="hint">Sound on · 108 seconds</p>
       <nav class="formats-pick" aria-label="Choose a frame format">
         <span>Format</span>
@@ -77,8 +80,9 @@
       <svg class="i-sound" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z" /></svg>
       <svg class="i-muted" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4zm15.6 3 2.1-2.1-1.4-1.4-2.1 2.1-2.1-2.1-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4z" /></svg>
     </button>
-    <button id="btn-rec" title="Record video (r): MP4 where supported" aria-label="Record video"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" /></svg></button>
-    <button id="btn-wav" title="Download soundtrack (WAV)" aria-label="Download soundtrack"><svg viewBox="0 0 24 24"><path d="M12 3v10.6l3.3-3.3 1.4 1.4L12 16.4l-4.7-4.7 1.4-1.4 3.3 3.3V3h2zM5 19h14v2H5z" /></svg></button>
+    <button id="btn-rec" title="Record live (r): captures the screen while the film plays, so a slow device can drop frames. For a frame-perfect file use Export video." aria-label="Record live video"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" /></svg></button>
+    <button id="btn-export" title="Export video (x): renders every frame offline, frame-perfect, and downloads an MP4" aria-label="Export video"><svg viewBox="0 0 24 24"><path d="M12 2v11.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6V2h2zM3 15h2v4h14v-4h2v6H3z" /></svg></button>
+    <button id="btn-wav" title="Download soundtrack (WAV)" aria-label="Download soundtrack"><svg viewBox="0 0 24 24"><path d="M9 3v11.3A3.5 3.5 0 1 0 11 17.5V7h6V3H9z" /></svg></button>
     <button id="btn-speed" class="fmt" title="Playback speed (s): 0.35× · 0.5× · 1× · 0.25×" aria-label="Playback speed">0.35×</button>
     <button id="btn-exp" class="fmt exp-btn" title="Experience mode: slow-motion flythrough, no narration" aria-label="Experience mode" aria-pressed="false">
       <svg class="i-exp" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.2a2.8 2.8 0 1 1 0 5.6 2.8 2.8 0 0 1 0-5.6zM12 5c5.5 0 10 3.1 10 7s-4.5 7-10 7S2 15.9 2 12s4.5-7 10-7zm0 1.6c-4.9 0-8.4 2.7-8.4 5.4s3.5 5.4 8.4 5.4 8.4-2.7 8.4-5.4-3.5-5.4-8.4-5.4z" /></svg>
@@ -166,6 +170,47 @@
       <p class="xh-tip">Works best on a plain, well-lit table with some texture (wood, cloth), not glass or a glossy white top.</p>
     </section>
     <p class="xh-note"><strong>iPhone and iPad:</strong> Safari does not support WebXR yet, so VR and AR cannot start there. Watch the film or Experience mode instead. <strong>Embedded previews</strong> (such as the claude.ai page) block VR and AR, so open the film's own web address.</p>
+  </dialog>
+
+  <dialog id="export-dlg" class="xr-help export-dlg" aria-labelledby="export-h">
+    <form method="dialog" class="xh-close-row" data-x="close"><button class="xh-close" aria-label="Close">✕</button></form>
+    <h2 id="export-h">Export video</h2>
+    <p class="xh-lead">Renders the film frame by frame, not in real time, and encodes every frame, so nothing is skipped however slow this device is. The soundtrack is always included, even when the player is muted.</p>
+    <div data-x="setup">
+      <div class="ex-grid">
+        <span class="ex-k">Format</span><span class="ex-v" data-x="fmt">2.39 cinema</span>
+        <label class="ex-k" for="ex-res">Resolution</label>
+        <select id="ex-res" class="ex-v" data-x="res">
+          <option value="720">720p (recommended)</option>
+          <option value="1080">1080p</option>
+          <option value="screen">Screen size</option>
+        </select>
+        <label class="ex-k" for="ex-fps">Frame rate</label>
+        <select id="ex-fps" class="ex-v" data-x="fps">
+          <option value="30">30 fps</option>
+          <option value="24">24 fps</option>
+          <option value="60">60 fps</option>
+        </select>
+        <span class="ex-k">Quality</span>
+        <label class="ex-v ex-check"><input type="checkbox" data-x="hq" /> High quality: motion blur (8 sub-frames) and 2× supersampling. Much slower, still frame-perfect.</label>
+      </div>
+      <p class="ex-est" data-x="est"></p>
+      <p class="ex-warn" data-x="warn"></p>
+      <p class="ex-msg" data-x="msg" role="alert"></p>
+      <div class="ex-actions"><button type="button" class="ex-btn" data-x="start">Start export</button></div>
+      <p class="xh-tip">Other formats: pick one on the start screen (or with the format button) first. Keep this tab open until it finishes; it keeps rendering in the background.</p>
+    </div>
+    <div data-x="run" hidden>
+      <p class="ex-codec" data-x="codec"></p>
+      <div class="ex-track"><div class="ex-bar" data-x="bar"></div></div>
+      <p class="ex-count" data-x="count" aria-live="polite"></p>
+      <p class="ex-time" data-x="time"></p>
+      <div class="ex-actions"><button type="button" class="ex-btn ex-cancel" data-x="cancel">Cancel</button></div>
+    </div>
+    <div data-x="done" hidden>
+      <p data-x="done-text"></p>
+      <form method="dialog" class="ex-actions"><button class="ex-btn">Close</button></form>
+    </div>
   </dialog>
 
   <script type="module" src="src/main.js"></script>
