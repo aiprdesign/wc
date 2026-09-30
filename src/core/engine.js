@@ -61,6 +61,15 @@ export class Engine {
     }
     this.renderer = new THREE.WebGLRenderer({ canvas, context, antialias: false, alpha: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.renderer.setClearColor(0x000000, 1);
+    // a shader that fails to compile on this GPU leaves its objects undrawn (missing geometry, missing
+    // rays): log it, drop the optional surface detail (the usual culprit on tight GPUs), recompile all
+    this.renderer.debug.onShaderError = (gl, program, vs, fs) => {
+      const log = (s) => (gl.getShaderInfoLog(s) || '').trim();
+      console.error('[engine] shader failed to compile on this GPU', log(vs), log(fs), gl.getProgramInfoLog(program));
+      if (surfaceDetailDisabled()) return;
+      disableSurfaceDetail();
+      setTimeout(() => this.recompileAll(), 0);
+    };
     this.renderer.toneMapping = THREE.NoToneMapping;       // tone mapping happens in the final grade
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.autoClear = false;
@@ -150,6 +159,13 @@ export class Engine {
       const tex = buildSceneEnvironment(this.renderer, L, { size: this.envSize, look: inst.envLook ?? {}, pmrem: this.pmrem });
       if (tex && inst.scene.environment === this.env) { inst.scene.environment = tex; inst._sceneEnv = tex; }
     } catch (e) { console.warn('[engine] environment failed for', inst.segment?.id, e); }
+  }
+
+  // mark every material of every sequence (and the heading overlays) for a fresh compile
+  recompileAll() {
+    const touch = (root) => root?.traverse?.((o) => { for (const m of [o.material].flat()) if (m) m.needsUpdate = true; });
+    for (const inst of this.instances.values()) { touch(inst.scene); touch(inst._wordsOverlay?.scene); }
+    console.info('[engine] recompiled all materials without surface detail');
   }
 
   /** The chapter heading isn't on screen (exploring, or headings off): scenes then apply the

@@ -199,6 +199,14 @@ export function physicalize(m) {
   }
 }
 
+// Safety net: some GPUs (phones, older integrated chips) have tight limits on texture units and
+// fragment uniforms; a material pushed over them by the detail texture fails to compile and is simply
+// not drawn. On the first shader error the engine calls this: detail is dropped everywhere and every
+// material recompiles without it.
+let SD_OFF = false;
+export function disableSurfaceDetail() { SD_OFF = true; }
+export const surfaceDetailDisabled = () => SD_OFF;
+
 // Apply to one material (idempotent). Chains any onBeforeCompile the scene already installed.
 export function addSurfaceDetail(m) {
   if (!m || m.userData?.sdDone || m.userData?.noDetail) return false;
@@ -213,9 +221,9 @@ export function addSurfaceDetail(m) {
   const prev = m.onBeforeCompile, prevKey = m.customProgramCacheKey;
   // the default cache key is the onBeforeCompile source: evaluate the old key against the old hook
   const baseKey = () => { const cur = m.onBeforeCompile; m.onBeforeCompile = prev; try { return prevKey.call(m); } finally { m.onBeforeCompile = cur; } };
-  m.onBeforeCompile = function (sh, r) { prev?.call(this, sh, r); inject(sh, u); };
+  m.onBeforeCompile = function (sh, r) { prev?.call(this, sh, r); if (!SD_OFF) inject(sh, u); };
   const tag = '|sd1';
-  m.customProgramCacheKey = () => baseKey() + tag + (HQ ? 'h' : 'l');
+  m.customProgramCacheKey = () => baseKey() + (SD_OFF ? '|sd0' : tag + (HQ ? 'h' : 'l'));
   m.userData.sdDone = true;
   m.needsUpdate = true;
   return true;
