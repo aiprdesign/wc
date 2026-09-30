@@ -296,6 +296,97 @@ function airframeDetail(g, mats) {
   add(glass, mats.glass, false); add(frame, mats.dark); add(trim, mats.trim); add(dark, mats.dark); add(skin, mats.cowl); add(engine, mats.engine);
 }
 
+// wing surface height at (x, z): the lofted NACA section of the station at |z| (upper or lower skin)
+function wingY(x, z, upper) {
+  const s = clamp((Math.abs(z) - FUS_R * 0.6) / 2.35, 0, 1), lx = 0.42 - s * 0.24, ly = -0.13 + s * 2.35 * 0.08, ch = lerp(0.98, 0.42, s);
+  const u = clamp((lx - x) / ch, 0, 1), t = 0.13;
+  const yt = 5 * t * (0.2969 * Math.sqrt(u) - 0.126 * u - 0.3516 * u * u + 0.2843 * u ** 3 - 0.1036 * u ** 4);
+  const yc = 0.02 * (u < 0.4 ? (2 * 0.4 * u - u * u) / 0.16 : ((1 - 0.8) + 2 * 0.4 * u - u * u) / 0.36);
+  return ly + (yc + (upper ? yt : -yt)) * ch;
+}
+// a grid surface from a (u, v) → Vector3 function, u and v in [0, 1]
+function gridSurf(fn, nu, nv) {
+  const pos = [], idx = [];
+  for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) { const p = fn(i / nu, j / nv); pos.push(p.x, p.y, p.z); }
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const k = j * (nu + 1) + i; idx.push(k, k + 1, k + nu + 1, k + 1, k + nu + 2, k + nu + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+
+// Second detail pass (DC-3 era, what the fly-over's low camera sees first): wing-root fillets above and below the
+// wing, main wheels half-exposed under the nacelles with rubber tyres, ribbed treads, brake drums, hub caps and lug
+// bolts inside a dark wheel-well opening; the tail-wheel fork; the carburettor-scoop mouth; the black non-slip
+// walkway on the wing roots; Hamilton Standard propeller hubs (blade ferrules, counterweight brackets, the hub
+// barrel ring and the dome nut) that turn with the blades.
+function airframeDetail2(g, mats, props) {
+  const add = (geos, mat, shadow = true) => { const m = new THREE.Mesh(mergePN(geos), mat); m.castShadow = shadow; m.receiveShadow = true; g.add(m); return m; };
+  const skin = [], rubber = [], dark = [], trim = [], engine = [], walk = [];
+  // ---- wing-root fillets: a concave quadratic blend from the fuselage side to the wing skin, growing toward the
+  // trailing edge the way the DC-3's big fillets do, above and below the wing
+  {
+    const s0 = (0.23 - FUS_R * 0.6) / 2.35, xle = 0.42 - s0 * 0.24, ch = lerp(0.98, 0.42, s0);
+    for (const side of [1, -1]) for (const upper of [true, false]) {
+      skin.push(gridSurf((u, v) => {
+        const x = xle + 0.01 - u * (ch - 0.02), fy = fusY(x), R = fusR(x) + 0.0015;
+        let zj = R, y0 = 0;
+        for (let k = 0; k < 4; k++) { y0 = wingY(x, zj, upper); zj = Math.sqrt(Math.max(R * R - (y0 - fy) ** 2, 1e-6)); }
+        const sz = (upper ? 0.012 + 0.04 * u * u : 0.012 + 0.03 * u) * smoothstep(0, 0.22, u) * (1 - smoothstep(0.72, 1, u));
+        const yA = y0 + (upper ? 1 : -1) * sz, zA = Math.sqrt(Math.max(R * R - (yA - fy) ** 2, 1e-6));
+        const zB = zj + sz * 1.7, yB = wingY(x, zB, upper) + (upper ? 0.0015 : -0.0015);
+        const a = (1 - v) * (1 - v), b = 2 * v * (1 - v), c = v * v;
+        return V3(x, a * yA + b * y0 + c * yB, side * (a * zA + b * zj + c * zB));
+      }, 48, 8));
+    }
+    // black non-slip walkway on the upper wing root, inboard of the nacelles
+    for (const side of [1, -1]) walk.push(gridSurf((u, v) => { const z = lerp(0.29, 0.49, v), x = lerp(0.2, -0.12, u); return V3(x, wingY(x, z, true) + 0.0018, side * z); }, 8, 4));
+  }
+  // ---- main wheels (retracted forward, the lower half standing proud of the nacelle), wheel wells, carburettor scoop
+  for (const side of [1, -1]) {
+    const zc = side * NAC_Z, wx = 0.32, wy = NAC_Y - 0.135;
+    rubber.push(baked(new THREE.TorusGeometry(0.075, 0.0312, 14, 48), [wx, wy, zc]));                                   // tyre
+    for (const dz of [-0.018, -0.006, 0.006, 0.018]) { const r = 0.075 + Math.sqrt(0.0312 ** 2 - dz * dz); rubber.push(baked(new THREE.TorusGeometry(r - 0.0006, 0.0024, 5, 56), [wx, wy, zc + dz])); }  // tread ribs
+    for (const f of [1, -1]) {
+      const zf = zc + f * 0.026;
+      engine.push(baked(new THREE.TorusGeometry(0.047, 0.0045, 6, 28), [wx, wy, zf]));                                  // brake drum rim
+      trim.push(baked(new THREE.CylinderGeometry(0.03, 0.034, 0.006, 20), [wx, wy, zf + f * 0.002], [Math.PI / 2, 0, 0]));  // hub cap
+      for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; dark.push(baked(new THREE.CylinderGeometry(0.004, 0.004, 0.008, 6), [wx + Math.cos(a) * 0.04, wy + Math.sin(a) * 0.04, zf + f * 0.002], [Math.PI / 2, 0, 0])); }
+    }
+    // wheel-well opening: a near-black patch conforming to the nacelle belly around the tyre, with a polished lip
+    const nb = (x, a, off) => V3(x, NAC_Y - Math.cos(a) * (nacR(x) + off), zc + Math.sin(a) * (nacR(x) + off));
+    rubber.push(gridSurf((u, v) => nb(lerp(0.16, 0.47, u), lerp(-0.46, 0.46, v), 0.0012), 10, 6));
+    for (let k = 0; k < 12; k++) {
+      const edge = (q) => { const L = 2 * (0.31 + 0.92), d = q * L; return d < 0.31 ? [0.16 + d, -0.46] : d < 1.23 ? [0.47, -0.46 + (d - 0.31)] : d < 1.54 ? [0.47 - (d - 1.23), 0.46] : [0.16, 0.46 - (d - 1.54)]; };
+      for (let m = 0; m < 3; m++) { const q0 = (k * 3 + m) / 36, q1 = (k * 3 + m + 1) / 36, [x0, a0] = edge(q0), [x1, a1] = edge(q1); engine.push(rodG(nb(x0, a0, 0.002), nb(x1, a1, 0.002), 0.0028, 4)); }
+    }
+    // carburettor air scoop: the dark intake mouth on its forward face
+    rubber.push(baked(new THREE.BoxGeometry(0.004, 0.026, 0.046), [NAC_X1 - 0.19 + 0.0015, NAC_Y + nacR(NAC_X1 - 0.3) + 0.01, zc]));
+  }
+  // ---- tail wheel: fork plates either side, axle hub, rubber tyre
+  {
+    const top = V3(-1.757, -0.165, 0), ax = V3(-1.8, -0.17, 0);
+    for (const f of [1, -1]) dark.push(rodG(V3(top.x, top.y, f * 0.02), V3(ax.x, ax.y, f * 0.02), 0.006, 5), baked(new THREE.BoxGeometry(0.03, 0.02, 0.006), [top.x, top.y + 0.004, f * 0.02]));
+    dark.push(baked(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 6), [ax.x, ax.y, 0], [Math.PI / 2, 0, 0]));
+    rubber.push(baked(new THREE.TorusGeometry(0.035, 0.0146, 10, 24), [ax.x, ax.y, 0]));
+    trim.push(baked(new THREE.CylinderGeometry(0.018, 0.018, 0.03, 14), [ax.x, ax.y, 0], [Math.PI / 2, 0, 0]));
+  }
+  add(skin, mats.cowl); add(rubber, mats.rubber); add(dark, mats.dark); add(trim, mats.trim); add(engine, mats.engine); add(walk, mats.rubber, false);
+  // ---- propeller hubs (in each prop group's frame: hub at x = hubX; the group turns about x)
+  const hubX = NAC_X1 + 0.03;
+  for (const prop of props) {
+    const pe = [], pt = [];
+    for (let b = 0; b < 3; b++) {
+      const M4 = new THREE.Matrix4().makeTranslation(hubX, 0, 0).multiply(new THREE.Matrix4().makeRotationX((b / 3) * TAU));
+      pe.push(baked(new THREE.CylinderGeometry(0.021, 0.024, 0.07, 14), [0, 0.09, 0]).applyMatrix4(M4));                   // blade ferrule / shank clamp
+      pe.push(baked(new THREE.BoxGeometry(0.012, 0.016, 0.05), [-0.012, 0.1, 0.035]).applyMatrix4(M4));                    // counterweight bracket arm
+      pe.push(baked(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 12), [-0.012, 0.1, 0.065], [Math.PI / 2, 0, 0]).applyMatrix4(M4));  // counterweight
+      pt.push(baked(new THREE.TorusGeometry(0.0235, 0.0035, 6, 16), [0, 0.123, 0], [Math.PI / 2, 0, 0]).applyMatrix4(M4));   // ferrule band
+    }
+    pt.push(baked(new THREE.TorusGeometry(0.074, 0.0055, 8, 36), [hubX - 0.012, 0, 0], [0, Math.PI / 2, 0]));             // barrel / dome joint
+    pt.push(baked(new THREE.CylinderGeometry(0.014, 0.018, 0.02, 12), [hubX + 0.12, 0, 0], [0, 0, Math.PI / 2]));          // dome nut
+    for (const [geos, mat] of [[pe, mats.engine], [pt, mats.trim]]) { const m = new THREE.Mesh(mergePN(geos), mat); m.castShadow = true; prop.add(m); }
+  }
+}
+
 function airframeMeshes(mats) {
   const g = new THREE.Group();
   const add = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
@@ -346,6 +437,7 @@ function airframeMeshes(mats) {
   const ws = new THREE.Mesh(baked(new THREE.SphereGeometry(1, 24, 12, 0, TAU, 0, 0.5), [1.52, 0.1, 0], [0, 0, -1.0], [0.2, 0.12, 0.2]), mats.glass); g.add(ws);
   add(baked(new THREE.BoxGeometry(0.1, 0.012, 0.012), [1.53, 0.15, 0], [0, 0, -0.95]), mats.dark);
   airframeDetail(g, mats);
+  airframeDetail2(g, mats, props);
   g.userData.props = props;
   return g;
 }
@@ -701,9 +793,10 @@ export function create(ctx, segment) {
   const cowlMat = withReveal(new THREE.MeshStandardMaterial({ color: '#d5dbe3', metalness: 1, roughness: 0.36, map: brushedMetalTexture(), envMapIntensity: 1.2, side: THREE.DoubleSide }));
   const navMat = (c) => withReveal(new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.2, metalness: 0 }));
   const navR = navMat('#ff2a1c'), navG = navMat('#20ff5a'), navW = navMat('#fff6e0');
-  const planeBody = airframeMeshes({ skin: skinMat, fus: fusMat, wing: wingMat, tip: tipMat, dark: darkMat, glass: glassMat, disc: discMat, trim: trimMat, engine: engineMat, cowl: cowlMat, navR, navG, navW });
+  const rubberMat = withReveal(new THREE.MeshStandardMaterial({ color: '#101113', metalness: 0, roughness: 0.88, side: THREE.DoubleSide }));
+  const planeBody = airframeMeshes({ skin: skinMat, fus: fusMat, wing: wingMat, tip: tipMat, dark: darkMat, glass: glassMat, disc: discMat, trim: trimMat, engine: engineMat, cowl: cowlMat, rubber: rubberMat, navR, navG, navW });
   plane.add(planeBody);
-  const revealMats = [skinMat, fusMat, wingMat, tipMat, darkMat, glassMat, trimMat, engineMat, cowlMat, navR, navG, navW];
+  const revealMats = [skinMat, fusMat, wingMat, tipMat, darkMat, glassMat, trimMat, engineMat, cowlMat, rubberMat, navR, navG, navW];
   const props = planeBody.userData.props;
 
   // vapour trails from the wingtips (analytic path history)
@@ -1050,6 +1143,46 @@ export function create(ctx, segment) {
       for (let k = 0; k < 3; k++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.006), radM); p.position.set(x, -0.28 - k * 0.175, 0); truss.add(p); }
     } }
   station.add(truss);
+  // station detail, merged per material and parented to the part it rides on (the lab still berths as one piece):
+  // MMOD blanket seams and girth joints on both modules, a framed second window and a grapple fixture on the lab,
+  // the CBM bolt ring on its active berthing ring, a grapple fixture on the core; on the truss, rotary-joint drums
+  // inboard of the array wings, cable trays along the top face and framed radiator panels with their manifolds
+  {
+    const merged = (parent, list) => { for (const [geos, mat] of list) if (geos.length) parent.add(new THREE.Mesh(mergePN(geos), mat)); };
+    const seams = (R, len, n, out) => { for (let k = 0; k < n; k++) { const a = (k + 0.5) / n * TAU; out.push(baked(new THREE.BoxGeometry(0.007, 0.005, len), [Math.cos(a) * (R + 0.002), Math.sin(a) * (R + 0.002), 0], [0, 0, a - Math.PI / 2])); } };
+    const girth = (R, z, out) => out.push(baked(new THREE.TorusGeometry(R + 0.002, 0.0035, 5, 40), [0, 0, z]));
+    const grapple = (p, out, dark) => {                                // flight-releasable grapple fixture: base plate, pin, cam
+      out.push(baked(new THREE.CylinderGeometry(0.032, 0.032, 0.008, 16), p));
+      dark.push(baked(new THREE.CylinderGeometry(0.006, 0.006, 0.045, 8), [p[0], p[1] + 0.025, p[2]]), baked(new THREE.BoxGeometry(0.01, 0.022, 0.03), [p[0], p[1] + 0.015, p[2] + 0.012], [0.5, 0, 0]));
+    };
+    // lab (modA)
+    const aS = [], aD = [], aG = [];
+    seams(0.2, 0.72, 12, aD); for (const z of [0, -0.3, 0.3]) girth(0.2, z, aD);
+    aG.push(baked(new THREE.CircleGeometry(0.03, 18), [0, 0.2015, -0.12], [-Math.PI / 2, 0, 0]));
+    for (const z of [0.1, -0.12]) aS.push(baked(new THREE.TorusGeometry(0.037, 0.005, 6, 20), [0, 0.203, z], [Math.PI / 2, 0, 0]));
+    grapple([0.0, 0.206, -0.27], aS, aD);
+    for (let k = 0; k < 16; k++) { const a = k / 16 * TAU; aD.push(baked(new THREE.CylinderGeometry(0.006, 0.006, 0.02, 6), [Math.cos(a) * 0.112, Math.sin(a) * 0.112, -0.475], [Math.PI / 2, 0, 0])); }
+    merged(modA, [[aS, stSteel], [aD, stDark], [aG, stGlass]]);
+    // core (modB)
+    const bS = [], bD = [];
+    seams(0.17, 0.58, 10, bD); girth(0.17, 0, bD);
+    grapple([0.0, 0.176, 0.12], bS, bD);
+    merged(modB, [[bS, stSteel], [bD, stDark]]);
+    // truss
+    const tS = [], tD = [];
+    for (const x of [-0.95, 0.95]) {
+      tS.push(baked(new THREE.CylinderGeometry(0.11, 0.11, 0.07, 28), [x, 0, 0], [0, 0, Math.PI / 2]));
+      for (const dx of [-0.037, 0.037]) tD.push(baked(new THREE.TorusGeometry(0.108, 0.006, 6, 28), [x + dx, 0, 0], [0, Math.PI / 2, 0]));
+    }
+    for (const z of [-0.035, 0.035]) tD.push(baked(new THREE.BoxGeometry(3.1, 0.008, 0.018), [0, 0.078, z]));
+    for (const x of [-0.62, 0.62]) for (let k = 0; k < 3; k++) {
+      const y = -0.28 - k * 0.175;
+      for (const dy of [-0.08, 0.08]) tS.push(baked(new THREE.BoxGeometry(0.345, 0.006, 0.01), [x, y + dy, 0]));
+      for (const dx of [-0.17, 0.17]) tS.push(baked(new THREE.BoxGeometry(0.006, 0.16, 0.01), [x + dx, y, 0]));
+      tD.push(baked(new THREE.CylinderGeometry(0.004, 0.004, 0.165, 5), [x - 0.12, y, 0.006]), baked(new THREE.CylinderGeometry(0.004, 0.004, 0.165, 5), [x + 0.12, y, 0.006]));
+    }
+    merged(truss, [[tS, stSteel], [tD, stDark]]);
+  }
   // eased approach that arrives with a little velocity, then a lightly damped settle (continuous position AND velocity)
   // returns 0 → 1 over [t1 - dur, t1], overshooting by ≈ v/(ω·dur) and ringing out with rate β
   const settle = (t, t1, dur, v = 0.6, w = 48, b = 22) => {
