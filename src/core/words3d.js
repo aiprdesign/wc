@@ -57,10 +57,11 @@ function letterMaterial(era, env, shared, invert = false) {
         { float nz = abs(normalize(vWordN).z);
           float face = smoothstep(0.93, 0.99, nz), side = 1.0 - smoothstep(0.15, 0.45, nz), bev = 1.0 - face - side;
           float brush = fract(sin(floor(vWordPos.y * 900.0) * 91.7) * 4375.85) * 0.5 + 0.5 * fract(sin(floor(vWordPos.y * 260.0 + vWordPos.x * 3.0) * 13.1) * 917.3);
-          roughnessFactor = clamp(face * (0.26 + 0.14 * brush) + max(bev, 0.0) * 0.1 + side * 0.46, 0.05, 1.0); }`)
+          roughnessFactor = clamp(face * (0.26 + 0.14 * brush) + max(bev, 0.0) * 0.1 + side * 0.62, 0.05, 1.0); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.78, 1.0, smoothstep(0.15, 0.6, nz)); }`)
+        { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.32, 1.0, smoothstep(0.2, 0.7, nz)); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance *= mix(0.35, 1.0, smoothstep(0.2, 0.7, abs(normalize(vWordN).z)));
         // diagonal light sweep in the word's own space + a landing flash
         float band = exp(-pow((vWordPos.x + vWordPos.y * 0.35 - uSweep) / uSweepW, 2.0));
         totalEmissiveRadiance += uTint * (band * 0.14 + uFlash * 0.25);`)
@@ -74,7 +75,7 @@ function letterMaterial(era, env, shared, invert = false) {
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v11';
+  m.customProgramCacheKey = () => 'word3d-v12';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
   if (!invert) addSurfaceDetail(m);
   return m;
