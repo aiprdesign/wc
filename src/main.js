@@ -402,11 +402,14 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   player.seek = (t) => { origSeek(t); if (explorer.active) explorer.enter(player.time); };   // scrubbing re-poses the world
 
   // VR / AR (WebXR): the buttons appear only where the browser offers a session
+  let toChapters = false;
   const xr = new XRMode(engine, {
     player, experience: exp, overlay: $('xr-overlay'),
     onStart: () => { intro.classList.add('hidden'); controls.classList.remove('show'); syncPlaying(); },
     onToggle: syncPlaying,
     onEnd: () => {
+      // AR Lite's close button: back to the chapter list (a reload frees the chapter)
+      if (toChapters) { location.hash = 'arlite'; return; }
       // back to the flat film at the same moment, still playing if it was
       if (exp.active) { if (exp.playing) exp._loop(); else exp.render(); }
       else if (player.playing) player.loop();
@@ -415,6 +418,14 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
       showControls();
     },
   });
+  // AR Lite: the AR close button (top right) returns to the chapters; so does the page's own one
+  if (body.classList.contains('arlite') || HASH_ARLITE) {
+    const lbl = $('xr-overlay').querySelector('.xr-close-lbl');
+    if (lbl) lbl.textContent = 'Chapters';
+    // (capture phase: set before the button's own handler ends the session, which may end at once)
+    $('xr-overlay').addEventListener('click', (e) => { if (e.target.closest?.('[data-xr="exit"]')) toChapters = true; }, true);
+  }
+  $('arlite-close').addEventListener('click', () => { player.pause(); location.hash = 'arlite'; });
   body.classList.toggle('has-vr', !!xrs?.vr);
   body.classList.toggle('has-ar', !!xrs?.ar);
   if (HASH_XR) body.classList.add(`xr-link-${HASH_XR}`);

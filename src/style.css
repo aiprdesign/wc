@@ -158,6 +158,13 @@ body:not(.has-vr) #intro .play-vr, body:not(.has-ar) #intro .play-ar { opacity: 
 .xr-found .xr-hint { border-color: var(--gold); background: rgba(40, 30, 14, 0.75); }
 @keyframes xr-sweep { 0%, 100% { transform: translateX(-6px) rotate(-14deg); } 50% { transform: translateX(6px) rotate(14deg); } }
 @media (prefers-reduced-motion: reduce) { .xr-scanning .xr-scan-icon { animation: none; } }
+/* close: top right, clear of the notch (AR overlay; AR Lite's page outside AR) */
+.xr-close { position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); z-index: 40; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px 0 12px; font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.62); border: 1px solid rgba(226, 195, 138, 0.6); border-radius: 999px; pointer-events: auto; cursor: pointer; }
+.xr-close svg { width: 18px; height: 18px; fill: var(--gold); }
+.xr-close:hover, .xr-close:focus-visible { border-color: var(--gold); background: rgba(40, 30, 14, 0.8); }
+.xr-ar-on .xr-hint { margin-top: 56px; }   /* below the close button */
+.arlite-close { display: none; }
+body.arlite:not(.xr-on) .arlite-close { display: inline-flex; }
 .xr-bar { display: flex; gap: 12px; pointer-events: auto; }
 .xr-bar button { min-width: 52px; height: 44px; padding: 0 16px; display: grid; place-items: center; font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.5); border-radius: 999px; }
 .xr-bar svg { width: 18px; height: 18px; fill: var(--gold); }

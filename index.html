@@ -19,6 +19,9 @@
     <canvas id="film" aria-label="Achievements of Western Civilization — real-time film"></canvas>
   </main>
 
+  <!-- AR Lite: back to the chapter list (top right, outside AR) -->
+  <button type="button" id="arlite-close" class="xr-close arlite-close" aria-label="Close and choose another chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" /></svg><span class="xr-close-lbl">Chapters</span></button>
+
   <section id="intro" class="overlay">
     <div class="intro-inner">
       <p class="eyebrow">A Short Film</p>
@@ -121,13 +124,13 @@
 
   <!-- AR on phones: shown over the camera view while a session runs (WebXR DOM overlay) -->
   <div id="xr-overlay" class="xr-overlay">
+    <button type="button" data-xr="exit" class="xr-close" aria-label="Exit AR"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" /></svg><span class="xr-close-lbl">Exit</span></button>
     <p class="xr-hint"><span class="xr-scan-icon" aria-hidden="true"></span><span class="xr-hint-scan">Move your phone slowly over a table to find its surface</span><span class="xr-hint-place">Point at a table, then tap to place the film</span><span class="xr-hint-found">Surface found · tap to place it here</span><span class="xr-hint-move">Tap to move · pinch to resize · twist to turn</span></p>
     <div class="xr-bar">
       <button type="button" data-xr="play" aria-label="Play or pause">
         <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
         <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
       </button>
-      <button type="button" data-xr="exit">Exit AR</button>
     </div>
   </div>
 
