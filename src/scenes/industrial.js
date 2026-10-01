@@ -242,12 +242,14 @@ export function create(ctx, segment) {
   const byVar = VARS.map(() => []);
   wallGears.forEach((g) => { g.idx = byVar[g.v].length; byVar[g.v].push(g); g.dist = Math.hypot(g.x - H.x, g.y - H.y); g.angle = 0; });
   const wallMat = new THREE.MeshStandardMaterial({ color: '#ffffff', metalness: 1, roughness: 0.34, roughnessMap: latheTexture(512, 11), bumpMap: latheTexture(512, 11), bumpScale: 0.3 });
-  const tints = [new THREE.Color('#c29a5f'), new THREE.Color('#b9c0c8'), new THREE.Color('#8d949b'), new THREE.Color('#5d6167')];
+  // clean machined metal: the film-wide grime and mottling read as rust on the gear wall
+  wallMat.userData.detail = { albedo: 0.03, rough: 0.35, bump: 0.00002, scratch: 0.3, grime: 0.03 };
+  const tints = [new THREE.Color('#b9a582'), new THREE.Color('#b9c0c8'), new THREE.Color('#8d949b'), new THREE.Color('#5d6167')];
   const wallMeshes = byVar.map((list, vi) => {
     const im = new THREE.InstancedMesh(varGeo[vi], wallMat, Math.max(1, list.length));
     im.count = list.length;
     list.forEach((g, i) => {
-      const c = g.layer === 0 ? tints[R() < 0.35 ? 0 : 1] : g.layer === 1 ? tints[R() < 0.2 ? 0 : 2] : tints[3];
+      const c = g.layer === 0 ? tints[R() < 0.18 ? 0 : 1] : g.layer === 1 ? tints[R() < 0.1 ? 0 : 2] : tints[3];
       im.setColorAt(i, c);
     });
     im.frustumCulled = false;
@@ -261,6 +263,7 @@ export function create(ctx, segment) {
   // a full-width plate would stand across the track as a flat grey wall that clips the trackside steam)
   const BP_X0 = WALL.x0 - 4.75, BP_X1 = WALL.x1 + 0.9;
   const backPlate = new THREE.Mesh(new THREE.PlaneGeometry(BP_X1 - BP_X0, 26), new THREE.MeshStandardMaterial({ color: '#2b2c2e', metalness: 0.8, roughness: 0.6, roughnessMap: backTex, bumpMap: backTex, bumpScale: 1 }));
+  backPlate.material.userData.detail = { albedo: 0.05, rough: 0.35, bump: 0.0003, scratch: 0, grime: 0.05 };
   backPlate.position.set((BP_X0 + BP_X1) / 2, 9.5, layerZ(2) - 0.5); scene.add(backPlate);
 
   const calloutA = new Callout('INVOLUTE PROFILE · α 20°', { dx: 0.55, dy: 0.32, size: 0.05, color: '#ffd2a8', sub: 'Z 36 · MODULE 9 mm' });
