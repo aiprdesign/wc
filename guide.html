@@ -143,6 +143,10 @@ code.inline { font-family: var(--mono); font-size: .8em; color: var(--gold-hi); 
 .facts-body a { overflow-wrap: anywhere; }
 footer { text-align: center; font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  .qr-pair { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 6px 0 4px; }
+  .qr-pair figure { margin: 0; display: flex; gap: 14px; align-items: center; }
+  .qr-pair img { border-radius: 10px; box-shadow: 0 0 0 1px rgba(226, 195, 138, 0.35); background: #f3ead8; }
+  .qr-pair figcaption { font-size: 13px; line-height: 1.6; color: var(--dim, #bfb5a6); }
 </style>
 
 <div class="wrap">
@@ -214,6 +218,10 @@ footer { text-align: center; font-family: var(--mono); font-size: 12px; color: v
   <section class="guide" aria-labelledby="vrar-h" id="vrar">
     <h2 id="vrar-h" style="margin:0">Watch in VR &amp; AR</h2>
     <p class="tip">The real-time film also runs in a VR headset and as an AR model on your table (WebXR). Open the film's own address on the device: <code class="inline">https://aiprdesign.github.io/wc/</code>. Embedded previews such as the claude.ai page block VR and AR. <strong style="color: var(--gold-hi); font-weight: 500;">iPhone and iPad:</strong> Safari has no WebXR yet, so use the normal film or Experience mode there.</p>
+    <div class="qr-pair">
+      <figure><img src="assets/qr/vr.svg" width="150" height="150" alt="QR code: open the VR version" /><figcaption><strong>VR</strong> · scan in the headset's browser<br /><code class="inline">aiprdesign.github.io/wc/#vr</code></figcaption></figure>
+      <figure><img src="assets/qr/ar.svg" width="150" height="150" alt="QR code: open the AR version" /><figcaption><strong>AR</strong> · scan with an Android phone<br /><code class="inline">aiprdesign.github.io/wc/#ar</code></figcaption></figure>
+    </div>
     <ol class="steps">
       <li><div>
         <h3>VR · what you need</h3>
