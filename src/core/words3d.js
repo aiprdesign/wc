@@ -52,7 +52,7 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;\nvWordN = normalize(mat3(uWordInv * modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine; uniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine, uCapH; uniform vec3 uTint;')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         // the opening title's hammered gold (lib/surface.js adds the hammered micro-surface on top): faces
         // keep it, bevels are polished a little brighter, the cast sides a little rougher
@@ -60,7 +60,14 @@ function letterMaterial(era, env, shared, invert = false) {
           float face = smoothstep(0.93, 0.99, nz), side = 1.0 - smoothstep(0.15, 0.45, nz), bev = max(1.0 - face - side, 0.0);
           roughnessFactor *= mix(1.0, 0.55, bev) * mix(1.0, 1.35, side); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.32, 1.0, smoothstep(0.2, 0.7, nz)); }`)
+        { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.32, 1.0, smoothstep(0.2, 0.7, nz));
+          // metallic gold gradient up each letter (word space, so every letter shares it): deep amber at the
+          // foot, rich gold through the middle, a bright band just above it, pale champagne at the top
+          float gy = clamp(vWordPos.y / max(uCapH, 1e-3) + 0.5, 0.0, 1.0);
+          vec3 gLow = vec3(0.5, 0.34, 0.17), gMid = vec3(1.0, 0.97, 0.9), gTop = vec3(1.2, 1.14, 0.9);
+          vec3 grad = gy < 0.5 ? mix(gLow, gMid, smoothstep(0.0, 0.5, gy)) : mix(gMid, gTop, smoothstep(0.5, 1.0, gy));
+          grad *= 1.0 + 0.24 * exp(-pow((gy - 0.64) / 0.07, 2.0));
+          diffuseColor.rgb *= grad; }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance *= mix(0.35, 1.0, smoothstep(0.2, 0.7, abs(normalize(vWordN).z)));
         // diagonal light sweep in the word's own space + a landing flash
@@ -76,7 +83,7 @@ function letterMaterial(era, env, shared, invert = false) {
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v13';
+  m.customProgramCacheKey = () => 'word3d-v14';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
   // (hammered like the title's letters: the same detail, a touch stronger and at the title's scale relative
   // to the letter — headings are drawn smaller in the world, so the pattern is set finer)
@@ -242,7 +249,7 @@ export class Words3D {
     const seg = inst.segment;
     const era = eraOf(t0);
     const shared = {
-      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() },
+      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() }, uCapH: { value: 0.7 },
       uTint: { value: new THREE.Color(era.color).lerp(new THREE.Color('#ffffff'), 0.55) },
     };
     const glyphs = letters3D(text, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 10, bevelSegments: 5 });
@@ -262,6 +269,7 @@ export class Words3D {
       group.add(pivot);
       return { pivot, mesh, mat, i, x: g.x };
     });
+    shared.uCapH.value = capH;
     // glowing plinth line under the word
     const half = glyphs.width / 2 + 0.25;
     const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
