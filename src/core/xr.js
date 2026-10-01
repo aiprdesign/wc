@@ -49,10 +49,10 @@ export const TUNE = {
     // the vitrine: `deep` × deeper front to back (the set's depth shows), `tall` × as tall as it is wide
     deep: 1.3, tall: 1.25,
     // pinch to resize (× the base size), surface tracking (marker glide /s, steady time before "ready")
-    minScale: 0.4, maxScale: 4, glide: 14, steady: 0.25, minUp: 0.75,
-    // 'full': the whole set, unclipped (skies and backdrop walls still drop out so the room shows);
-    // 'case': cut to the vitrine. The overlay button switches between them.
-    view: 'full',
+    minScale: 0.25, maxScale: 5, glide: 14, steady: 0.25, minUp: 0.75,
+    // 'case' (Small): cut to the vitrine, leaving the camera view clear; 'full': the whole set,
+    // unclipped (skies and backdrop walls still drop out so the room shows). Overlay buttons choose.
+    view: 'case',
     // per-chapter framing: the finale's Earth is a whole globe on the plinth (frame × and centre depth × R)
     // (or an explicit subject: the finale's Earth, radius 1.6 at the origin, as a whole globe)
     shots: { finale: { centre: [0, 0, 0], radius: 1.72 } },
@@ -966,7 +966,7 @@ void main() {
     for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) el.addEventListener(t, touch, { passive: false });
     el.querySelector('[data-xr="play"]')?.addEventListener('click', () => this.toggle());
     el.querySelector('[data-xr="exit"]')?.addEventListener('click', () => this.stop());
-    el.querySelector('[data-xr="view"]')?.addEventListener('click', () => { this.view = this.view === 'full' ? 'case' : 'full'; this._syncOverlay(); });
+    el.querySelectorAll('[data-xr-view]').forEach((b) => b.addEventListener('click', () => { this.view = b.dataset.xrView; this._syncOverlay(); }));
   }
 
   _syncOverlay() {
@@ -974,6 +974,6 @@ void main() {
     if (!el) return;
     el.classList.toggle('xr-playing', this.playing);
     el.classList.toggle('xr-placed', !!this.placed);
-    el.classList.toggle('xr-view-case', this.view === 'case');
+    el.querySelectorAll('[data-xr-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.xrView === this.view)));
   }
 }
