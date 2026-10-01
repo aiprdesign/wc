@@ -32,7 +32,7 @@ const ERAS = [
   // 60-30-10: the words are the film's 10% accent — one signature gold
   // every heading is cast in the same gold as the opening title's 3D letters (opening.js goldMat): a warm
   // #e9b964 metal, satin roughness, hammered micro-surface (lib/surface.js) and a low inner glow — gold bars
-  [99, { color: '#e9b964', roughness: 0.38, env: 0.55, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.22 }],
+  [99, { color: '#e9b964', roughness: 0.38, env: 0.55, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.3 }],
 ];
 const eraOf = (T) => ERAS.find(([t]) => T < t)[1];
 
@@ -54,12 +54,11 @@ function letterMaterial(era, env, shared, invert = false) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine; uniform vec3 uTint;')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        // gold-bar finish in the word's own space: brushed faces (fine horizontal streaks), mirror-polished
-        // bevels that catch every highlight, and slightly darker, rougher cast sides
+        // the opening title's hammered gold (lib/surface.js adds the hammered micro-surface on top): faces
+        // keep it, bevels are polished a little brighter, the cast sides a little rougher
         { float nz = abs(normalize(vWordN).z);
-          float face = smoothstep(0.93, 0.99, nz), side = 1.0 - smoothstep(0.15, 0.45, nz), bev = 1.0 - face - side;
-          float brush = fract(sin(floor(vWordPos.y * 900.0) * 91.7) * 4375.85) * 0.5 + 0.5 * fract(sin(floor(vWordPos.y * 260.0 + vWordPos.x * 3.0) * 13.1) * 917.3);
-          roughnessFactor = clamp(face * (0.26 + 0.14 * brush) + max(bev, 0.0) * 0.1 + side * 0.62, 0.05, 1.0); }`)
+          float face = smoothstep(0.93, 0.99, nz), side = 1.0 - smoothstep(0.15, 0.45, nz), bev = max(1.0 - face - side, 0.0);
+          roughnessFactor *= mix(1.0, 0.55, bev) * mix(1.0, 1.35, side); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         { float nz = abs(normalize(vWordN).z); diffuseColor.rgb *= mix(0.32, 1.0, smoothstep(0.2, 0.7, nz)); }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -77,9 +76,11 @@ function letterMaterial(era, env, shared, invert = false) {
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v12';
+  m.customProgramCacheKey = () => 'word3d-v13';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
-  if (!invert) addSurfaceDetail(m);
+  // (hammered like the title's letters: the same detail, a touch stronger and at the title's scale relative
+  // to the letter — headings are drawn smaller in the world, so the pattern is set finer)
+  if (!invert) { m.userData.detail = { albedo: 0.34, rough: 1.2, bump: 0.00003, scratch: 0.4, grime: 0.2, scale: 1.1 }; addSurfaceDetail(m); }
   return m;
 }
 

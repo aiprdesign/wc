@@ -13,6 +13,7 @@ import { SEGMENTS, DURATION, TIME_SCALE, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } 
 import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApplyShader, AccumShader, GlareDownShader, GlareUpShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
 import { budgetScene, textureVersions } from '../lib/texbudget.js';
+import { antiTileScene } from '../lib/antitile.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
@@ -140,6 +141,8 @@ export class Engine {
         }
         this.realism(inst, peak);
         this.upgradeShadows(inst);
+        // repeated textures on big surfaces (floors, ground, backdrops) never show their grid (lib/antitile.js)
+        antiTileScene(inst.scene);
         // phones: cap every texture's size before it reaches the GPU (lib/texbudget.js)
         if (this.quality === 'lite') { budgetScene(inst.scene, { before: texV0 }); if (inst.hud) budgetScene(inst.hud.scene); }
         await r.compileAsync(inst.scene, inst.camera);

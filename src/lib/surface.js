@@ -102,6 +102,9 @@ const VERT_MAIN = /* glsl */ `
 const FRAG_PARS = /* glsl */ `
 uniform sampler2D tSurfDetail; uniform vec4 uSd; uniform float uSdGrime, uSdK; uniform vec2 uSdScale;
 varying vec3 vSdP; varying vec3 vSdN;
+float sdHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sdNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(sdHash(i), sdHash(i + vec2(1.0, 0.0)), f.x), mix(sdHash(i + vec2(0.0, 1.0)), sdHash(i + vec2(1.0, 1.0)), f.x), f.y); }
 vec4 sdTri(vec3 p, vec3 w){
   return texture2D(tSurfDetail, p.yz) * w.x + texture2D(tSurfDetail, p.zx + vec2(0.37, 0.61)) * w.y + texture2D(tSurfDetail, p.xy + vec2(0.71, 0.13)) * w.z;
 }
@@ -109,7 +112,12 @@ vec4 sdTri(vec3 p, vec3 w){
 vec4 sdOne(vec3 p, vec3 n){
   vec3 a = abs(n);
   vec2 uv = a.x > a.y && a.x > a.z ? p.yz : a.y > a.z ? p.zx + vec2(0.37, 0.61) : p.xy + vec2(0.71, 0.13);
-  return texture2D(tSurfDetail, uv);
+  // (texture-bombed, see lib/antitile.js: on big floors the 256² detail tile would show as a grid)
+  float k = sdNoise(uv * 0.45) * 8.0, f = fract(k), ia = floor(k);
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  vec4 c0 = textureGrad(tSurfDetail, uv + sin(vec2(3.0, 7.0) * ia), dx, dy);
+  vec4 c1 = textureGrad(tSurfDetail, uv + sin(vec2(3.0, 7.0) * (ia + 1.0)), dx, dy);
+  return mix(c0, c1, smoothstep(0.2, 0.8, f));
 }`;
 
 // 'high': tri-planar at two scales (six fetches); 'lite' (default): one fetch. Set by the engine
