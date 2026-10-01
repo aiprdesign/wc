@@ -530,6 +530,8 @@ export function create(ctx, segment) {
     // ---------------------------------------------------------------- 1 · ascent
     _ascent(t, info) {
       const T = info.T;
+      // the stack shudders slightly under thrust (first: the key light below frames its shadow on it)
+      stack.position.set(Math.sin(T * 47) * 0.004, Math.sin(T * 53) * 0.004, 0);
       place(aCam, aLook, aK, t);
       camera.fov = 34 + (1 - ramp(t, 0, 0.55, ease.outCubic)) * 14 + ramp(t, 0.95, 1.24, ease.inCubic) * 8;
       SU.uMode.value = 0; SU.uSun.value.copy(SUN_A);
@@ -562,8 +564,6 @@ export function create(ctx, segment) {
       SA.uT.value = t; SA.uViewport.value = info.height; SA.uSun.value.copy(SUN_A);
       glowL.position.copy(srbExitW[0]).lerp(srbExitW[1], 0.5).addScaledVector(AX, -0.6);
       glowL.color.set('#ffb070'); glowL.intensity = 4 * (1 - ramp(t, tSep, tSep + 0.1));
-      // the stack shudders slightly under thrust
-      stack.position.set(Math.sin(T * 47) * 0.004, Math.sin(T * 53) * 0.004, 0);
       const f = camera.position.distanceTo(tmp.set(0, 2.4, 0).applyQuaternion(stackQ));
       return ret(f, 0, 4, 0.9, 0.75, 1.0 + (1 - ramp(t, 0.2, 0.5)) * 0.1, 0.35);
     },

@@ -357,10 +357,11 @@ export class ExportDialog {
   // Time one frame at the current size (with a 1-pixel read to wait for the GPU): the estimate scales it.
   measure() {
     const e = this.ctx.engine;
+    const shown = e.lastT * TIME_SCALE;   // the frame on screen (put back after timing)
     try {
-      const gl = e.renderer.getContext(), px = new Uint8Array(4), T = e.lastT * TIME_SCALE || 10;
+      const gl = e.renderer.getContext(), px = new Uint8Array(4), T = shown > 1 ? shown : 10;   // (the opening's black first second is no measure)
       const times = [];
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < 3; k++) {
         const t0 = performance.now();
         e.render(T, 0);
         gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
@@ -368,6 +369,7 @@ export class ExportDialog {
       }
       times.shift();   // the first can include one-off work (a scene's lighting built on first use)
       this._perFrame = { ms: Math.min(...times), px: e.outW * e.outH };
+      if (T !== shown) e.render(shown, 0);
     } catch { this._perFrame = null; }
   }
 
@@ -412,11 +414,14 @@ export class ExportDialog {
     this.$.time.textContent = '';
     this.$.codec.textContent = '';
     document.body.classList.add('exporting');
-    const restore = this.ctx.prepare();
+    const stay = (ev) => { ev.preventDefault(); ev.returnValue = ''; };   // leaving the page mid-export asks first
+    addEventListener('beforeunload', stay);
+    let restore = null;
     const audio = this.ctx.getAudio?.() ?? null;
     const fmtT = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
     let lastUI = 0;
     try {
+      restore = this.ctx.prepare();
       const r = await exportVideo(this.ctx.engine, audio, {
         width, height, fps, hq, from, to, container, foldBytes, signal: this.abort.signal,
         onStart: (info) => {
@@ -445,7 +450,8 @@ export class ExportDialog {
     } finally {
       this.active = false;
       document.body.classList.remove('exporting');
-      if (!this._lost) restore();
+      removeEventListener('beforeunload', stay);
+      if (!this._lost) restore?.();
     }
   }
 

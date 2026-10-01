@@ -35,15 +35,30 @@ screen, or `x`) renders the film offline instead: frame by frame at a fixed 30 f
 optional), not in real time. Every frame is rendered and encoded, so none are skipped however slow
 the device is. It exports the current frame format at 720p (default), 1080p or screen size.
 *High quality* adds 8-sub-frame motion blur and 2× supersampling, which is much slower. The
-soundtrack is always included (with narration unless `?novo`). Experience mode exports the normal
-film. The file is `achievements-of-western-civilization-<format>-<720p|1080p>.mp4`.
+soundtrack is always included, even when the player is muted (the score without narration with
+`?novo`; a silent file with `?noaudio`), and the dialog says which. The file is the film itself,
+frame-identical whatever was played, explored, dragged or flown before: Experience mode, Explore,
+the live camera and the drone stand aside for the export and come back afterwards, and every frame
+is a pure function of film time. The audio starts on the first frame and runs the length of the
+video (the Opus encoder's lead-in is signalled to the player: an MP4 edit list, the WebM
+CodecDelay). The progress panel shows frame *i* of *N*, elapsed time and an ETA; Cancel stops it
+with nothing downloaded and the player put back as it was. The export keeps going in a background
+tab, and a long export is held in Blob chunks rather than in the page's memory. The file is
+`achievements-of-western-civilization-<format>-<720p|1080p>.mp4` (or `.webm`).
 
-It uses WebCodecs: H.264 + AAC (or Opus) in MP4, or VP9 / VP8 + Opus in WebM where the browser
-can't encode H.264 (muxed with the vendored `vendor/mp4-muxer`, `vendor/webm-muxer`, MIT). It
-works in Chrome / Edge 94+, Safari 16.4+ (silent where Safari has no audio encoder) and
-Firefox 130+. Where WebCodecs is missing, the dialog points to `npm run render:*` below, the
-frame-perfect offline renderer. For automation, `await __film.exportVideo({ from, to, width })`
-exports a time range.
+It uses WebCodecs, muxed with the vendored `vendor/mp4-muxer` and `vendor/webm-muxer` (MIT; each
+carries a small, marked patch for the audio lead-in):
+
+| Browser | File |
+|---|---|
+| Chrome / Edge 94+ | MP4: H.264 + AAC, or H.264 + Opus where the browser has no AAC encoder (e.g. Linux) |
+| Safari 16.4+ (macOS, iOS) | MP4: H.264 + AAC where Safari has an audio encoder; a silent MP4 where it has none (the dialog says so) |
+| Firefox 130+ (desktop) | MP4: H.264 + Opus, or WebM: VP9 + Opus where H.264 can't be encoded |
+| Chromium builds without H.264 | WebM: VP9 (or VP8) + Opus |
+| No WebCodecs (older Safari / Firefox) | the dialog points to `npm run render:*` below, the frame-perfect offline renderer |
+
+Phones default to 720p and warn before 1080p, screen size or high quality (graphics memory). For
+automation, `await __film.exportVideo({ from, to, width })` exports a time range.
 
 | Add to the address | Effect |
 |---|---|
