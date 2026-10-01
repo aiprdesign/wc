@@ -45,7 +45,11 @@ export async function xrSupport(timeout = 800) {
 export const TUNE = {
   vr: { follow: 0.6, turn: 0.9, zoom: 1.2, near: 0.05, minDist: 1.5, maxDist: 30, panelDist: 3, panelWidth: 2.8 },
   ar: {
-    half: 0.25, sides: 8, frame: 1.25, depth: 0.35, follow: 0.45, turn: 0.8, zoom: 0.8, reach: 0.9, drop: 0.45,
+    half: 0.3, sides: 8, frame: 1.6, depth: 0.35, follow: 0.45, turn: 0.8, zoom: 0.8, reach: 0.9, drop: 0.45,
+    // the vitrine: `deep` × deeper front to back (the set's depth shows), `tall` × as tall as it is wide
+    deep: 1.3, tall: 1.25,
+    // pinch to resize (× the base size), surface tracking (marker glide /s, steady time before "ready")
+    minScale: 0.4, maxScale: 4, glide: 14, steady: 0.25, minUp: 0.75,
     // per-chapter framing: the finale's Earth is a whole globe on the plinth (frame × and centre depth × R)
     // (or an explicit subject: the finale's Earth, radius 1.6 at the origin, as a whole globe)
     shots: { finale: { centre: [0, 0, 0], radius: 1.72 } },
@@ -93,15 +97,17 @@ export function arRigMatrix(out, subject, yaw, scale, anchor, anchorYaw) {
 }
 // Clipping planes (world space) of an upright prism around `c`: `sides` faces at inradius `half`,
 // top and bottom at ±half. three.js clips what lies on the negative side, so normals point inward.
-export function clipPrism(planes, c, yaw, half, sides = 8) {
+// `deep` stretches it along the heading (an octagon round an ellipse), `top` sets its top above `c`.
+export function clipPrism(planes, c, yaw, half, sides = 8, deep = 1, top = half) {
   planes.length = sides + 2;
   for (let i = 0; i < sides; i++) {
-    const a = yaw + (i / sides) * Math.PI * 2;
-    const n = _v.set(-Math.sin(a), 0, -Math.cos(a));
-    (planes[i] ??= new THREE.Plane()).setFromNormalAndCoplanarPoint(n, _u.copy(c).addScaledVector(n, -half));
+    const a = (i / sides) * Math.PI * 2, nf = Math.cos(a), ns = Math.sin(a);
+    const n = _v.set(-Math.sin(yaw + a), 0, -Math.cos(yaw + a));
+    const h = half * Math.hypot(ns, deep * nf);   // support distance of the ellipse along n
+    (planes[i] ??= new THREE.Plane()).setFromNormalAndCoplanarPoint(n, _u.copy(c).addScaledVector(n, -h));
   }
   (planes[sides] ??= new THREE.Plane()).setFromNormalAndCoplanarPoint(Y, _u.copy(c).addScaledVector(Y, -half));
-  (planes[sides + 1] ??= new THREE.Plane()).setFromNormalAndCoplanarPoint(_v.set(0, -1, 0), _u.copy(c).addScaledVector(Y, half));
+  (planes[sides + 1] ??= new THREE.Plane()).setFromNormalAndCoplanarPoint(_v.set(0, -1, 0), _u.copy(c).addScaledVector(Y, top));
   return planes;
 }
 
@@ -208,12 +214,27 @@ export class XRMode {
     this.panel.renderOrder = 1e5;
     this.panel.frustumCulled = false;
     this.hint = new Label(0.9);
-    this.reticle = new THREE.Mesh(new THREE.RingGeometry(0.055, 0.07, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe2c38a, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, toneMapped: false }));
-    this.reticle.renderOrder = 1e6;
+    // the surface marker: a centre ring, and the model's footprint on the surface (its real size)
     const H = TUNE.ar.half, R = H / Math.cos(Math.PI / TUNE.ar.sides);   // circumradius of the vitrine
+    const flat = (g) => g.rotateX(-Math.PI / 2);
+    const mark = (o) => new THREE.MeshBasicMaterial({ color: 0xe2c38a, transparent: true, opacity: o, depthTest: false, depthWrite: false, toneMapped: false });
+    this.reticle = new THREE.Group();
+    this.reticle.add(new THREE.Mesh(flat(new THREE.RingGeometry(0.035, 0.05, 48)), mark(0.95)));
+    this.reticle.add(new THREE.Mesh(flat(new THREE.CircleGeometry(0.008, 16)), mark(0.95)));
+    this.footprint = new THREE.Mesh(flat(new THREE.RingGeometry(R * 0.985, R, TUNE.ar.sides, 1, Math.PI / TUNE.ar.sides)), mark(0.7));
+    this.footFill = new THREE.Mesh(flat(new THREE.CircleGeometry(R, TUNE.ar.sides, Math.PI / TUNE.ar.sides)), mark(0.08));
+    this.reticle.add(this.footprint, this.footFill);
+    this.reticle.traverse((o) => { o.renderOrder = 1e6; });
+    // the plinth: a soft contact shadow that grounds the model on the table, and a thin gold rim
     this.plinth = new THREE.Group();
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(R * 1.04, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0b0906, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }));
-    const rim = new THREE.Mesh(new THREE.RingGeometry(R * 1.04, R * 1.07, 96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe2c38a, transparent: true, opacity: 0.6, depthWrite: false, toneMapped: false }));
+    const sh = document.createElement('canvas');
+    sh.width = sh.height = 128;
+    const g2 = sh.getContext('2d'), grad = g2.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(0,0,0,0.72)'); grad.addColorStop(0.62, 'rgba(0,0,0,0.6)'); grad.addColorStop(0.8, 'rgba(0,0,0,0.25)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g2.fillStyle = grad; g2.fillRect(0, 0, 128, 128);
+    const shTex = new THREE.CanvasTexture(sh);
+    const disc = new THREE.Mesh(flat(new THREE.PlaneGeometry(R * 2.6, R * 2.6)), new THREE.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false, toneMapped: false }));
+    const rim = new THREE.Mesh(flat(new THREE.RingGeometry(R * 1.04, R * 1.06, 96)), new THREE.MeshBasicMaterial({ color: 0xe2c38a, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
     rim.position.y = disc.position.y = 0.002;
     this.plinth.add(disc, rim);
     this.roomRoot.add(this.panel, this.hint, this.reticle, this.plinth);
@@ -225,6 +246,11 @@ export class XRMode {
     this.planes = [];
     this.anchor = new THREE.Vector3();
     this.anchorYaw = 0;
+    this.anchorGoal = new THREE.Vector3();   // where a tap moved it: the model glides there
+    this.anchorYawGoal = 0;
+    this.userScale = 1;                      // pinch
+    this.userYaw = 0;                        // twist
+    this.hitRaw = new THREE.Vector3();
     this._pos = new THREE.Vector3();
     this.hit = null;
     this.hidden = [];
@@ -243,7 +269,7 @@ export class XRMode {
     if (this.session || this._pending || !navigator.xr) return Promise.resolve(false);
     const ar = mode === AR;
     const init = ar
-      ? { optionalFeatures: ['hit-test', 'local-floor', ...(this.overlay ? ['dom-overlay'] : [])], ...(this.overlay ? { domOverlay: { root: this.overlay } } : {}) }
+      ? { optionalFeatures: ['hit-test', 'anchors', 'local-floor', ...(this.overlay ? ['dom-overlay'] : [])], ...(this.overlay ? { domOverlay: { root: this.overlay } } : {}) }
       : { optionalFeatures: ['local-floor', 'hand-tracking'] };
     let req;
     try { req = navigator.xr.requestSession(mode, init); } catch (e) { return Promise.reject(e); }
@@ -306,12 +332,16 @@ export class XRMode {
     this.inst = null;
     this._lastTime = null; this._lastFilmT = null; this._prevP = null; this._cutAt = -1e9; this._seeded = false;
     this.placed = false; this.hit = null; this.hitSource = null; this._pads = {};
+    this._steady = 0; this._hitPose = null; this._anchorReq = false;
+    this.xrAnchor?.delete?.(); this.xrAnchor = null;
+    this.userScale = 1; this.userYaw = 0; this._gestureUntil = 0;
     this._subject = null; this._probeAt = -1e9;
     this._warned = false; this._failed = false;
     const ar = mode === AR;
     if (ar && session.requestHitTestSource) {
       session.requestReferenceSpace('viewer')
-        .then((space) => session.requestHitTestSource({ space }))
+        // ARCore's detected planes first (steady, true to the table), feature points as a fallback
+        .then((space) => session.requestHitTestSource({ space, entityTypes: ['plane', 'point'] }).catch(() => session.requestHitTestSource({ space })))
         .then((src) => { if (this.session === session) this.hitSource = src; else src.cancel?.(); })
         .catch((err) => console.info('[xr] no hit-test: the model is placed in front of you', err?.message ?? err));
     }
@@ -335,6 +365,8 @@ export class XRMode {
     s.removeEventListener('squeeze', this._squeeze);
     this.hitSource?.cancel?.();
     this.hitSource = null;
+    this.xrAnchor?.delete?.(); this.xrAnchor = null;
+    this.overlay?.classList.remove('xr-scanning', 'xr-found');
     const mode = this.mode;
     this.engine.renderer.xr.setAnimationLoop(null);
     this._detach();
@@ -446,10 +478,15 @@ void main() {
 
   _select() {
     if (this.mode !== AR) { this.toggle(); return; }
+    // the end of a pinch / twist is not a tap
+    if (performance.now() < this._gestureUntil || this._touches > 1) return;
     // AR: place (or move) the model where the reticle is; the film starts on the first placement
     const first = !this.placed;
     this.placed = true;
     this._placeAt(this._head());
+    if (first) { this.anchor.copy(this.anchorGoal); this.anchorYaw = this.anchorYawGoal; }
+    // lock it to the real surface (an XR anchor follows ARCore's refinements of the table)
+    this._anchorReq = !!this.hit;
     this.reticle.visible = false;
     if (first) {
       const exp = this.experience?.active ? this.experience : null;
@@ -463,27 +500,55 @@ void main() {
 
   // anchor = the vitrine's floor point in the room, turned to face the viewer
   _placeAt(head) {
-    if (this.hit) this.anchor.copy(this.hit);
+    if (this.hit) this.anchorGoal.copy(this.hit);
     else {
       const q = _q.setFromRotationMatrix(this.engine.renderer.xr.getCamera().matrix);
       const f = _v.set(0, 0, -1).applyQuaternion(q);
       f.y = 0;
       if (f.lengthSq() < 1e-4) f.set(0, 0, -1);
       f.normalize();
-      this.anchor.copy(head).addScaledVector(f, TUNE.ar.reach);
-      this.anchor.y = head.y - TUNE.ar.drop;
+      this.anchorGoal.copy(head).addScaledVector(f, TUNE.ar.reach);
+      this.anchorGoal.y = head.y - TUNE.ar.drop;
     }
-    this.anchorYaw = Math.atan2(-(this.anchor.x - head.x), -(this.anchor.z - head.z));
+    this.anchorYawGoal = Math.atan2(-(this.anchorGoal.x - head.x), -(this.anchorGoal.z - head.z));
+    if (this.xrAnchor) { this.xrAnchor.delete?.(); this.xrAnchor = null; }
   }
 
-  _input(frame) {
-    // AR: where the viewer points on a real surface
+  _input(frame, wall = 0) {
+    // AR: where the viewer points on a real surface: the nearest flat, upward-facing one (a table
+    // top or the floor; walls and steep slopes are skipped), smoothed so the marker glides
     if (this.mode === AR && this.hitSource) {
+      let pose = null;
       try {
-        const res = frame.getHitTestResults(this.hitSource);
-        const pose = res[0]?.getPose(this.refSpace);
-        this.hit = pose ? (this.hit ?? new THREE.Vector3()).setFromMatrixPosition(_m.fromArray(pose.transform.matrix)) : null;
-      } catch { this.hit = null; }
+        for (const res of frame.getHitTestResults(this.hitSource)) {
+          const p = res.getPose(this.refSpace);
+          if (p && p.transform.matrix[5] >= TUNE.ar.minUp) { pose = p; break; }   // the surface normal (pose +Y) points up
+        }
+      } catch { pose = null; }
+      this._hitPose = pose;
+      if (!pose) { this.hit = null; this._steady = 0; } else {
+        const raw = this.hitRaw.setFromMatrixPosition(_m.fromArray(pose.transform.matrix));
+        if (!this.hit || this.hit.distanceTo(raw) > 0.4) { this.hit = (this.hit ?? new THREE.Vector3()).copy(raw); this._steady = 0; } else {
+          const jump = this.hit.distanceTo(raw);
+          this.hit.lerp(raw, 1 - Math.exp(-TUNE.ar.glide * wall));
+          this._steady = jump < 0.03 ? this._steady + wall : Math.max(0, this._steady - wall);
+        }
+      }
+      // a tap placed it on a surface: anchor it there
+      if (this._anchorReq && this.placed && frame.createAnchor && pose) {
+        this._anchorReq = false;
+        const session = this.session, p = this.anchorGoal;
+        try {
+          frame.createAnchor(new XRRigidTransform({ x: p.x, y: p.y, z: p.z }), this.refSpace)?.then((a) => {
+            if (this.session !== session) { a.delete?.(); return; }
+            this.xrAnchor?.delete?.(); this.xrAnchor = a;
+          }).catch(() => {});
+        } catch { /* anchors unsupported: the model stays where it was put */ }
+      }
+      if (this.xrAnchor && frame.trackedAnchors?.has(this.xrAnchor)) {
+        const ap = frame.getPose(this.xrAnchor.anchorSpace, this.refSpace);
+        if (ap) this.anchorGoal.setFromMatrixPosition(_m.fromArray(ap.transform.matrix));
+      }
     }
     for (const src of this.session.inputSources) {
       const gp = src.gamepad;
@@ -511,7 +576,7 @@ void main() {
     const e = this.engine, r = e.renderer, ar = this.mode === AR, cfg = ar ? TUNE.ar : TUNE.vr;
     const raw = this._lastTime == null ? 0 : Math.max(0, (time - this._lastTime) / 1000), wall = Math.min(0.1, raw);
     this._lastTime = time;
-    this._input(frame);
+    this._input(frame, wall);
 
     // clock: the soundtrack (or Experience mode's own clock, which this loop drives while in XR)
     const exp = this.experience?.active ? this.experience : null, player = this.player;
@@ -566,7 +631,7 @@ void main() {
       else if (snap || !this._subject || time - this._probeAt > 500) { this._probeAt = time; this._subject = this._probe(inst, d); }
       const sub = this._subject, D = sub.D ?? d.focus;
       const R = shot.radius ?? D * d.tanHalf * cfg.frame * (shot.frame ?? 1);
-      S = R / cfg.half;
+      S = R / (cfg.half * this.userScale);
       // the vitrine's centre: a little behind the visible surface (subjects have depth), its floor
       // on the set's lowest ground under the subject, so the model stands on the table
       src = this._target.copy(d.P).addScaledVector(d.F, D + (shot.depth ?? cfg.depth) * R);
@@ -581,9 +646,14 @@ void main() {
     const pos = this._pos.set(f.x.x, f.y.x, f.z.x), scale = Math.exp(f.lnS.x);
     const rig = this.rig;
     if (ar) {
-      if (!this.placed) this._placeAt(this._head().clone());
-      const centre = _v.copy(this.anchor).addScaledVector(Y, cfg.half);
-      arRigMatrix(rig.matrix, pos, f.yaw.x, scale, centre, this.anchorYaw);
+      // before the first tap the model previews on the marker; a later tap glides it to the new spot
+      if (!this.placed) { this._placeAt(this._head().clone()); this.anchor.copy(this.anchorGoal); this.anchorYaw = this.anchorYawGoal; } else {
+        const k = 1 - Math.exp(-8 * wall);
+        if (this.anchor.distanceTo(this.anchorGoal) > 3) this.anchor.copy(this.anchorGoal); else this.anchor.lerp(this.anchorGoal, k);
+        this.anchorYaw += wrap(this.anchorYawGoal - this.anchorYaw) * k;
+      }
+      const centre = _v.copy(this.anchor).addScaledVector(Y, cfg.half * this.userScale);
+      arRigMatrix(rig.matrix, pos, f.yaw.x, scale, centre, this.anchorYaw + this.userYaw);
     } else rigMatrix(rig.matrix, pos, f.yaw.x, scale);
     rig.matrixWorldNeedsUpdate = true;
     this.roomRoot.matrix.copy(rig.matrix);
@@ -620,8 +690,8 @@ void main() {
     const scene = inst.scene, bg = scene.background, fog = scene.fog;
     let fogSave = null;
     if (ar) {
-      const half = cfg.half * scale;
-      clipPrism(this.planes, pos, f.yaw.x, half, cfg.sides);
+      const half = cfg.half * this.userScale * scale;   // scene units
+      clipPrism(this.planes, pos, f.yaw.x, half, cfg.sides, cfg.deep, half * (2 * cfg.tall - 1));
       r.clippingPlanes = this.planes;
       scene.background = null;
       // haze as thick at the subject as in the film, measured from where the viewer stands
@@ -630,18 +700,35 @@ void main() {
         const k = clamp((this._subject?.D ?? d.focus) / Math.max(1e-3, this._head().distanceTo(this.anchor) * scale), 0.05, 1);
         if (fog.isFogExp2) fog.density *= k; else { fog.near /= k; fog.far /= k; }
       }
-      this._hideOutside(inst, pos, half);
+      this._hideOutside(inst, pos, half * cfg.deep);
       r.setClearColor(0x000000, 0);
       const head = this._head();
+      const us = this.userScale;
       this.plinth.position.copy(this.anchor);
-      this.plinth.rotation.y = this.anchorYaw;
+      this.plinth.rotation.y = this.anchorYaw + this.userYaw;
+      this.plinth.scale.set(us, 1, us * cfg.deep);
+      // the marker: dim while the surface is still settling, gold and breathing once it is steady
+      const ready = !!this.hit && this._steady >= cfg.steady;
       const showReticle = !this.placed && !!this.hit;
       this.reticle.visible = showReticle;
-      if (showReticle) this.reticle.position.copy(this.hit);
+      if (showReticle) {
+        this.reticle.position.copy(this.hit);
+        this.reticle.rotation.y = this.anchorYawGoal;
+        const pulse = ready ? 1 + 0.06 * Math.sin(time / 1000 * 4) : 1;
+        this.reticle.children[0].scale.setScalar(pulse);
+        this.footprint.scale.set(us, 1, us * cfg.deep); this.footFill.scale.set(us, 1, us * cfg.deep);
+        this.footprint.material.opacity = ready ? 0.75 : 0.25;
+        this.footFill.material.opacity = ready ? 0.1 : 0.03;
+        this.reticle.children[0].material.opacity = ready ? 0.95 : 0.45;
+      }
+      if (this.overlay) {
+        this.overlay.classList.toggle('xr-scanning', !this.placed && !ready && !!this.hitSource);
+        this.overlay.classList.toggle('xr-found', !this.placed && ready);
+      }
       this.hint.visible = !this.placed || !playing;
       this.hint.set(!this.placed ? (this.hit ? 'TAP OR PULL TRIGGER TO PLACE' : 'LOOK AT A TABLE · TAP TO PLACE') : 'PAUSED · A / X OR ▶ TO PLAY');
       this.hint.scale.setScalar(0.45);
-      this.hint.position.copy(this.anchor).addScaledVector(Y, cfg.half * 2 + 0.08);
+      this.hint.position.copy(this.anchor).addScaledVector(Y, cfg.half * us * 2 * cfg.tall + 0.08);
       this.hint.rotation.set(0, Math.atan2(head.x - this.hint.position.x, head.z - this.hint.position.z), 0);
     } else {
       r.setClearColor(inst.background ?? 0x000000, 1);
@@ -855,6 +942,21 @@ void main() {
     const el = this.overlay;
     if (!el) return;
     el.addEventListener('beforexrselect', (ev) => { if (ev.target.closest('button')) ev.preventDefault(); });
+    // two fingers: pinch to resize the model, twist to turn it (taps still place / move it)
+    let g0 = null;
+    const span = (t) => [Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY), Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX)];
+    const touch = (ev) => {
+      this._touches = ev.touches.length;
+      if (this.mode !== AR || ev.target.closest?.('button')) return;
+      if (ev.touches.length < 2) { if (g0) this._gestureUntil = performance.now() + 400; g0 = null; return; }
+      const [dist, ang] = span(ev.touches);
+      if (!g0 || ev.type === 'touchstart') { g0 = { dist, ang, scale: this.userScale, yaw: this.userYaw }; return; }
+      this.userScale = clamp(g0.scale * dist / Math.max(1, g0.dist), TUNE.ar.minScale, TUNE.ar.maxScale);
+      this.userYaw = g0.yaw - wrap(ang - g0.ang);
+      this._gestureUntil = performance.now() + 400;
+      ev.preventDefault();
+    };
+    for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) el.addEventListener(t, touch, { passive: false });
     el.querySelector('[data-xr="play"]')?.addEventListener('click', () => this.toggle());
     el.querySelector('[data-xr="exit"]')?.addEventListener('click', () => this.stop());
   }

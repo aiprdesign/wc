@@ -121,7 +121,7 @@
 
   <!-- AR on phones: shown over the camera view while a session runs (WebXR DOM overlay) -->
   <div id="xr-overlay" class="xr-overlay">
-    <p class="xr-hint"><span class="xr-hint-place">Point at a table, then tap to place the film</span><span class="xr-hint-move">Tap to move it</span></p>
+    <p class="xr-hint"><span class="xr-scan-icon" aria-hidden="true"></span><span class="xr-hint-scan">Move your phone slowly over a table to find its surface</span><span class="xr-hint-place">Point at a table, then tap to place the film</span><span class="xr-hint-found">Surface found · tap to place it here</span><span class="xr-hint-move">Tap to move · pinch to resize · twist to turn</span></p>
     <div class="xr-bar">
       <button type="button" data-xr="play" aria-label="Play or pause">
         <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
@@ -188,9 +188,9 @@
       <ol>
         <li>Scan a code above (or open <span class="xh-url"></span><span class="xh-url-ar">#arlite</span> <button type="button" class="xh-copy" data-copy-hash="#arlite">Copy link</button> in Chrome, or the Quest browser).</li>
         <li>Pick a chapter if asked, wait a few seconds for it to load, turn the sound on, then choose <strong>View in AR</strong> and allow the camera.</li>
-        <li>Point the phone at a table and move it slowly until a gold ring sits on the surface.</li>
-        <li>Tap to place the film. Tap again anywhere to move it.</li>
-        <li>Walk around the model to look from any side. Use the on-screen <strong>play / pause</strong> and <strong>Exit AR</strong> buttons.</li>
+        <li>Move the phone slowly over a table until the gold outline turns bright: that is the surface found, and the outline is the model's size.</li>
+        <li>Tap to place the film. It locks to the table; tap again to glide it somewhere else.</li>
+        <li><strong>Pinch</strong> to make it bigger or smaller, <strong>twist</strong> two fingers to turn it, and walk around it to see the full depth from any side. Use the on-screen <strong>play / pause</strong> and <strong>Exit AR</strong> buttons.</li>
       </ol>
       <h3>On Quest 3</h3>
       <ul class="xh-keys">

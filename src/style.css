@@ -148,8 +148,16 @@ body:not(.has-vr) #intro .play-vr, body:not(.has-ar) #intro .play-ar { opacity: 
 .xr-overlay { display: none; }
 .xr-ar-on .xr-overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); pointer-events: none; background: transparent; z-index: 30; }
 .xr-hint { margin: 0; padding: 8px 14px; font-size: 12px; letter-spacing: 0.08em; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.4); border-radius: 999px; }
-.xr-hint-move, .xr-placed .xr-hint-place { display: none; }
-.xr-placed .xr-hint-move { display: inline; }
+/* AR guidance: scanning for a surface → surface found → placed (pinch / twist / tap) */
+.xr-ar-on .xr-overlay { pointer-events: auto; touch-action: none; }
+.xr-hint { display: flex; align-items: center; gap: 8px; text-align: center; }
+.xr-hint-move, .xr-hint-scan, .xr-hint-found, .xr-scan-icon, .xr-placed .xr-hint-place { display: none; }
+.xr-scanning .xr-hint-place, .xr-found .xr-hint-place { display: none; }
+.xr-scanning .xr-hint-scan, .xr-found .xr-hint-found, .xr-placed .xr-hint-move { display: inline; }
+.xr-scanning .xr-scan-icon { display: inline-block; flex: none; width: 12px; height: 20px; border: 1.5px solid var(--gold); border-radius: 3px; animation: xr-sweep 1.6s ease-in-out infinite; }
+.xr-found .xr-hint { border-color: var(--gold); background: rgba(40, 30, 14, 0.75); }
+@keyframes xr-sweep { 0%, 100% { transform: translateX(-6px) rotate(-14deg); } 50% { transform: translateX(6px) rotate(14deg); } }
+@media (prefers-reduced-motion: reduce) { .xr-scanning .xr-scan-icon { animation: none; } }
 .xr-bar { display: flex; gap: 12px; pointer-events: auto; }
 .xr-bar button { min-width: 52px; height: 44px; padding: 0 16px; display: grid; place-items: center; font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.5); border-radius: 999px; }
 .xr-bar svg { width: 18px; height: 18px; fill: var(--gold); }
