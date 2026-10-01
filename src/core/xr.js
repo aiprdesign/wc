@@ -50,6 +50,9 @@ export const TUNE = {
     deep: 1.3, tall: 1.25,
     // pinch to resize (× the base size), surface tracking (marker glide /s, steady time before "ready")
     minScale: 0.4, maxScale: 4, glide: 14, steady: 0.25, minUp: 0.75,
+    // 'full': the whole set, unclipped (skies and backdrop walls still drop out so the room shows);
+    // 'case': cut to the vitrine. The overlay button switches between them.
+    view: 'full',
     // per-chapter framing: the finale's Earth is a whole globe on the plinth (frame × and centre depth × R)
     // (or an explicit subject: the finale's Earth, radius 1.6 at the origin, as a whole globe)
     shots: { finale: { centre: [0, 0, 0], radius: 1.72 } },
@@ -248,6 +251,7 @@ export class XRMode {
     this.anchorYaw = 0;
     this.anchorGoal = new THREE.Vector3();   // where a tap moved it: the model glides there
     this.anchorYawGoal = 0;
+    this.view = TUNE.ar.view;                // 'full' | 'case'
     this.userScale = 1;                      // pinch
     this.userYaw = 0;                        // twist
     this.hitRaw = new THREE.Vector3();
@@ -691,8 +695,9 @@ void main() {
     let fogSave = null;
     if (ar) {
       const half = cfg.half * this.userScale * scale;   // scene units
+      const full = this.view === 'full';
       clipPrism(this.planes, pos, f.yaw.x, half, cfg.sides, cfg.deep, half * (2 * cfg.tall - 1));
-      r.clippingPlanes = this.planes;
+      r.clippingPlanes = full ? [] : this.planes;
       scene.background = null;
       // haze as thick at the subject as in the film, measured from where the viewer stands
       if (fog) {
@@ -700,13 +705,14 @@ void main() {
         const k = clamp((this._subject?.D ?? d.focus) / Math.max(1e-3, this._head().distanceTo(this.anchor) * scale), 0.05, 1);
         if (fog.isFogExp2) fog.density *= k; else { fog.near /= k; fog.far /= k; }
       }
-      this._hideOutside(inst, pos, half * cfg.deep);
+      this._hideOutside(inst, pos, half * cfg.deep, full);
       r.setClearColor(0x000000, 0);
       const head = this._head();
       const us = this.userScale;
       this.plinth.position.copy(this.anchor);
       this.plinth.rotation.y = this.anchorYaw + this.userYaw;
       this.plinth.scale.set(us, 1, us * cfg.deep);
+      this.plinth.children[1].visible = !full;   // the rim marks the case's edge
       // the marker: dim while the surface is still settling, gold and breathing once it is steady
       const ready = !!this.hit && this._steady >= cfg.steady;
       const showReticle = !this.placed && !!this.hit;
@@ -862,7 +868,7 @@ void main() {
   // AR, per frame: what would spoil the vitrine steps aside (restored right after the frame):
   // backdrop walls behind the set, enclosing domes and rooms, dust clouds, glow billboards reaching
   // past the glass, and any shader material that could not learn clipping yet reaches outside it.
-  _hideOutside(inst, c, half) {
+  _hideOutside(inst, c, half, full = false) {
     let list = this._hideList;
     if (!list) {
       list = this._hideList = [];
@@ -920,7 +926,8 @@ void main() {
       const behind = _u.copy(size.center).applyMatrix4(o.matrixWorld).sub(this.dp.P).dot(this.dp.F) - _sph.center.copy(c).sub(this.dp.P).dot(this.dp.F);
       if (behind > half * 0.15 || (r > half * 2.5 && [o.material].flat().some((m) => m.transparent))) { o.visible = false; this.hidden.push(o); }
     }
-    if (!list.length) return;
+    // (full view: nothing is clipped, so the unclippable shader meshes needn't be culled to the case)
+    if (!list.length || full) return;
     const lim = half * 1.15;
     for (const o of list) {
       if (!o.visible) continue;
@@ -959,6 +966,7 @@ void main() {
     for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) el.addEventListener(t, touch, { passive: false });
     el.querySelector('[data-xr="play"]')?.addEventListener('click', () => this.toggle());
     el.querySelector('[data-xr="exit"]')?.addEventListener('click', () => this.stop());
+    el.querySelector('[data-xr="view"]')?.addEventListener('click', () => { this.view = this.view === 'full' ? 'case' : 'full'; this._syncOverlay(); });
   }
 
   _syncOverlay() {
@@ -966,5 +974,6 @@ void main() {
     if (!el) return;
     el.classList.toggle('xr-playing', this.playing);
     el.classList.toggle('xr-placed', !!this.placed);
+    el.classList.toggle('xr-view-case', this.view === 'case');
   }
 }

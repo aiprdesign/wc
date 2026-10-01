@@ -147,6 +147,8 @@ footprint, brightening once the surface holds steady. A tap places the model and
 surface with an XR anchor (where supported); a later tap glides it to the new spot. Pinch resizes
 it (0.4–4×), a two-finger twist turns it. The vitrine is 0.6 m across, 1.3× deeper front to back
 and 1.25× as tall as wide, framing more of each set, with a soft contact shadow on the table.
+Two views (overlay button): **Full scene** (default) draws the whole set unclipped, with skies,
+domes and backdrop walls dropped so the room still shows through; **Case** cuts it to the vitrine.
 
 - **VR**: the soundtrack (or Experience mode's clock) keeps time. Your viewpoint follows the
   director's camera level (heading only, no pitch or roll) through a critically damped ~0.6 s

@@ -263,3 +263,7 @@ select.ex-v { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(226, 
 .arlite-picking .play-row, .arlite-picking .intro-links, .arlite-picking .formats-pick, .arlite-picking .hint { display: none; }
 .arlite #play-exp, .arlite #intro .play-vr, .arlite .export-link, .arlite .formats-pick, .arlite .hint { display: none !important; }
 .arlite #intro .play-ar { order: -1; }
+
+/* AR view toggle: shows the current view (full scene ⇄ display case) */
+.xv-case, .xr-view-case .xv-full { display: none; }
+.xr-view-case .xv-case { display: inline; }
