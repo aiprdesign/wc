@@ -32,7 +32,7 @@ const ERAS = [
   // 60-30-10: the words are the film's 10% accent — one signature gold
   // every heading is cast in the same gold as the opening title's 3D letters (opening.js goldMat): a warm
   // #e9b964 metal, satin roughness, hammered micro-surface (lib/surface.js) and a low inner glow — gold bars
-  [99, { color: '#e9b964', roughness: 0.38, env: 0.55, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.3 }],
+  [99, { color: '#e9b964', roughness: 0.38, env: 0.85, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.55 }],
 ];
 const eraOf = (T) => ERAS.find(([t]) => T < t)[1];
 
@@ -76,14 +76,14 @@ function letterMaterial(era, env, shared, invert = false) {
       // soft highlight knee: letters stay crisp under the bloom threshold instead of hazing out
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
         { vec3 c = gl_FragColor.rgb; float m = max(c.r, max(c.g, c.b));
-          if (m > 0.55) { float nm = 0.55 + (m - 0.55) / (1.0 + (m - 0.55) * 3.5); gl_FragColor.rgb = c * (nm / m); } }
+          if (m > 0.78) { float nm = 0.78 + (m - 0.78) / (1.0 + (m - 0.78) * 2.0); gl_FragColor.rgb = c * (nm / m); } }
         // first-show shine: a bright specular band that is allowed past the knee, so it sparkles once
         gl_FragColor.rgb += uTint * band * uShine * 0.24;
         // per-letter shine: the letter flares white-hot as the shine front passes over it (like the closing
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
         gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
   };
-  m.customProgramCacheKey = () => 'word3d-v14';
+  m.customProgramCacheKey = () => 'word3d-v15';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
   // (hammered like the title's letters: the same detail, a touch stronger and at the title's scale relative
   // to the letter — headings are drawn smaller in the world, so the pattern is set finer)

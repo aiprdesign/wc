@@ -499,7 +499,7 @@ export function create(ctx, segment) {
     strokeCount,
     get exploreLimits() { return lastT < m3 ? LIM_2D : LIM_3D; },
     explore(t) {
-      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, this, t + segment.start);
+      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.2 * headingDuck(ctx, this, t + segment.start);
       easel.visible = true;
       // once the canvas recedes the lit figure and its drafting grid are the set: the canvas keeps its easel
       // (off-axis it otherwise hung as a dark card in the void) but not the studio boards below the grid

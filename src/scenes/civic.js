@@ -808,7 +808,7 @@ export function create(ctx, segment) {
     explore(t) {
       stageFloor.visible = true; setWordDepth(true);
       // explore hides the chapter heading (LAW) and with it the film's bloom duck: put it back
-      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
+      if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.2 * headingDuck(ctx, api, t + segment.start);
     },
     // off the film's axis: callouts turn to the viewer, props drifting up to the lens step back, and the
     // additive particle clouds are kept from stacking into glare (edge-on on the documents, or zoomed out)

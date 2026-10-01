@@ -1180,7 +1180,7 @@ export function create(ctx, segment) {
     // once the camera has swooped down to the orrery the instruments of shot 2 hang far overhead, out of the
     // film's frame: off-axis they read as leftovers of the previous shot floating in the void
     if (t > 2.6) scope.visible = armil.visible = gearGrp.visible = diag.visible = false;
-    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, out, t + segment.start);
+    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.2 * headingDuck(ctx, out, t + segment.start);
   }
   // labels turn to the viewer's camera (the film turns them to its own); the Opticks caption on the prism too
   const _qp = new THREE.Quaternion(), _cw = new THREE.Vector3();

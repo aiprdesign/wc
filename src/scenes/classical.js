@@ -952,7 +952,7 @@ export function create(ctx, segment) {
     ground.scale.setScalar(149.5 / 120);
     // Explore hides the chapter heading, and with it the bloom duck the film applies under it: the
     // wireframe / clay column (a strong additive emitter under the key spot) blew out into a glare
-    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.45 * headingDuck(ctx, api, t + segment.start);
+    if (ctx.engine?.headingsHidden) bloom.strength *= 1 - 0.2 * headingDuck(ctx, api, t + segment.start);
   }
   // callouts turn to the viewer's camera; the flat engineering drawings fade out as they turn edge-on
   function explorePosed(cam) {
