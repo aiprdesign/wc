@@ -496,6 +496,9 @@ export function create(ctx, segment) {
     },
     vertexShader: pageVert, fragmentShader: pageFrag,
   });
+  // AR: the shader places every page round the core, so the vitrine's clip (which tests the unplaced
+  // vertex) would cut them all: the sphere is left unclipped (it sits inside the vitrine anyway)
+  pageMat.userData.arNoClip = true;
   const pages = new THREE.InstancedMesh(box, pageMat, N_PAGES);
   pages.frustumCulled = false;
   scene.add(pages);
@@ -653,6 +656,8 @@ export function create(ctx, segment) {
   const self = {
     scene, camera, hud: null, background: 0x000000,
     // the page stream / globe library is a real 3D volume; the network flight is a speed-ramped corridor
+    // AR: the page sphere round the core (its pages are see-through to the depth probe)
+    arSubject: () => ({ centre: CORE, radius: SPHERE_R * 1.2 }),
     get exploreLimits() { return lastT < C_NET ? { yaw: 1.2, pitchDown: 0.5, pitchUp: 0.9, zoomOut: 2.4 } : { yaw: 0.9, pitchDown: 0.35, pitchUp: 0.6, zoomOut: 2.0 }; },
     dof: { focus: 8, range: 3, amount: 0 },
     bloom: { strength: 0.75 },

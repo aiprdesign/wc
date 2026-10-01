@@ -424,7 +424,7 @@ export class XRMode {
         }
         if (saved.has(m) || m.isRawShaderMaterial) continue;
         const opaque = !m.transparent && m.blending === THREE.NormalBlending;
-        const clip = m.isShaderMaterial && !m.clipping && MAIN.test(m.vertexShader) && MAIN.test(m.fragmentShader);
+        const clip = m.isShaderMaterial && !m.clipping && !m.userData.arNoClip && MAIN.test(m.vertexShader) && MAIN.test(m.fragmentShader);
         if (!opaque && !clip) continue;
         saved.set(m, { obc: m.onBeforeCompile, key: m.customProgramCacheKey, own: Object.hasOwn(m, 'onBeforeCompile'), ownKey: Object.hasOwn(m, 'customProgramCacheKey'), clipping: m.clipping });
         const prev = m.onBeforeCompile, key = m.customProgramCacheKey;
@@ -630,7 +630,9 @@ void main() {
     let src = d.P, S;
     if (ar) {
       // what the shot shows: a depth probe of the director's view (on cuts and twice a second)
-      const shot = cfg.shots[inst.segment.id] ?? {};
+      // (a scene can name its subject: see-through ones — glass cards, glowing lines, page clouds — are
+      // invisible to the depth probe, which would frame the floor or backdrop behind them instead)
+      const shot = inst.arSubject?.(T - inst.segment.start) ?? cfg.shots[inst.segment.id] ?? {};   // (scene-local time, as update gets)
       if (shot.centre) this._subject = { D: null, floorY: null };
       else if (snap || !this._subject || time - this._probeAt > 500) { this._probeAt = time; this._subject = this._probe(inst, d); }
       const sub = this._subject, D = sub.D ?? d.focus;
@@ -639,7 +641,7 @@ void main() {
       // the vitrine's centre: a little behind the visible surface (subjects have depth), its floor
       // on the set's lowest ground under the subject, so the model stands on the table
       src = this._target.copy(d.P).addScaledVector(d.F, D + (shot.depth ?? cfg.depth) * R);
-      if (shot.centre) src.fromArray(shot.centre);
+      if (shot.centre) { if (Array.isArray(shot.centre)) src.fromArray(shot.centre); else src.copy(shot.centre); }
       else if (sub.floorY != null) src.y = clamp(sub.floorY - 0.03 * R, src.y - R, src.y + 0.5 * R) + R;
     } else S = vrScale(d);
     const yawT = f.yaw.x + wrap(d.yaw - f.yaw.x);                         // continuous heading
@@ -705,7 +707,7 @@ void main() {
         const k = clamp((this._subject?.D ?? d.focus) / Math.max(1e-3, this._head().distanceTo(this.anchor) * scale), 0.05, 1);
         if (fog.isFogExp2) fog.density *= k; else { fog.near /= k; fog.far /= k; }
       }
-      this._hideOutside(inst, pos, half * cfg.deep, full);
+      this._hideOutside(inst, pos, half, full);
       r.setClearColor(0x000000, 0);
       const head = this._head();
       const us = this.userScale;
@@ -874,7 +876,7 @@ void main() {
       list = this._hideList = [];
       inst.scene.traverse((o) => {
         const mats = [o.material ?? []].flat();
-        if ((o.isMesh || o.isPoints || o.isLine || o.isSprite) && mats.some((m) => m.isShaderMaterial && !m.clipping)) list.push(o);
+        if ((o.isMesh || o.isPoints || o.isLine || o.isSprite) && mats.some((m) => m.isShaderMaterial && !m.clipping && !m.userData.arNoClip)) list.push(o);
       });
     }
     // backdrops: big upright flat walls behind the set read as a box in the room
@@ -903,7 +905,9 @@ void main() {
       if (!o.visible) continue;
       if (axis === -3) {
         const r = o.matrixWorld.getMaxScaleOnAxis() * 0.75;   // a billboard's reach from its centre
-        if (_u.setFromMatrixPosition(o.matrixWorld).distanceTo(c) + r > half) { o.visible = false; this.hidden.push(o); }
+        // big glows: over the camera feed an additive halo reads as grey fog (and the vitrine walls
+        // would slice it into a lit slab); small ones (sparks, highlights) stay
+        if (r > half * 0.25 || (!full && _u.setFromMatrixPosition(o.matrixWorld).distanceTo(c) + r > half)) { o.visible = false; this.hidden.push(o); }
         continue;
       }
       if (axis === -2) {
@@ -928,7 +932,7 @@ void main() {
     }
     // (full view: nothing is clipped, so the unclippable shader meshes needn't be culled to the case)
     if (!list.length || full) return;
-    const lim = half * 1.15;
+    const lim = half * TUNE.ar.deep * 1.15;
     for (const o of list) {
       if (!o.visible) continue;
       let bs;

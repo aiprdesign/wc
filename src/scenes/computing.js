@@ -325,6 +325,8 @@ export function create(ctx, segment) {
   const ai = buildBranches({ Y0: AI_Y0, Zc: AI_ZC, D_REF: AI_DREF, tStart: tBin + 0.06 });
   worldB.add(ai.group);
   const coreW = ai.core.clone().add(B0);
+  // AR: the branches and cards are see-through, so the subject is named (the card wall around the core)
+  const aiSubject = { centre: new THREE.Vector3(), radius: 0 };
 
   // binary glyph streams: die floor → the neural core
   const GLYPHS = 700;
@@ -401,6 +403,13 @@ export function create(ctx, segment) {
   const api = {
     scene, camera, hud,
     get exploreLimits() { return lastT < tSwitch ? LIM_BENCH : lastT < tBin + 0.05 ? LIM_DIE : LIM_CARDS; },
+    arSubject(t) {
+      if (t < tBin) return null;
+      ai.group.updateWorldMatrix(true, false);
+      aiSubject.centre.copy(ai.core).applyMatrix4(ai.group.matrixWorld);
+      aiSubject.radius = AI_DREF * 0.5;
+      return aiSubject;
+    },
     // Explore 3D: the AI cards gain their glass backing slabs (so they read as panels, not decals, off-axis)
     // Bench: the floor disc (r 12) is spread out so a wide orbit meets fog, not its rim; the processor's
     // polished lid mirrors the key spot into a white-out from above, so its polish is broadened
