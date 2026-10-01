@@ -601,8 +601,12 @@ export function create(ctx, segment) {
   // ending in mid-air, so that stage keeps a closer window)
   let lastT = 0;
   const LIM = { zoomOut: 2.8 }, LIM_CIRCUIT = { zoomOut: 1.8 };
+  const AR_SUBJECT = { centre: new THREE.Vector3(0, 4, 0), radius: 4 };   // (centre one radius up: the plan stands on the table)
   const self = {
     scene, camera, hud, background: 0x000000, bloom: { strength: 0.8 }, exposure: 1, update, explore, exploreEnd,
+    // AR: the plan view's motifs (rings, orbits, traces) are thin lines the depth probe can't see;
+    // until the dive into the stars, the subject is the plan centre
+    arSubject: (t) => (t < C5 - 0.35 ? AR_SUBJECT : null),
     get exploreLimits() { return lastT > C4 - 0.4 && lastT < C5 ? LIM_CIRCUIT : LIM; },
   };
 
