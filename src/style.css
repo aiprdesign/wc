@@ -224,8 +224,16 @@ select.ex-v { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(226, 
 .xh-qr { display: flex; gap: 14px; align-items: center; margin: 10px 0 4px; padding: 10px; border: 1px solid rgba(226, 195, 138, 0.25); border-radius: 10px; background: rgba(226, 195, 138, 0.05); }
 .xh-qr img { flex: none; border-radius: 8px; background: #f3ead8; }
 .xh-qr figcaption { font-size: 12.5px; line-height: 1.5; color: #d8cdbb; }
-.xh-qr-url { display: block; margin-top: 4px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--gold, #e2c38a); }
+.xh-qr-url { display: block; text-decoration: none; margin-top: 4px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--gold, #e2c38a); }
 @media (max-width: 420px) { .xh-qr img { width: 104px; height: 104px; } }
+/* AR popup: a QR code (and a tap target) per chapter, each opening it in AR Lite */
+.xh-chs-lead { margin: 0 0 8px; font-size: 12.5px; color: #d8cdbb; }
+.xh-chs { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 8px; margin: 0 0 6px; }
+.xh-ch { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px; border: 1px solid rgba(226, 195, 138, 0.25); border-radius: 10px; background: rgba(226, 195, 138, 0.05); color: #d8cdbb; text-decoration: none; font-size: 11.5px; line-height: 1.3; text-align: center; }
+.xh-ch img { width: 120px; height: 120px; border-radius: 6px; background: #f3ead8; }
+.xh-ch b { color: var(--gold, #e2c38a); font-weight: 400; }
+.xh-ch:hover, .xh-ch:focus-visible { border-color: var(--gold, #e2c38a); background: rgba(226, 195, 138, 0.12); }
+@media (max-width: 420px) { .xh-chs { grid-template-columns: repeat(2, 1fr); } .xh-ch img { width: 100px; height: 100px; } }
 #intro.ready .install-app:not([hidden]) { display: block; }
 .install-app[hidden] { display: none !important; }
 

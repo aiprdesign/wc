@@ -432,12 +432,14 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
     const yes = (k) => (xrs?.[k] ? '<b>ready</b>' : '<i>not on this device</i>');
     $('xh-status').innerHTML = `This browser: VR ${yes('vr')} · AR ${yes('ar')}${embedded ? ' · this page is embedded, so open the film\u2019s own address' : ''}`;
     help.querySelectorAll('.xh-url').forEach((el) => { el.textContent = filmUrl; });
+    // chapter QR tiles and the AR Lite link: the film's own address (an embedded page can't start AR)
+    help.querySelectorAll('a.xh-ch, a.xh-qr-url').forEach((a) => { a.href = filmUrl + new URL(a.getAttribute('href'), location.href).hash; });
     showHelpTab(tab);
     if (help.showModal) help.showModal(); else help.setAttribute('open', '');
   };
   help.querySelectorAll('[data-xh]').forEach((b) => b.addEventListener('click', () => showHelpTab(b.dataset.xh)));
   help.querySelectorAll('.xh-copy').forEach((b) => b.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(filmUrl); b.textContent = 'Copied'; } catch { b.textContent = 'Copy failed'; }
+    try { await navigator.clipboard.writeText(filmUrl + (b.dataset.copyHash ?? '')); b.textContent = 'Copied'; } catch { b.textContent = 'Copy failed'; }
     setTimeout(() => { b.textContent = 'Copy link'; }, 1600);
   }));
   if (!xrs?.vr) { const t = $('play-vr')?.querySelector('.pe-sub'); if (t) t.textContent = 'Needs a VR headset · tap for how-to'; }
