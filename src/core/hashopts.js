@@ -8,8 +8,7 @@
 // start screen; a tap still starts the session (browsers only open one from a user gesture).
 const raw = (globalThis.location?.hash ?? '').slice(1);
 const tokens = raw.toLowerCase().split(/[&+,]/).filter(Boolean);
-import { LOOK_IDS } from '../lib/theme.js';
-const OPTIONS = new Set(['experience', 'vr', 'ar', ...LOOK_IDS]);   // look names (#silver …) are options too
+const OPTIONS = new Set(['experience', 'vr', 'ar']);
 
 export const HASH_EXPERIENCE = tokens.includes('experience') || new URLSearchParams(globalThis.location?.search ?? '').has('experience');
 const has = (k) => tokens.includes(k) || new URLSearchParams(globalThis.location?.search ?? '').has(k);

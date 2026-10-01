@@ -2,7 +2,6 @@
 // hashopts first: it narrows a combined fragment (#square&experience) to the format token before
 // timeline.js reads it
 import { HASH_EXPERIENCE, HASH_XR, restoreHash, setHashExperience } from './core/hashopts.js';
-import { LOOKS, LOOK_IDS, LOOK_ID, setLook } from './lib/theme.js';
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
@@ -226,13 +225,6 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   const cur = fmts.findIndex(([h]) => h === curHash);
   $('btn-format').textContent = fmts[Math.max(0, cur)][1];
   $('btn-format').addEventListener('click', () => { location.hash = fmts[(Math.max(0, cur) + 1) % fmts.length][0]; });
-  // colour looks (lib/theme.js): start-screen buttons and the player-bar cycle button
-  document.querySelectorAll('.looks-pick [data-look]').forEach((b) => {
-    b.setAttribute('aria-current', String(b.dataset.look === LOOK_ID));
-    b.addEventListener('click', () => { if (b.dataset.look !== LOOK_ID) setLook(b.dataset.look); });
-  });
-  $('btn-look').textContent = LOOKS[LOOK_ID].label;
-  $('btn-look').addEventListener('click', () => setLook(LOOK_IDS[(LOOK_IDS.indexOf(LOOK_ID) + 1) % LOOK_IDS.length]));
   $('btn-fs').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()));
   $('btn-wav').addEventListener('click', () => {
     if (!score?.encodeWav) return;

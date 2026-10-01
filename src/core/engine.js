@@ -16,7 +16,6 @@ import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
 import { addSurfaceDetailToScene, setSurfaceQuality, disableSurfaceDetail, surfaceDetailDisabled } from '../lib/surface.js';
-import { LOOK } from '../lib/theme.js';
 import { sceneLights, buildSceneEnvironment } from '../lib/environment.js';
 
 const shaderMat = (def) => new THREE.ShaderMaterial({
@@ -300,12 +299,6 @@ export class Engine {
       if (this.quality === 'high' || this.quality === 'ultra') this.dofQuad.material.defines = { DOF_TAPS: 56 };
       this.transQuad = new FullScreenQuad(shaderMat(TransitionShader));
       this.finalQuad = new FullScreenQuad(shaderMat(FinalShader));
-      { // the viewer's look (lib/theme.js)
-        const g = LOOK.grade, u = this.finalQuad.material.uniforms;
-        u.uLookAmt.value = g.amt ?? 0; u.uLookSat.value = g.sat ?? 1; u.uLookContrast.value = g.contrast ?? 0;
-        if (g.shadow) u.uLookShadow.value.fromArray(g.shadow);
-        if (g.high) u.uLookHigh.value.fromArray(g.high);
-      }
       this.aoQuad = new FullScreenQuad(shaderMat(AoShader));
       this.aoBlurQuad = new FullScreenQuad(shaderMat(AoBlurShader));
       const ap = shaderMat(AoApplyShader);   // multiplies the plate in place: dst * src
