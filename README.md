@@ -115,6 +115,15 @@ the drone in `src/core/live.js`, the score in `src/audio/ambient.js`; `engine.cl
 typography. None of it runs unless Experience mode is on, so the film and offline renders are
 unchanged.
 
+### Install as an app (Android)
+
+The film is an installable web app (`manifest.webmanifest`, `sw.js`): in Android Chrome the start screen
+shows **Install as an app** (or use Chrome's menu → Install app). The installed app opens full screen on
+Chrome's engine, so WebXR AR and VR work inside it, and its icon's long-press shortcuts open AR, VR or
+Experience mode directly. The service worker is network-first (the site's latest version always plays;
+the cache only answers offline). A plain Android WebView wrapper cannot run WebXR; for a Google Play
+listing, wrap the installable app as a Trusted Web Activity (e.g. PWABuilder or Bubblewrap).
+
 ### VR and AR (WebXR)
 
 **Watch in VR** rides the director's camera in a headset; **View in AR** turns the current shot

@@ -475,6 +475,24 @@ function download(blob, name) {
 // Switching the frame format (#square, #16x9, #wide) needs a fresh engine.
 addEventListener('hashchange', () => location.reload());
 
+// INSTALLABLE APP (manifest.webmanifest + sw.js): Android Chrome offers "Install app"; the installed app
+// opens full screen on Chrome's engine, so AR / VR work in it. The button shows only when installable.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !params.has('still')) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+let installPrompt = null;
+addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); installPrompt = e;
+  const b = $('install-app'); if (b) b.hidden = false;
+});
+$('install-app')?.addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  try { await installPrompt.userChoice; } catch { /* dismissed */ }
+  installPrompt = null; $('install-app').hidden = true;
+});
+addEventListener('appinstalled', () => { const b = $('install-app'); if (b) b.hidden = true; });
+
 boot().catch((e) => {
   console.error(e);
   setStatus(`Could not start: ${e.message}`);

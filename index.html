@@ -6,6 +6,10 @@
   <title>Achievements of Western Civilization</title>
   <meta name="description" content="A 60-second real-time cinematic motion-design study: 3D, particles, typography, VFX and procedural sound, rendered live in WebGL." />
   <link rel="stylesheet" href="src/style.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0806" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
   <script type="importmap">
     { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/", "mp4-muxer": "./vendor/mp4-muxer/mp4-muxer.js", "webm-muxer": "./vendor/webm-muxer/webm-muxer.js" } }
   </script>
@@ -42,6 +46,7 @@
       </div>
       <div class="intro-links">
         <button id="xr-help-link" class="xr-help-link" type="button">How to watch in VR &amp; AR</button>
+      <button id="install-app" class="xr-help-link install-app" type="button" hidden title="Install the film as an app on this device (opens full screen; AR and VR work in it)">Install as an app</button>
         <button id="export-link" class="xr-help-link export-link" type="button" title="Render the film to a video file, frame by frame: no dropped frames, however slow this device is">Download as video (frame-perfect)</button>
       </div>
       <p class="hint">Sound on · 108 seconds</p>

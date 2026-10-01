@@ -226,3 +226,5 @@ select.ex-v { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(226, 
 .xh-qr figcaption { font-size: 12.5px; line-height: 1.5; color: #d8cdbb; }
 .xh-qr-url { display: block; margin-top: 4px; font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--gold, #e2c38a); }
 @media (max-width: 420px) { .xh-qr img { width: 104px; height: 104px; } }
+#intro.ready .install-app:not([hidden]) { display: block; }
+.install-app[hidden] { display: none !important; }
