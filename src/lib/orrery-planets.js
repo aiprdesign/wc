@@ -377,7 +377,7 @@ void main(){
 
 const SIZES = { mercury: 1024, venus: 1024, earth: 2048, earthClouds: 2048, mars: 2048, jupiter: 2048, saturn: 1024, uranus: 256, neptune: 512, moon: 1024 };
 
-export function bakePlanetMaps(renderer) {
+export function bakePlanetMaps(renderer, { scale = 1 } = {}) {
   const mat = new THREE.ShaderMaterial({
     uniforms: { uMode: { value: 0 } },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
@@ -387,7 +387,7 @@ export function bakePlanetMaps(renderer) {
   const prev = renderer.getRenderTarget();
   const maps = {};
   for (const [k, mode] of Object.entries(BAKE_MODES)) {
-    const w = SIZES[k];
+    const w = Math.max(128, SIZES[k] * scale);   // (phones bake at a quarter of the size)
     const rt = new THREE.WebGLRenderTarget(w, w / 2, {
       type: THREE.UnsignedByteType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
       wrapS: THREE.RepeatWrapping, wrapT: THREE.ClampToEdgeWrapping, depthBuffer: false,

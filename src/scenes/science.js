@@ -413,7 +413,7 @@ export function create(ctx, segment) {
   // spinning on a correctly tilted axis that stays fixed in space while its arm carries it round.
   // Sizes are orrery-readable but ordered like the real bodies; Uranus and Neptune ride the two
   // lowest arms, outside the zodiac ring.
-  const maps = bakePlanetMaps(ctx.renderer);
+  const maps = bakePlanetMaps(ctx.renderer, { scale: ctx.engine?.quality === 'lite' ? 0.25 : 1 });   // (phones: quarter-size maps)
   const PU = planetUniforms(S, key.position);
   const unitSphere = new THREE.SphereGeometry(1, 64, 48);
   const DEG = Math.PI / 180;

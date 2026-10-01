@@ -225,7 +225,7 @@ export function create(ctx, segment) {
   };
 
   // ---- Earth -----------------------------------------------------------------------
-  const maps = bakeEarth(ctx.renderer, { width: 4096 });
+  const maps = bakeEarth(ctx.renderer, { width: ctx.engine?.quality === 'lite' ? 1024 : 4096 });   // (phones: 1024 — 4096² maps are 90 MB)
   const sunDir = new THREE.Vector3(0, 0, -1), sunObj = new THREE.Vector3(), shadeDir = new THREE.Vector3();
   const earthMat = new THREE.ShaderMaterial({
     uniforms: {

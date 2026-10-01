@@ -12,6 +12,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { SEGMENTS, DURATION, TIME_SCALE, FILM_ASPECT, OUTPUT_ASPECT, warmthAt } from '../timeline.js';
 import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApplyShader, AccumShader, GlareDownShader, GlareUpShader, TRANSITION_MODES } from './post.js';
 import { getFont3D } from '../lib/text.js';
+import { budgetScene, textureVersions } from '../lib/texbudget.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
@@ -132,12 +133,15 @@ export class Engine {
       try {
         const dur = seg.end - seg.start;
         const peak = new Map();   // brightest each light gets (many fade in): sizes the environment's softboxes
+        const texV0 = this.quality === 'lite' ? textureVersions(inst.scene) : null;
         for (const u of [0, dur * 0.25, dur * 0.5, dur * 0.75, dur]) {
           inst.update(u, this.info(seg.start + u, seg, 0));
           inst.scene.traverse((o) => { if (o.isLight) peak.set(o, Math.max(peak.get(o) ?? 0, o.intensity)); });
         }
         this.realism(inst, peak);
         this.upgradeShadows(inst);
+        // phones: cap every texture's size before it reaches the GPU (lib/texbudget.js)
+        if (this.quality === 'lite') { budgetScene(inst.scene, { before: texV0 }); if (inst.hud) budgetScene(inst.hud.scene); }
         await r.compileAsync(inst.scene, inst.camera);
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
