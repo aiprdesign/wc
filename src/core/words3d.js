@@ -10,7 +10,6 @@
 import * as THREE from 'three';
 import { addSurfaceDetail } from '../lib/surface.js';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
-import { pulse } from '../lib/rhythm.js';
 import { WORDS, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
 import { letters3D, getFont3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
@@ -378,8 +377,10 @@ export class Words3D {
       // land with a small impact, then shine one by one (all fast, all on the beat grid)
       const { slot, fly, inDur, shineSlot, shineDur, shine0 } = kickTiming(n, it.swap, pace, it.t0), st = slot;
       const held = sat((t - inDur) / 0.2) * (1 - sat((T - it.t1 + 0.3) / 0.2));
-      const beat = pulse(T, { decay: 9 }) * held;
-      it.group.scale.setScalar(k * (1 + 0.018 * beat));   // a gentle breath on every beat
+      // (no beat 'breath' on the scale: its instant rise on every beat read as a jerk in the hold; the held
+      // word only glides — the slow zoom-out and turn above)
+      const beat = 0 * held;
+      it.group.scale.setScalar(k);
       let zw = 0;
       if (it.zoom) {
         // ZOOM THROUGH THE LETTER: scale exponentially about the counter while sliding it to frame
