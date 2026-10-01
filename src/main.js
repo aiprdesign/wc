@@ -552,3 +552,14 @@ boot().catch((e) => {
 const bootError = (msg) => { if (!window.__film?.ready) setStatus(`Could not start: ${msg}`); };
 addEventListener('error', (e) => bootError(e.message || String(e.error)));
 addEventListener('unhandledrejection', (e) => bootError(e.reason?.message || String(e.reason)));
+
+// start screen: share the film's home page (system share sheet on phones, else copy the link)
+$('share-film')?.addEventListener('click', async (e) => {
+  const b = e.currentTarget, url = 'https://aiprdesign.github.io/wc/';
+  const done = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Share link'; }, 1800); };
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Achievements of Western Civilization', text: 'A short film: Achievements of Western Civilization', url }); return; }
+    await navigator.clipboard.writeText(url);
+    done('Link copied');
+  } catch (err) { if (err?.name !== 'AbortError') done('Copy failed'); }
+});
