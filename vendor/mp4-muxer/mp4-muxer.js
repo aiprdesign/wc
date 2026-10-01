@@ -183,10 +183,8 @@ var moov = (tracks, creationTime, fragmented = false) => box("moov", null, [
 var mvhd = (creationTime, tracks) => {
   let duration = intoTimescale(Math.max(
     0,
-    ...tracks.filter((x) => x.samples.length > 0).map((x) => {
-      const lastSample = lastPresentedSample(x.samples);
-      return lastSample.presentationTimestamp + lastSample.duration;
-    })
+    ...tracks.filter((x) => x.samples.length > 0).map((x) => presentedDuration(x))
+    // [wc patch] (edited durations, see editOf)
   ), GLOBAL_TIMESCALE);
   let nextTrackId = Math.max(...tracks.map((x) => x.id)) + 1;
   let needsU64 = !isU32(creationTime) || !isU32(duration);
@@ -221,8 +219,9 @@ var trak = (track, creationTime) => box("trak", null, [
 ]);
 // [wc patch] Edit list for an audio track given `audio.trim = { duration }` (seconds): the Opus pre-skip
 // (read from the encoder's OpusHead, as ISO/IEC 23003-5 / ffmpeg do) is cut from the start and the
-// track presents exactly `duration`, so decoded audio starts at 0 and ends with the video.
-var edts = (track) => {
+// track presents exactly `duration`, so decoded audio starts at 0 and ends with the video. The
+// track's (tkhd) and the movie's (mvhd) durations are the edited one.
+var editOf = (track) => {
   const trim = track.info.trim;
   if (!trim || track.info.type !== "audio")
     return null;
@@ -234,14 +233,26 @@ var edts = (track) => {
   }
   const last = lastPresentedSample(track.samples);
   const available = last ? last.presentationTimestamp + last.duration - mediaTime / track.timescale : 0;
-  const duration = intoTimescale(Math.max(0, Math.min(trim.duration ?? Infinity, available)), GLOBAL_TIMESCALE);
+  return { mediaTime, duration: Math.max(0, Math.min(trim.duration ?? Infinity, available)) };
+};
+var presentedDuration = (track) => {
+  const edit = editOf(track);
+  if (edit)
+    return edit.duration;
+  const last = lastPresentedSample(track.samples);
+  return last ? last.presentationTimestamp + last.duration : 0;
+};
+var edts = (track) => {
+  const edit = editOf(track);
+  if (!edit)
+    return null;
   return box("edts", null, [
     fullBox("elst", 0, 0, [
       u32(1),
       // Entry count
-      u32(duration),
+      u32(intoTimescale(edit.duration, GLOBAL_TIMESCALE)),
       // Segment duration (movie timescale)
-      i32(mediaTime),
+      i32(edit.mediaTime),
       // Media time (track timescale)
       fixed_16_16(1)
       // Media rate
@@ -249,11 +260,8 @@ var edts = (track) => {
   ]);
 };
 var tkhd = (track, creationTime) => {
-  let lastSample = lastPresentedSample(track.samples);
-  let durationInGlobalTimescale = intoTimescale(
-    lastSample ? lastSample.presentationTimestamp + lastSample.duration : 0,
-    GLOBAL_TIMESCALE
-  );
+  let durationInGlobalTimescale = intoTimescale(presentedDuration(track), GLOBAL_TIMESCALE);
+  // [wc patch] (the edited duration, see editOf)
   let needsU64 = !isU32(creationTime) || !isU32(durationInGlobalTimescale);
   let u32OrU64 = needsU64 ? u64 : u32;
   let matrix;

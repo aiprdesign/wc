@@ -53,6 +53,15 @@
         <a href="#9x16" data-fmt="9x16">9:16 vertical</a>
         <a href="#2x3" data-fmt="2x3">2:3 vertical</a>
       </nav>
+      <nav class="formats-pick looks-pick" aria-label="Choose a colour look">
+        <span>Look</span>
+        <button type="button" data-look="gold"><i class="lk-sw" style="--a:#e9b964;--b:#5a3d17"></i>Gold</button>
+        <button type="button" data-look="silver"><i class="lk-sw" style="--a:#d9dde3;--b:#3b4250"></i>Silver</button>
+        <button type="button" data-look="noir"><i class="lk-sw" style="--a:#f0f0f0;--b:#111"></i>Noir</button>
+        <button type="button" data-look="sepia"><i class="lk-sw" style="--a:#d8b48a;--b:#4a3220"></i>Sepia</button>
+        <button type="button" data-look="teal"><i class="lk-sw" style="--a:#f0a85a;--b:#1d4a52"></i>Teal &amp; Orange</button>
+        <button type="button" data-look="rose"><i class="lk-sw" style="--a:#e8a890;--b:#4a2a2a"></i>Rose gold</button>
+      </nav>
       <a class="guide-card" href="guide.html">
         <span class="gc-text">
           <span class="gc-title">Open the guide</span>
@@ -92,6 +101,7 @@
     <button id="btn-vr" class="fmt xr-btn" title="Watch in VR (WebXR headset)" aria-label="Watch in VR">VR</button>
     <button id="btn-ar" class="fmt xr-btn" title="View as an AR tabletop diorama (WebXR)" aria-label="View in AR">AR</button>
     <button id="btn-explore" class="fmt" title="Explore the 3D scene (e)" aria-label="Explore the 3D scene" aria-pressed="false"><span class="lbl-long">Explore&nbsp;</span>3D</button>
+    <button id="btn-look" class="fmt" title="Colour look: Gold · Silver · Noir · Sepia · Teal &amp; Orange · Rose gold" aria-label="Change colour look">Gold</button>
     <button id="btn-format" class="fmt" title="Frame format: 2.39 · 1:1 · 16:9 · 9:16 · 2:3" aria-label="Change frame format">2.39</button>
     <button id="btn-fs" title="Fullscreen (f)" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zM5 14h2v3h3v2H5v-5zm12 3v-3h2v5h-5v-2h3z" /></svg></button>
   </nav>

@@ -154,7 +154,15 @@ export class ByteSink {
 
 // A task boundary that background tabs don't throttle (unlike setTimeout / rAF): keeps the page
 // responsive between frames and keeps exporting while the tab is hidden.
-const nextTask = () => new Promise((r) => { const c = new MessageChannel(); c.port1.onmessage = () => { c.port1.close(); r(); }; c.port2.postMessage(0); });
+// One channel per export (closed at the end), not one per frame.
+function taskYielder() {
+  const ch = new MessageChannel();
+  let wake = null;
+  ch.port1.onmessage = () => { const w = wake; wake = null; w?.(); };
+  const next = () => new Promise((r) => { wake = r; ch.port2.postMessage(0); });
+  next.close = () => { ch.port1.onmessage = null; ch.port1.close(); ch.port2.close(); wake?.(); };
+  return next;
+}
 const abortError = () => new DOMException('Export cancelled', 'AbortError');
 
 /**
@@ -245,6 +253,7 @@ export async function exportVideo(engine, audio, opts = {}) {
     }
   };
 
+  const nextTask = taskYielder();
   const gop = Math.max(1, Math.round(fps * 2));   // a keyframe every 2 s
   const MAXQ = 4;                                   // frames waiting in the encoder (memory stays bounded)
   engine.pin(width, height, hq ? { supersample: 2, ...(lite ? {} : { ao: true, glare: 0.04 }) } : {});
@@ -263,7 +272,7 @@ export async function exportVideo(engine, audio, opts = {}) {
       try { venc.encode(frame, { keyFrame: i % gop === 0 }); } finally { frame.close(); }
       if (pcm) pushAudio(Math.min(total, Math.round(((i + 1) / fps) * pcm.sampleRate)));
       const elapsed = (performance.now() - started) / 1000;
-      opts.onProgress?.({ frame: i + 1, frames: N, elapsed, eta: (elapsed / (i + 1)) * (N - i - 1), queue: venc.encodeQueueSize });
+      opts.onProgress?.({ frame: i + 1, frames: N, elapsed, eta: (elapsed / (i + 1)) * (N - i - 1), queue: venc.encodeQueueSize, buffered: sink.partBytes, written: sink.size });
       // backpressure: wait for the encoder to drain (the dequeue event, or a short poll as a fallback)
       while (venc.encodeQueueSize > MAXQ && !failure) {
         await Promise.race([new Promise((r) => venc.addEventListener('dequeue', r, { once: true })), new Promise((r) => setTimeout(r, 10))]);
@@ -287,6 +296,7 @@ export async function exportVideo(engine, audio, opts = {}) {
     throw failure ?? e;
   } finally {
     closeAll();
+    nextTask.close();
     sink.reset();   // release the partial file on cancel / error (a finished file lives on in its Blob)
     canvas.removeEventListener('webglcontextlost', onLost);
     signal?.removeEventListener('abort', onAbort);
@@ -417,6 +427,7 @@ export class ExportDialog {
     const stay = (ev) => { ev.preventDefault(); ev.returnValue = ''; };   // leaving the page mid-export asks first
     addEventListener('beforeunload', stay);
     let restore = null;
+    this.stats = { frame: 0, maxQueue: 0, maxBuffered: 0 };
     const audio = this.ctx.getAudio?.() ?? null;
     const fmtT = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
     let lastUI = 0;
@@ -428,6 +439,8 @@ export class ExportDialog {
           this.$.codec.textContent = `${info.width}×${info.height} · ${info.fps} fps · ${info.video}${info.audio ? ` + ${info.audio}` : ' · no sound (this browser can’t encode audio)'} · ${info.container.toUpperCase()}${hq ? ' · high quality' : ''}`;
         },
         onProgress: (p) => {
+          const st = this.stats;   // (for tests / automation: how deep the encoder queue and the unfolded file ever got)
+          st.frame = p.frame; st.maxQueue = Math.max(st.maxQueue, p.queue); st.maxBuffered = Math.max(st.maxBuffered, p.buffered);
           const now = performance.now();
           if (now - lastUI < 100 && p.frame < p.frames) return;
           lastUI = now;
@@ -437,7 +450,7 @@ export class ExportDialog {
         },
       });
       const file = `${name ?? `achievements-of-western-civilization-${formatTag()}-${Math.min(r.width, r.height)}p`}.${r.ext}`;
-      r.name = file;
+      r.name = file; r.stats = this.stats;
       if (download) this.ctx.download(r.blob, file);
       return r;
     } catch (e) {

@@ -80,9 +80,9 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 /* intro: frame-format links */
 .formats-pick { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; margin: 18px 0 0; font-size: 11px; letter-spacing: 0.08em; }
 .formats-pick span { color: var(--dim, rgba(239, 232, 220, 0.55)); text-transform: uppercase; letter-spacing: 0.3em; margin-right: 4px; }
-.formats-pick a { color: var(--ink); text-decoration: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; padding: 5px 11px; }
-.formats-pick a:hover, .formats-pick a:focus-visible { border-color: var(--gold); outline: none; }
-.formats-pick a[aria-current="true"] { border-color: var(--gold); color: var(--gold); }
+.formats-pick a, .looks-pick button { color: var(--ink); text-decoration: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; padding: 5px 11px; }
+.formats-pick a:hover, .formats-pick a:focus-visible, .looks-pick button:hover, .looks-pick button:focus-visible { border-color: var(--gold); outline: none; }
+.formats-pick a[aria-current="true"], .looks-pick button[aria-current="true"] { border-color: var(--gold); color: var(--gold); }
 
 /* live camera: drag to look around while playing */
 #film { touch-action: none; }
@@ -216,5 +216,10 @@ select.ex-v { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(226, 
 .export-dlg[data-mode="run"] { margin: auto auto 20px; background: rgba(18, 15, 12, 0.88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .export-dlg[data-mode="run"]::backdrop { background: rgba(0, 0, 0, 0.25); }
 .export-dlg[data-mode="run"] .xh-close-row, .export-dlg[data-mode="run"] .xh-lead { display: none; }
+.export-dlg[data-mode="run"], .ex-btn { -webkit-user-select: none; user-select: none; }   /* a double-clicked Start doesn't select the progress text */
 .exporting .controls { opacity: 0; pointer-events: none; }
 #btn-export svg { fill: var(--gold); }
+
+/* colour looks (start screen) */
+.looks-pick button { font: inherit; font-size: inherit; letter-spacing: inherit; color: inherit; background: transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.looks-pick .lk-sw { width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, var(--a) 0 55%, var(--b) 55% 100%); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); flex: none; }

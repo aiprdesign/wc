@@ -9,6 +9,7 @@
 // fall back like dominoes and clear.
 import * as THREE from 'three';
 import { addSurfaceDetail } from '../lib/surface.js';
+import { LOOK } from '../lib/theme.js';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
 import { WORDS, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
 import { letters3D, getFont3D } from '../lib/text.js';
@@ -32,7 +33,7 @@ const ERAS = [
   // 60-30-10: the words are the film's 10% accent — one signature gold
   // every heading is cast in the same gold as the opening title's 3D letters (opening.js goldMat): a warm
   // #e9b964 metal, satin roughness, hammered micro-surface (lib/surface.js) and a low inner glow — gold bars
-  [99, { color: '#e9b964', roughness: 0.38, env: 0.55, light: '#ffcf8a', glow: '#ffb85a', glowI: 0.22 }],
+  [99, { color: LOOK.heading.color, roughness: 0.38, env: 0.55, light: LOOK.heading.light, glow: LOOK.heading.glow, glowI: 0.22 }],   // (the chosen look's metal: gold by default)
 ];
 const eraOf = (T) => ERAS.find(([t]) => T < t)[1];
 

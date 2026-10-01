@@ -328,10 +328,12 @@ export const FinalShader = {
     tGlare: { value: null }, uGlare: { value: 0 },
     uResolution: { value: null }, uAspect: { value: 2.39 }, uHarmony: { value: 0.85 },
     uSS: { value: 1 }, uSrcTexel: { value: new THREE.Vector2(1, 1) }, uTonemap: { value: 0 },
+    uLookAmt: { value: 0 }, uLookSat: { value: 1 }, uLookShadow: { value: new THREE.Vector3(1, 1, 1) }, uLookHigh: { value: new THREE.Vector3(1, 1, 1) }, uLookContrast: { value: 0 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
     uniform float uHarmony; uniform int uTonemap;
+    uniform float uLookAmt, uLookSat, uLookContrast; uniform vec3 uLookShadow, uLookHigh;
     uniform sampler2D tInput, tGlare; uniform float uGlare; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
     varying vec2 vUv;
     // supersampled input (uSS > 1): a separable (1,3,3,1) tent over the source texels under this
@@ -419,6 +421,15 @@ export const FinalShader = {
       col = mix(col, col * col * (3.0 - 2.0 * col), 0.22);
       // saturation trim for the "museum film" look
       col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 0.94);
+      // the viewer's chosen LOOK (lib/theme.js): saturation, tints split by luminance, extra contrast
+      if (uLookAmt > 0.0) {
+        float ll = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        vec3 lk = mix(vec3(ll), col, uLookSat);
+        lk *= mix(uLookShadow, uLookHigh, smoothstep(0.05, 0.75, ll));
+        lk = clamp(lk, 0.0, 1.0);
+        lk = mix(lk, lk * lk * (3.0 - 2.0 * lk), uLookContrast);
+        col = mix(col, lk, uLookAmt);
+      }
       // vignette
       float vig = smoothstep(1.25, 0.25, sqrt(r2) * 1.05);
       col *= mix(1.0, vig, uVignette);
