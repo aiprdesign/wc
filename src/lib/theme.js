@@ -12,7 +12,7 @@ export const LOOKS = {
             heading: { color: '#d9dde3', glow: '#bcd4ff', light: '#e8f0ff' } },
   noir:   { label: 'Noir',          grade: { amt: 1, sat: 0.0, shadow: [0.92, 0.92, 0.92], high: [1.04, 1.04, 1.04], contrast: 0.22 },
             heading: { color: '#f0f0f0', glow: '#ffffff', light: '#ffffff' } },
-  sepia:  { label: 'Sepia',         grade: { amt: 1, sat: 0.0, shadow: [0.78, 0.6, 0.42], high: [1.1, 1.0, 0.8], contrast: 0.08 },
+  sepia:  { label: 'Sepia',         grade: { amt: 1, sat: 0.0, shadow: [0.9, 0.66, 0.4], high: [1.16, 1.0, 0.74], contrast: 0.1 },
             heading: { color: '#c08a52', glow: '#ff9a4a', light: '#ffc58a' } },
   teal:   { label: 'Teal & Orange', grade: { amt: 1, sat: 1.12, shadow: [0.78, 0.98, 1.12], high: [1.12, 1.0, 0.86], contrast: 0.1 },
             heading: { color: '#f0a85a', glow: '#ff9a40', light: '#ffd0a0' } },
