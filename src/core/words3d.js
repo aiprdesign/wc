@@ -21,6 +21,7 @@ import { ease, sat, lerp, ramp } from '../lib/math.js';
 // The words and their kick-in timing live in lib/headings.js (the score reads them too).
 
 const DOF_KEYS = ['focus', 'range', 'amount'];
+const HEAD_Y = 0.1;   // every chapter heading sits at this height (fraction of frame height above centre)
 const DOF_RACK_IN = 0.3;   // s of story time for the rack focus onto a heading to engage fully
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
@@ -52,7 +53,7 @@ function letterMaterial(era, env, shared, invert = false) {
       .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWordPos = (uWordInv * modelMatrix * vec4(transformed, 1.0)).xyz;\nvWordN = normalize(mat3(uWordInv * modelMatrix) * objectNormal);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine, uCapH; uniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWordN;\nvarying vec3 vWordPos; uniform float uSweep, uSweepW, uFlash, uShine, uLShine, uCapH, uExpComp; uniform vec3 uTint;')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         // the opening title's hammered gold (lib/surface.js adds the hammered micro-surface on top): faces
         // keep it, bevels are polished a little brighter, the cast sides a little rougher
@@ -81,9 +82,11 @@ function letterMaterial(era, env, shared, invert = false) {
         gl_FragColor.rgb += uTint * band * uShine * 0.24;
         // per-letter shine: the letter flares white-hot as the shine front passes over it (like the closing
         // line's typing edge), well past the knee so it blooms, then settles back to its gold
-        gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));`);
+        gl_FragColor.rgb += mix(uTint, vec3(1.0, 0.97, 0.92), 0.6) * uLShine * (1.0 + 0.15 * fract(sin(dot(vWordPos.xy, vec2(12.9898, 78.233))) * 43758.5453));
+        // the same brightness in every chapter: undo the scene's exposure (applied later, in the grade)
+        gl_FragColor.rgb *= uExpComp;`);
   };
-  m.customProgramCacheKey = () => 'word3d-v15';
+  m.customProgramCacheKey = () => 'word3d-v16';
   // the same hammered / polished micro-surface the opening's gold letters get (chains the hook above)
   // (hammered like the title's letters: the same detail, a touch stronger and at the title's scale relative
   // to the letter — headings are drawn smaller in the world, so the pattern is set finer)
@@ -103,9 +106,9 @@ export class Words3D {
       // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
       for (const w of [WORDS[seg.id] ?? []].flat()) {
         // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
-        if (typeof w === 'string') { const it = this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; this.items.push(it); continue; }
+        if (typeof w === 'string') { const it = this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; it.yOff = HEAD_Y; this.items.push(it); continue; }
         const item = this.build(w.text, inst(seg.id), w.t0, w.t1, false, lay);
-        Object.assign(item, { pace: w.pace ?? 1, yOff: w.y ?? 0, noFocus: w.focus === false });
+        Object.assign(item, { pace: w.pace ?? 1, yOff: HEAD_Y, noFocus: w.focus === false });   // (every chapter heading at one height)
         this.items.push(item);
       }
     }
@@ -117,6 +120,11 @@ export class Words3D {
       if (!SWAPS[i + 1]) this.makeZoom(it, 'A');
       this.items.push(it);
     });
+    // ONE STYLE FOR EVERY CHAPTER HEADING: the same letter height on screen (set by a reference word at the
+    // 75th percentile of length, so only the longest words shrink a little to fit), the same place in the
+    // frame, and the same brightness whatever the scene's exposure (the montage's quick swaps keep theirs)
+    const widths = this.items.filter((it) => !it.swap).map((it) => it.width).sort((a, b) => a - b);
+    this.refWidth = widths[Math.floor((widths.length - 1) * 0.75)] ?? 1;
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this._k = new THREE.Vector3();
     this._q = [new THREE.Quaternion(), new THREE.Quaternion()];
@@ -249,7 +257,7 @@ export class Words3D {
     const seg = inst.segment;
     const era = eraOf(t0);
     const shared = {
-      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() }, uCapH: { value: 0.7 },
+      uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() }, uCapH: { value: 0.7 }, uExpComp: { value: 1 },
       uTint: { value: new THREE.Color(era.color).lerp(new THREE.Color('#ffffff'), 0.55) },
     };
     const glyphs = letters3D(text, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 10, bevelSegments: 5 });
@@ -366,7 +374,8 @@ export class Words3D {
       const visW = H * OUTPUT_ASPECT;
       // word spans ~64% (square) / ~46% (anamorphic) of the width; cap height ≤ 12% of the frame
       const side = it.align !== 'center';
-      const k = Math.min((visW * (OUTPUT_ASPECT < 1.9 ? (side ? 0.56 : 0.64) : (side ? 0.4 : 0.46))) / it.width, (H * 0.12) / 0.7);
+      const share = OUTPUT_ASPECT < 1.9 ? (side ? 0.56 : 0.64) : (side ? 0.4 : 0.46);
+      const k = Math.min((visW * share) / (it.swap ? it.width : Math.max(it.width, this.refWidth)), (H * 0.12) / 0.7);
       // alignment: left/right words sit against a margin of the frame
       const margin = visW * 0.08, wordW = it.width * k;
       const ax = it.align === 'left' ? -visW / 2 + margin + wordW / 2 : it.align === 'right' ? visW / 2 - margin - wordW / 2 : 0;
@@ -473,6 +482,7 @@ export class Words3D {
       // first show: the sweep is a real shine — bright band plus a star glint on its leading edge
       const shine = Math.max(first, second) * fade;
       it.shared.uShine.value = shine;
+      it.shared.uExpComp.value = 1 / Math.max(0.2, it.inst.exposure ?? 1);
       it.glint.visible = shine > 0.02;
       it.glint.position.x = it.shared.uSweep.value;
       it.glint.scale.setScalar((0.12 + 0.18 * shine) * (1 + 0.15 * Math.sin(t * 40)));
