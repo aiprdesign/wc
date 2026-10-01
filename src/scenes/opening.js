@@ -126,7 +126,8 @@ uniform float uI; uniform vec3 uColor; varying vec2 vUv;
 void main(){
   vec2 p = vUv - 0.5;
   float x = max(1.0 - abs(p.x) * 2.0, 0.0);
-  float a = exp(-pow(p.y * 2.0 / 0.07, 2.0)) * pow(x, 2.4) + exp(-pow(p.y * 2.0 / 0.012, 2.0)) * pow(x, 1.2) * 0.8 + exp(-pow(length(p * vec2(4.0, 1.0)) * 2.0 / 0.2, 2.0)) * 0.6;
+  // tapered to a point at both tips (inside the frame) so it never reads as a flat band
+  float a = exp(-pow(p.y * 2.0 / 0.035, 2.0)) * pow(x, 4.0) * 0.6 + exp(-pow(p.y * 2.0 / 0.01, 2.0)) * pow(x, 2.0) * 0.8 + exp(-pow(length(p * vec2(4.0, 1.0)) * 2.0 / 0.2, 2.0)) * 0.6;
   a *= uI;
   if (a < 0.002) discard;
   gl_FragColor = vec4(uColor * a, 1.0);
@@ -809,10 +810,10 @@ export function create(ctx, segment) {
       sparksT.tick(t, info.height);
 
       // HUD streak: both hits (the film centres the burst and the title on the frame)
-      // (the slam's streak is a quick, thin flash: a slow, wide one sat behind the title as a flat stripe)
-      streakU.uI.value = 1.5 * (aI >= 0 ? Math.exp(-aI * 4.5) : 0.25 * pre) + 0.7 * (aS >= 0 ? Math.exp(-aS * 24) : 0) + 0.1 * cut / 0.004;
-      streak.scale.y = aS >= 0 ? 0.2 : 0.42;
-      streak.scale.x = FILM_ASPECT * (1.6 + 1.1 * Math.exp(-Math.max(0, Math.min(aI >= 0 ? aI : 9, aS >= 0 ? aS : 9)) * 3));
+      // (a quick flash on each hit: a slow, wide streak lingered behind the headings as a flat rectangle)
+      streakU.uI.value = 1.1 * (aI >= 0 ? Math.exp(-aI * 10) : 0.1 * pre) + 0.5 * (aS >= 0 ? Math.exp(-aS * 30) : 0) + 0.1 * cut / 0.004;
+      streak.scale.y = aS >= 0 ? 0.16 : 0.26;
+      streak.scale.x = FILM_ASPECT * (1.05 + 0.6 * Math.exp(-Math.max(0, Math.min(aI >= 0 ? aI : 9, aS >= 0 ? aS : 9)) * 3));
       streak.visible = streakU.uI.value > 0.003;
 
       // subtitle
