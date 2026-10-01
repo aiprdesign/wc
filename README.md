@@ -136,6 +136,11 @@ a secure page (https or `localhost`) and is blocked inside embedded viewers such
 artifact frame: open the film from its own address (e.g. GitHub Pages). `#vr` / `#ar` (also
 `?vr` / `?ar`) put the button forward on the start screen; a tap still starts the session.
 
+**AR Lite for phones** (`#arlite`, the AR QR code's target): builds only one chapter (the start
+screen lists them; `#arlite&classical` names one), always at lite quality with a smaller XR
+framebuffer, and loops that chapter on the table with its part of the soundtrack. It loads in
+seconds where the whole film is too heavy for a phone browser.
+
 - **VR**: the soundtrack (or Experience mode's clock) keeps time. Your viewpoint follows the
   director's camera level (heading only, no pitch or roll) through a critically damped ~0.6 s
   glide; cuts and chapter changes dip to black and snap. World scale adapts per shot so the subject

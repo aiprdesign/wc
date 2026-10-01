@@ -26,6 +26,10 @@
       <p class="sub">Ideas · Discovery · Engineering · Art · Institutions</p>
       <div id="loader" class="loader"><span></span></div>
       <p id="status" class="status">Preparing sequences…</p>
+      <div id="arlite-pick" class="arlite-pick" hidden>
+        <p class="arl-head">AR Lite · one chapter at a time, light enough for a phone</p>
+        <div class="arl-list"></div>
+      </div>
       <div class="play-row">
         <button id="play" class="play" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
@@ -46,6 +50,7 @@
       </div>
       <div class="intro-links">
         <button id="xr-help-link" class="xr-help-link" type="button">How to watch in VR &amp; AR</button>
+        <a id="arlite-link" class="xr-help-link arlite-link" href="#arlite" title="AR on a phone: loads one chapter at a time, so it starts where the whole film is too heavy">AR Lite for phones</a>
       <button id="install-app" class="xr-help-link install-app" type="button" hidden title="Install the film as an app on this device (opens full screen; AR and VR work in it)">Install as an app</button>
         <button id="export-link" class="xr-help-link export-link" type="button" title="Render the film to a video file, frame by frame: no dropped frames, however slow this device is">Download as video (frame-perfect)</button>
       </div>
@@ -157,7 +162,7 @@
     </section>
     <section class="xh-panel" data-xh-panel="ar" hidden>
       <p class="xh-lead">Put each scene on your table as a small model in a glass case, and walk around it while the film plays.</p>
-      <figure class="xh-qr"><img src="assets/qr/ar.svg" width="132" height="132" alt="QR code that opens the AR version: aiprdesign.github.io/wc/#ar" /><figcaption><strong>Scan with your Android phone's camera</strong> to open the AR version in Chrome.<span class="xh-qr-url">aiprdesign.github.io/wc/#ar</span></figcaption></figure>
+      <figure class="xh-qr"><img src="assets/qr/ar.svg" width="132" height="132" alt="QR code that opens the AR version: aiprdesign.github.io/wc/#arlite" /><figcaption><strong>Scan with your Android phone's camera</strong> to open the AR version in Chrome.<span class="xh-qr-url">aiprdesign.github.io/wc/#arlite</span></figcaption></figure>
       <h3>What you need</h3>
       <p>An Android phone with Chrome and Google Play Services for AR (ARCore), or a Meta Quest 3 / 3S with passthrough.</p>
       <h3>How to start</h3>

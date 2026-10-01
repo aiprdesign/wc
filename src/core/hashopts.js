@@ -8,11 +8,17 @@
 // start screen; a tap still starts the session (browsers only open one from a user gesture).
 const raw = (globalThis.location?.hash ?? '').slice(1);
 const tokens = raw.toLowerCase().split(/[&+,]/).filter(Boolean);
-const OPTIONS = new Set(['experience', 'vr', 'ar']);
+// `#arlite` (AR Lite, for phones): only one chapter is built, so it loads where the whole film
+// can't; `#arlite&classical` names the chapter (otherwise the start screen offers a picker).
+// The chapter ids mirror timeline.js SEGMENTS (not imported: see above).
+export const CHAPTERS = ['opening', 'classical', 'civic', 'renaissance', 'science', 'industrial', 'electricity', 'medicine', 'flight', 'moonshot', 'computing', 'knowledge', 'frontier', 'montage', 'finale'];
+const OPTIONS = new Set(['experience', 'vr', 'ar', 'arlite', ...CHAPTERS]);
 
 export const HASH_EXPERIENCE = tokens.includes('experience') || new URLSearchParams(globalThis.location?.search ?? '').has('experience');
 const has = (k) => tokens.includes(k) || new URLSearchParams(globalThis.location?.search ?? '').has(k);
-export const HASH_XR = has('vr') ? 'vr' : has('ar') ? 'ar' : '';
+export const HASH_ARLITE = has('arlite');
+export const HASH_XR = has('vr') ? 'vr' : has('ar') || HASH_ARLITE ? 'ar' : '';
+export const HASH_CHAPTER = tokens.find((t) => CHAPTERS.includes(t)) ?? (CHAPTERS.includes(new URLSearchParams(globalThis.location?.search ?? '').get('arlite')) ? new URLSearchParams(globalThis.location.search).get('arlite') : '');
 export const HASH_FORMAT = tokens.find((t) => !OPTIONS.has(t)) ?? '';
 
 let narrowed = false;

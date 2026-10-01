@@ -3,9 +3,11 @@
 import { SEGMENTS } from '../timeline.js';
 import * as placeholder from './placeholder.js';
 
-export async function loadSceneModules() {
+// { only: id } (AR Lite) builds just that chapter; the rest stand in as placeholders.
+export async function loadSceneModules({ only = '' } = {}) {
   const modules = {};
   await Promise.all(SEGMENTS.map(async (seg) => {
+    if (only && seg.id !== only) { modules[seg.id] = placeholder; return; }
     try {
       modules[seg.id] = await import(`./${seg.id}.js`);
     } catch (e) {

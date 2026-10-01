@@ -287,6 +287,8 @@ export class XRMode {
     r.xr.enabled = true;
     r.xr.cameraAutoUpdate = false;
     r.xr.setReferenceSpaceType('local');
+    // phones (lite): a smaller XR framebuffer (fill rate and memory; the camera feed stays sharp)
+    if (e.quality === 'lite') r.xr.setFramebufferScaleFactor(0.7);
     e.xrStarting = true;
     try {
       await r.xr.setSession(session);
@@ -514,6 +516,7 @@ void main() {
     // clock: the soundtrack (or Experience mode's own clock, which this loop drives while in XR)
     const exp = this.experience?.active ? this.experience : null, player = this.player;
     if (exp) { if (exp.playing && (!ar || this.placed)) exp.step(wall); }
+    else if (player.wrap?.()) { /* AR Lite: the chapter loops */ }
     else if (player.playing && player.currentTime >= FILM_DURATION) {
       player.pause(); player.time = FILM_DURATION; player.onEnd?.(); this._syncOverlay();
     }

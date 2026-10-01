@@ -1,7 +1,7 @@
 // Entry point: load fonts, sequences and the procedural score, then hand over to the transport UI.
 // hashopts first: it narrows a combined fragment (#square&experience) to the format token before
 // timeline.js reads it
-import { HASH_EXPERIENCE, HASH_XR, restoreHash, setHashExperience } from './core/hashopts.js';
+import { HASH_EXPERIENCE, HASH_XR, HASH_ARLITE, HASH_CHAPTER, restoreHash, setHashExperience } from './core/hashopts.js';
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
@@ -67,7 +67,9 @@ async function boot() {
   // ?q= low|medium|high|ultra sets the render width; high/ultra also turn on ambient occlusion,
   // finer shadows, veiling glare and finer bokeh. ?ss=2 supersamples (renders at
   // 2× and filters down), ?ao=0/1 overrides AO, ?shadows=1|2|4 overrides the shadow-map multiplier.
-  const quality = QUALITY[params.get('q')] ? params.get('q') : LITE_DEVICE ? 'lite' : 'medium';
+  // AR Lite (#arlite): one chapter, always at lite quality (picked first when the link names none)
+  const chapter = HASH_ARLITE ? (HASH_CHAPTER || await pickChapter()) : '';
+  const quality = HASH_ARLITE ? 'lite' : QUALITY[params.get('q')] ? params.get('q') : LITE_DEVICE ? 'lite' : 'medium';
   const flag = (k) => (params.has(k) ? !/^(0|false|off)$/i.test(params.get(k)) : undefined);
   const xrs = await xrReady;
   const engine = new Engine($('film'), {
@@ -125,7 +127,7 @@ async function boot() {
   setStatus('Composing score…');
   // The score renders in an OfflineAudioContext while the sequences are being built.
   const scorePromise = loadScore();
-  const modules = await loadSceneModules();
+  const modules = await loadSceneModules({ only: chapter });
   setLoad(0.2);
   await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.7); setStatus(`Building · ${seg.title}`); });
   setStatus('Composing score…');
@@ -156,13 +158,28 @@ async function boot() {
   window.__film.renderFrame = (T, o) => { engine.render(T, ...frameOpts(o)); return T; };             // film seconds
   window.__film.renderStory = (t, o) => { engine.render(t * TIME_SCALE, ...frameOpts(o)); return t; };  // story seconds
 
-  const start = (parseFloat(params.get('t') ?? '0') || 0) * TIME_SCALE;   // ?t= is story time
+  let start = (parseFloat(params.get('t') ?? '0') || 0) * TIME_SCALE;   // ?t= is story time
+  if (chapter) {
+    // loop inside the chapter, clear of the cross-fades with its neighbours
+    const seg = SEGMENTS.find((s) => s.id === chapter), last = seg === SEGMENTS[SEGMENTS.length - 1];
+    player.range = [(seg.start > 0 ? seg.start + 0.5 : 0) * TIME_SCALE, last ? DURATION - 0.1 : (seg.end - 0.5) * TIME_SCALE];
+    if (start < player.range[0] || start >= player.range[1]) start = player.range[0];
+  }
   player.time = start;
   engine.render(start, 0);
 
   if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
 
   const ui = setupUI(player, score, explorer, experience, ambient, xrs);
+  if (chapter) {
+    const seg = SEGMENTS.find((s) => s.id === chapter);
+    document.body.classList.add('arlite');
+    $('play').querySelector('span').textContent = 'Watch here';
+    const sub = $('play-ar').querySelector('.pe-sub');
+    if (xrs?.ar && sub) sub.textContent = `${seg.title} · on your table`;
+    const link = $('arlite-link');
+    link.textContent = 'Choose another chapter';
+  }
   intro.classList.add('ready');
   $('play').disabled = false;
   $('play-exp').disabled = false;
@@ -177,6 +194,26 @@ async function boot() {
   //   await __film.exportVideo({ from: 10, to: 13, width: 640, fps: 30, hq: false, download: true })
   window.__film.exportVideo = (o = {}) => ui.exporter.run(o);
   if (params.has('autoplay')) { if (HASH_EXPERIENCE) ui.enterExperience(); else begin(player); }
+}
+
+// AR Lite without a chapter in the link: the start screen lists the chapters; the choice goes into
+// the address (#arlite&<id>) so the link can be shared or bookmarked.
+function pickChapter() {
+  const box = $('arlite-pick');
+  box.hidden = false;
+  document.body.classList.add('arlite-picking');
+  setStatus('Choose a chapter to place on your table');
+  box.querySelector('.arl-list').innerHTML = SEGMENTS.map((s, i) => `<button type="button" data-ch="${s.id}"><b>${String(i + 1).padStart(2, '0')}</b> ${s.title}</button>`).join('');
+  return new Promise((resolve) => {
+    box.addEventListener('click', (e) => {
+      const id = e.target.closest('[data-ch]')?.dataset.ch;
+      if (!id) return;
+      box.hidden = true;
+      document.body.classList.remove('arlite-picking');
+      try { history.replaceState(history.state, '', `#arlite&${id}`); } catch { /* ignore */ }
+      resolve(id);
+    });
+  });
 }
 
 function begin(player) {

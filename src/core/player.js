@@ -21,6 +21,7 @@ export class Player {
     this.onEnd = () => {};
     this.onTick = () => {};
     this.muted = false;
+    this.range = null;       // [from, to) film time: playback loops inside it (AR Lite's one chapter)
   }
 
   now() { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; }
@@ -28,6 +29,7 @@ export class Player {
   get currentTime() { return this.playing ? Math.min(DURATION, this.now() - this.startedAt) : this.time; }
 
   async play(from = this.time) {
+    if (this.range && (from < this.range[0] || from >= this.range[1] - 0.05)) from = this.range[0];
     if (from >= DURATION - 0.05) from = 0;
     // resume inside the tap (mobile browsers only unlock audio from a user gesture) — don't await
     // before the source starts, or the gesture is lost on iOS
@@ -63,6 +65,13 @@ export class Player {
     this.stopSource();
   }
 
+  // past the end of the loop range: back to its start (true when it looped)
+  wrap() {
+    if (!this.range || !this.playing || this.currentTime < this.range[1]) return false;
+    this.play(this.range[0]);
+    return true;
+  }
+
   toggle() { return this.playing ? this.pause() : this.play(); }
 
   seek(t) {
@@ -83,6 +92,7 @@ export class Player {
     let slow = 0, frames = 0, prevWall = performance.now();
     const frame = () => {
       if (!this.playing) return;
+      if (this.wrap()) return;
       const t = this.currentTime;
       try {
         this.engine.render(t, Math.min(0.1, Math.max(0, t - last)));
