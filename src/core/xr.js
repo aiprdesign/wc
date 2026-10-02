@@ -217,6 +217,11 @@ export class XRMode {
     this.panel.renderOrder = 1e5;
     this.panel.frustumCulled = false;
     this.hint = new Label(0.9);
+    // a 3D exit button, held low in view, for sessions without the page overlay (no on-screen
+    // buttons): tap it on screen, or select it with a controller
+    this.exit3d = new Label(0.2, 2.4);
+    this.exit3d.set('✕  EXIT');
+    this.exit3d.visible = false;
     // the surface marker: a centre ring, and the model's footprint on the surface (its real size)
     const H = TUNE.ar.half, R = H / Math.cos(Math.PI / TUNE.ar.sides);   // circumradius of the vitrine
     const flat = (g) => g.rotateX(-Math.PI / 2);
@@ -240,7 +245,7 @@ export class XRMode {
     const rim = new THREE.Mesh(flat(new THREE.RingGeometry(R * 1.04, R * 1.06, 96)), new THREE.MeshBasicMaterial({ color: 0xe2c38a, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false }));
     rim.position.y = disc.position.y = 0.002;
     this.plinth.add(disc, rim);
-    this.roomRoot.add(this.panel, this.hint, this.reticle, this.plinth);
+    this.roomRoot.add(this.panel, this.hint, this.reticle, this.plinth, this.exit3d);
     this.tune = TUNE;                             // (tests tweak it live)
     this.proxy = new THREE.PerspectiveCamera();   // the viewer's eye in scene space, for explorePosed
     this.dp = { P: new THREE.Vector3(), F: new THREE.Vector3(), C: new THREE.Vector3(), yaw: 0, focus: 5, tanHalf: 0.3 };
@@ -351,6 +356,10 @@ export class XRMode {
     }
     this.reticle.visible = false;
     this.plinth.visible = ar;
+    // no page overlay granted (no on-screen buttons): the 3D exit button stands in
+    this.noOverlay = ar && !session.domOverlayState;
+    if (this.noOverlay) console.info('[xr] no DOM overlay: showing the in-scene exit button');
+    this.exit3d.visible = false;
     document.body.classList.add('xr-on', ar ? 'xr-ar-on' : 'xr-vr-on');
     this.onStart(mode);
     // VR: roll film (AR waits for the model to be placed)
@@ -370,6 +379,7 @@ export class XRMode {
     this.hitSource?.cancel?.();
     this.hitSource = null;
     this.xrAnchor?.delete?.(); this.xrAnchor = null;
+    this.exit3d.visible = false; this.noOverlay = false;
     this.overlay?.classList.remove('xr-scanning', 'xr-found');
     const mode = this.mode;
     this.engine.renderer.xr.setAnimationLoop(null);
@@ -480,7 +490,8 @@ void main() {
     this.inst = null;
   }
 
-  _select() {
+  _select(ev) {
+    if (this.mode === AR && this.exit3d.visible && this._hitsExit(ev)) { this.stop(); return; }
     if (this.mode !== AR) { this.toggle(); return; }
     // the end of a pinch / twist is not a tap
     if (performance.now() < this._gestureUntil || this._touches > 1) return;
@@ -501,6 +512,24 @@ void main() {
   }
 
   _head() { return _u.setFromMatrixPosition(this.engine.renderer.xr.getCamera().matrix); }
+
+  // does this select's ray (a screen tap or a controller) pass through the 3D exit button?
+  _hitsExit(ev) {
+    try {
+      const pose = ev?.frame?.getPose(ev.inputSource.targetRaySpace, this.refSpace);
+      if (!pose) return false;
+      _m.fromArray(pose.transform.matrix);
+      const o = new THREE.Vector3().setFromMatrixPosition(_m), d = new THREE.Vector3(0, 0, -1).transformDirection(_m);
+      const b = this.exit3d, n = new THREE.Vector3(0, 0, 1).applyQuaternion(b.quaternion);
+      const den = d.dot(n);
+      if (Math.abs(den) < 1e-4) return false;
+      const t = b.position.clone().sub(o).dot(n) / den;
+      if (t <= 0) return false;
+      const local = o.addScaledVector(d, t).sub(b.position).applyQuaternion(b.quaternion.clone().invert());
+      const w = b.geometry.parameters.width, h = b.geometry.parameters.height;
+      return Math.abs(local.x) < w * 0.65 && Math.abs(local.y) < h * 0.8;   // a generous target
+    } catch { return false; }
+  }
 
   // anchor = the vitrine's floor point in the room, turned to face the viewer
   _placeAt(head) {
@@ -734,10 +763,17 @@ void main() {
         this.overlay.classList.toggle('xr-found', !this.placed && ready);
       }
       this.hint.visible = !this.placed || !playing;
-      this.hint.set(!this.placed ? (this.hit ? 'TAP OR PULL TRIGGER TO PLACE' : 'LOOK AT A TABLE · TAP TO PLACE') : 'PAUSED · A / X OR ▶ TO PLAY');
+      this.hint.set(!this.placed ? (this.noOverlay ? (this.hit ? 'TAP TO PLACE · EXIT BELOW OR BACK' : 'LOOK AT A TABLE · EXIT BELOW OR BACK') : this.hit ? 'TAP OR PULL TRIGGER TO PLACE' : 'LOOK AT A TABLE · TAP TO PLACE') : 'PAUSED · A / X OR ▶ TO PLAY');
       this.hint.scale.setScalar(0.45);
       this.hint.position.copy(this.anchor).addScaledVector(Y, cfg.half * us * 2 * cfg.tall + 0.08);
       this.hint.rotation.set(0, Math.atan2(head.x - this.hint.position.x, head.z - this.hint.position.z), 0);
+      if (this.noOverlay) {
+        // held low in view, facing the eye
+        const cm = r.xr.getCamera().matrix;
+        this.exit3d.position.set(0, -0.17, -0.5).applyMatrix4(cm);
+        this.exit3d.quaternion.setFromRotationMatrix(cm);
+        this.exit3d.visible = true;
+      }
     } else {
       r.setClearColor(inst.background ?? 0x000000, 1);
       this.hint.visible = !playing;
@@ -969,7 +1005,7 @@ void main() {
     };
     for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) el.addEventListener(t, touch, { passive: false });
     el.querySelector('[data-xr="play"]')?.addEventListener('click', () => this.toggle());
-    el.querySelector('[data-xr="exit"]')?.addEventListener('click', () => this.stop());
+    el.querySelectorAll('[data-xr="exit"]').forEach((b) => b.addEventListener('click', () => this.stop()));
     el.querySelectorAll('[data-xr-view]').forEach((b) => b.addEventListener('click', () => { this.view = b.dataset.xrView; this._syncOverlay(); }));
   }
 

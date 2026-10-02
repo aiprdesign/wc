@@ -168,6 +168,7 @@ body.arlite:not(.xr-on) .arlite-close { display: inline-flex; }
 .xr-bar { display: flex; gap: 12px; pointer-events: auto; }
 .xr-bar button { min-width: 52px; height: 44px; padding: 0 16px; display: grid; place-items: center; font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.6); border: 1px solid rgba(226, 195, 138, 0.5); border-radius: 999px; }
 .xr-bar svg { width: 18px; height: 18px; fill: var(--gold); }
+.xr-bar .xr-exit { display: inline-flex; align-items: center; gap: 6px; }   /* (a second exit, in thumb reach) */
 .xr-overlay .i-pause, .xr-overlay.xr-playing .i-play { display: none; }
 .xr-overlay.xr-playing .i-pause { display: block; }
 
