@@ -104,7 +104,7 @@ universities), it is listed first.
 | "t = 0.25 s …" ghost labels | fall sequence | Depiction (computed from the film's own fall curve) | — |
 | "T² ∝ a³" · "KEPLER · HARMONICES MUNDI · 1619" | equation + caption | Correct (third law published 1619) | [Britannica: Kepler's laws](https://www.britannica.com/science/Keplers-laws-of-planetary-motion) |
 | "F = G m₁m₂ / r²" · "NEWTON · PRINCIPIA MATHEMATICA · 1687" | equation + caption | Correct date; the formula is in modern notation. Newton stated the law in words and proportions (Book III); the constant G and this algebraic form came later | [Britannica: Newton's law of gravitation](https://www.britannica.com/science/Newtons-law-of-gravitation) |
-| "n = sin θ₁ / sin θ₂" · "NEWTON · OPTICKS · 1704" | equation + caption, 0:33.3 | Correct (law of refraction, Snell 1621 / Descartes 1637, shown with Newton's prism work) | [Britannica: Snell's law](https://www.britannica.com/science/Snells-law) |
+| "n = sin θ₁ / sin θ₂" · "IBN SAHL 984 · SNELL 1621" · "NEWTON · OPTICKS · 1704" [was "NEWTON · OPTICKS · 1704" alone] | equation + captions, 0:33.3 | Fixed (credit). The law of refraction was first stated by Ibn Sahl in Baghdad, 984, then by Snell in 1621 and Descartes in 1637. Newton's *Opticks* is the prism work shown | [Britannica: Snell's law](https://www.britannica.com/science/Snells-law) · [Wikipedia: Ibn Sahl](https://en.wikipedia.org/wiki/Ibn_Sahl_(mathematician)) |
 | "λ 700 nm" (red), "λ 400 nm" (violet) | spectrum labels | Correct (approximate ends of the visible spectrum) | [NASA: Visible light](https://science.nasa.gov/ems/09_visiblelight/) |
 | Orrery axial tilts: Mercury 0.03°, Venus 177.4°, Earth 23.44°, Mars 25.19°, Jupiter 3.13°, Saturn 26.73°, Uranus 97.77°, Neptune 28.32°; Moon's axis 6.7° | orrery, 0:31 | Correct | [NASA Planetary Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/) |
 | Saturn's rings: D, C, B, Cassini Division, A (Encke and Keeler gaps), F at their true radii | orrery | Correct | [NASA Saturnian Rings Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html) |
@@ -229,6 +229,26 @@ universities), it is listed first.
 |---|---|---|---|
 | "From the agora to the Moon, twenty-five centuries of reason, courage and invention." | text, 1:26.8 | Correct (see narration) | — |
 | "IDEAS BUILD UPON IDEAS." · "THE JOURNEY CONTINUES" | text | Framing | — |
+
+
+## Roots: credit to other civilizations (chapter cards)
+
+Each chapter card carries a small "Roots" line. It names earlier work by other civilizations
+that the chapter's achievements built on.
+
+| Chapter | Roots line | Sources |
+|---|---|---|
+| I · Classical | Egypt's stone columns · arches first built in Mesopotamia and Egypt | [Britannica: Egyptian architecture](https://www.britannica.com/art/Egyptian-architecture) · [Britannica: arch](https://www.britannica.com/technology/arch-architecture) |
+| II · Civic | written law in Mesopotamia · Ur-Nammu c. 2100 BC · Hammurabi c. 1754 BC | [Britannica: Ur-Nammu](https://www.britannica.com/biography/Ur-Nammu) · [Britannica: Code of Hammurabi](https://www.britannica.com/topic/Code-of-Hammurabi) |
+| III · Renaissance | Greek texts kept by Byzantine and Arabic scholars · optics of Ibn al-Haytham | [Britannica: Ibn al-Haytham](https://www.britannica.com/biography/Ibn-al-Haytham) · [Britannica: Byzantine scholarship and the Renaissance](https://www.britannica.com/event/Renaissance) |
+| IV · Science | refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi | [Wikipedia: Ibn Sahl](https://en.wikipedia.org/wiki/Ibn_Sahl_(mathematician)) · [Britannica: Hindu-Arabic numerals](https://www.britannica.com/topic/Hindu-Arabic-numerals) · [Britannica: al-Khwarizmi](https://www.britannica.com/biography/al-Khwarizmi) |
+| V · Industrial | steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551 | [Britannica: Heron of Alexandria](https://www.britannica.com/biography/Heron-of-Alexandria) · [Wikipedia: Taqi al-Din](https://en.wikipedia.org/wiki/Taqi_ad-Din_Muhammad_ibn_Ma%27ruf) |
+| VI · Electricity | radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia) | [Britannica: Jagadish Chandra Bose](https://www.britannica.com/biography/Jagadish-Chandra-Bose) · [Britannica: Aleksandr Popov](https://www.britannica.com/biography/Aleksandr-Stepanovich-Popov) |
+| VII · Medicine | pulmonary circulation, Ibn al-Nafis c. 1242 · variolation from China, India, Africa, Ottoman Empire | [Britannica: Ibn al-Nafis](https://www.britannica.com/biography/Ibn-al-Nafis) · [CDC: History of smallpox](https://www.cdc.gov/smallpox/about/history.html) |
+| VIII · Flight | rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961 | [NASA: A brief history of rocketry](https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
+| X · Computing | zero and place value from India · "algorithm" honours al-Khwarizmi, Baghdad | [Britannica: zero](https://www.britannica.com/science/zero-mathematics) · [Britannica: algorithm](https://www.britannica.com/science/algorithm) |
+| XI · Knowledge | paper from China, Cai Lun AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377 | [Britannica: Cai Lun](https://www.britannica.com/biography/Cai-Lun) · [Britannica: Bi Sheng](https://www.britannica.com/biography/Bi-Sheng) · [UNESCO: Jikji](https://www.unesco.org/en/memory-world) |
+| XII · Frontier | first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA) | [NASA: Sputnik](https://history.nasa.gov/sputnik/) · [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
 
 ---
 
