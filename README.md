@@ -97,6 +97,22 @@ A/B switches: `?env=0` (shared studio for every scene) · `?detail=0` (no surfac
 phone path on any device). If the graphics driver resets, the page reloads one step lighter
 (high → medium → lite) and stops after two resets instead of looping.
 
+### Smooth real-time playback
+
+- **Pre-warm while loading.** After the sequences are built, the whole film is drawn once, small
+  (160 px), through the real pipeline: every third of a second of story time (every half second on
+  phones). Every shader variant compiles there, including each chapter's own lighting environment
+  and light set, shadow passes, headings and sprites. Every texture uploads there too. Playback then
+  never stalls on a compile; those stalls used to cluster at the chapter changes. `?still` skips it
+  and `?prewarm=1` forces it.
+- **Static batching (`src/lib/batch.js`).** Small parts that never move relative to their group and
+  share a material are merged into one mesh per group: rivets, panels, struts, bolts. Each chapter
+  is sampled every 0.1 s first, and big, see-through, custom-shader and animated parts are left
+  alone. Merged parts keep their own surface-detail coordinates, so the picture is unchanged.
+  Peak draw calls drop from 699 to 479, Industrial from 389 to 173, and Frontier/Legacy from 554
+  to 219. `?batch=0` turns it off for A/B.
+- **Adaptive resolution.** If frames keep taking over ~45 ms, playback steps the render width down.
+
 ### Experience mode
 
 A game-like, slow-motion flythrough of the whole film with no narration, headings or HUD.
