@@ -496,7 +496,8 @@ export function create(ctx, segment) {
   titleGroup.add(titleParticles);
 
   // Subtitle (per-glyph kinetic reveal) + gold rule
-  const sub = new KineticText('Ideas • Discovery • Engineering • Art • Institutions', { font: FONTS.display, weight: 400, height: 0.235, letterSpacing: 0.28, color: '#f1dcb4', intensity: 1.0 });
+  // the title's subtitle: the achievements shown stand on the ideas of many civilizations
+  const sub = new KineticText('Built on the ideas of the whole world', { font: FONTS.display, weight: 400, height: 0.235, letterSpacing: 0.28, color: '#f1dcb4', intensity: 1.0 });
   sub.position.set(0, -1.42, 0.05);
   titleGroup.add(sub);
   const ruleL = progressLine([V(0, -0.98, 0.05), V(-5.3, -0.98, 0.05)], { color: GOLD, headColor: GOLD_HOT, intensity: 1.6, head: 0.05 });

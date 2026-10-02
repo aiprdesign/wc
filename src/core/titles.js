@@ -17,12 +17,12 @@ const CHAPTERS = {
   science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.', roots: "Roots: refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi" },
   industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.', roots: "Roots: steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551" },
   electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.', roots: "Roots: radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia)" },
-  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: pulmonary circulation, Ibn al-Nafis c. 1242 · variolation from China, India, Africa, Ottoman Empire" },
+  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa" },
   flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.', roots: "Roots: rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961" },
   moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
   computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.', roots: "Roots: zero and place value from India · 'algorithm' honours al-Khwarizmi, Baghdad" },
   frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.', roots: "Roots: first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA)" },
-  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper from China, Cai Lun AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
+  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper, China AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
 };
 
 // The one word that defines each chapter — shown huge, SaaS-keynote style, before the heading.
@@ -339,18 +339,29 @@ export class TitleLayer {
     g.add(scrim, era, ruleL, ruleR, story);   // the chapter word itself is 3D, in the scene (words3d.js)
     // roots: a small credit line under the story (wraps on narrow frames)
     let roots = null;
+    let rootsBack = null;
     if (c.roots) {
-      roots = new WordLine(c.roots, { height: 0.026, font: FONTS.sans, italic: false, weight: 400, color: '#e8d6b4', intensity: 0.9, maxWidth: tall ? (2 * OUTPUT_ASPECT * 0.86) / this.scale : 2.2 });
-      roots.position.y = story.position.y - (story.lineCount - 1) * 0.056 * 1.25 - 0.068;
+      const rh = 0.031;
+      roots = new WordLine(c.roots, { height: rh, font: FONTS.sans, italic: false, weight: 500, color: '#f6ead2', intensity: 1.15, maxWidth: tall ? (2 * OUTPUT_ASPECT * 0.86) / this.scale : 1.75 });
+      roots.position.y = story.position.y - (story.lineCount - 1) * 0.056 * 1.25 - 0.074;
       roots.position.x = story.position.x + (align === 'center' ? 0 : (align === 'left' ? 1 : -1) * (roots.width - story.width) / 2);
-      g.add(roots);
+      // its own soft dark backing: the line stays legible over bright or busy plates
+      const bh = rh * 1.25 * roots.lineCount + 0.05;
+      rootsBack = new THREE.Mesh(new THREE.PlaneGeometry(roots.width + 0.3, bh), new THREE.ShaderMaterial({
+        uniforms: { uO: { value: 0 } }, transparent: true, depthWrite: false, depthTest: false,
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: 'uniform float uO; varying vec2 vUv; void main(){ vec2 d = abs(vUv - 0.5) * 2.0; float a = (1.0 - smoothstep(0.75, 1.0, d.x)) * (1.0 - smoothstep(0.45, 1.0, d.y)); gl_FragColor = vec4(0.0, 0.0, 0.0, uO * 0.72 * a); }',
+      }));
+      rootsBack.renderOrder = -1;
+      rootsBack.position.set(roots.position.x, roots.position.y - (roots.lineCount - 1) * rh * 1.25 / 2, 0);
+      g.add(rootsBack, roots);
     }
     this.scene.add(g);
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
     const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
     scrim.position.x = align === 'center' ? 0 : (align === 'left' ? 1 : -1) * (story.width / 2 - half);
-    return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, roots, scrim, t0, t1 };
+    return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, roots, rootsBack, scrim, t0, t1 };
   }
 
   makeInterlude(d) {
@@ -419,7 +430,8 @@ export class TitleLayer {
       // roots: fades in with the story's first words (cards are short), leaves with it
       if (c.roots) {
         const rin = ramp(t, 0.45, 0.95, ease.outCubic), rout = ramp(to, 0.1, 0.45, ease.inCubic);
-        c.roots.words.forEach((w) => { w.plane.position.y = w.baseY + (1 - rin) * -0.012; w.plane.opacity = rin * (1 - rout) * 0.85; });
+        c.roots.words.forEach((w) => { w.plane.position.y = w.baseY + (1 - rin) * -0.012; w.plane.opacity = rin * (1 - rout) * 0.95; });
+        c.rootsBack.material.uniforms.uO.value = rin * (1 - rout);
       }
     }
     for (const d of this.interludes) {

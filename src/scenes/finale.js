@@ -406,12 +406,18 @@ export function create(ctx, segment) {
   // centred in the VISIBLE gap (caps baseline → sub-heading cap line), a touch nearer the title so it never touches the sub-heading
   rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002 + 0.13 * (titleY - subY), 0);
   rule.renderOrder = 11;
+  // the title's subtitle (italic serif), then the closing line
+  const world = new TextPlane('Built on the ideas of the whole world', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, color: '#f1e2c6', intensity: 1.0, depthWrite: false });
+  const wS = L(1.9, 1.35) / inkW(world, 0.2);
+  world.scale.setScalar(wS);
+  const worldY = subY - subH * 0.5 - L(0.2, 0.13) * M * 0.5 - 0.2 * wS * 0.5;
+  world.position.set(0, worldY, 0);
   const closing = new TextPlane('THE JOURNEY CONTINUES', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
   const cS = L(2.45, 1.6) / inkW(closing, 0.2);
   closing.scale.setScalar(cS);
-  closing.position.set(0, subY - subH * 0.5 - L(0.34, 0.2) * M * 0.5 - 0.2 * cS * 0.5, 0);
-  hud.scene.add(title, sub, sweepT, sweepS, rule, closing);
-  for (const o of [title, sub, closing]) o.renderOrder = 10;
+  closing.position.set(0, worldY - 0.2 * wS * 0.5 - L(0.26, 0.17) * M * 0.5 - 0.2 * cS * 0.5, 0);
+  hud.scene.add(title, sub, sweepT, sweepS, rule, world, closing);
+  for (const o of [title, sub, world, closing]) o.renderOrder = 10;
   const TITLE_GOLD = new THREE.Color('#f4e3c1'), SUB_GOLD = new THREE.Color('#ecdfc4');
 
   // ---- per-frame scratch ----------------------------------------------------------------------
@@ -596,6 +602,8 @@ export function create(ctx, segment) {
     rule.scale.set(Math.max(0.001, rl * titleW * 0.42), 0.0042 * L(1.2, 1), 1);
     rule.material.opacity = rl * 0.75 * textFade;
     rule.visible = on && rl > 0;
+    world.opacity = sat((T - C_CLOSE + 0.6) / 0.5) * 0.9 * textFade;
+    world.reveal = ease.outCubic(sat((T - C_CLOSE + 0.6) / 1.1));
     closing.opacity = sat((T - C_CLOSE) / 0.5) * 0.85 * textFade;
     closing.reveal = ease.outCubic(sat((T - C_CLOSE) / 1.3));
 
