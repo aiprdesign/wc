@@ -84,11 +84,15 @@ export function familyOf(m) {
 }
 
 
+// sdPos / sdNrm: a merged part's own object-space position (at its scale) and normal (lib/batch.js),
+// so its pattern stays exactly where it was before the merge; zero (unset) on every other mesh
 const VERT_PARS = /* glsl */ `
+attribute vec3 sdPos; attribute vec3 sdNrm;
 varying vec3 vSdP; varying vec3 vSdN;`;
 const VERT_MAIN = /* glsl */ `
   {
     vec4 sdp = vec4(transformed, 1.0); vec3 sdn = objectNormal;
+    if (dot(sdNrm, sdNrm) > 0.25) { sdp = vec4(sdPos, 1.0); sdn = sdNrm; }
     #ifdef USE_BATCHING
       sdp = batchingMatrix * sdp; sdn = mat3(batchingMatrix) * sdn;
     #endif
@@ -230,8 +234,10 @@ export function addSurfaceDetail(m) {
   // the default cache key is the onBeforeCompile source: evaluate the old key against the old hook
   const baseKey = () => { const cur = m.onBeforeCompile; m.onBeforeCompile = prev; try { return prevKey.call(m); } finally { m.onBeforeCompile = cur; } };
   m.onBeforeCompile = function (sh, r) { prev?.call(this, sh, r); if (!SD_OFF) inject(sh, u); };
-  const tag = '|sd1';
+  const tag = '|sd2';
   m.customProgramCacheKey = () => baseKey() + (SD_OFF ? '|sd0' : tag + (HQ ? 'h' : 'l'));
+  // (meshes without the merged-part attributes read zeros: the part branch stays off)
+  m.defaultAttributeValues = { ...(m.defaultAttributeValues ?? {}), sdPos: [0, 0, 0], sdNrm: [0, 0, 0] };
   m.userData.sdDone = true;
   m.needsUpdate = true;
   return true;

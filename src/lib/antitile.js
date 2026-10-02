@@ -53,7 +53,7 @@ export function antiTileScene(root) {
   let n = 0;
   root.updateMatrixWorld(true);
   root.traverse((o) => {
-    if (!o.isMesh || !o.geometry) return;
+    if (!o.isMesh || !o.geometry || o.userData.batch) return;   // merged small parts (lib/batch.js) were never big surfaces
     for (const m of [o.material].flat()) {
       const t = m?.map;
       if (!m?.isMeshStandardMaterial || !t || t.wrapS !== THREE.RepeatWrapping || m.userData.noAntiTile) continue;

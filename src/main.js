@@ -82,7 +82,7 @@ async function boot() {
       shadowScale: params.has('shadows') ? Math.max(1, Math.min(4, parseFloat(params.get('shadows')) || 1)) : undefined,
       shutter: params.has('shutter') ? parseFloat(params.get('shutter')) || 180 : undefined,
       // realism A/B switches (see README): per-scene IBL, surface detail, tone mapper, veiling glare
-      sceneEnv: flag('env'), detail: flag('detail'), tonemap: params.get('tm') ?? undefined,
+      sceneEnv: flag('env'), detail: flag('detail'), batch: flag('batch'), tonemap: params.get('tm') ?? undefined,
       glare: flag('glare') === false ? 0 : flag('glare') ? 0.04 : undefined,
     },
     // headsets get a multisampled XR framebuffer; phones (AR only) keep the lighter context
@@ -129,7 +129,13 @@ async function boot() {
   const scorePromise = loadScore();
   const modules = await loadSceneModules({ only: chapter });
   setLoad(0.2);
-  await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.7); setStatus(`Building · ${seg.title}`); });
+  await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
+  // compile every shader and upload every texture now, so real-time playback never stalls on them
+  // (skipped for automated stills, which render single frames; ?prewarm=1 forces it)
+  if (!params.has('still') || params.has('prewarm')) {
+    setStatus('Preparing smooth playback…');
+    await engine.prewarm((p) => setLoad(0.85 + p * 0.1));
+  }
   setStatus('Composing score…');
   const score = await scorePromise;
   setLoad(1);

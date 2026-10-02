@@ -885,7 +885,7 @@ void main() {
       walls = this._wallList = [];
       inst.scene.traverse((o) => {
         const g = o.geometry;
-        if (!o.isMesh || !g?.attributes?.position) return;
+        if (!o.isMesh || !g?.attributes?.position || o.userData.batch) return;   // (merged small parts: lib/batch.js)
         if (!g.boundingBox) g.computeBoundingBox();
         const sz = g.boundingBox.getSize(_v), mx = Math.max(sz.x, sz.y, sz.z), mn = Math.min(sz.x, sz.y, sz.z);
         if (mx > 0 && mn < mx * 0.02) walls.push([o, sz.x === mn ? 0 : sz.y === mn ? 1 : 2]);

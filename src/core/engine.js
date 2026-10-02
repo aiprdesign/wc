@@ -14,6 +14,7 @@ import { DofShader, TransitionShader, FinalShader, AoShader, AoBlurShader, AoApp
 import { getFont3D } from '../lib/text.js';
 import { budgetScene, textureVersions } from '../lib/texbudget.js';
 import { antiTileScene } from '../lib/antitile.js';
+import { batchStatic } from '../lib/batch.js';
 import { TitleLayer } from './titles.js';
 import { Words3D } from './words3d.js';
 import { PALETTE } from '../lib/palette.js';
@@ -48,6 +49,8 @@ export class Engine {
       tonemap: fx.tonemap ?? 'aces',
       // high: veiling glare, the lens's own wide, energy-conserving scatter (share of the light)
       glare: fx.glare ?? (hq ? 0.04 : 0),
+      // static batching of fixed small parts (lib/batch.js); ?batch=0 turns it off for A/B
+      noBatch: fx.batch === false,
     };
     setSurfaceQuality(hq ? 'high' : 'lite');
     this.quality = quality;
@@ -139,6 +142,12 @@ export class Engine {
           inst.update(u, this.info(seg.start + u, seg, 0));
           inst.scene.traverse((o) => { if (o.isLight) peak.set(o, Math.max(peak.get(o) ?? 0, o.intensity)); });
         }
+        // merge the fixed small parts of detailed models (fewer draw calls; lib/batch.js) — sampled every
+        // 0.1 s of the sequence, before surface detail patches the materials
+        if (inst.batch !== false && !this.fx.noBatch) {
+          const n = Math.ceil(dur / 0.1) + 1;
+          inst._batch = batchStatic(inst.scene, (k) => { const u = (k / (n - 1)) * dur; inst.update(u, this.info(seg.start + u, seg, 0)); }, n);
+        }
         this.realism(inst, peak);
         this.upgradeShadows(inst);
         // repeated textures on big surfaces (floors, ground, backdrops) never show their grid (lib/antitile.js)
@@ -152,6 +161,28 @@ export class Engine {
     }
     // 3D chapter words live inside each sequence's scene (built after every scene exists)
     this.words3d = new Words3D(this);
+  }
+
+  // Pre-warm (during loading): draw the whole film once, small, through the real pipeline, so every
+  // shader variant (each chapter's own environment and light set, shadow passes, headings, sprites)
+  // compiles and every texture uploads here, not mid-playback — where each one is a visible stall,
+  // bunched at the chapter changes. Sequences are pure functions of time, so this leaves no trace.
+  async prewarm(onProgress = () => {}, { step = this.quality === 'lite' ? 0.5 : 1 / 3, width = 160 } = {}) {
+    const wasPinned = this.pinned;
+    if (!wasPinned) this.pin(width, Math.max(2, Math.round(width / OUTPUT_ASPECT)));
+    const n = Math.ceil(DURATION / step);
+    let yieldAt = performance.now();
+    try {
+      for (let i = 0; i <= n; i++) {
+        const T = Math.min(i * step + 0.02, DURATION - 0.01);
+        try { this.render(T * TIME_SCALE, 1 / 30); } catch { /* reported during playback */ }
+        if (performance.now() - yieldAt > 40) { onProgress(i / n); await new Promise((r) => setTimeout(r, 0)); yieldAt = performance.now(); }
+      }
+      this.renderer.getContext().finish?.();
+    } finally {
+      if (!wasPinned) this.unpin();
+    }
+    onProgress(1);
   }
 
   // Realism pass over a freshly built sequence: its own image-based lighting (replacing the shared
