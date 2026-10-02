@@ -8,20 +8,21 @@ import { KineticText, TextPlane, FONTS } from '../lib/text.js';
 import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
 
-// Headings per segment. Dates are the milestones each chapter shows.
+// Headings per segment. Dates are the milestones each chapter shows. `roots` credits the earlier
+// work of other civilizations the chapter's achievements built on (sources: docs/FACTS.md).
 const CHAPTERS = {
-  classical:   { n: 'I',    era: 'c. 500 BC — AD 400',          heading: 'THE FOUNDATIONS',        story: 'Athens and Rome gave the world proportion, engineering and the citizen.' },
-  civic:       { n: 'II',   era: '508/7 BC · 1215 · 1689',      heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.' },
-  renaissance: { n: 'III',  era: 'c. 1400 — 1600',              heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.' },
-  science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.' },
-  industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.' },
-  electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.' },
-  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.' },
-  flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.' },
+  classical:   { n: 'I',    era: 'c. 500 BC — AD 400',          heading: 'THE FOUNDATIONS',        story: 'Athens and Rome gave the world proportion, engineering and the citizen.', roots: "Roots: Egypt's stone columns · arches first built in Mesopotamia and Egypt" },
+  civic:       { n: 'II',   era: '508/7 BC · 1215 · 1689',      heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.', roots: "Roots: written law in Mesopotamia · Ur-Nammu c. 2100 BC · Hammurabi c. 1754 BC" },
+  renaissance: { n: 'III',  era: 'c. 1400 — 1600',              heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.', roots: "Roots: Greek texts kept by Byzantine and Arabic scholars · optics of Ibn al-Haytham" },
+  science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.', roots: "Roots: refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi" },
+  industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.', roots: "Roots: steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551" },
+  electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.', roots: "Roots: radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia)" },
+  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: pulmonary circulation, Ibn al-Nafis c. 1242 · variolation from China, India, Africa, Ottoman Empire" },
+  flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.', roots: "Roots: rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961" },
   moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
-  computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.' },
-  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.' },
-  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.' },
+  computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.', roots: "Roots: zero and place value from India · 'algorithm' honours al-Khwarizmi, Baghdad" },
+  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.', roots: "Roots: first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA)" },
+  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper from China, Cai Lun AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
 };
 
 // The one word that defines each chapter — shown huge, SaaS-keynote style, before the heading.
@@ -336,12 +337,20 @@ export class TitleLayer {
     }));
     scrim.renderOrder = -1;
     g.add(scrim, era, ruleL, ruleR, story);   // the chapter word itself is 3D, in the scene (words3d.js)
+    // roots: a small credit line under the story (wraps on narrow frames)
+    let roots = null;
+    if (c.roots) {
+      roots = new WordLine(c.roots, { height: 0.026, font: FONTS.sans, italic: false, weight: 400, color: '#e8d6b4', intensity: 0.9, maxWidth: tall ? (2 * OUTPUT_ASPECT * 0.86) / this.scale : 2.2 });
+      roots.position.y = story.position.y - (story.lineCount - 1) * 0.056 * 1.25 - 0.068;
+      roots.position.x = story.position.x + (align === 'center' ? 0 : (align === 'left' ? 1 : -1) * (roots.width - story.width) / 2);
+      g.add(roots);
+    }
     this.scene.add(g);
     const dur = seg.end - seg.start;
     // Enter after the incoming transition settles; leave before the next one begins.
     const t0 = seg.start + 0.95, t1 = seg.start + Math.min(3.7, dur - 0.55);
     scrim.position.x = align === 'center' ? 0 : (align === 'left' ? 1 : -1) * (story.width / 2 - half);
-    return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, scrim, t0, t1 };
+    return { g, era, eraText, color: ACCENT, ruleL, ruleR, story, roots, scrim, t0, t1 };
   }
 
   makeInterlude(d) {
@@ -407,6 +416,11 @@ export class TitleLayer {
         w.plane.opacity = kin * (1 - kout) * 0.94;
         w.plane.intensity = 1.05 + (1 - kin) * 1.2 * (kin > 0 ? 1 : 0);
       });
+      // roots: fades in with the story's first words (cards are short), leaves with it
+      if (c.roots) {
+        const rin = ramp(t, 0.45, 0.95, ease.outCubic), rout = ramp(to, 0.1, 0.45, ease.inCubic);
+        c.roots.words.forEach((w) => { w.plane.position.y = w.baseY + (1 - rin) * -0.012; w.plane.opacity = rin * (1 - rout) * 0.85; });
+      }
     }
     for (const d of this.interludes) {
       const on = T > d.t0 && T < d.t1;

@@ -901,11 +901,13 @@ export function create(ctx, segment) {
 
   const lamRed = new TextPlane('λ 700 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#ffc2b0', intensity: 1.1 });
   const lamVio = new TextPlane('λ 400 nm', { font: FONTS.mono, height: 0.04, letterSpacing: 0.2, color: '#d6c8ff', intensity: 1.1 });
-  const capO = new TextPlane('NEWTON · OPTICKS · 1704', { font: FONTS.mono, height: 0.04, letterSpacing: 0.3, color: '#fff0dc', intensity: 1.0 });
+  // the law of refraction is Ibn Sahl's (Baghdad, 984) and Snell's (1621); Newton's Opticks is the prism work shown
+  const capO = new TextPlane('IBN SAHL 984 · SNELL 1621', { font: FONTS.mono, height: 0.04, letterSpacing: 0.3, color: '#fff0dc', intensity: 1.0 });
+  const capO2 = new TextPlane('NEWTON · OPTICKS · 1704', { font: FONTS.mono, height: 0.034, letterSpacing: 0.3, color: '#fff0dc', intensity: 0.9 });
   const eqN = equation([['n = sin θ'], ['1', 'sub'], [' / sin θ'], ['2', 'sub']], { height: 0.1, intensity: 1.4, color: '#fff0dc' });
-  prism.add(capO, eqN);
+  prism.add(capO, capO2, eqN);
   cardGrp.add(lamRed, lamVio);
-  eqN.position.set(1.8, 0.24, 0.05); capO.position.set(1.8, 0.12, 0.05);
+  eqN.position.set(1.8, 0.24, 0.05); capO.position.set(1.8, 0.12, 0.05); capO2.position.set(1.8, 0.055, 0.05);
   {
     // pencilled onto the card beside each end of the band
     const across = V(hitR.y - hitV.y, -(hitR.x - hitV.x), 0).normalize();
@@ -1143,6 +1145,7 @@ export function create(ctx, segment) {
     lamRed.opacity = lamVio.opacity = ramp(t, tBeam + 0.4, tBeam + 0.45);
     eqN.reveal = ramp(t, tBeam + 0.05, tBeam + 0.45, ease.outCubic); eqN.opacity = ramp(t, tBeam + 0.05, tBeam + 0.1);
     capO.reveal = ramp(t, tBeam + 0.15, tBeam + 0.5, ease.outCubic); capO.opacity = eqN.opacity * 0.9;
+    capO2.reveal = ramp(t, tBeam + 0.25, tBeam + 0.6, ease.outCubic); capO2.opacity = eqN.opacity * 0.8;
     prism.visible = t > 3.0;
     // the grade's colour harmony steps aside so the spectrum shows every true hue
     // (the harmony only pulls off-palette hues; while the orrery is on show it eases so the planets keep
@@ -1151,7 +1154,7 @@ export function create(ctx, segment) {
 
     // labels face the camera (flat zodiac numerals excepted)
     for (const l of labels3D) l.quaternion.copy(camera.quaternion);
-    eqN.quaternion.identity(); capO.quaternion.identity();
+    eqN.quaternion.identity(); capO.quaternion.identity(); capO2.quaternion.identity();
 
     // HUD
     hudItems.forEach(([tp, a, b]) => { const e = envelope(t, a, b, 0.25, 0.3); tp.opacity = e; tp.reveal = ramp(t, a, a + 0.45, ease.outCubic); });
@@ -1201,7 +1204,7 @@ export function create(ctx, segment) {
     for (const l of labels3D) l.quaternion.copy(cam.quaternion);
     if (prism.visible) {
       _qp.copy(prism.quaternion).invert().multiply(cam.quaternion);
-      eqN.quaternion.copy(_qp); capO.quaternion.copy(_qp);
+      eqN.quaternion.copy(_qp); capO.quaternion.copy(_qp); capO2.quaternion.copy(_qp);
     }
   }
   const out = { scene, camera, update, explore, explorePosed, hud, dof, bloom, exposure: 1, harmony: 1, background: BG, exploreLimits: { yaw: 1.2, pitchDown: 0.35, pitchUp: 0.85, zoomOut: 2.6 } };
