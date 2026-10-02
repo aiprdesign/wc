@@ -285,15 +285,15 @@ export class Words3D {
     plinthL.position.y = plinthR.position.y = -capH / 2 - 0.12;
     // (the underline is retired at the user's request: the objects stay for the timing code but are never drawn)
     const plinth = [plinthL, plinthR];
-    // contrast backing: a soft, near-opaque dark glow behind gold letters (bright scene plates
-    // are HDR, so only a nearly solid core keeps the word legible) — or a warm light halo behind
-    // inverted dark letters
+    // contrast backing: a soft dark shadow behind gold letters — or a warm light halo behind inverted
+    // dark letters. Light and gradual: the glowing gold reads on its own, and a near-opaque core
+    // blacked out the plate behind the word (the Knowledge sphere lost a band, as if cut away)
     const back = new THREE.Mesh(new THREE.PlaneGeometry(glyphs.width + 2.8, capH * 3.6), new THREE.ShaderMaterial({
-      uniforms: { uO: { value: 0 }, uCol: { value: new THREE.Color(invert ? '#f3ead9' : '#000000') }, uA: { value: invert ? 0.9 : 0.97 } },
+      uniforms: { uO: { value: 0 }, uCol: { value: new THREE.Color(invert ? '#f3ead9' : '#000000') }, uA: { value: invert ? 0.9 : 0.55 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `uniform float uO, uA; uniform vec3 uCol; varying vec2 vUv;
         void main(){ vec2 d = (vUv - 0.5) * 2.0; float r = length(d * vec2(1.0, 1.0)); float e = pow(max(abs(d.x), 0.0), 6.0);
-          float a = smoothstep(1.0, 0.35, r + e * 0.4); gl_FragColor = vec4(uCol, a * uA * uO); }`,
+          float a = smoothstep(1.0, 0.0, r + e * 0.4); a *= a; gl_FragColor = vec4(uCol, a * uA * uO); }`,
       transparent: true, depthWrite: false, fog: false,
     }));
     back.position.z = -0.45;
