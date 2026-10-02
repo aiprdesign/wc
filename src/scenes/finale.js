@@ -145,10 +145,14 @@ void main(){
   vec2 p = vUv - 0.5;
   float a;
   if (uKind == 0) { float r = length(p) * 2.0; a = exp(-r * 4.0) * 0.8 + exp(-r * 1.6) * 0.25; a *= smoothstep(1.0, 0.7, r); }
-  else if (uKind == 1) { a = exp(-pow(p.y * 2.0 / 0.07, 2.0)) * pow(max(1.0 - abs(p.x) * 2.0, 0.0), 2.4); a += exp(-pow(p.y * 2.0 / 0.012, 2.0)) * pow(max(1.0 - abs(p.x) * 2.0, 0.0), 1.2) * 0.8; }
+  // (the streak tapers to a point at both tips, inside the frame: a wide, slow-falling one held over the
+  // ending read as a flat glowing bar with hard ends)
+  else if (uKind == 1) { float x = max(1.0 - abs(p.x) * 2.0, 0.0); a = exp(-pow(p.y * 2.0 / 0.035, 2.0)) * pow(x, 4.0) * 0.6; a += exp(-pow(p.y * 2.0 / 0.01, 2.0)) * pow(x, 2.2) * 0.8; }
   else { float r = length(p) * 2.0; a = smoothstep(1.0, 0.8, r) * smoothstep(0.35, 0.95, r) * 0.6 + smoothstep(1.0, 0.0, r) * 0.08; }
-  if (a * uI < 0.002) discard;
-  gl_FragColor = vec4(uColor * a * uI, 1.0);
+  // fade the faint tail continuously to zero (a hard cut-off showed, bloomed, as a rectangle's edge)
+  a = max(a * uI - 0.003, 0.0);
+  if (a <= 0.0) discard;
+  gl_FragColor = vec4(uColor * a, 1.0);
 }`;
 const sweepFrag = /* glsl */ `
 uniform sampler2D uMap; uniform float uS, uW, uOpacity; uniform vec3 uColor;
@@ -366,8 +370,10 @@ export function create(ctx, segment) {
   self.hud = hud;
   const M = FILM_ASPECT / OUTPUT_ASPECT;
   const HX = FILM_ASPECT;
-  const flareGlow = flarePiece(0, '#ffd9a8'), flareStreak = flarePiece(1, '#ffe6c8'), ghostA = flarePiece(2, '#9fc4ff'), ghostB = flarePiece(2, '#ffcf96');
-  hud.scene.add(flareGlow, flareStreak, ghostA, ghostB);
+  // (no anamorphic streak: over the long sunrise hold, bloom smeared its bright core line into a flat,
+  // hard-edged band beside the sun; the sun's own glow and the bloom carry the flare)
+  const flareGlow = flarePiece(0, '#ffd9a8'), ghostA = flarePiece(2, '#9fc4ff'), ghostB = flarePiece(2, '#ffcf96');
+  hud.scene.add(flareGlow, ghostA, ghostB);
 
   const L = (sq, wd) => lerp(sq, wd, W);
   // story (Cormorant italic, per-letter)
@@ -426,13 +432,11 @@ export function create(ctx, segment) {
     const sx = ndc.x * HX, sy = ndc.y * M;
     flareGlow.position.set(sx, sy, 0); flareGlow.scale.setScalar(L(1.3, 0.8));
     flareGlow.material.uniforms.uI.value = fl * 0.3;
-    flareStreak.position.set(sx, sy, 0); flareStreak.scale.set(HX * 2.6, L(0.5, 0.35), 1);
-    flareStreak.material.uniforms.uI.value = fl * 0.55;
     ghostA.position.set(-sx * 0.55, -sy * 0.55, 0); ghostA.scale.setScalar(0.22);
     ghostA.material.uniforms.uI.value = 0;
     ghostB.position.set(-sx * 1.1, -sy * 1.1, 0); ghostB.scale.setScalar(0.42);
     ghostB.material.uniforms.uI.value = 0;
-    flareGlow.visible = flareGlow.material.uniforms.uI.value > 0.002; flareStreak.visible = flareStreak.material.uniforms.uI.value > 0.002;
+    flareGlow.visible = flareGlow.material.uniforms.uI.value > 0.002;
     ghostA.visible = ghostB.visible = false;
   }
   self.explorePosed = (cam) => { cam.getWorldQuaternion(flareQ); placeFlare(flareQ, cam.fov); };

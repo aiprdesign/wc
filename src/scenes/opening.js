@@ -128,8 +128,8 @@ void main(){
   float x = max(1.0 - abs(p.x) * 2.0, 0.0);
   // tapered to a point at both tips (inside the frame) so it never reads as a flat band
   float a = exp(-pow(p.y * 2.0 / 0.035, 2.0)) * pow(x, 4.0) * 0.6 + exp(-pow(p.y * 2.0 / 0.01, 2.0)) * pow(x, 2.0) * 0.8 + exp(-pow(length(p * vec2(4.0, 1.0)) * 2.0 / 0.2, 2.0)) * 0.6;
-  a *= uI;
-  if (a < 0.002) discard;
+  a = max(a * uI - 0.003, 0.0);   // (fades continuously to zero: a hard cut-off edge shows once bloomed)
+  if (a <= 0.0) discard;
   gl_FragColor = vec4(uColor * a, 1.0);
 }`;
 const fxMesh = (frag, uniforms, { depthTest = true } = {}) => {
