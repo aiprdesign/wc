@@ -361,7 +361,7 @@ void main(){
   vec3 Lc = uCore - vW; float dc = length(Lc); Lc /= dc;
   float att = uCoreK / (1.0 + dc * dc * 0.09);
   float ndl = max(dot(N, L), 0.0);
-  vec3 col = albedo * 0.035;
+  vec3 col = albedo * (0.035 + 0.09 * bk);   // (a little fill on the bound volumes: they face away from the key)
   col += albedo * uKeyCol * ndl * (1.0 - metal * 0.7);
   col += albedo * uRimCol * max(dot(N, R), 0.0) * 0.55;
   col += albedo * uCoreCol * max(dot(N, Lc), 0.0) * att;
@@ -483,7 +483,8 @@ export function create(ctx, segment) {
   box.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 4));
   box.setAttribute('aFly', new THREE.InstancedBufferAttribute(fly, 4));
   box.setAttribute('aMisc', new THREE.InstancedBufferAttribute(misc, 4));
-  const leather = ['#4a130d', '#6b3818', '#16301f', '#172237', '#23140c', '#7c4a22'].map((c) => new THREE.Color(c));
+  // (lighter than period leather: the darkest bindings vanished into the black void and the globe read as full of holes)
+  const leather = ['#7a2418', '#93501f', '#2f5e3d', '#2f4470', '#62402a', '#a8662e'].map((c) => new THREE.Color(c));
   const pageMat = new THREE.ShaderMaterial({
     uniforms: {
       uT: { value: 0 }, uR: { value: SPHERE_R }, uAsmDur: { value: 0.5 }, uBook: { value: 0 }, uPix: { value: 0 }, uGone: { value: 0 },
