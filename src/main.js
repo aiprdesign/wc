@@ -132,14 +132,15 @@ async function boot() {
   // where playback starts (?t= is story time; AR Lite: its chapter)
   const chapterSeg = chapter ? SEGMENTS.find((s) => s.id === chapter) : null;
   const startStory = chapterSeg ? (chapterSeg.start > 0 ? chapterSeg.start + 0.5 : 0) : (parseFloat(params.get('t') ?? '0') || 0);
-  // STREAMING: only the chapter(s) at the start (and the next one) are built before Play appears; the
-  // rest stream in behind (see streamAll below). Automated stills (?still) and ?stream=0 build
-  // everything up front, as before.
-  const streaming = !params.has('still') && params.get('stream') !== '0';
+  // Default: everything is built and pre-drawn behind the loader, so playback never stops or stutters
+  // (background building competes with the film for the main thread). ?stream=1 opts into streaming:
+  // only the chapter(s) at the start (and the next one) before Play, the rest behind (streamAll below).
+  const streaming = !params.has('still') && params.get('stream') === '1';
   if (!streaming) {
     await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
-    // compile every shader and upload every texture now (?prewarm=1 for stills)
-    if (params.has('prewarm')) { setStatus('Preparing smooth playback…'); await engine.prewarm((p) => setLoad(0.85 + p * 0.1)); }
+    // compile every shader and upload every texture now, so real-time playback never stalls on them
+    // (skipped for automated stills, which render single frames; ?prewarm=1 forces it)
+    if (!params.has('still') || params.has('prewarm')) { setStatus('Preparing smooth playback…'); await engine.prewarm((p) => setLoad(0.85 + p * 0.1)); }
   } else {
     await engine.setup(modules);
     const first = engine.activeSegments(startStory);

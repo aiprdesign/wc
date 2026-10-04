@@ -99,12 +99,13 @@ phone path on any device). If the graphics driver resets, the page reloads one s
 
 ### Smooth real-time playback
 
-- **Streaming.** Only the chapter at the start point and the next one are built before **Play**
-  appears. The rest build in the background in film order. The loop always builds the first unbuilt
+- **Streaming (opt-in, `?stream=1`).** By default everything is built behind the loader, so playback
+  never stops; background building competes with the film for the main thread. With `?stream=1`, only
+  the chapter at the start point and the next one are built before **Play** appears. The rest build in the background in film order. The loop always builds the first unbuilt
   chapter at or after the playhead, so a seek reorders the queue. Each chapter is warmed (environment,
   shaders at every light set, textures) without touching the canvas. If playback reaches a chapter
   that isn't ready, it holds with a small "Loading the next chapter…" note and resumes on its own.
-  Video export waits for every chapter. `?stream=0` (and `?still`) build everything up front.
+  Video export waits for every chapter.
 - **Pre-warm while loading.** After the sequences are built, the whole film is drawn once, small
   (160 px), through the real pipeline: every third of a second of story time (every half second on
   phones). Every shader variant compiles there, including each chapter's own lighting environment
