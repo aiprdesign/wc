@@ -29,6 +29,7 @@ export class Player {
   get currentTime() { return this.playing ? Math.min(DURATION, this.now() - this.startedAt) : this.time; }
 
   async play(from = this.time) {
+    this.waiting = false;
     if (this.range && (from < this.range[0] || from >= this.range[1] - 0.05)) from = this.range[0];
     if (from >= DURATION - 0.05) from = 0;
     // resume inside the tap (mobile browsers only unlock audio from a user gesture) — don't await
@@ -94,6 +95,8 @@ export class Player {
       if (!this.playing) return;
       if (this.wrap()) return;
       const t = this.currentTime;
+      // streaming: the film ahead isn't built yet — stop here; onWait resumes once it is
+      if (this.gate && !this.gate(t)) { this.pause(); this.waiting = true; this.onWait?.(t); return; }
       try {
         this.engine.render(t, Math.min(0.1, Math.max(0, t - last)));
       } catch (e) {

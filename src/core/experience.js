@@ -104,6 +104,9 @@ export class Experience {
   // Advance the flight by `wall` seconds of wall clock; returns the film-time step.
   step(wall) {
     let dt = wall * this.speed;
+    // streaming: hold while the next stretch of the film is still being built
+    this.waiting = !!this.gate && !this.gate(this.t + dt);
+    if (this.waiting) return 0;
     if (this.t >= HOLD_AT && this.hold < HOLD_S) {   // closing hold: time stands still, the drone circles on
       this.hold += wall; dt = 0;
     } else {
@@ -113,7 +116,7 @@ export class Experience {
     // the headings forming, as whooshes (only when time actually moves forward, not on a loop)
     if (dt > 0 && this.ambient) this._letters(this.t - dt, this.t);
     // a soft swell in the score at each chapter change
-    const seg = this.engine.mainInstance(this.t / TIME_SCALE).segment.id;
+    const seg = this.engine.mainInstance(this.t / TIME_SCALE)?.segment.id;
     if (this.chapter && seg !== this.chapter) this.ambient?.swell();
     this.chapter = seg;
     return dt;

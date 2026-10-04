@@ -32,6 +32,7 @@ export class Explorer {
     const e = this.engine, T = filmT / TIME_SCALE;
     this.filmT = filmT;
     const inst = e.mainInstance(T);
+    if (!inst) return false;   // streaming: this chapter is still being built
     if (this.active) { if (this.inst !== inst) this.handBack(); else this.restoreCamera(); }   // re-entered (scrubbing)
     this.inst = inst;
     const info = e.info(T, this.inst.segment, 0);

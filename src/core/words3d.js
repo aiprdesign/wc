@@ -95,39 +95,49 @@ function letterMaterial(era, env, shared, invert = false) {
 }
 
 export class Words3D {
+  // Headings are built chapter by chapter as the sequences stream in (addSegment); their shared size
+  // is measured up front from every chapter's words, so the first heading is already sized as in the film.
   constructor(engine) {
     this.engine = engine;
     this.items = [];
-    const inst = (id) => engine.instances.get(id);
-    for (const i of engine.instances.values()) this.trackDof(i);   // before build(): see trackDof
-    for (const seg of SEGMENTS) {
-      const dur = seg.end - seg.start;
-      const lay = LAYOUT[seg.id] ?? {};
-      // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
-      for (const w of [WORDS[seg.id] ?? []].flat()) {
-        // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
-        if (typeof w === 'string') { const it = this.build(w, inst(seg.id), seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; it.yOff = HEAD_Y; this.items.push(it); continue; }
-        const item = this.build(w.text, inst(seg.id), w.t0, w.t1, false, lay);
-        Object.assign(item, { pace: w.pace ?? 1, yOff: HEAD_Y, noFocus: w.focus === false });   // (every chapter heading at one height)
-        this.items.push(item);
-      }
-    }
-    SWAPS.forEach(([cue, w], i) => {
-      const t0 = CUES[cue], t1 = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
-      const it = this.build(w, inst('montage'), t0 - 0.05, t1 - 0.08, true, LAYOUT.montage);
-      // the last word (STARS) never leaves: the camera zooms into its A, whose counter is the
-      // window onto the Earth shot (transition 'letter' at the montage → finale hand-over)
-      if (!SWAPS[i + 1]) this.makeZoom(it, 'A');
-      this.items.push(it);
-    });
+    this.added = new Set();
     // ONE STYLE FOR EVERY CHAPTER HEADING: the same letter height on screen (set by a reference word at the
     // 75th percentile of length, so only the longest words shrink a little to fit), the same place in the
     // frame, and the same brightness whatever the scene's exposure (the montage's quick swaps keep theirs)
-    const widths = this.items.filter((it) => !it.swap).map((it) => it.width).sort((a, b) => a - b);
+    const texts = SEGMENTS.flatMap((seg) => [WORDS[seg.id] ?? []].flat().map((w) => (typeof w === 'string' ? w : w.text)));
+    const widths = texts.map((t) => { const g = letters3D(t, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 2, bevelSegments: 1 }); g.forEach((l) => l.geometry.dispose()); return g.width; }).sort((a, b) => a - b);
     this.refWidth = widths[Math.floor((widths.length - 1) * 0.75)] ?? 1;
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this._k = new THREE.Vector3();
     this._q = [new THREE.Quaternion(), new THREE.Quaternion()];
+  }
+
+  // Build the headings of one sequence (once it exists).
+  addSegment(id) {
+    if (this.added.has(id)) return;
+    const inst = this.engine.instances.get(id);
+    if (!inst) return;
+    this.added.add(id);
+    this.trackDof(inst);   // before build(): see trackDof
+    const seg = inst.segment, dur = seg.end - seg.start, lay = LAYOUT[seg.id] ?? {};
+    // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
+    for (const w of [WORDS[seg.id] ?? []].flat()) {
+      // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
+      if (typeof w === 'string') { const it = this.build(w, inst, seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; it.yOff = HEAD_Y; this.items.push(it); continue; }
+      const item = this.build(w.text, inst, w.t0, w.t1, false, lay);
+      Object.assign(item, { pace: w.pace ?? 1, yOff: HEAD_Y, noFocus: w.focus === false });   // (every chapter heading at one height)
+      this.items.push(item);
+    }
+    if (id === 'montage') {
+      SWAPS.forEach(([cue, w], i) => {
+        const t0 = CUES[cue], t1 = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
+        const it = this.build(w, inst, t0 - 0.05, t1 - 0.08, true, LAYOUT.montage);
+        // the last word (STARS) never leaves: the camera zooms into its A, whose counter is the
+        // window onto the Earth shot (transition 'letter' at the montage → finale hand-over)
+        if (!SWAPS[i + 1]) this.makeZoom(it, 'A');
+        this.items.push(it);
+      });
+    }
   }
 
   // Headings live in an overlay layer per sequence: drawn over the scene (never intersecting or

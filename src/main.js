@@ -129,12 +129,31 @@ async function boot() {
   const scorePromise = loadScore();
   const modules = await loadSceneModules({ only: chapter });
   setLoad(0.2);
-  await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
-  // compile every shader and upload every texture now, so real-time playback never stalls on them
-  // (skipped for automated stills, which render single frames; ?prewarm=1 forces it)
-  if (!params.has('still') || params.has('prewarm')) {
-    setStatus('Preparing smooth playback…');
-    await engine.prewarm((p) => setLoad(0.85 + p * 0.1));
+  // where playback starts (?t= is story time; AR Lite: its chapter)
+  const chapterSeg = chapter ? SEGMENTS.find((s) => s.id === chapter) : null;
+  const startStory = chapterSeg ? (chapterSeg.start > 0 ? chapterSeg.start + 0.5 : 0) : (parseFloat(params.get('t') ?? '0') || 0);
+  // STREAMING: only the chapter(s) at the start (and the next one) are built before Play appears; the
+  // rest stream in behind (see streamAll below). Automated stills (?still) and ?stream=0 build
+  // everything up front, as before.
+  const streaming = !params.has('still') && params.get('stream') !== '0';
+  if (!streaming) {
+    await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
+    // compile every shader and upload every texture now (?prewarm=1 for stills)
+    if (params.has('prewarm')) { setStatus('Preparing smooth playback…'); await engine.prewarm((p) => setLoad(0.85 + p * 0.1)); }
+  } else {
+    await engine.setup(modules);
+    const first = engine.activeSegments(startStory);
+    const next = SEGMENTS[SEGMENTS.indexOf(first[first.length - 1]) + 1];
+    const ids = [...first, ...(next ? [next] : [])].map((s) => s.id);
+    for (const [k, id] of ids.entries()) {
+      setStatus(`Building · ${SEGMENTS.find((s) => s.id === id).title}`);
+      await engine.buildSegment(id);
+      setLoad(0.2 + ((k + 1) / ids.length) * 0.6);
+    }
+    // shaders and textures of that first stretch, so its first seconds play without a stall
+    const until = (next ?? first[first.length - 1]).end;
+    await engine.prewarm((p) => setLoad(0.8 + p * 0.15), { from: Math.max(0, startStory - 0.5), to: until });
+    for (const id of ids) engine.instances.get(id)._warm = true;
   }
   setStatus('Composing score…');
   const score = await scorePromise;
@@ -164,7 +183,7 @@ async function boot() {
   window.__film.renderFrame = (T, o) => { engine.render(T, ...frameOpts(o)); return T; };             // film seconds
   window.__film.renderStory = (t, o) => { engine.render(t * TIME_SCALE, ...frameOpts(o)); return t; };  // story seconds
 
-  let start = (parseFloat(params.get('t') ?? '0') || 0) * TIME_SCALE;   // ?t= is story time
+  let start = startStory * TIME_SCALE;
   if (chapter) {
     // loop inside the chapter, clear of the cross-fades with its neighbours
     const seg = SEGMENTS.find((s) => s.id === chapter), last = seg === SEGMENTS[SEGMENTS.length - 1];
@@ -175,6 +194,40 @@ async function boot() {
   engine.render(start, 0);
 
   if (params.has('still')) { document.body.classList.add('still'); intro.style.display = 'none'; window.__film.ready = true; return; }
+
+  // STREAMING: the remaining chapters build in the background, always the first unbuilt one at or after
+  // the playhead (so a seek reorders the queue), each warmed without touching the canvas. Playback holds
+  // (a small "Loading" note) if it reaches a chapter that isn't ready yet, and resumes on its own.
+  const LOOKAHEAD = 1.0;   // story seconds of film that must be built ahead of the playhead
+  const gate = (filmT) => { const T = filmT / TIME_SCALE; return engine.isReady(T) && engine.isReady(Math.min(DURATION / TIME_SCALE - 0.01, T + LOOKAHEAD)); };
+  player.gate = gate;
+  experience.gate = gate;
+  const buffering = () => document.body.classList.toggle('buffering', !!(player.waiting || experience.waiting));
+  const onBuilt = () => {
+    if (player.waiting && gate(player.time)) player.play(player.time);
+    buffering();
+    if (!player.playing && !experience.playing && !engine.pinned) engine.render(nowT(), 0);   // a waiting still frame fills in
+  };
+  player.onWait = buffering;
+  setInterval(buffering, 300);
+  let streamDone = null;
+  const streamAll = () => (streamDone ??= (async () => {
+    for (;;) {
+      const pending = SEGMENTS.filter((s) => !engine.isBuilt(s.id) || !engine.instances.get(s.id)._warm);
+      if (!pending.length) break;
+      const T = nowT() / TIME_SCALE;
+      const next = pending.find((s) => s.end > T) ?? pending[0];
+      try {
+        await engine.buildSegment(next.id);
+        await engine.warmSegment(next.id);
+      } catch (e) { console.warn('[stream] could not build', next.id, e); if (engine.instances.get(next.id)) engine.instances.get(next.id)._warm = true; else break; }
+      onBuilt();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    console.info('[stream] every chapter is ready');
+  })());
+  if (streaming) streamAll(); else streamDone = Promise.resolve();
+  window.__film.whenAllReady = () => streamAll();
 
   const ui = setupUI(player, score, explorer, experience, ambient, xrs);
   if (chapter) {
@@ -480,6 +533,7 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   // film is exported) and put back exactly as it was afterwards.
   const exporter = new ExportDialog({
     engine,
+    whenReady: () => window.__film.whenAllReady?.(),   // streaming: every chapter built first
     getAudio: () => player.buffer ?? null,   // the loaded soundtrack (with narration unless ?novo); mute doesn't apply
     narration: !params.has('novo'),
     isMuted: () => player.muted,

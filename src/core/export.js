@@ -432,6 +432,8 @@ export class ExportDialog {
     const fmtT = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
     let lastUI = 0;
     try {
+      // streaming: every sequence must be built before frame-perfect rendering starts
+      if (this.ctx.whenReady) { this.$.count.textContent = 'Loading the film…'; await this.ctx.whenReady(); }
       restore = this.ctx.prepare();
       const r = await exportVideo(this.ctx.engine, audio, {
         width, height, fps, hq, from, to, container, foldBytes, signal: this.abort.signal,

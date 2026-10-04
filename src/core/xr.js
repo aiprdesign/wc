@@ -615,6 +615,7 @@ void main() {
     const exp = this.experience?.active ? this.experience : null, player = this.player;
     if (exp) { if (exp.playing && (!ar || this.placed)) exp.step(wall); }
     else if (player.wrap?.()) { /* AR Lite: the chapter loops */ }
+    else if (player.playing && player.gate && !player.gate(player.currentTime)) { player.pause(); player.waiting = true; this._syncOverlay(); }   // streaming: wait for the next chapter
     else if (player.playing && player.currentTime >= FILM_DURATION) {
       player.pause(); player.time = FILM_DURATION; player.onEnd?.(); this._syncOverlay();
     }
@@ -622,6 +623,7 @@ void main() {
     const playing = exp ? exp.playing : player.playing;
     const T = filmT / TIME_SCALE;
     const inst = e.mainInstance(T);
+    if (!inst) return;   // streaming: this chapter is still being built (playback waits for it)
     let snap = !this._seeded;
     if (inst !== this.inst) { this._attach(inst); snap = true; }
     const expected = (this._lastFilmT ?? filmT) + (playing ? (exp ? wall * exp.speed : raw) : 0);

@@ -103,8 +103,20 @@ export class Engine {
   }
 
   // Build shared resources and every sequence. `modules` maps segment id → scene module.
+  // Everything at once (automation, export): set up, then build every sequence in film order.
   async init(modules, onProgress = () => {}) {
+    await this.setup(modules);
+    let i = 0;
+    for (const seg of SEGMENTS) { await this.buildSegment(seg.id); onProgress(++i / SEGMENTS.length, seg); }
+  }
+
+  // Streaming: setup() is quick (no sequences yet); buildSegment(id) builds one sequence when it is
+  // wanted (main.js builds the opening first and the rest in the background, in film order, the one
+  // the playhead needs next jumping the queue). isReady(T) says whether the frame at T can be drawn.
+  async setup(modules) {
     const r = this.renderer;
+    this.modules = modules;
+    this._building = new Map();
     // one PMREM generator for the shared studio and every per-sequence environment (its blur
     // shaders compile once)
     this.pmrem = new THREE.PMREMGenerator(r);
@@ -126,9 +138,24 @@ export class Engine {
 
     this.resize();
     this.titles = new TitleLayer();
-    let i = 0;
-    for (const seg of SEGMENTS) {
-      const mod = modules[seg.id];
+    // 3D chapter words live inside each sequence's scene: built with it (buildSegment)
+    this.words3d = new Words3D(this);
+  }
+
+  isBuilt(id) { return this.instances.has(id); }
+  isReady(T) { return this.activeSegments(T).every((s) => this.instances.has(s.id)); }
+
+  buildSegment(id) {
+    if (this.instances.has(id)) return Promise.resolve(this.instances.get(id));
+    if (!this._building.has(id)) this._building.set(id, this._build(id).finally(() => this._building.delete(id)));
+    return this._building.get(id);
+  }
+
+  async _build(id) {
+    const r = this.renderer;
+    const seg = SEGMENTS.find((s) => s.id === id);
+    {
+      const mod = this.modules[seg.id];
       const inst = await mod.create(this.ctx, seg);
       inst.segment = seg;
       if (inst.camera?.isPerspectiveCamera) { inst.camera.aspect = FILM_ASPECT; inst.camera.updateProjectionMatrix(); }
@@ -157,24 +184,50 @@ export class Engine {
         await r.compileAsync(inst.scene, inst.camera);
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
-      onProgress(++i / SEGMENTS.length, seg);
+      this.words3d.addSegment(seg.id);
+      return inst;
     }
-    // 3D chapter words live inside each sequence's scene (built after every scene exists)
-    this.words3d = new Words3D(this);
+  }
+
+  // A sequence built in the background, made ready to draw without a stall and without touching the
+  // canvas (playback may be running): its environment, its shaders at every light set it goes through
+  // (compiled off the main thread where the browser can) and its textures uploaded.
+  async warmSegment(id, { step = this.quality === 'lite' ? 0.5 : 1 / 3 } = {}) {
+    const inst = this.instances.get(id);
+    if (!inst || inst._warm) return;
+    inst._warm = true;
+    const r = this.renderer, seg = inst.segment, dur = seg.end - seg.start;
+    this.ensureEnvironment(inst);
+    const ov = () => inst._wordsOverlay?.scene;
+    for (let u = 0; u <= dur + 1e-6; u += step) {
+      try {
+        inst.update(u, this.info(seg.start + u, seg, 0));
+        this.words3d?.apply(inst, seg.start + u);
+        await r.compileAsync(inst.scene, inst.camera);
+        if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
+        if (ov()) await r.compileAsync(ov(), inst.camera);
+      } catch { /* reported when drawn */ }
+      await new Promise((res) => setTimeout(res, 0));
+    }
+    const seen = new Set();
+    for (const root of [inst.scene, inst.hud?.scene, ov()]) root?.traverse((o) => {
+      for (const m of [o.material ?? []].flat()) for (const v of Object.values(m)) if (v?.isTexture && !seen.has(v)) { seen.add(v); try { r.initTexture(v); } catch { /* lazily on draw */ } }
+    });
   }
 
   // Pre-warm (during loading): draw the whole film once, small, through the real pipeline, so every
   // shader variant (each chapter's own environment and light set, shadow passes, headings, sprites)
   // compiles and every texture uploads here, not mid-playback — where each one is a visible stall,
   // bunched at the chapter changes. Sequences are pure functions of time, so this leaves no trace.
-  async prewarm(onProgress = () => {}, { step = this.quality === 'lite' ? 0.5 : 1 / 3, width = 160 } = {}) {
+  async prewarm(onProgress = () => {}, { step = this.quality === 'lite' ? 0.5 : 1 / 3, width = 160, from = 0, to = DURATION } = {}) {
     const wasPinned = this.pinned;
     if (!wasPinned) this.pin(width, Math.max(2, Math.round(width / OUTPUT_ASPECT)));
-    const n = Math.ceil(DURATION / step);
+    const n = Math.ceil((to - from) / step);
     let yieldAt = performance.now();
     try {
       for (let i = 0; i <= n; i++) {
-        const T = Math.min(i * step + 0.02, DURATION - 0.01);
+        const T = Math.min(from + i * step + 0.02, to - 0.01, DURATION - 0.01);
+        if (!this.isReady(T)) continue;   // (streaming: only what is built)
         try { this.render(T * TIME_SCALE, 1 / 30); } catch { /* reported during playback */ }
         if (performance.now() - yieldAt > 40) { onProgress(i / n); await new Promise((r) => setTimeout(r, 0)); yieldAt = performance.now(); }
       }
@@ -383,7 +436,8 @@ export class Engine {
     const segs = this.activeSegments(T);
     let s = segs[0];
     if (segs[1] && (T - segs[1].start) / (segs[0].end - segs[1].start) > 0.5) s = segs[1];
-    return this.instances.get(s.id);
+    // (streaming: the other sequence of a transition when this one isn't built yet; undefined if neither)
+    return this.instances.get(s.id) ?? segs.map((x) => this.instances.get(x.id)).find(Boolean);
   }
 
   // Run fn with the camera's open-matte lens applied (as renderInstance renders it).
@@ -528,7 +582,7 @@ export class Engine {
   // can be posed cheaply without rendering.
   subframePoses(times) {
     return times.map((ft) => {
-      const T = ft / TIME_SCALE, inst = this.mainInstance(T), cam = inst.camera;
+      const T = ft / TIME_SCALE, inst = this.mainInstance(T) ?? this.instances.values().next().value, cam = inst.camera;
       try { inst.update(T - inst.segment.start, this.info(T, inst.segment, 0)); } catch { /* reported by render */ }
       cam.updateMatrixWorld(true);
       const p = new THREE.Vector3(), q = new THREE.Quaternion();
@@ -601,7 +655,11 @@ export class Engine {
     let a = segs[0], b = segs[1];
     const ex = this.explore?.active ? this.explore : null;
     if (ex) { a = ex.inst.segment; b = null; }   // exploring: one sequence, no transition
-    const instA = this.instances.get(a.id);
+    let instA = this.instances.get(a.id);
+    // streaming: a sequence not built yet (the playhead waits for it) — draw the other one, or black
+    if (!instA && b && this.instances.has(b.id)) { a = b; b = null; instA = this.instances.get(a.id); }
+    if (b && !this.instances.has(b.id)) b = null;
+    if (!instA) { r.setRenderTarget(this.comp); r.setClearColor(0x000000, 1); r.clear(true, true, false); return { T, exposure: 1, harmony: 1 }; }
     tu.tA.value = this.renderInstance(instA, T, dt, this.rtA, this.dofA);
     // harmony: 0..1 scale on the grade's 60-30-10 colour harmony (scenes lower it to show true spectral colour)
     let bloomStrength = (instA.bloom?.strength ?? 0.7) * (1 - 0.2 * (instA._wordsDuck ?? 0)), exposure = instA.exposure ?? 1, harmony = instA.harmony ?? 1;
