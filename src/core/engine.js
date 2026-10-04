@@ -138,6 +138,7 @@ export class Engine {
 
     this.resize();
     this.titles = new TitleLayer();
+    if (this.quality === 'lite') budgetScene(this.titles.scene);   // (phones: the chapter cards' text too)
     // 3D chapter words live inside each sequence's scene: built with it (buildSegment)
     this.words3d = new Words3D(this);
   }
@@ -185,6 +186,7 @@ export class Engine {
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
       this.words3d.addSegment(seg.id);
+      if (this.quality === 'lite' && inst._wordsOverlay) budgetScene(inst._wordsOverlay.scene);
       return inst;
     }
   }
@@ -192,7 +194,7 @@ export class Engine {
   // A sequence built in the background, made ready to draw without a stall and without touching the
   // canvas (playback may be running): its environment, its shaders at every light set it goes through
   // (compiled off the main thread where the browser can) and its textures uploaded.
-  async warmSegment(id, { step = this.quality === 'lite' ? 0.5 : 1 / 3 } = {}) {
+  async warmSegment(id, { step = this.quality === 'lite' ? 0.5 : 1 / 3, textures = true } = {}) {
     const inst = this.instances.get(id);
     if (!inst || inst._warm) return;
     inst._warm = true;
@@ -209,6 +211,7 @@ export class Engine {
       } catch { /* reported when drawn */ }
       await new Promise((res) => setTimeout(res, 0));
     }
+    if (!textures) return;
     const seen = new Set();
     for (const root of [inst.scene, inst.hud?.scene, ov()]) root?.traverse((o) => {
       for (const m of [o.material ?? []].flat()) for (const v of Object.values(m)) if (v?.isTexture && !seen.has(v)) { seen.add(v); try { r.initTexture(v); } catch { /* lazily on draw */ } }
@@ -220,6 +223,16 @@ export class Engine {
   // compiles and every texture uploads here, not mid-playback — where each one is a visible stall,
   // bunched at the chapter changes. Sequences are pure functions of time, so this leaves no trace.
   async prewarm(onProgress = () => {}, { step = this.quality === 'lite' ? 0.5 : 1 / 3, width = 160, from = 0, to = DURATION } = {}) {
+    // phones: shaders only. Drawing the film here would upload every chapter's textures at once (several
+    // hundred MB), more than a phone browser holds — the page was killed while loading (AR / VR too).
+    // Textures upload as each chapter first shows, as before; the shaders still compile up front.
+    if (this.quality === 'lite') {
+      const ids = SEGMENTS.filter((s) => s.end > from && s.start < to && this.instances.has(s.id)).map((s) => s.id);
+      for (const [k, id] of ids.entries()) { await this.warmSegment(id, { step, textures: false }); onProgress((k + 1) / ids.length); }
+      try { await this.renderer.compileAsync(this.titles.scene, this.titles.camera); } catch { /* compiled on first draw */ }
+      onProgress(1);
+      return;
+    }
     const wasPinned = this.pinned;
     if (!wasPinned) this.pin(width, Math.max(2, Math.round(width / OUTPUT_ASPECT)));
     const n = Math.ceil((to - from) / step);

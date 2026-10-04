@@ -79,7 +79,9 @@ class LiveText extends THREE.Mesh {
 class WordLine extends THREE.Group {
   constructor(text, { height = 0.05, font = FONTS.serif, italic = true, weight = 500, color = '#fff', intensity = 1, maxWidth = Infinity } = {}) {
     super();
-    const size = 160, k = height / size;
+    // canvas em size scaled to the on-screen size (a 0.056 story word is ~30 px on a 1080p frame): ~3× that,
+    // not a fixed 160 px — every word is its own texture, and they add up (phones ran out of memory)
+    const size = Math.round(Math.min(160, Math.max(48, height * 1700))), k = height / size;
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px "${font}"`;
     const space = ctx.measureText(' ').width * k;
