@@ -563,7 +563,7 @@ export function create(ctx, segment) {
   // explodes, then a hard push through the linework and the manuscripts that stops dead on the SLAM
   const fT = cue('flyThrough'), tA = cue('titleAssemble'), tL = cue('titleLocked');
   const l3 = cue('letters3D'), lf = cue('lettersFly');
-  const zKeys = [[0, 2.3], [tIgn, 2.15], [tFF, 2.02], [tCol, 1.7], [pA, 1.55], [pA + 0.4, 3.4], [g1, 7.4], [fT, 7.3], [fT + 0.25, -6], [tL - 0.25, -33], [tL, -40.6], [tL + 0.5, -41.1], [l3, -41.9], [lf, -42.9], [7.3, -45.6], [7.7, -49.6], [8.0, -55]];
+  const zKeys = [[0, 2.3], [tIgn, 2.15], [tFF, 2.02], [tCol, 1.7], [pA, 1.55], [pA + 0.4, 3.4], [g1, 7.4], [fT, 7.3], [fT + 0.25, -6], [tL - 0.25, -33], [tL, -40.6], [tL + 0.5, -41.1], [l3, -41.9], [lf, -42.9], [lf + 0.8, -44.2], [7.3, -45.6], [7.7, -49.6], [8.0, -55]];
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
   const dof = { focus: 10, range: 3, amount: 0 };
   const bloom = { strength: 0.75 };

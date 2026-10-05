@@ -63,8 +63,8 @@ export const CUES = {
   titleAssemble: 2.75,
   titleLocked: 3.5,     // … into the title SLAM (film ≈ 4.86 s)
   subtitle: 3.875,
-  letters3D: 6.3,
-  lettersFly: 6.8,
+  letters3D: 5.3,       // (the title holds ~2 s of film, not 3.4: the letters turn and fly a second sooner)
+  lettersFly: 5.8,
   // classical
   columnWire: 7.8,
   columnClay: 9.0,
