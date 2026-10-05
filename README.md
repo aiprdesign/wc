@@ -66,6 +66,7 @@ automation, `await __film.exportVideo({ from, to, width })` exports a time range
 | `#16x9` | 16:9 frame |
 | `#9x16` (or `?aspect=9:16`) | 9:16 vertical frame |
 | `#2x3` (or `?aspect=2:3`) | 2:3 vertical frame |
+| `#4x5` (or `?aspect=4:5`) | 4:5 vertical frame — LinkedIn feed format (1080 × 1350) |
 | `?q=lite` / `?q=low` / `?q=high` / `?q=ultra` | the phone path · 1280 / 2560 / 3840 px (default 1920; phones default to `lite`). `high` and `ultra` also add the heavier realism features (see **Picture realism** below) |
 | `?ss=2` | supersampling: renders at 2× and filters down (cleanest edges; heavy, meant for stills and offline renders) |
 | `?ao=0` / `?ao=1` · `?shadows=1` | override ambient occlusion / the shadow-map multiplier (A/B comparisons) |
@@ -200,8 +201,9 @@ npm run render:1x1       # → renders/1x1/achievements-of-western-civilization-
 npm run render:16x9      # → renders/16x9/…-16x9.mp4                                     (1920 × 1080)
 npm run render:9x16      # → renders/9x16/…-9x16.mp4                                     (1080 × 1920)
 npm run render:2x3       # → renders/2x3/…-2x3.mp4                                       (1080 × 1620)
+npm run render:4x5       # → renders/4x5/…-4x5.mp4                                       (1080 × 1350)
 npm run render:all       # all four, one after another
-npm run render:draft:1x1 # quick preview (also :16x9, :9x16, :2x3): no motion blur or supersampling
+npm run render:draft:1x1 # quick preview (also :16x9, :9x16, :2x3, :4x5): no motion blur or supersampling
 ```
 
 Each frame is rendered deterministically (identical to real-time playback, never a dropped

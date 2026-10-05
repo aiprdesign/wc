@@ -10,11 +10,13 @@
     "render:16x9": "node tools/render.mjs --gpu --preset cinematic --aspect 16:9 --width 1920 --out renders/16x9",
     "render:9x16": "node tools/render.mjs --gpu --preset cinematic --aspect 9:16 --width 1080 --out renders/9x16",
     "render:2x3": "node tools/render.mjs --gpu --preset cinematic --aspect 2:3 --width 1080 --out renders/2x3",
-    "render:all": "npm run render:1x1 && npm run render:16x9 && npm run render:9x16 && npm run render:2x3",
+    "render:4x5": "node tools/render.mjs --gpu --preset cinematic --aspect 4:5 --width 1080 --out renders/4x5",
+    "render:all": "npm run render:1x1 && npm run render:16x9 && npm run render:9x16 && npm run render:2x3 && npm run render:4x5",
     "render:draft:1x1": "node tools/render.mjs --gpu --preset draft --aspect 1 --width 1080 --out renders/draft-1x1",
     "render:draft:16x9": "node tools/render.mjs --gpu --preset draft --aspect 16:9 --width 1920 --out renders/draft-16x9",
     "render:draft:9x16": "node tools/render.mjs --gpu --preset draft --aspect 9:16 --width 1080 --out renders/draft-9x16",
     "render:draft:2x3": "node tools/render.mjs --gpu --preset draft --aspect 2:3 --width 1080 --out renders/draft-2x3",
+    "render:draft:4x5": "node tools/render.mjs --gpu --preset draft --aspect 4:5 --width 1080 --out renders/draft-4x5",
     "postinstall": "playwright install chromium"
   },
   "devDependencies": {

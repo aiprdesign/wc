@@ -3,6 +3,7 @@
 //   node tools/render.mjs --gpu --aspect 16:9 --width 1920 --out renders/16x9    (landscape)
 //   node tools/render.mjs --gpu --aspect 9:16 --width 1080 --out renders/9x16    (vertical)
 //   node tools/render.mjs --gpu --aspect 2:3 --width 1080 --out renders/2x3      (vertical 2:3)
+//   node tools/render.mjs --gpu --aspect 4:5 --width 1080 --out renders/4x5      (vertical 4:5, LinkedIn)
 // Options: --gpu (use your graphics card: opens browser windows while it renders; without it
 // Chromium renders in software, which is slow), --fps 30, --workers 2, --from/--to (film s),
 // --noaudio, --ffmpeg /path/to/ffmpeg (else ffmpeg-static from npm, then ffmpeg on PATH).

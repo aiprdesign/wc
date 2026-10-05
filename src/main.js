@@ -328,9 +328,9 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   $('play').addEventListener('click', () => { begin(player); syncPlaying(); });
   $('btn-play').addEventListener('click', toggle);
   $('btn-mute').addEventListener('click', () => { player.setMuted(!player.muted); ambient?.setMuted(player.muted); body.classList.toggle('muted', player.muted); });
-  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16'], ['2x3', '2:3']];
+  const fmts = [['wide', '2.39'], ['square', '1:1'], ['16x9', '16:9'], ['9x16', '9:16'], ['2x3', '2:3'], ['4x5', '4:5']];
   // intro: mark the format in use (arriving with #experience, a format keeps it: #square&experience)
-  const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16', [2 / 3]: '2x3' }[OUTPUT_ASPECT] ?? 'wide';
+  const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16', [2 / 3]: '2x3', [4 / 5]: '4x5' }[OUTPUT_ASPECT] ?? 'wide';
   document.querySelectorAll('.formats-pick a').forEach((a) => {
     a.setAttribute('aria-current', String(a.dataset.fmt === curHash));
     if (HASH_EXPERIENCE) a.setAttribute('href', `#${a.dataset.fmt}&experience`);

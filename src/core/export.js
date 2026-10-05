@@ -19,7 +19,7 @@ export function formatTag(aspect = OUTPUT_ASPECT) {
   return known.find(([a]) => Math.abs(a - aspect) < 1e-3)?.[1] ?? `${aspect.toFixed(2).replace('.', 'x')}`;
 }
 export function formatLabel(aspect = OUTPUT_ASPECT) {
-  return { wide: '2.39 cinema', '1x1': '1:1 square', '16x9': '16:9 landscape', '9x16': '9:16 vertical', '2x3': '2:3 vertical', '4x5': '4:5 vertical' }[formatTag(aspect)] ?? `${aspect.toFixed(2)}:1`;
+  return { wide: '2.39 cinema', '1x1': '1:1 square', '16x9': '16:9 landscape', '9x16': '9:16 vertical', '2x3': '2:3 vertical', '4x5': '4:5 LinkedIn' }[formatTag(aspect)] ?? `${aspect.toFixed(2)}:1`;
 }
 
 const even = (v) => Math.max(2, 2 * Math.round(v / 2));
