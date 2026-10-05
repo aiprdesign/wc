@@ -135,7 +135,8 @@ async function boot() {
   // Default: everything is built and pre-drawn behind the loader, so playback never stops or stutters
   // (background building competes with the film for the main thread). ?stream=1 opts into streaming:
   // only the chapter(s) at the start (and the next one) before Play, the rest behind (streamAll below).
-  const streaming = !params.has('still') && params.get('stream') === '1';
+  // AR / VR Lite (#arlite) always streams, chapter by chapter, letting go of the chapters behind it.
+  const streaming = !params.has('still') && (params.get('stream') === '1' || !!chapter);
   if (!streaming) {
     await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
     // compile every shader and upload every texture now, so real-time playback never stalls on them
@@ -185,12 +186,8 @@ async function boot() {
   window.__film.renderStory = (t, o) => { engine.render(t * TIME_SCALE, ...frameOpts(o)); return t; };  // story seconds
 
   let start = startStory * TIME_SCALE;
-  if (chapter) {
-    // loop inside the chapter, clear of the cross-fades with its neighbours
-    const seg = SEGMENTS.find((s) => s.id === chapter), last = seg === SEGMENTS[SEGMENTS.length - 1];
-    player.range = [(seg.start > 0 ? seg.start + 0.5 : 0) * TIME_SCALE, last ? DURATION - 0.1 : (seg.end - 0.5) * TIME_SCALE];
-    if (start < player.range[0] || start >= player.range[1]) start = player.range[0];
-  }
+  // AR / VR Lite: from the chosen chapter onward, chapter after chapter, looping the film at its end
+  if (chapter) player.range = [0, DURATION - 0.1];
   player.time = start;
   engine.render(start, 0);
 
@@ -212,7 +209,24 @@ async function boot() {
   player.onWait = buffering;
   setInterval(buffering, 300);
   let streamDone = null;
-  const streamAll = () => (streamDone ??= (async () => {
+  // AR / VR Lite keeps a window instead: the chapters within WINDOW story seconds ahead of the playhead
+  // are built (and warmed), those behind it are freed — about two chapters in memory at any time.
+  const WINDOW = 6;
+  const liteWindow = async () => {
+    for (;;) {
+      const T = nowT() / TIME_SCALE;
+      for (const s of SEGMENTS) if (engine.isBuilt(s.id) && (s.end < T - 1.5 || s.start > T + WINDOW + 6)) engine.disposeSegment(s.id);
+      const want = SEGMENTS.find((s) => s.end > T + 0.05 && s.start < T + WINDOW && (!engine.isBuilt(s.id) || !engine.instances.get(s.id)._warm));
+      if (!want) { await new Promise((r) => setTimeout(r, 250)); continue; }
+      try {
+        await engine.buildSegment(want.id);
+        await engine.warmSegment(want.id, { textures: false });
+      } catch (e) { console.warn('[stream] could not build', want.id, e); if (engine.instances.get(want.id)) engine.instances.get(want.id)._warm = true; }
+      onBuilt();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  };
+  const streamAll = () => (streamDone ??= chapter ? liteWindow() : (async () => {
     for (;;) {
       const pending = SEGMENTS.filter((s) => !engine.isBuilt(s.id) || !engine.instances.get(s.id)._warm);
       if (!pending.length) break;
@@ -236,7 +250,9 @@ async function boot() {
     document.body.classList.add('arlite');
     $('play').querySelector('span').textContent = 'Watch here';
     const sub = $('play-ar').querySelector('.pe-sub');
-    if (xrs?.ar && sub) sub.textContent = `${seg.title} · on your table`;
+    if (xrs?.ar && sub) sub.textContent = `From ${seg.title} · on your table`;
+    const subV = $('play-vr').querySelector('.pe-sub');
+    if (xrs?.vr && subV) subV.textContent = `From ${seg.title} · chapter by chapter`;
     const link = $('arlite-link');
     link.textContent = 'Choose another chapter';
   }

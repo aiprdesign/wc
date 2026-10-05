@@ -112,6 +112,12 @@ export class Words3D {
     this._q = [new THREE.Quaternion(), new THREE.Quaternion()];
   }
 
+  // Forget a sequence's headings (the engine frees their GPU resources with the sequence).
+  removeSegment(id) {
+    this.items = this.items.filter((it) => it.inst.segment.id !== id);
+    this.added.delete(id);
+  }
+
   // Build the headings of one sequence (once it exists).
   addSegment(id) {
     if (this.added.has(id)) return;

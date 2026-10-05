@@ -159,10 +159,12 @@ a secure page (https or `localhost`) and is blocked inside embedded viewers such
 artifact frame: open the film from its own address (e.g. GitHub Pages). `#vr` / `#ar` (also
 `?vr` / `?ar`) put the button forward on the start screen; a tap still starts the session.
 
-**AR Lite for phones** (`#arlite`, the AR QR code's target): builds only one chapter (the start
-screen lists them; `#arlite&classical` names one), always at lite quality with a smaller XR
-framebuffer, and loops that chapter on the table with its part of the soundtrack. It loads in
-seconds where the whole film is too heavy for a phone browser.
+**AR & VR Lite for phones** (`#arlite`, the AR QR code's target): starts at the chapter you pick
+(the start screen lists them; `#arlite&classical` names one), then plays on chapter after chapter
+through the film and loops at the end. Only the chapters within a few seconds of the playhead are
+built (each one while the one before it plays, loaded on demand); the chapters behind are freed, so a
+phone holds about two at a time. It always runs at lite quality, with a smaller XR framebuffer, in AR
+or VR.
 
 AR placement: hit-testing prefers ARCore's detected planes (feature points as a fallback) and
 takes only flat, upward-facing surfaces; the marker glides (smoothed) and shows the model's real

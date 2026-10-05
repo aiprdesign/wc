@@ -144,6 +144,28 @@ export class Engine {
   }
 
   isBuilt(id) { return this.instances.has(id); }
+
+  // Free a built sequence (AR / VR Lite plays chapter by chapter and lets go of the ones behind it, so a
+  // phone holds about two at a time). Shared render-target textures (environments) are left alone;
+  // cached canvases and geometry another sequence reuses simply upload again when next drawn.
+  disposeSegment(id) {
+    const inst = this.instances.get(id);
+    if (!inst || this._building?.has(id)) return;
+    this.instances.delete(id);
+    this.words3d?.removeSegment(id);
+    const tex = (t) => { if (t?.isTexture && !t.isRenderTargetTexture && t !== this.env) t.dispose(); };
+    const free = (root) => root?.traverse((o) => {
+      o.geometry?.dispose?.();
+      for (const m of [o.material ?? []].flat()) {
+        for (const v of Object.values(m)) tex(v);
+        if (m.uniforms) for (const u of Object.values(m.uniforms)) tex(u?.value);
+        m.dispose?.();
+      }
+    });
+    free(inst.scene); free(inst.hud?.scene); free(inst._wordsOverlay?.scene);
+    if (inst._sceneEnv && inst._sceneEnv !== this.env) inst._sceneEnv.dispose?.();
+    try { inst.dispose?.(); } catch { /* scene hook */ }
+  }
   isReady(T) { return this.activeSegments(T).every((s) => this.instances.has(s.id)); }
 
   buildSegment(id) {
@@ -156,7 +178,8 @@ export class Engine {
     const r = this.renderer;
     const seg = SEGMENTS.find((s) => s.id === id);
     {
-      const mod = this.modules[seg.id];
+      let mod = this.modules[seg.id];
+      if (typeof mod === 'function') mod = this.modules[seg.id] = await mod();   // (lazy: AR / VR Lite)
       const inst = await mod.create(this.ctx, seg);
       inst.segment = seg;
       if (inst.camera?.isPerspectiveCamera) { inst.camera.aspect = FILM_ASPECT; inst.camera.updateProjectionMatrix(); }
