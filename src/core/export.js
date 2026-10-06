@@ -8,6 +8,7 @@
 //   muxing:  mp4-muxer / webm-muxer (vendor/, MIT), streamed into a Blob; nothing is kept twice
 // Sequences are pure functions of time, so an exported frame is exactly the frame playback would show.
 // No WebCodecs (older Safari / Firefox): the dialog points to tools/render.mjs (npm run render:*).
+import { FILM } from '../film.js';
 import { FILM_DURATION, OUTPUT_ASPECT, TIME_SCALE } from '../timeline.js';
 
 export const hasWebCodecs = () => typeof VideoEncoder === 'function' && typeof VideoFrame === 'function' && typeof EncodedVideoChunk === 'function';
@@ -403,7 +404,7 @@ export class ExportDialog {
     const why = this.ctx.canStart?.();
     if (why) { this.$.msg.textContent = why; return; }
     const s = this.settings();
-    const name = `achievements-of-western-civilization-${formatTag()}-${s.res === 'screen' ? `${Math.min(s.width, s.height)}p` : `${s.res}p`}`;
+    const name = `${FILM.slug}-${formatTag()}-${s.res === 'screen' ? `${Math.min(s.width, s.height)}p` : `${s.res}p`}`;
     try {
       const r = await this.run({ width: s.width, height: s.height, fps: s.fps, hq: s.hq, name });
       if (r) this.finish(r);
@@ -451,7 +452,7 @@ export class ExportDialog {
           this.$.time.textContent = `${fmtT(p.elapsed)} elapsed · ${p.frame < 8 ? 'estimating…' : `about ${fmtT(p.eta)} left`}`;
         },
       });
-      const file = `${name ?? `achievements-of-western-civilization-${formatTag()}-${Math.min(r.width, r.height)}p`}.${r.ext}`;
+      const file = `${name ?? `${FILM.slug}-${formatTag()}-${Math.min(r.width, r.height)}p`}.${r.ext}`;
       r.name = file; r.stats = this.stats;
       if (download) this.ctx.download(r.blob, file);
       return r;

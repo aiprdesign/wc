@@ -3,43 +3,15 @@
 // story-only cards carry the narrative between chapters. Pure function of time.
 import * as THREE from 'three';
 import { SEGMENTS, CUES, OUTPUT_ASPECT, TIME_SCALE, warmthAt } from '../timeline.js';
+import { FILM } from '../film.js';
 import { LAYOUT } from './words3d.js';
 import { KineticText, TextPlane, FONTS } from '../lib/text.js';
 import { progressLine, segmentsLine } from '../lib/lines.js';
 import { ramp, ease, sat, lerp } from '../lib/math.js';
 
-// Headings per segment. Dates are the milestones each chapter shows. `roots` credits the earlier
-// work of other civilizations the chapter's achievements built on (sources: docs/FACTS.md).
-const CHAPTERS = {
-  classical:   { n: 'I',    era: 'c. 500 BC — AD 400',          heading: 'THE FOUNDATIONS',        story: 'Athens and Rome gave the world proportion, engineering and the citizen.', roots: "Roots: Egypt's stone columns · arches first built in Mesopotamia and Egypt" },
-  civic:       { n: 'II',   era: '508/7 BC · 1215 · 1689',      heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.', roots: "Roots: written law in Mesopotamia · Ur-Nammu c. 2100 BC · Hammurabi c. 1754 BC" },
-  renaissance: { n: 'III',  era: 'c. 1400 — 1600',              heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.', roots: "Roots: Greek texts kept by Byzantine and Arabic scholars · optics of Ibn al-Haytham" },
-  science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.', roots: "Roots: refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi" },
-  industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.', roots: "Roots: steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551" },
-  electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.', roots: "Roots: radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia)" },
-  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa" },
-  flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.', roots: "Roots: rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961" },
-  moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
-  computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.', roots: "Roots: zero and place value from India · 'algorithm' honours al-Khwarizmi, Baghdad" },
-  frontier:    { n: 'XII',  era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.', roots: "Roots: first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA)" },
-  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper, China AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
-};
-
-// The one word that defines each chapter — shown huge, SaaS-keynote style, before the heading.
-const CONCEPT = {
-  classical: 'Order.', civic: 'Law.', renaissance: 'Beauty.', science: 'Reason.', industrial: 'Power.',
-  electricity: 'Connection.', medicine: 'Life.', flight: 'Flight.', moonshot: 'One giant leap.',
-  computing: 'Intelligence.', knowledge: 'Knowledge.',
-};
-// Montage: rapid word swaps locked to the shape morphs.
-const SWAPS = [['mColumns', 'Order.'], ['mGears', 'Motion.'], ['mOrbits', 'Orbits.'], ['mAtoms', 'Atoms.'], ['mCircuit', 'Circuits.'], ['mStars', 'Stars.']];
-
-
-// Story-only cards between chapters (global seconds).
-const INTERLUDES = [
-  { start: 1.5, end: 2.95, text: 'Every achievement begins as an idea.' },     // with the VO's "begins as an idea"; gone before the SLAM (3.5)
-  { start: 55.9, end: 60.2, text: 'Standing on the shoulders of giants.', cite: 'NEWTON TO HOOKE · 1675/6', low: true },
-];
+// Chapter cards (era, heading, story, roots) and the story-only cards between chapters come from the
+// film being played (src/films/<id>.js).
+const { CHAPTERS, INTERLUDES } = FILM;
 
 const WARM = new THREE.Color('#ffe2b0'), COOL = new THREE.Color('#dbe8ff');
 // 60-30-10: the signature accent (10%) for every graphic element; reading text stays neutral.
@@ -142,14 +114,9 @@ export class TitleLayer {
     this.words = [];
     for (const seg of SEGMENTS) {
       const c = CHAPTERS[seg.id];
-      if (false && CONCEPT[seg.id]) this.words.push(this.makeWord(CONCEPT[seg.id], seg.start + 0.28, seg.start + 1.55, c?.n, seg));
       if (!c || !c.heading) continue;
       this.cards.push(this.makeCard(seg, c));
     }
-    if (false) SWAPS.forEach(([cue, w], i) => {
-      const t = CUES[cue], next = SWAPS[i + 1] ? CUES[SWAPS[i + 1][0]] : CUES.pullBack - 0.15;
-      this.words.push(this.makeWord(w, t - 0.05, next - 0.05, null, SEGMENTS.find((sg) => sg.id === 'montage'), { swap: true }));
-    });
     this.interludes = INTERLUDES.map((d) => this.makeInterlude(d));
     this.makeReel(a);
   }

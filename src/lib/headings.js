@@ -2,22 +2,15 @@
 // and the score (audio/cues.js) so every letter's whip, landing and shine is heard on its frame.
 // Pure data + math (no three.js): the score renders in contexts without the importmap.
 import { SEGMENTS, CUES, BEAT } from '../timeline.js';
+import { FILM } from '../film.js';
 
 // beat-grid helpers (story time; the score plays the same grid)
 export const onBeat = (x, div = 1) => Math.round(x / (BEAT / div)) * (BEAT / div);
 export const nextBeat = (x, div = 1) => Math.ceil(x / (BEAT / div) - 1e-6) * (BEAT / div);
 
-// One defining word per chapter (Cinzel capitals — the film's display face).
-// entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
-export const WORDS = {
-  classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
-  renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
-  electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
-  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.3, pace: 0.8 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
-  frontier: { text: 'FRONTIER', t0: 49.8, t1: 50.95, pace: 0.8 },   // clears before the genome shot
-};
-// the montage's rapid word swaps, each on its cue
-export const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'], ['mAtoms', 'ATOMS'], ['mCircuit', 'CIRCUITS'], ['mStars', 'STARS']];
+// One defining word per chapter, and the montage's rapid word swaps, from the film being played
+// (src/films/<id>.js). Entries may be objects with explicit story timing: { text, t0, t1, pace, y, focus }
+export const { WORDS, SWAPS } = FILM;
 
 // Every heading in film order: { text, seg, t0, t1, swap, pace, entry } with t0/t1 as authored
 // (words3d snaps them to the beat in build()).

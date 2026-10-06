@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES, FILM_ASPECT } from '../timeline.js';
+import { FILM } from '../film.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, timeWarp, rng, clamp } from '../lib/math.js';
 import { progressLine, segmentsLine, circlePoints, goldenSpiralPoints } from '../lib/lines.js';
 import { MorphParticles, Dust, sampleBox, sampleGeometry } from '../lib/particles.js';
@@ -204,7 +205,36 @@ function iconShapes() {
     orbit.push(p);
   }
   if (orbit.length > 1) moon.lines.push(orbit);
-  return [column, gear, rocket, moon];
+
+  // 5. a stupa (Sanchi): the railed drum, the hemispherical dome, the harmika and its three parasols
+  const stupa = { lines: [], segs: [] };
+  stupa.lines.push(P([[-0.46, -0.5], [0.46, -0.5]]), P([[-0.4, -0.5], [-0.4, -0.38], [0.4, -0.38], [0.4, -0.5]]));
+  for (let k = 0; k <= 16; k++) { const x = -0.44 + k * 0.055; stupa.segs.push([V(x, -0.5), V(x, -0.42)]); }   // the railing (vedika)
+  for (const y of [-0.475, -0.45]) stupa.segs.push([V(-0.44, y), V(0.44, y)]);
+  const dome = [];
+  for (let i = 0; i <= 64; i++) { const a = Math.PI * (i / 64); dome.push(V(-Math.cos(a) * 0.36, -0.38 + Math.sin(a) * 0.34)); }
+  stupa.lines.push(dome, P([[-0.33, -0.31], [0.33, -0.31]]));
+  stupa.lines.push(P([[-0.075, -0.04], [-0.075, 0.04], [0.075, 0.04], [0.075, -0.04]]), P([[-0.095, 0.04], [0.095, 0.04], [0.095, 0.06], [-0.095, 0.06], [-0.095, 0.04]]));
+  for (const x of [-0.05, 0, 0.05]) stupa.segs.push([V(x, -0.04), V(x, 0.04)]);
+  stupa.segs.push([V(0, 0.06), V(0, 0.42)]);
+  for (const [y, w] of [[0.16, 0.15], [0.27, 0.11], [0.37, 0.07]]) stupa.lines.push(P([[-w, y - 0.025], [0, y + 0.012], [w, y - 0.025]]));
+
+  // 6. zero: the ring of the numeral, a dot at its heart (the Bakhshali placeholder), ten ticks for ten digits
+  const zero = { lines: [], segs: [] };
+  zero.lines.push(circlePoints(0.38, 160, { start: Math.PI / 2, end: Math.PI * 2.5 }), circlePoints(0.3, 140, { start: -Math.PI / 2, end: Math.PI * 1.5 }));
+  zero.lines.push(circlePoints(0.035, 24, { start: Math.PI / 2, end: Math.PI * 2.5 }));
+  for (let k = 0; k < 10; k++) { const a = Math.PI / 2 - k * Math.PI / 5; zero.segs.push([V(Math.cos(a) * 0.43, Math.sin(a) * 0.43), V(Math.cos(a) * 0.5, Math.sin(a) * 0.5)]); }
+  // 7. a PSLV: the slim core under its bulbous payload fairing, six strap-on boosters (two in profile)
+  const pslv = { lines: [], segs: [] };
+  const pside = [[0, 0.56], [0.03, 0.53], [0.062, 0.47], [0.075, 0.38], [0.075, 0.27], [0.058, 0.23], [0.058, 0.05], [0.064, 0.0], [0.064, -0.5], [0, -0.5]];
+  pslv.lines.push(P(pside), mirror(P(pside)));
+  for (const [y, hw] of [[0.27, 0.075], [0.23, 0.058], [0.05, 0.058], [-0.12, 0.064]]) pslv.segs.push([V(-hw, y), V(hw, y)]);
+  const boost = P([[0.064, -0.2], [0.082, -0.15], [0.1, -0.15], [0.1, -0.5], [0.064, -0.5]]);
+  pslv.lines.push(boost, mirror(boost));
+  for (const cx of [-0.08, 0.08]) pslv.lines.push(P([[cx - 0.014, -0.5], [cx - 0.02, -0.54], [cx + 0.02, -0.54], [cx + 0.014, -0.5]]));
+  pslv.lines.push(P([[-0.03, -0.5], [-0.045, -0.56], [0.045, -0.56], [0.03, -0.5]]));
+  const all = { column, gear, rocket, moon, stupa, zero, pslv };
+  return (FILM.opening?.icons ?? ['column', 'gear', 'rocket', 'moon']).map((k) => all[k]);
 }
 
 export function create(ctx, segment) {
@@ -341,8 +371,41 @@ export function create(ctx, segment) {
     const sp = goldenSpiralPoints(2.3, 2.2, 260).map((p) => V((2 + gw - 0.15 - p.x * 0.55) * s, p.y * 0.55 - 0.1, 0));
     addLine(sp.reverse(), 1.0, 1.55, 1.3, ease.outCubic);
   }
-  // Temple elevation (stylobate, 8 columns, entablature, pediment) — built bottom-up
-  {
+  // Temple elevation — built bottom-up: the Western film's Greek temple (stylobate, 8 columns,
+  // entablature, pediment), or the Indian film's Nagara temple (FILM.opening.temple === 'nagara')
+  if (FILM.opening?.temple === 'nagara') {
+    const segs = [];
+    const W = 3.9, base = -2.35, wall = 0.3;
+    for (let k = 0; k < 4; k++) { const y = base + k * 0.11, w = W + 0.35 - k * 0.1; segs.push([V(-w, y), V(w, y)]); segs.push([V(-w, y), V(-w, y + 0.11)]); segs.push([V(w, y), V(w, y + 0.11)]); }
+    const y0 = base + 0.44;
+    // pillared halls (mandapas) either side, under stepped pyramidal roofs
+    for (const sg of [1, -1]) {
+      for (let i = 0; i < 4; i++) { const x = sg * (1.95 + i * 0.6); segs.push([V(x - 0.07, y0), V(x - 0.07, wall)], [V(x + 0.07, y0), V(x + 0.07, wall)], [V(x - 0.13, wall - 0.08), V(x + 0.13, wall - 0.08)]); }
+      segs.push([V(sg * 1.6, wall), V(sg * W, wall)], [V(sg * 1.6, wall + 0.1), V(sg * W, wall + 0.1)], [V(sg * W, wall), V(sg * W, wall + 0.1)]);
+      for (let k = 0; k < 5; k++) { const y = wall + 0.1 + k * 0.17, a = 1.65 + k * 0.17, b = W - 0.1 - k * 0.32; segs.push([V(sg * a, y + 0.17), V(sg * b, y + 0.17)], [V(sg * b, y), V(sg * (b - 0.08), y + 0.17)]); }
+    }
+    // the sanctum wall and its pilasters
+    segs.push([V(-1.6, y0), V(-1.6, wall)], [V(1.6, y0), V(1.6, wall)], [V(-1.6, wall), V(1.6, wall)]);
+    for (const x of [-1.15, -0.55, 0.55, 1.15]) segs.push([V(x, y0), V(x, wall)]);
+    segs.push([V(-0.32, y0), V(-0.32, -0.4)], [V(0.32, y0), V(0.32, -0.4)], [V(-0.32, -0.4), V(0, -0.15)], [V(0, -0.15), V(0.32, -0.4)]);   // the doorway
+    // the curvilinear tower (shikhara): its storeys narrowing upward, the ribbed amalaka and the finial
+    const prof = (u) => 1.55 * (1 - 0.72 * u ** 1.35);
+    const H0 = wall, H1 = 2.45, N = 11;
+    for (let k = 0; k < N; k++) {
+      const ya = H0 + (H1 - H0) * k / N, yb = H0 + (H1 - H0) * (k + 1) / N;
+      const xa = prof(k / N), xb = prof((k + 1) / N);
+      for (const sg of [1, -1]) segs.push([V(sg * xa, ya), V(sg * xb, yb)]);
+      segs.push([V(-xb, yb), V(xb, yb)]);
+      segs.push([V(-xb * 0.35, ya), V(-xb * 0.35, yb)], [V(xb * 0.35, ya), V(xb * 0.35, yb)]);   // the central offset (ratha)
+    }
+    const ar = prof(1), ay = H1 + 0.09;
+    for (let i = 0; i < 24; i++) { const a0 = (i / 24) * Math.PI * 2, a1 = ((i + 1) / 24) * Math.PI * 2; segs.push([V(Math.cos(a0) * ar * 1.25, ay + Math.sin(a0) * 0.09), V(Math.cos(a1) * ar * 1.25, ay + Math.sin(a1) * 0.09)]); }
+    for (let i = -3; i <= 3; i++) segs.push([V(i * ar * 0.3, ay - 0.08), V(i * ar * 0.3, ay + 0.08)]);
+    segs.push([V(-0.12, ay + 0.1), V(0.12, ay + 0.1)], [V(-0.12, ay + 0.1), V(-0.07, ay + 0.3)], [V(0.12, ay + 0.1), V(0.07, ay + 0.3)], [V(0, ay + 0.3), V(0, ay + 0.48)]);
+    const ys = segs.map(([a, b]) => (a.y + b.y) / 2);
+    const lo = Math.min(...ys), hi = Math.max(...ys);
+    add(segmentsLine(segs, lineOpts(0.9, { headColor: '#e8bd6e', head: 0.012, orderFn: (a, b) => ((a.y + b.y) / 2 - lo) / (hi - lo) * 0.75, stagger: 0.75 })), 0.55, 1.5, ease.inOutSine);
+  } else {
     const segs = [];
     const W = 3.9, base = -2.35;
     for (let k = 0; k < 3; k++) { const y = base + k * 0.13, w = W + 0.35 - k * 0.12; segs.push([V(-w, y), V(w, y)]); segs.push([V(-w, y), V(-w, y + 0.13)]); segs.push([V(w, y), V(w, y + 0.13)]); }
@@ -389,9 +452,10 @@ export function create(ctx, segment) {
   };
   addLabel('A', 1.1, -0.3, 0.6); addLabel('B', -1.12, -0.3, 0.65);   // below the axis: the centred caption sits on it
   addLabel('φ', 2.1 + gw * 0.5, 2.2, 1.1, { h: 0.26 }); addLabel('φ', -2.1 - gw * 0.5, 2.2, 1.15, { h: 0.26 });
-  addLabel('1 : 1.618', 3.25, -2.3, 1.2, { mono: true, h: 0.11 });
-  addLabel('MODVLVS · I', -3.2, -2.3, 1.25, { mono: true, h: 0.11 });
-  addLabel('De architectura', 0, 2.9, 1.3, { h: 0.22 });
+  const LB = FILM.opening?.labels ?? {};
+  addLabel(LB.ratio ?? '1 : 1.618', 3.25, -2.3, 1.2, { mono: true, h: 0.11 });
+  addLabel(LB.module ?? 'MODVLVS · I', -3.2, -2.3, 1.25, { mono: true, h: 0.11 });
+  addLabel(LB.title ?? 'De architectura', 0, 2.9, 1.3, { h: 0.22 });
 
   const sparksA = makeSparks(sparkList, { drag: 3, trail: 0.05, grav: [0, -0.45, 0], size: 0.016, intensity: 2.4 });
   fx.add(sparksA.group);
@@ -449,8 +513,8 @@ export function create(ctx, segment) {
   const titleGroup = new THREE.Group();
   titleGroup.position.set(0, 0, Z_TITLE);
   scene.add(titleGroup);
-  const L1 = letters3D('ACHIEVEMENTS OF', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.16 });
-  const L2 = letters3D('WESTERN CIVILIZATION', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.1 });
+  const L1 = letters3D(FILM.opening?.line1 ?? 'ACHIEVEMENTS OF', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.16 });
+  const L2 = letters3D(FILM.opening?.line2 ?? 'WESTERN CIVILIZATION', { size: 1, depth: 0.55, bevel: 0.03, tracking: 0.1 });
   const s2 = 10.4 / L2.width, s1 = 6.1 / L1.width;
   const Y1 = 0.95, Y2 = -0.3;
   const marbleMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture({ seed: 7 }), color: '#e6dccb', roughness: 0.3, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.2, emissive: new THREE.Color('#ffe7c2'), emissiveIntensity: 0, envMapIntensity: 0.4 });
@@ -497,7 +561,7 @@ export function create(ctx, segment) {
 
   // Subtitle (per-glyph kinetic reveal) + gold rule
   // the title's subtitle: the achievements shown stand on the ideas of many civilizations
-  const sub = new KineticText('Built on the ideas of the whole world', { font: FONTS.display, weight: 400, height: 0.235, letterSpacing: 0.28, color: '#f1dcb4', intensity: 1.0 });
+  const sub = new KineticText(FILM.opening?.subtitle ?? 'Built on the ideas of the whole world', { font: FONTS.display, weight: 400, height: 0.235, letterSpacing: 0.28, color: '#f1dcb4', intensity: 1.0 });
   sub.position.set(0, -1.42, 0.05);
   titleGroup.add(sub);
   const ruleL = progressLine([V(0, -0.98, 0.05), V(-5.3, -0.98, 0.05)], { color: GOLD, headColor: GOLD_HOT, intensity: 1.6, head: 0.05 });

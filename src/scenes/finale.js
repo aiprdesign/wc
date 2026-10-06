@@ -25,6 +25,7 @@
 // layout moves the story to the left of an Earth framed on the right.
 import * as THREE from 'three';
 import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../timeline.js';
+import { FILM } from '../film.js';
 import { TextPlane, KineticText, FONTS } from '../lib/text.js';
 import { MorphParticles } from '../lib/particles.js';
 import { sat, lerp, smoothstep, ease, rng, envelope, timeWarp, TAU } from '../lib/math.js';
@@ -32,7 +33,7 @@ import { makeRig, EARTH_R } from './finale-rig.js';
 import { bakeEarth, earthVert, earthFrag, atmoVert, atmoFrag } from './finale-earth.js';
 
 const R = EARTH_R;
-const EARTH_SPIN0 = 1.1;
+const EARTH_SPIN0 = FILM.finale?.spin ?? 1.1;   // (each film turns its own lands toward the sunrise)
 
 // ---- motes: the montage's stars → streaming → orbital halo ---------------------------
 const moteCommon = /* glsl */ `
@@ -377,8 +378,8 @@ export function create(ctx, segment) {
 
   const L = (sq, wd) => lerp(sq, wd, W);
   // story (Cormorant italic, per-letter)
-  const story1 = new KineticText('From the agora to the Moon,', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, letterSpacing: 0.01, color: '#f1e6d0', intensity: 1.0 });
-  const story2 = new KineticText('twenty-five centuries of reason, courage and invention.', { font: FONTS.serif, italic: true, weight: 400, height: 0.2, letterSpacing: 0.012, color: '#e7dcc6', intensity: 0.95 });
+  const story1 = new KineticText(FILM.finale?.story1 ?? 'From the agora to the Moon,', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, letterSpacing: 0.01, color: '#f1e6d0', intensity: 1.0 });
+  const story2 = new KineticText(FILM.finale?.story2 ?? 'twenty-five centuries of reason, courage and invention.', { font: FONTS.serif, italic: true, weight: 400, height: 0.2, letterSpacing: 0.012, color: '#e7dcc6', intensity: 0.95 });
   story1.scale.setScalar(L(3.05, 1.7) / kineticWidth(story1, 0.2));
   story2.scale.setScalar(L(4.15, 2.05) / kineticWidth(story2, 0.2));
   story1.position.set(L(0, -1.1), L(0.735, 0.16) * M, 0);
@@ -392,7 +393,7 @@ export function create(ctx, segment) {
   hud.scene.add(ideas);
   // title
   const title = new TextPlane('ACHIEVEMENTS', { font: FONTS.display, weight: 600, height: 0.3, letterSpacing: 0.12, color: '#f4e3c1', intensity: 1.0, depthWrite: false });
-  const sub = new TextPlane('OF WESTERN CIVILIZATION', { font: FONTS.display, weight: 400, height: 0.3, letterSpacing: 0.34, color: '#ecdfc4', intensity: 0.95, depthWrite: false });
+  const sub = new TextPlane(FILM.finale?.title2 ?? 'OF WESTERN CIVILIZATION', { font: FONTS.display, weight: 400, height: 0.3, letterSpacing: 0.34, color: '#ecdfc4', intensity: 0.95, depthWrite: false });
   const inkW = (tp, h) => tp.worldWidth - 0.25 * h * 2;
   const titleW = L(3.75, 2.55);
   const tS = titleW / inkW(title, 0.3), sS = (titleW * 0.985) / inkW(sub, 0.3);
@@ -407,7 +408,7 @@ export function create(ctx, segment) {
   rule.position.set(0, (titleY - titleH * 0.5 + subY + subH * 0.5) / 2 + 0.002 + 0.13 * (titleY - subY), 0);
   rule.renderOrder = 11;
   // the title's subtitle (italic serif), then the closing line
-  const world = new TextPlane('Built on the ideas of the whole world', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, color: '#f1e2c6', intensity: 1.0, depthWrite: false });
+  const world = new TextPlane(FILM.finale?.world ?? 'Built on the ideas of the whole world', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, color: '#f1e2c6', intensity: 1.0, depthWrite: false });
   const wS = L(1.9, 1.35) / inkW(world, 0.2);
   world.scale.setScalar(wS);
   const worldY = subY - subH * 0.5 - L(0.2, 0.13) * M * 0.5 - 0.2 * wS * 0.5;

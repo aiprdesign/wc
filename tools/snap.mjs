@@ -1,5 +1,7 @@
 // Headless frame capture for development / review.
 //   node tools/snap.mjs --times 0.5,3,7.2 --out /tmp/frames [--width 1280] [--port 8123] [--audio]
+//     [--film india] [--only indus,language] (build just those chapters: much quicker) [--aspect 9:16]
+// Times are STORY seconds.
 // Serves the repo, renders exact film times through window.__film.renderFrame and saves PNGs.
 import { createRequire } from 'node:module';
 import http from 'node:http';
@@ -39,14 +41,14 @@ const page = await browser.newPage({ viewport: { width, height: Math.round(width
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
-const q = `still&t=${times[0]}&q=${args.q ?? 'low'}${args.aspect ? `&aspect=${args.aspect}` : ''}${args.audio ? '' : '&noaudio'}`;
+const q = `still&t=${times[0]}&q=${args.q ?? 'low'}${args.aspect ? `&aspect=${args.aspect}` : ''}${args.audio ? '' : '&noaudio'}${args.only ? `&only=${args.only}` : ''}${args.film ? `&film=${args.film}` : ''}`;
 await page.goto(`http://localhost:${port}/?${q}`);
-await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 240000 });
+await page.waitForFunction(() => window.__film?.ready === true, null, { timeout: 1200000 });
 for (const t of times) {
   const t0 = Date.now();
   await page.evaluate((T) => window.__film.renderStory(T), t);
   const file = path.join(out, `f_${t.toFixed(2).padStart(6, '0')}.png`);
-  await page.locator('#film').screenshot({ path: file });
+  await page.locator('#film').screenshot({ path: file, timeout: 600000 });
   console.log(`t=${t} → ${file} (${Date.now() - t0} ms)`);
 }
 if (errors.length) console.log('Console:\n' + [...new Set(errors)].slice(0, 40).join('\n'));

@@ -13,6 +13,7 @@ import { Ambient } from './audio/ambient.js';
 import { loadFonts } from './lib/text.js';
 import { loadSceneModules } from './scenes/index.js';
 import { SEGMENTS, FILM_DURATION as DURATION, TIME_SCALE, OUTPUT_ASPECT } from './timeline.js';
+import { FILM, FILM_ID, FILM_TOKEN, filmHash } from './film.js';
 
 const params = new URLSearchParams(location.search);
 const QUALITY = { lite: 1280, low: 1280, medium: 1920, high: 2560, ultra: 3840 };
@@ -44,7 +45,7 @@ async function loadScore() {
   // ?livescore (or ?novo, the score without the narrator) composes it in the browser instead.
   if (!params.has('livescore') && !params.has('novo')) {
     try {
-      const res = await fetch('assets/audio/soundtrack.mp3');
+      const res = await fetch(FILM.soundtrack);
       if (res.ok) {
         const data = await res.arrayBuffer();
         const buffer = await new OfflineAudioContext(2, 1, 48000).decodeAudioData(data);
@@ -127,7 +128,9 @@ async function boot() {
   setStatus('Composing score…');
   // The score renders in an OfflineAudioContext while the sequences are being built.
   const scorePromise = loadScore();
-  const modules = await loadSceneModules({ only: chapter });
+  // ?still&only=<id>[,<id>…] (development previews): build just those chapters, quickly
+  const onlyIds = params.has('still') && params.get('only') ? params.get('only').split(',').filter((id) => SEGMENTS.some((s) => s.id === id)) : null;
+  const modules = await loadSceneModules({ only: chapter || (onlyIds?.length === 1 ? onlyIds[0] : '') });
   setLoad(0.2);
   // where playback starts (?t= is story time; AR Lite: its chapter)
   const chapterSeg = chapter ? SEGMENTS.find((s) => s.id === chapter) : null;
@@ -137,7 +140,10 @@ async function boot() {
   // only the chapter(s) at the start (and the next one) before Play, the rest behind (streamAll below).
   // AR / VR Lite (#arlite) always streams, chapter by chapter, letting go of the chapters behind it.
   const streaming = !params.has('still') && (params.get('stream') === '1' || !!chapter);
-  if (!streaming) {
+  if (onlyIds?.length) {
+    await engine.setup(modules);
+    for (const id of onlyIds) { setStatus(`Building · ${id}`); await engine.buildSegment(id); }
+  } else if (!streaming) {
     await engine.init(modules, (p, seg) => { setLoad(0.2 + p * 0.65); setStatus(`Building · ${seg.title}`); });
     // compile every shader and upload every texture now, so real-time playback never stalls on them
     // (skipped for automated stills, which render single frames; ?prewarm=1 forces it)
@@ -286,7 +292,7 @@ function pickChapter() {
       if (!id) return;
       box.hidden = true;
       document.body.classList.remove('arlite-picking');
-      try { history.replaceState(history.state, '', `#arlite&${id}`); } catch { /* ignore */ }
+      try { history.replaceState(history.state, '', `#${filmHash(`arlite&${id}`)}`); } catch { /* ignore */ }
       resolve(id);
     });
   });
@@ -333,21 +339,21 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
   const curHash = { 1: 'square', [16 / 9]: '16x9', [9 / 16]: '9x16', [2 / 3]: '2x3', [4 / 5]: '4x5' }[OUTPUT_ASPECT] ?? 'wide';
   document.querySelectorAll('.formats-pick a').forEach((a) => {
     a.setAttribute('aria-current', String(a.dataset.fmt === curHash));
-    if (HASH_EXPERIENCE) a.setAttribute('href', `#${a.dataset.fmt}&experience`);
+    a.setAttribute('href', `#${filmHash(HASH_EXPERIENCE ? `${a.dataset.fmt}&experience` : a.dataset.fmt)}`);
   });
   const cur = fmts.findIndex(([h]) => h === curHash);
   $('btn-format').textContent = fmts[Math.max(0, cur)][1];
-  $('btn-format').addEventListener('click', () => { location.hash = fmts[(Math.max(0, cur) + 1) % fmts.length][0]; });
+  $('btn-format').addEventListener('click', () => { location.hash = filmHash(fmts[(Math.max(0, cur) + 1) % fmts.length][0]); });
   $('btn-fs').addEventListener('click', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()));
   $('btn-wav').addEventListener('click', () => {
     if (!score?.encodeWav) return;
-    download(score.encodeWav(score.buffer), 'achievements-of-western-civilization-score.wav');
+    download(score.encodeWav(score.buffer), `${FILM.slug}-score.wav`);
   });
   $('btn-rec').addEventListener('click', async () => {
     if (body.classList.contains('recording') || exp.active || exporter.active) return;
     body.classList.add('recording', 'playing');
     intro.classList.add('hidden');
-    await player.record((blob, ext = 'webm') => { body.classList.remove('recording'); download(blob, `achievements-of-western-civilization.${ext}`); });
+    await player.record((blob, ext = 'webm') => { body.classList.remove('recording'); download(blob, `${FILM.slug}.${ext}`); });
   });
 
   // Scrubbing
@@ -501,7 +507,7 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
     // (capture phase: set before the button's own handler ends the session, which may end at once)
     $('xr-overlay').addEventListener('click', (e) => { if (e.target.closest?.('[data-xr="exit"]')) toChapters = true; }, true);
   }
-  $('arlite-close').addEventListener('click', () => { player.pause(); location.hash = 'arlite'; });
+  $('arlite-close').addEventListener('click', () => { player.pause(); location.hash = filmHash('arlite'); });
   body.classList.toggle('has-vr', !!xrs?.vr);
   body.classList.toggle('has-ar', !!xrs?.ar);
   if (HASH_XR) body.classList.add(`xr-link-${HASH_XR}`);
@@ -620,6 +626,48 @@ $('install-app')?.addEventListener('click', async () => {
 });
 addEventListener('appinstalled', () => { const b = $('install-app'); if (b) b.hidden = true; });
 
+// THE TWO FILMS: the start screen names the film this page plays and links to the other one
+// (#india / #western: a new film needs a fresh engine, so the hashchange reloads)
+function setupFilmScreen() {
+  document.title = FILM.title;
+  const [a, b] = FILM.title.split(/ (?=[A-Z][a-z]+ Civilization$)/);
+  const h1 = intro.querySelector('h1');
+  if (h1 && b) h1.innerHTML = `${a}<br />${b}`;
+  const sub = intro.querySelector('.sub');
+  if (sub) sub.textContent = FILM.opening?.subtitle ?? sub.textContent;
+  $('film')?.setAttribute('aria-label', `${FILM.title} — real-time film`);
+  const note = intro.querySelector('.note');
+  if (note && FILM.note) note.textContent = FILM.note;
+  document.querySelectorAll('.formats-pick a').forEach((el) => el.setAttribute('href', `#${filmHash(el.dataset.fmt)}`));
+  document.querySelectorAll('.film-pick a').forEach((el) => el.setAttribute('aria-current', String(el.dataset.film === FILM_ID)));
+  // share card: this film's own address and QR code
+  const url = `aiprdesign.github.io/wc/${FILM_TOKEN ? `#${FILM_TOKEN}` : ''}`;
+  const card = intro.querySelector('.share-card');
+  if (card && FILM_TOKEN) {
+    const img = card.querySelector('img');
+    img.src = `assets/qr/film-${FILM_ID}.svg`; img.alt = `QR code that opens the film: ${url}`;
+    const link = card.querySelector('.sc-url');
+    link.href = `https://${url}`; link.textContent = url;
+  }
+  // VR / AR help: links and chapter codes for this film
+  document.querySelectorAll('#xr-help a.xh-qr-url, #xr-help .xh-copy').forEach((el) => {
+    if (el.dataset.copyHash) el.dataset.copyHash = `#${filmHash(el.dataset.copyHash.slice(1))}`;
+    else if (el.getAttribute('href')?.startsWith('#')) el.setAttribute('href', `#${filmHash(el.getAttribute('href').slice(1))}`);
+  });
+  if (FILM_TOKEN) {
+    const urlAr = document.querySelector('#xr-help .xh-url-ar');
+    if (urlAr) urlAr.textContent = `#${filmHash('arlite')}`;
+    const chs = document.querySelector('#xr-help .xh-chs');
+    if (chs) chs.innerHTML = SEGMENTS.map((sg, i) => `<a class="xh-ch" href="#${filmHash(`arlite&${sg.id}`)}" title="Open ${sg.title} in AR Lite"><img src="assets/qr/ar-${FILM_ID}-${sg.id}.svg" width="120" height="120" alt="QR code: ${sg.title} in AR" /><span><b>${String(i + 1).padStart(2, '0')}</b> ${sg.title}</span></a>`).join('');
+    document.querySelectorAll('#xr-help .xh-qr img').forEach((img) => {
+      const k = /qr\/(vr|ar)\.svg/.exec(img.getAttribute('src'))?.[1];
+      if (k) { img.src = `assets/qr/${k}-${FILM_ID}.svg`; img.alt = img.alt.replace(/#(vr|arlite)/, `#${filmHash(k === 'vr' ? 'vr' : 'arlite')}`); }
+    });
+    document.querySelectorAll('#xr-help .xh-qr-url').forEach((el) => { el.textContent = el.textContent.replace(/#(vr|arlite)$/, (m, k) => `#${filmHash(k)}`); });
+  }
+}
+setupFilmScreen();
+
 boot().catch((e) => {
   console.error(e);
   setStatus(`Could not start: ${e.message}`);
@@ -632,10 +680,10 @@ addEventListener('unhandledrejection', (e) => bootError(e.reason?.message || Str
 
 // start screen: share the film's home page (system share sheet on phones, else copy the link)
 $('share-film')?.addEventListener('click', async (e) => {
-  const b = e.currentTarget, url = 'https://aiprdesign.github.io/wc/';
+  const b = e.currentTarget, url = `https://aiprdesign.github.io/wc/${FILM_TOKEN ? `#${FILM_TOKEN}` : ''}`;
   const done = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Share link'; }, 1800); };
   try {
-    if (navigator.share) { await navigator.share({ title: 'Achievements of Western Civilization', text: 'A short film: Achievements of Western Civilization', url }); return; }
+    if (navigator.share) { await navigator.share({ title: FILM.title, text: `A short film: ${FILM.title}`, url }); return; }
     await navigator.clipboard.writeText(url);
     done('Link copied');
   } catch (err) { if (err?.name !== 'AbortError') done('Copy failed'); }

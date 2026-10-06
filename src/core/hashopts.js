@@ -6,13 +6,16 @@
 // puts the full fragment back with restoreHash(). ?experience works too on a normal server.
 // `#vr` / `#ar` (also combined, `#experience&vr`) put the headset / tabletop button forward on the
 // start screen; a tap still starts the session (browsers only open one from a user gesture).
+import { FILM, FILMS } from '../film.js';
+
 const raw = (globalThis.location?.hash ?? '').slice(1);
 const tokens = raw.toLowerCase().split(/[&+,]/).filter(Boolean);
 // `#arlite` (AR Lite, for phones): only one chapter is built, so it loads where the whole film
 // can't; `#arlite&classical` names the chapter (otherwise the start screen offers a picker).
-// The chapter ids mirror timeline.js SEGMENTS (not imported: see above).
-export const CHAPTERS = ['opening', 'classical', 'civic', 'renaissance', 'science', 'industrial', 'electricity', 'medicine', 'flight', 'moonshot', 'computing', 'knowledge', 'frontier', 'montage', 'finale'];
-const OPTIONS = new Set(['experience', 'vr', 'ar', 'arlite', ...CHAPTERS]);
+// The chapter ids are the film's own (src/films/<id>.js through film.js, which reads the full fragment
+// before this module narrows it). `#india` picks the film (film.js).
+export const CHAPTERS = FILM.SEGMENTS.map((s) => s.id);
+const OPTIONS = new Set(['experience', 'vr', 'ar', 'arlite', ...Object.keys(FILMS), ...CHAPTERS]);
 
 export const HASH_EXPERIENCE = tokens.includes('experience') || new URLSearchParams(globalThis.location?.search ?? '').has('experience');
 const has = (k) => tokens.includes(k) || new URLSearchParams(globalThis.location?.search ?? '').has(k);

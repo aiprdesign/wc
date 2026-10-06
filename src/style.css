@@ -78,6 +78,17 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 @media (prefers-reduced-motion: reduce) { .guide-card, .guide-card .gc-arrow { transition: none; } }
 
 /* intro: frame-format links */
+/* the two films: a segmented switch at the top of the start screen */
+.film-pick { display: inline-flex; gap: 0; margin: 0 auto 18px; border: 1px solid rgba(226, 195, 138, 0.32); border-radius: 999px; padding: 3px; background: rgba(0, 0, 0, 0.25); }
+.film-pick a { display: grid; gap: 1px; text-align: center; color: var(--ink); text-decoration: none; border-radius: 999px; padding: 6px 16px 7px; transition: background 0.2s, color 0.2s; }
+.film-pick .fp-n { font-size: 9px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--dim, rgba(239, 232, 220, 0.55)); }
+.film-pick .fp-t { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 15px; letter-spacing: 0.02em; }
+.film-pick a:hover, .film-pick a:focus-visible { background: rgba(226, 195, 138, 0.1); outline: none; }
+.film-pick a[aria-current="true"] { background: rgba(226, 195, 138, 0.18); color: var(--gold); }
+.film-pick a[aria-current="true"] .fp-n { color: var(--gold); }
+.film-pick[hidden], .arlite .film-pick, .arlite-picking .film-pick { display: none; }
+@media (max-width: 420px) { .film-pick a { padding: 5px 11px 6px; } .film-pick .fp-t { font-size: 13px; } }
+
 .formats-pick { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 8px; margin: 18px 0 0; font-size: 11px; letter-spacing: 0.08em; }
 .formats-pick span { color: var(--dim, rgba(239, 232, 220, 0.55)); text-transform: uppercase; letter-spacing: 0.3em; margin-right: 4px; }
 .formats-pick a { color: var(--ink); text-decoration: none; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; padding: 5px 11px; }
