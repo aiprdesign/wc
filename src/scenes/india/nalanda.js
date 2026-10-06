@@ -22,13 +22,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES } from '../../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, rng, timeWarp } from '../../lib/math.js';
-import { progressTube, progressLine, circlePoints } from '../../lib/lines.js';
+import { progressLine, circlePoints } from '../../lib/lines.js';
 import { Dust } from '../../lib/particles.js';
 import { glowSprite } from '../../lib/materials.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
 import { TextPlane, FONTS } from '../../lib/text.js';
 import { pulse } from '../../lib/rhythm.js';
-import { brickMaterial, groundMaterial, skyMaterial, monkGeometries, buildMap, proj, DEG } from './nalanda-assets.js';
+import { brickMaterial, groundMaterial, skyMaterial, monkGeometries, buildMap, ribbon, proj, DEG } from './nalanda-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffcf85', LABEL = '#ffe3b3';
@@ -36,14 +36,14 @@ const VH = 8.32;                                        // vihara wall height: t
 const VIH_X = [-110, -55, 0, 110];                      // the row of monasteries (the hero at x = 0)
 const TEM_X = [-82.5, -27.5, 27.5, 82.5], TEM_Z = -66;  // the row of temples across the avenue
 const AVE = { z0: -44, z1: -28 };
-const LIB = { x0: 40, x1: 62, z0: -14, z1: 14 };        // the library, east of the hero vihara
+const LIB = { x0: 46, x1: 68, z0: -14, z1: 14 };        // the library, east of the hero vihara
 const FL = [0.6, 5.6, 10.6, 15.6], LIB_TOP = 20.6;      // library floor levels
 
 // sky / light keys over the shot: today (afternoon) → golden hour → dusk → night
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const SKY_KEYS = [
-  { t: 0.0, hor: C(0.62, 0.6, 0.6), zen: C(0.18, 0.3, 0.55), sun: C(1.0, 0.86, 0.7), si: 3.0 },
-  { t: 1.1, hor: C(0.7, 0.55, 0.42), zen: C(0.17, 0.26, 0.5), sun: C(1.0, 0.72, 0.45), si: 3.4 },
+  { t: 0.0, hor: C(0.78, 0.72, 0.62), zen: C(0.22, 0.38, 0.66), sun: C(1.0, 0.84, 0.64), si: 3.8 },
+  { t: 1.1, hor: C(0.8, 0.6, 0.42), zen: C(0.19, 0.3, 0.56), sun: C(1.0, 0.7, 0.42), si: 3.8 },
   { t: 1.9, hor: C(0.85, 0.42, 0.2), zen: C(0.12, 0.16, 0.36), sun: C(1.0, 0.52, 0.24), si: 3.4 },
   { t: 2.4, hor: C(0.34, 0.16, 0.16), zen: C(0.04, 0.06, 0.16), sun: C(0.9, 0.3, 0.12), si: 0.5 },
   { t: 2.9, hor: C(0.07, 0.06, 0.1), zen: C(0.01, 0.015, 0.045), sun: C(0.5, 0.2, 0.1), si: 0.0 },
@@ -73,12 +73,25 @@ export function create(ctx, segment) {
   // ------------------------------------------------------------------------------------- materials
   const U = { uRise: { value: -50 }, uDelayK: { value: 0.26 }, uCentre: { value: new THREE.Vector2(0, -8) }, uHot: { value: 0 } };
   const vihMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.6, jag: 5 });
-  const temMat = brickMaterial(U, { ruinLo: 5.0, ruinHi: 14.0, jag: 9, tint: [0.96, 0.9, 0.86] });
+  const temMat = brickMaterial(U, { ruinLo: 8.0, ruinHi: 12.0, jag: 3, tint: [0.96, 0.9, 0.86] });
   const libMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.2, jag: 5 });
   const facadeMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.2, jag: 5, slice: true });
   const woodMat = new THREE.MeshStandardMaterial({ color: '#3a2214', roughness: 0.75 });
   const voidMat = new THREE.MeshStandardMaterial({ color: '#0b0705', roughness: 1 });
   const waterMat = new THREE.MeshStandardMaterial({ color: '#05080a', roughness: 0.08, metalness: 0 });
+  // parts that are not brick (shelves, dark doorways) exist only once the build front has passed them
+  const frontClip = (mat, key) => {
+    mat.userData.noDetail = true;
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, U);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW; uniform float uRise, uDelayK; uniform vec2 uCentre;')
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vFW.y > uRise - uDelayK * length(vFW.xz - uCentre) - 0.3) discard;');
+    };
+    mat.customProgramCacheKey = () => 'nalanda-clip-' + key;
+  };
+  frontClip(woodMat, 'wood'); frontClip(voidMat, 'void');
   const GU = { uEarth: { value: 0 }, uMapMix: { value: 0 }, uMapK: { value: 1 } };
   const groundMat = groundMaterial(GU);
 
@@ -195,15 +208,21 @@ export function create(ctx, segment) {
       box(M, cx - h, cx + h, y0, y1, cz - h, cz + h);
       ring(M, cx, cz, h, h + 0.35, y1 - 0.4, y1);                     // cornice
       ring(M, cx, cz, h, h + 0.2, y0, y0 + 0.45);                      // base band
-      const pr = h / 3;
-      ring(M, cx, cz, h - 0.01, h + 0.55, y0 + 0.45, y1 - 0.4);        // (thin projecting frame)
-      box(voidMat, cx - h - 0.6, cx + h + 0.6, y0 + 0.45, y1 - 0.4, cz - pr, cz + pr);   // shadowed recess behind the frame (hidden inside)
+      // central projections on the four faces, each with its own cornice
+      const pr = h / 3, PJ = 0.6, yt = y1 - 0.4;
+      box(M, cx - pr, cx + pr, y0, yt, cz + h, cz + h + PJ); box(M, cx - pr, cx + pr, y0, yt, cz - h - PJ, cz - h);
+      box(M, cx + h, cx + h + PJ, y0, yt, cz - pr, cz + pr); box(M, cx - h - PJ, cx - h, y0, yt, cz - pr, cz + pr);
+      box(M, cx - pr - 0.2, cx + pr + 0.2, yt, y1, cz + h, cz + h + PJ + 0.3); box(M, cx - pr - 0.2, cx + pr + 0.2, yt, y1, cz - h - PJ - 0.3, cz - h);
+      box(M, cx + h, cx + h + PJ + 0.3, yt, y1, cz - pr - 0.2, cz + pr + 0.2); box(M, cx - h - PJ - 0.3, cx - h, yt, y1, cz - pr - 0.2, cz + pr + 0.2);
+      // pilasters
       const n = Math.max(3, Math.round(h * 2 / 2.3));
       for (let k = 0; k <= n; k++) {
         const p = -h + 0.5 + k * (2 * h - 1) / n;
-        for (const [ax, sgn] of [['x', 1], ['x', -1], ['z', 1], ['z', -1]]) {
-          if (ax === 'x') box(M, cx + p - 0.24, cx + p + 0.24, y0 + 0.45, y1 - 0.4, cz + sgn * (h + 0.55), cz + sgn * (h + 0.78));
-          else box(M, cx + sgn * (h + 0.55), cx + sgn * (h + 0.78), y0 + 0.45, y1 - 0.4, cz + p - 0.24, cz + p + 0.24);
+        const f = Math.abs(p) < pr - 0.3 ? h + PJ : h;
+        if (Math.abs(Math.abs(p) - pr) < 0.35) continue;
+        for (const sgn of [1, -1]) {
+          box(M, cx + p - 0.24, cx + p + 0.24, y0 + 0.45, yt, cz + sgn * f, cz + sgn * (f + 0.22));
+          box(M, cx + sgn * f, cx + sgn * (f + 0.22), y0 + 0.45, yt, cz + p - 0.24, cz + p + 0.24);
         }
       }
     }
@@ -288,7 +307,6 @@ export function create(ctx, segment) {
     box(M, x1 - 1, x1, 0, LIB_TOP + 0.4, z0 + 1, z1 - 1);                                          // east wall
     for (const y of FL.slice(1)) box(M, x0 + 1, x1 - 1, y - 0.4, y, z0 + 1, z1 - 1);               // floors
     box(M, x0, x1, LIB_TOP, LIB_TOP + 0.4, z0, z1);                                                  // roof
-    ring(M, (x0 + x1) / 2, 0, 0, 0, 0, 0);
     // roof parapet and outer pilasters / string courses on the three solid sides
     box(M, x0, x1, LIB_TOP + 0.4, LIB_TOP + 1.3, z0, z0 + 0.4); box(M, x0, x1, LIB_TOP + 0.4, LIB_TOP + 1.3, z1 - 0.4, z1);
     box(M, x1 - 0.4, x1, LIB_TOP + 0.4, LIB_TOP + 1.3, z0, z1); box(M, x0, x0 + 0.4, LIB_TOP + 0.4, LIB_TOP + 1.3, z0, z1);
@@ -319,6 +337,9 @@ export function create(ctx, segment) {
     }
   }
 
+  // the scholars' groups in the hero courtyard (the last one on the raised platform)
+  const GROUPS = [V(-6.0, 0.1, -6.2), V(4.2, 0.1, -7.6), V(-7.4, 0.1, 3.4), V(1.0, 0.1, 6.6), V(8.1, 1.0, 0.0)];
+  for (const g of GROUPS.slice(0, 4)) box(vihMat, g.x - 0.6, g.x + 0.6, 0.1, 0.35, g.z - 0.6, g.z + 0.6);
   for (const x of VIH_X) vihara(x, 0, x === 0);
   for (const x of TEM_X) temple(x, TEM_Z);
   library();
@@ -329,7 +350,7 @@ export function create(ctx, segment) {
   const meshes = [];
   for (const [mat, list] of accs) {
     const m = new THREE.Mesh(mergeGeometries(list), mat);
-    m.castShadow = m.receiveShadow = mat !== waterMat;
+    m.castShadow = mat !== waterMat && mat !== woodMat && mat !== voidMat; m.receiveShadow = true;
     if (mat.userData.depth) m.customDepthMaterial = mat.userData.depth;
     m.frustumCulled = false;
     scene.add(m); meshes.push(m);
@@ -339,10 +360,11 @@ export function create(ctx, segment) {
   const bundleMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
   bundleMat.userData.noDetail = true;
   bundleMat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, GL);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSeed; varying float vSeed; varying float vWY;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvSeed = aSeed; vWY = (modelMatrix * vec4(transformed, 1.0)).y;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlowY, uGlowK, uTime; varying float vSeed; varying float vWY;')
+    Object.assign(sh.uniforms, GL, U);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSeed; varying float vSeed; varying float vWY; varying vec2 vWXZ;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvSeed = aSeed; vec4 bwp = modelMatrix * vec4(transformed, 1.0); vWY = bwp.y; vWXZ = bwp.xz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uGlowY, uGlowK, uTime, uRise, uDelayK; uniform vec2 uCentre; varying float vSeed; varying float vWY; varying vec2 vWXZ;')
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vWY > uRise - uDelayK * length(vWXZ - uCentre) - 0.3) discard;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         float fy = 0.6 + 5.0 * floor((vWY - 0.6) / 5.0);
         float lit = smoothstep(fy + vSeed * 1.6, fy + vSeed * 1.6 + 1.2, uGlowY);
@@ -371,7 +393,6 @@ export function create(ctx, segment) {
   const rm = rng(630);
   const seated = [], walkers = [];
   // courtyard groups round their teachers (the hero vihara), and the platform
-  const GROUPS = [V(-6.0, 0.1, -6.2), V(4.2, 0.1, -7.6), V(-7.4, 0.1, 3.4), V(1.0, 0.1, 6.6), V(8.1, 1.0, 0.0)];
   GROUPS.forEach((g, gi) => {
     const plat = gi === 4;
     seated.push({ p: g.clone().add(V(0, plat ? 0 : 0.25, 0)), ry: plat ? -Math.PI / 2 : rm() * 6.28, s: 1.05, c: 2 });      // the teacher
@@ -419,7 +440,7 @@ export function create(ctx, segment) {
   for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; const r = 12.9 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a))); lamp(V(Math.cos(a) * r, 1.0, Math.sin(a) * r), 0.55, 0); }
   for (const x of VIH_X) if (x !== 0) { for (let k = 0; k < 6; k++) lamp(V(x - 8 + rm() * 16, 0.8, -8 + rm() * 16), 0.8, 1); }
   for (const x of VIH_X) for (const s of [-1, 1]) lamp(V(x + s * 2.7, 3.0, 22.8), 0.9, 1);
-  for (let x = -160; x <= 160; x += 11) { lamp(V(x, 2.6, AVE.z1 + 0.3), 1.0, 1); lamp(V(x + 5.5, 2.6, AVE.z0 - 0.3), 1.0, 1); }
+  for (let x = -160; x <= 160; x += 11) { lamp(V(x, 2.6, AVE.z1 + 0.3), 0.6, 1); lamp(V(x + 5.5, 2.6, AVE.z0 - 0.3), 0.6, 1); }
   for (const tx of TEM_X) { for (let k = 0; k < 6; k++) for (const s of [-1, 1]) lamp(V(tx + s * 3.4, (k * 6 + 3) * 11 / 36 + 1.4, TEM_Z + 12 + (36 - k * 6 - 3) * 0.44), 0.8, 1); lamp(V(tx, 16.6, TEM_Z + 5.8), 1.6, 1); }
   for (const y of FL) { for (const zc of [-3.2, 3.2]) lamp(V(LIB.x0 + 2.6, y + 0.7, zc), 0.6, 2); for (const zc of [-6.8, 0, 6.8]) lamp(V(LIB.x0 + 9.5, y + 3.6, zc), 0.8, 2); }
   const lampGeo = new THREE.BufferGeometry();
@@ -473,8 +494,8 @@ export function create(ctx, segment) {
   scene.add(dust);
 
   // ------------------------------------------------------------------------------------- labels
-  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: -2.2, dy: -1.3, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
-  ruinLabel.position.set(-20.6, 1.2, 4);
+  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: 2.6, dy: -1.6, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
+  ruinLabel.position.set(-4, 1.8, 17.2);
   const vihLabel = new Callout('VIHARA · MONASTERY', { dx: -4, dy: 5, size: 1.0, color: LABEL, sub: 'STUDENT CELLS ROUND A COURTYARD', intensity: 1.5 });
   vihLabel.position.set(-19.5, VH + 1.2, -19.5);
   const temLabel = new Callout('CHAITYA · TEMPLE', { dx: 4, dy: 4.5, size: 1.0, color: LABEL, sub: 'STEPPED BRICK · CORNER TOWERS', intensity: 1.5 });
@@ -520,7 +541,7 @@ export function create(ctx, segment) {
     const L = curve0.getLength(), N = 80, pts = [];
     for (let i = 0; i <= N; i++) { const u = i / N, p = curve0.getPointAt(u); p.y = Math.sin(Math.PI * u) * Math.min(4, R.lift * L * 0.06) + 0.05; pts.push(p); }
     const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
-    const tube = progressTube(curve, { radius: 0.11, segments: 160, radial: 5, color: R.col, intensity: 2.2 });
+    const tube = ribbon(curve, { n: 160, width: 0.0032, color: R.col, intensity: 1.5 });
     tube.renderOrder = 7;
     mapFx.add(tube);
     const head = glowSprite({ color: '#ffd9a0', intensity: 3, scale: 2.2 });
@@ -564,20 +585,20 @@ export function create(ctx, segment) {
   // ------------------------------------------------------------------------------------- camera
   // t < T_ZOOM: keyframes (position, look); from T_ZOOM: orbit about a target with a log-distance climb
   const T_ZOOM = 2.8;
-  const G_MAP = proj(97.5, 27.0).multiplyScalar(DEG);                  // the map's centre at the end (metres)
-  const RK = [[2.8, Math.log(24)], [3.12, Math.log(27)], [3.3, Math.log(70)], [3.46, Math.log(1400)], [3.62, Math.log(6.5e4)], [3.82, Math.log(8.5e5)], [4.1, Math.log(3.7e6)], [4.5, Math.log(5.9e6)], [5.0, Math.log(7.0e6)]];
-  const R_END = 5.9e6;
+  const G_MAP = proj(98.0, 14.5).multiplyScalar(DEG);                  // the map's centre at the end (metres)
+  const RK = [[2.8, Math.log(33)], [3.12, Math.log(37)], [3.3, Math.log(90)], [3.46, Math.log(1600)], [3.62, Math.log(7e4)], [3.82, Math.log(9e5)], [4.1, Math.log(4.4e6)], [4.5, Math.log(7.3e6)], [5.0, Math.log(8.4e6)]];
+  const R_END = 7.3e6;
   const zoomU = (r) => sat((Math.log(r) - Math.log(30)) / (Math.log(R_END) - Math.log(30)));
-  const libTarget = (t, out) => out.set(LIB.x0 + 9, lerp(6.2, 15.5, ramp(t, T_ZOOM, 3.25, ease.inOutSine)), lerp(1.5, 0, ramp(t, T_ZOOM, 3.25))) ;
+  const libTarget = (t, out) => out.set(LIB.x0 + 7, lerp(5.5, 13.5, ramp(t, T_ZOOM, 3.25, ease.inOutSine)), lerp(-1.5, -3, ramp(t, T_ZOOM, 3.25)));
   const _g = new THREE.Vector3(), _d = new THREE.Vector3();
   function zoomCam(t, pos, look) {
     const r = Math.exp(timeWarp(t, RK)), u = zoomU(r);
     libTarget(t, _g);
     const sig = Math.min(1.1, r / R_END);
     _g.lerp(G_MAP, sig);
-    const yaw = lerp(0.06, -Math.PI / 2 + 0.12, smoothstep(0.1, 0.62, u));
+    const yaw = lerp(-0.3, -Math.PI / 2 + 0.12, smoothstep(0.1, 0.62, u));
     const pLib = lerp(-0.13, -0.05, ramp(t, T_ZOOM, 3.2));
-    const pitch = pLib * (1 - smoothstep(0, 0.12, u)) + timeWarp(u, [[0, 0], [0.1, -0.25], [0.38, -1.42], [0.6, -1.42], [1.0, -0.9], [1.2, -0.85]]);
+    const pitch = pLib * (1 - smoothstep(0, 0.12, u)) + timeWarp(u, [[0, 0], [0.1, -0.25], [0.38, -1.42], [0.6, -1.42], [1.0, -1.1], [1.2, -1.06]]);
     _d.set(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw));
     look.copy(_g); pos.copy(_g).addScaledVector(_d, -r);
     return r;
@@ -585,11 +606,11 @@ export function create(ctx, segment) {
   const kp = V(0, 0, 0), kl = V(0, 0, 0);
   zoomCam(T_ZOOM, kp, kl);
   const KEYS = [
-    [-0.3, V(-32.5, 2.1, 32.0), V(0, 0.9, -1)],
-    [1.05, V(-28.0, 3.1, 27.0), V(1, 1.2, -2)],
-    [1.95, V(-30, 21, 40), V(6, 4, -18)],
-    [2.42, V(-9, 12.8, 15.5), V(2.5, 0.6, -2.5)],
-    [2.64, V(10, 13.5, 8.5), V(38, 7, 2)],
+    [-0.3, V(-29.5, 5.2, 28.5), V(0, 0.2, -3)],
+    [1.05, V(-25.0, 6.6, 22.5), V(2, 0.8, -5)],
+    [1.95, V(-50, 33, 56), V(6, 2, -24)],
+    [2.3, V(-16.5, 12.6, 6.5), V(3, 0.2, -1)],
+    [2.56, V(-12, 12.2, 5.5), V(5, 0.5, -1.5)],
     [T_ZOOM, kp.clone(), kl.clone()],
   ];
   const KX = (sel, c) => KEYS.map((k) => [k[0], k[sel][c]]);
@@ -601,7 +622,7 @@ export function create(ctx, segment) {
   const bloom = { strength: 0.7 };
   const SK = { hor: new THREE.Color(), zen: new THREE.Color(), sun: new THREE.Color(), si: 0 };
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler(), _up = V(0, 1, 0);
-  const fogBase = new THREE.Color();
+  const fogBase = new THREE.Color(), _cs = new THREE.Vector3();
   let lastT = 0, lastR = 30;
 
   function update(t, info) {
@@ -648,23 +669,23 @@ export function create(ctx, segment) {
     hemi.groundColor.setRGB(0.22, 0.13, 0.08).multiplyScalar(1 - night * 0.7);
     hemi.intensity = lerp(0.55, 0.35, night);
     scene.environmentIntensity = lerp(0.32, 0.07, night);
-    fogBase.copy(SK.hor).multiplyScalar(0.85);
+    fogBase.copy(SK.hor).lerp(new THREE.Color(0.45, 0.45, 0.48), 0.35).multiplyScalar(0.8);
     scene.fog.color.copy(fogBase);
-    scene.fog.density = lerp(0.0042, 0.0026, ramp(t, tRise, tRise + 1)) / (1 + Math.max(0, alt - 30) / 60);
+    scene.fog.density = lerp(0.0019, 0.0014, ramp(t, tRise, tRise + 1)) / (1 + Math.max(0, alt - 30) / 60);
 
     // ---- lamps and lamplight
     const lampK = ramp(t, tSch - 0.4, tSch + 0.25);
     const libK = ramp(t, tLib - 0.25, tLib + 0.15);
     const fadeUp = 1 - ramp(Math.log(r), Math.log(4e4), Math.log(4e5));
-    lampMat.uniforms.uG.value.set(lampK * 1.0, ramp(t, tSch - 0.6, tSch + 0.3) * 0.9, Math.max(libK, lampK * 0.4) * 1.1).multiplyScalar(fadeUp * (1 + 0.12 * pulse(T, { decay: 6 }) * lampK));
+    lampMat.uniforms.uG.value.set(lampK * 1.0, ramp(t, tSch - 0.25, tSch + 0.4) * 0.8, Math.max(libK, lampK * 0.4) * 1.1).multiplyScalar(fadeUp * (1 + 0.12 * pulse(T, { decay: 6 }) * lampK));
     lampMat.uniforms.uTime.value = t;
     lampMat.uniforms.uVP.value = info?.height ?? 800;
     yardLights.forEach((l, i) => { l.intensity = lampK * (9 + 2 * Math.sin(t * 9 + i * 2)) * (1 - ramp(t, 3.0, 3.4)); });
     GL.uGlowY.value = lerp(-2, 22, ramp(t, tLib - 0.12, tLib + 0.42, ease.inOutSine));
-    GL.uGlowK.value = libK * 2.2;
+    GL.uGlowK.value = libK * 0.75;
     GL.uTime.value = t;
     libLight.position.set(LIB.x0 + 6, Math.min(GL.uGlowY.value, 18) + 1.5, 0);
-    libLight.intensity = libK * 70 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
+    libLight.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
     libGlow.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
     facadeMat.userData.u.uSlice.value = t < tLib - 0.15 ? -100 : lerp(0.4, LIB_TOP + 1.5, ramp(t, tLib - 0.12, tLib + 0.38, ease.inOutSine));
 
@@ -713,7 +734,7 @@ export function create(ctx, segment) {
     MU.uMap.value = mapK;
     MU.uR.value = lerp(0.0, 75, ramp(t, 3.5, 4.25, ease.inOutSine));
     const rp = (R) => ramp(t, tMap + R.t0, tMap + R.t0 + R.d, ease.inOutSine);
-    const camScale = (p) => camera.position.distanceTo(_p.copy(p).multiplyScalar(DEG)) / DEG;   // map-unit distance from the camera
+    const camScale = (p) => camera.position.distanceTo(_cs.copy(p).multiplyScalar(DEG)) / DEG;   // map-unit distance from the camera
     routes.forEach((R) => {
       const p = rp(R);
       R.tube.progress = p; R.tube.opacity = mapK;

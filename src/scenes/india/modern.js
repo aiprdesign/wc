@@ -167,20 +167,20 @@ export function create(ctx, segment) {
   const FX = 5.9;                         // violet filter
   const FL = V(7.2, YU, ZB);              // flask bulb centre
   const BULB = 0.32;
-  const DUMP_X = 8.5;
+  const DUMP_X = 8.32;
   const CB = V(13.4, -1.0, ZB);           // condensate plot centre
   const RAIL_Y = YU - 0.62;
   const FLOOR_Y = -2.1;
 
   // ============================================================================== lights
-  const slateKey = new THREE.SpotLight('#dfe9ff', 95, 22, 0.62, 0.85, 1.6);
-  slateKey.position.set(-2.6, 4.6, 6.0); slateKey.target.position.set(0.1, 0.1, 0);
+  const slateKey = new THREE.SpotLight('#dfe9ff', 110, 22, 0.72, 0.9, 1.6);
+  slateKey.position.set(-2.8, 4.6, 6.0); slateKey.target.position.set(-0.5, 0.1, 0);
   scene.add(slateKey, slateKey.target);
   const benchKey = new THREE.SpotLight('#d6e2ff', 36, 16, 0.5, 0.9, 1.6);
-  benchKey.position.set(5.6, 4.2, 4.0); benchKey.target.position.set(7.3, YU - 0.2, 0);
+  benchKey.position.set(6.6, 4.6, 2.4); benchKey.target.position.set(7.4, YU - 0.35, 0);
   scene.add(benchKey, benchKey.target);
   const becKey = new THREE.SpotLight('#cfdcff', 40, 16, 0.42, 0.9, 1.6);
-  becKey.position.set(11.6, 4.0, 4.2); becKey.target.position.copy(CB);
+  becKey.position.set(12.7, 4.8, 1.9); becKey.target.position.copy(CB);
   scene.add(becKey, becKey.target);
   const rim = new THREE.DirectionalLight('#8fa8ff', 1.1); rim.position.set(6, 3, -6); scene.add(rim);
   const chalkLight = new THREE.PointLight('#ffe8cc', 0, 2.5, 2); scene.add(chalkLight);
@@ -200,7 +200,7 @@ export function create(ctx, segment) {
   }));
   backdrop.position.set(6, 0, 0);
   scene.add(backdrop);
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(70, 64), new THREE.MeshStandardMaterial({ color: '#07080b', roughness: 0.5, metalness: 0.2, envMapIntensity: 0.08 }));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(70, 64), new THREE.MeshStandardMaterial({ color: '#040507', roughness: 0.62, metalness: 0.2, envMapIntensity: 0.08 }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(6, FLOOR_Y, 0); floor.material.userData.noDetail = true;
   scene.add(floor);
   const dustA = new Dust({ count: lite ? 700 : 1400, size: [9, 5, 6], center: [0, 0.3, 1.2], particleSize: 0.011, color: '#dbe6ff', opacity: 0.45, intensity: 1.2, seed: 31 });
@@ -216,23 +216,26 @@ export function create(ctx, segment) {
       const u = x / W, v = y / H;
       const n = fbm2(u * 5, v * 2.6, 3) * 0.5 + (R0() - 0.5) * 0.12;
       const l = 1 + n * 0.2, i = (y * W + x) * 4;
-      img.data[i] = 21 * l; img.data[i + 1] = 25 * l; img.data[i + 2] = 28 * l; img.data[i + 3] = 255;
+      img.data[i] = 29 * l; img.data[i + 1] = 34 * l; img.data[i + 2] = 38 * l; img.data[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     // erasure smudges: broad soft arcs of old chalk dust
     const R = rng(77);
     g.lineCap = 'round';
-    for (let i = 0; i < 26; i++) {
-      g.strokeStyle = `rgba(205,214,222,${0.015 + R() * 0.03})`; g.lineWidth = 14 + R() * 34;
-      g.shadowColor = 'rgba(205,214,222,0.2)'; g.shadowBlur = 20;
-      const x = R() * W, y = R() * H, r = 40 + R() * 140, a = R() * TAU;
-      g.beginPath(); g.arc(x, y, r, a, a + 0.6 + R() * 1.4); g.stroke();
+    // eraser wipes: long, slightly wavy horizontal passes, each a faint haze of chalk dust
+    for (let i = 0; i < 34; i++) {
+      g.strokeStyle = `rgba(205,214,222,${0.012 + R() * 0.02})`; g.lineWidth = 16 + R() * 26;
+      g.shadowColor = 'rgba(205,214,222,0.25)'; g.shadowBlur = 14;
+      const x = R() * W - 60, y = R() * H, l = 120 + R() * 380, a = (R() - 0.5) * 0.25;
+      g.beginPath(); g.moveTo(x, y);
+      g.bezierCurveTo(x + l * 0.33, y + Math.sin(a) * l * 0.33 + (R() - 0.5) * 20, x + l * 0.66, y + Math.sin(a) * l * 0.66 + (R() - 0.5) * 20, x + l, y + Math.sin(a) * l);
+      g.stroke();
     }
     g.shadowBlur = 0;
     // ghosts of earlier working, half wiped
-    g.fillStyle = 'rgba(220,228,235,0.05)';
+    g.fillStyle = 'rgba(220,228,235,0.028)';
     const ghosts = ['n = 1, 2, 3 ...', '1 + 2 + 3 + 4 + ...', 'q = e', 'x + 1/x', '1/1 + 1/4 + 1/9', '(1 - q)', '2, 3, 5, 7, 11, 13', 'e', 'k = 0'];
-    for (let i = 0; i < 18; i++) { g.font = fnt(18 + R() * 26, R() < 0.5); g.fillText(ghosts[i % ghosts.length], R() * W * 0.9, 30 + R() * (H - 40)); }
+    for (let i = 0; i < 18; i++) { g.font = fnt(16 + R() * 22, true); g.fillText(ghosts[i % ghosts.length], R() * W * 0.9, 30 + R() * (H - 40)); }
     return toTexture(c);
   })();
   const slateMat = new THREE.MeshStandardMaterial({ map: slateTex, roughness: 0.86, metalness: 0, envMapIntensity: 0.22 });
@@ -259,7 +262,7 @@ export function create(ctx, segment) {
   function chalkPlane(c, em, S, { x, y, align = 'center', t0, t1, intensity = 1.0, head = true, z = 0.004 }) {
     const k = em / S, w = c.width * k, h = c.height * k;
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: toTexture(c) }, uReveal: { value: 0 }, uSoft: { value: 0.025 }, uI: { value: intensity }, uOp: { value: 1 }, uColor: { value: new THREE.Color(CHALK) }, uPool: { value: V(0.2, 0.0, 0) }, uPoolR: { value: 2.6 } },
+      uniforms: { uMap: { value: toTexture(c) }, uReveal: { value: 0 }, uSoft: { value: 0.025 }, uI: { value: intensity }, uOp: { value: 1 }, uColor: { value: new THREE.Color(CHALK) }, uPool: { value: V(-0.4, 0.0, 0) }, uPoolR: { value: 3.0 } },
       vertexShader: chalkVert, fragmentShader: chalkFrag, transparent: true, depthWrite: false,
     });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
@@ -292,8 +295,8 @@ export function create(ctx, segment) {
     const S = 120;
     const c = chalkCanvas(Math.round(S * 1.5), (g) => runsDraw(g, [['1729 = 7 · 13 · 19']], 30, S * 1.05, S), 13);
     chalkPlane(c, 0.1, S, { x: -0.3, y: -0.62, t0: tR + 0.25, t1: tR + 0.6, intensity: 0.85, head: false });
-    const c2 = chalkCanvas(Math.round(S * 1.5), (g) => runsDraw(g, [['the smallest number that is a sum of two cubes in two ways', 'i']], 30, S * 1.05, S), 14);
-    chalkPlane(c2, 0.07, S, { x: 1.6, y: -0.62, t0: tR + 0.35, t1: tR + 0.85, intensity: 0.8, head: false });
+    const c2 = chalkCanvas(Math.round(S * 1.5), (g) => runsDraw(g, [['the smallest sum of two cubes in two ways', 'i']], 30, S * 1.05, S), 14);
+    chalkPlane(c2, 0.088, S, { x: 1.5, y: -0.62, t0: tR + 0.35, t1: tR + 0.85, intensity: 0.8, head: false });
   }
   // 1/π = (2√2 / 9801) Σ_{k=0}^{∞} (4k)! (1103 + 26390k) / ((k!)⁴ 396^{4k})   (Ramanujan, 1914)
   {
@@ -328,7 +331,7 @@ export function create(ctx, segment) {
       bar(x, b3);
       return x + b3;
     }, 15);
-    chalkPlane(c, 0.1, S, { x: -2.15, y: 0.3, t0: tR - 0.5, t1: tR + 0.35, intensity: 0.95 });
+    chalkPlane(c, 0.115, S, { x: -2.2, y: 0.32, t0: tR - 0.75, t1: tR + 0.3, intensity: 0.95 });
   }
   // partitions: p(n) with Ramanujan's congruence p(5k+4) ≡ 0 (mod 5) circled, and the Ferrers staircase of p(5) = 7
   {
@@ -364,7 +367,7 @@ export function create(ctx, segment) {
       });
       return runsDraw(g, [['  '], ['p', 'i'], ['(5) = 7']], x, S * 1.0, S);
     }, 19);
-    chalkPlane(c4, 0.12, S, { x: -3.2, y: -0.42, align: 'left', t0: tR - 0.45, t1: tR + 0.3, intensity: 0.85 });
+    chalkPlane(c4, 0.12, S, { x: -3.2, y: -0.42, align: 'left', t0: tR - 0.7, t1: tR + 0.25, intensity: 0.85 });
   }
 
   // ============================================================================== the beam
@@ -385,6 +388,7 @@ export function create(ctx, segment) {
     return DUMP_X + 1;
   };
   const frontGlow = glowSprite({ color: '#ffffff', intensity: 3, scale: 0.35 }); scene.add(frontGlow);
+  const WHITE_HOT = new THREE.Color(1, 0.96, 0.9);
 
   // ============================================================================== the optical bench
   const anod = new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.35, metalness: 0.85, envMapIntensity: 0.9 });
@@ -496,7 +500,7 @@ export function create(ctx, segment) {
       vCol = aCol;
       vec4 mv = modelViewMatrix * vec4(p, 1.0);
       gl_Position = projectionMatrix * mv;
-      gl_PointSize = uSize * (0.6 + 0.8 * fract(te * 91.7)) * (aCol.g > 0.25 ? 1.6 : 1.0) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
+      gl_PointSize = uSize * (0.6 + 0.8 * fract(te * 91.7)) * (aCol.g > 0.25 ? 1.25 : 1.0) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
     }`;
   const ptsFrag = /* glsl */ `varying vec3 vCol; varying float vA; uniform float uI;
     void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a * vA; if (a < 0.004) discard; gl_FragColor = vec4(vCol * uI, a); }`;
@@ -510,7 +514,7 @@ export function create(ctx, segment) {
       aO.set([x, FL.y, FL.z, tB + 0.02 + Math.pow(R(), 0.8) * 0.85], i * 4);
       const u = R() * 2 - 1, th = R() * TAU, s = Math.sqrt(1 - u * u);
       aD.set([s * Math.cos(th), u, s * Math.sin(th), 0.9 + R() * 1.4], i * 4);
-      const q = R(), k = q < 0.88 ? 0 : q < 0.945 ? 1 : q < 0.985 ? 2 : 3;
+      const q = R(), k = q < 0.93 ? 0 : q < 0.965 ? 1 : q < 0.99 ? 2 : 3;
       const c = cols[k]; col.set([c.r, c.g, c.b], i * 3);
     }
     const g = new THREE.BufferGeometry();
@@ -522,8 +526,8 @@ export function create(ctx, segment) {
   })();
 
   // spectrum plate: the photographic strip (as on Raman's spectrograms) and a spectrometer trace above it
-  const PLATE_W = 1.6, PLATE_H = 0.68;
-  const plate = new THREE.Group(); plate.position.set(8.55, -0.3, 0.0); plate.rotation.y = -0.4; scene.add(plate);
+  const PLATE_W = 1.36, PLATE_H = 0.58;
+  const plate = new THREE.Group(); plate.position.set(8.5, -0.74, 0.38); plate.rotation.y = -0.36; scene.add(plate);
   const lx = (lam) => (lam - LAM_A) / (LAM_B - LAM_A);
   const plateU = {
     uL: { value: LINES.map((l) => l.lam) }, uAmp: { value: LINES.map((l) => l.amp) }, uLit: { value: [0, 0, 0, 0] },
@@ -597,8 +601,8 @@ export function create(ctx, segment) {
       float tf = max(0.0, 1.0 - dot(q, q));
       return th + uC * pow(tf, 1.5);
     }`;
-  const becU = { uTh: { value: 0.36 }, uSig: { value: 0.62 }, uC: { value: 0 }, uCx: { value: 0.2 }, uCz: { value: 0.3 }, uO: { value: 1 }, uGlow: { value: 0 }, uRing: { value: 0 } };
-  const PEAK = 0.95;
+  const becU = { uTh: { value: 0.36 }, uSig: { value: 0.62 }, uC: { value: 0 }, uCx: { value: 0.25 }, uCz: { value: 0.36 }, uO: { value: 1 }, uGlow: { value: 0 }, uRing: { value: 0 } };
+  const PEAK = 0.78;
   const L = 3.4, NSEG = lite ? 96 : 140;
   const surfGeo = new THREE.PlaneGeometry(2, 2, NSEG, NSEG);
   surfGeo.rotateX(-Math.PI / 2);
@@ -616,12 +620,12 @@ export function create(ctx, segment) {
       }`,
     fragmentShader: /* glsl */ `uniform float uO, uGlow, uRing, uC; varying vec2 vP; varying float vH; varying vec3 vN; varying vec3 vW;
       vec3 ramp4(float h){
-        vec3 c0 = vec3(0.025, 0.03, 0.16), c1 = vec3(0.08, 0.32, 0.9), c2 = vec3(0.75, 0.95, 1.25), c3 = vec3(1.9, 1.35, 0.62);
+        vec3 c0 = vec3(0.025, 0.03, 0.16), c1 = vec3(0.08, 0.32, 0.9), c2 = vec3(0.4, 0.58, 0.9), c3 = vec3(1.05, 0.68, 0.3);
         return h < 0.22 ? mix(c0, c1, h / 0.22) : h < 0.55 ? mix(c1, c2, (h - 0.22) / 0.33) : mix(c2, c3, clamp((h - 0.55) / 0.4, 0.0, 1.0));
       }
       void main(){
         float r = length(vP);
-        float hn = vH / 1.12;
+        float hn = vH / 0.95;
         vec3 base = ramp4(hn);
         vec3 N = normalize(vN), Vd = normalize(cameraPosition - vW);
         float dif = 0.45 + 0.55 * max(0.0, dot(N, normalize(vec3(-0.4, 0.9, 0.5))));
@@ -630,7 +634,7 @@ export function create(ctx, segment) {
         vec2 gd = abs(fract(gq - 0.5) - 0.5) / fwidth(gq);
         float grid = 1.0 - smoothstep(0.4, 1.4, min(gd.x, gd.y));
         float ring = exp(-pow((r - uRing) * 18.0, 2.0)) * step(0.01, uRing) * (1.0 - smoothstep(0.6, 1.7, uRing));
-        vec3 col = base * (dif * 0.42 + 0.45 * smoothstep(0.35, 0.9, hn)) + base * grid * 1.15 + base * rimF * 0.6 + vec3(1.6, 1.25, 0.7) * ring * 1.5;
+        vec3 col = base * (dif * 0.42 + 0.4 * smoothstep(0.35, 0.9, hn)) + base * grid * (1.15 - 0.3 * smoothstep(0.4, 0.9, hn)) + base * rimF * 0.5 + vec3(1.6, 1.25, 0.7) * ring * 1.5;
         col *= 1.0 + uGlow * 0.6 * smoothstep(0.6, 1.0, hn);
         float a = min(1.0, 0.6 + 0.4 * grid + 0.3 * smoothstep(0.3, 0.8, hn)) * smoothstep(1.7, 1.15, r) * uO;
         gl_FragColor = vec4(col, a);
@@ -640,18 +644,19 @@ export function create(ctx, segment) {
   surface.position.copy(CB).add(V(0, 0.012, 0)); surface.renderOrder = 2; surface.frustumCulled = false;
   scene.add(surface);
   // the plot's platform: a dark disc with a brushed rim, axes and tick marks
+  const becRig = new THREE.Group(); scene.add(becRig);
   {
     const platMat = new THREE.MeshStandardMaterial({ color: '#0a0c11', roughness: 0.48, metalness: 0.5, envMapIntensity: 0.4 });
     platMat.userData.detail = { albedo: 0.04, rough: 0.25, grime: 0.03, scratch: 0.15, scale: 4 };
     const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.9, 0.06, 96), platMat);
-    plat.position.copy(CB).add(V(0, -0.03, 0)); scene.add(plat);
-    const rimR = new THREE.Mesh(new THREE.TorusGeometry(1.875, 0.012, 8, 160), steelM); rimR.rotation.x = Math.PI / 2; rimR.position.copy(CB); scene.add(rimR);
-    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, CB.y - FLOOR_Y, 32), anod); stand.position.set(CB.x, (CB.y + FLOOR_Y) / 2 - 0.03, CB.z); scene.add(stand);
+    plat.position.copy(CB).add(V(0, -0.03, 0)); becRig.add(plat);
+    const rimR = new THREE.Mesh(new THREE.TorusGeometry(1.875, 0.012, 8, 160), steelM); rimR.rotation.x = Math.PI / 2; rimR.position.copy(CB); becRig.add(rimR);
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, CB.y - FLOOR_Y, 32), anod); stand.position.set(CB.x, (CB.y + FLOOR_Y) / 2 - 0.03, CB.z); becRig.add(stand);
     const ax = [], y = CB.y + 0.004;
     ax.push([V(CB.x - 1.65, y, CB.z), V(CB.x + 1.65, y, CB.z)], [V(CB.x, y, CB.z - 1.65), V(CB.x, y, CB.z + 1.65)]);
     for (let i = -6; i <= 6; i++) { if (!i) continue; const d = i * 0.25; ax.push([V(CB.x + d, y, CB.z - 0.04), V(CB.x + d, y, CB.z + 0.04)], [V(CB.x - 0.04, y, CB.z + d), V(CB.x + 0.04, y, CB.z + d)]); }
     const axes = segmentsLine(ax, { color: '#9fb6e6', intensity: 0.7, opacity: 0.6, stagger: 0 });
-    scene.add(axes);
+    becRig.add(axes);
   }
   const axisLabel = new TextPlane('VELOCITY DISTRIBUTION', { font: FONTS.mono, height: 0.045, letterSpacing: 0.25, color: HUD_COL, intensity: 0.85 });
   axisLabel.rotation.x = -Math.PI / 2; axisLabel.position.set(CB.x, CB.y + 0.006, CB.z + 1.55); scene.add(axisLabel);
@@ -661,8 +666,8 @@ export function create(ctx, segment) {
   const NB = lite ? 2600 : 5200;
   const bU = {
     uT: { value: 0 }, uPh: { value: 0 }, uAmp: { value: 0.16 }, uViewport: { value: 800 }, uSize: { value: 0.032 },
-    uCB: { value: CB.clone() }, uFL: { value: FL.clone() }, uTip: { value: V(0, 0, 0) }, uSigScale: { value: 1 },
-    uStream0: { value: tB + 0.3 }, uCond0: { value: tC + 0.02 }, uGlow0: { value: tG - 0.05 }, uI: { value: 1.6 },
+    uCB: { value: CB.clone() }, uFL: { value: V(FL.x + 2.4, FL.y + 0.5, FL.z) }, uTip: { value: V(0, 0, 0) }, uSigScale: { value: 1 },
+    uStream0: { value: tB + 0.5 }, uCond0: { value: tC + 0.02 }, uGlow0: { value: tG - 0.05 }, uI: { value: 1.6 },
     uTh: becU.uTh, uSig: becU.uSig, uC: becU.uC, uCx: becU.uCx, uCz: becU.uCz,
   };
   const bosons = (() => {
@@ -674,7 +679,7 @@ export function create(ctx, segment) {
       const rr = Math.hypot(gx, gz); if (rr > 1.45) { gx *= 1.45 / rr; gz *= 1.45 / rr; }
       const u = Math.sqrt(R()), a = R() * TAU;
       aA.set([gx, gz, R(), R()], i * 4);
-      aB.set([Math.cos(a) * u * 0.17, Math.sin(a) * u * 0.26, R(), R()], i * 4);
+      aB.set([Math.cos(a) * u * 0.2, Math.sin(a) * u * 0.3, R(), R()], i * 4);
       const c = pal[Math.floor(R() * pal.length)]; col.set([c.r, c.g, c.b], i * 3);
     }
     const g = new THREE.BufferGeometry();
@@ -697,17 +702,17 @@ export function create(ctx, segment) {
           vec3 pos = uCB + vec3(p.x, h + 0.015 + (1.0 - c) * 0.05 * aB.z, p.y);
           // arrival: an arc from the flask
           float ar = clamp((uT - uStream0 - s * 0.25) / 0.4, 0.0, 1.0); float arE = ar * ar * (3.0 - 2.0 * ar);
-          vec3 src = uFL + (vec3(s, s2, aB.z) - 0.5) * 0.25;
+          vec3 src = uFL + (vec3(s, s2, aB.z) - 0.5) * vec3(0.2, 0.3, 0.2);
           vec3 mid = mix(src, pos, 0.5) + vec3(0.0, 0.9 + s2 * 0.6, (aB.w - 0.5) * 1.4);
           vec3 q = mix(mix(src, mid, arE), mix(mid, pos, arE), arE);
           // the flash: everything falls into the tip
           float k = clamp((uT - uGlow0 - s * 0.28) / 0.42, 0.0, 1.0); k = k * k * k;
           q = mix(q, uTip, k);
-          vCol = mix(aCol, vec3(1.0, 0.82, 0.52) * 1.5, c) * (1.0 + k * 2.5);
-          vA = step(0.0001, ar) * (0.35 + 0.65 * ar) * (1.0 - smoothstep(0.85, 1.0, k));
+          vCol = mix(aCol, vec3(1.0, 0.78, 0.48) * 0.5, c) * (1.0 + k * 2.0);
+          vA = smoothstep(0.0, 0.35, ar) * (1.0 - smoothstep(0.85, 1.0, k));
           vec4 mv = modelViewMatrix * vec4(q, 1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = uSize * (0.6 + 0.8 * aB.w) * (1.0 - 0.35 * c) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
+          gl_PointSize = uSize * (0.6 + 0.8 * aB.w) * (1.0 - 0.5 * c) * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
         }`,
       fragmentShader: /* glsl */ `varying vec3 vCol; varying float vA; uniform float uI;
         void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a * vA; if (a < 0.004) discard; gl_FragColor = vec4(vCol * uI, a); }`,
@@ -754,18 +759,18 @@ export function create(ctx, segment) {
   // ============================================================================== camera plan
   // per-component monotone Hermite keys (timeWarp): the slate track, a whip with the light, the bench,
   // a whip with the particle stream, the condensate, the push into the point
-  const TIP_Y = CB.y + 0.012 + 0.17 + 0.95;       // peak height at full condensate (thermal 0.17 + PEAK)
+  const TIP_Y = CB.y + 0.012 + 0.17 + 0.78;       // peak height at full condensate (thermal 0.17 + PEAK)
   const CAM = [
     [-0.15, V(-2.75, 0.2, 2.9), V(-1.95, 0.02, 0)],
-    [tR + 0.35, V(-0.95, 0.2, 3.3), V(-0.1, 0.02, 0)],
-    [tR + 0.68, V(0.75, 0.15, 3.2), V(1.55, -0.05, 0)],
+    [tR + 0.35, V(-0.75, 0.2, 3.35), V(0.0, 0.02, 0)],
+    [tR + 0.68, V(0.3, 0.15, 3.3), V(0.95, -0.05, 0)],
     [tB - 0.1, V(2.6, 0.12, 3.0), V(4.3, -0.3, 0)],
     [tB + 0.12, V(6.25, 0.3, 2.75), V(7.55, -0.22, 0)],
     [tC - 0.12, V(6.85, 0.36, 2.55), V(7.9, -0.16, 0)],
     [tC + 0.05, V(9.2, 0.8, 3.1), V(11.2, -0.4, 0)],
     [tC + 0.3, V(12.25, 0.95, 3.45), V(13.35, -0.42, 0)],
     [tG, V(12.75, 0.62, 2.55), V(13.4, -0.12, 0)],
-    [DUR + 0.05, V(13.28, 0.35, 0.95), V(13.4, TIP_Y - 0.05, 0)],
+    [DUR + 0.05, V(13.3, 0.4, 1.3), V(13.4, TIP_Y - 0.06, 0)],
   ];
   const camK = ['x', 'y', 'z'].map((c) => CAM.map((e) => [e[0], e[1][c]]));
   const lookK = ['x', 'y', 'z'].map((c) => CAM.map((e) => [e[0], e[2][c]]));
@@ -815,7 +820,7 @@ export function create(ctx, segment) {
       }
     }
     if (headPos) { chalkLight.position.copy(headPos).add(tmp.set(0, 0, 0.25)); chalkLight.intensity = 0.6; } else chalkLight.intensity = 0;
-    slateKey.intensity = 95 * (1 - 0.6 * ramp(t, tB, tB + 0.3));
+    slateKey.intensity = 110 * (1 - 0.6 * ramp(t, tB, tB + 0.3));
 
     // ------------------------------------------------------------ the light
     const fx = frontX(t);
@@ -831,7 +836,7 @@ export function create(ctx, segment) {
     frontGlow.visible = fOn;
     if (fOn) {
       frontGlow.position.set(fx, YU, ZB);
-      frontGlow.material.color.copy(fx < FX ? new THREE.Color(1, 0.96, 0.9) : VIOLET).multiplyScalar(fx < FX ? 2.4 : 3.2);
+      frontGlow.material.color.copy(fx < FX ? WHITE_HOT : VIOLET).multiplyScalar(fx < FX ? 2.4 : 3.2);
       frontGlow.scale.setScalar(fx < FX ? 0.3 : 0.38);
     }
     const tFilt = FRONT[1][0];
@@ -876,12 +881,13 @@ export function create(ctx, segment) {
     becU.uTh.value = lerp(0.38, 0.17, cool);
     becU.uSig.value = lerp(0.6, 0.46, cool);
     becU.uC.value = PEAK * ramp(t, tC + 0.05, tC + 0.5, ease.inOutCubic);
-    becU.uCx.value = 0.2; becU.uCz.value = 0.3;
+    becU.uCx.value = 0.25; becU.uCz.value = 0.36;
     const becIn = ramp(t, tB + 0.35, tC - 0.05);
-    becU.uO.value = becIn * (1 - 0.75 * ramp(t, tG + 0.1, DUR - 0.1));
-    becU.uGlow.value = ramp(t, tG - 0.1, DUR, ease.inQuad);
+    becU.uO.value = becIn * (1 - 0.85 * ramp(t, tG, tG + 0.55));
+    becU.uGlow.value = 0.5 * envelope(t, tG - 0.1, tG + 0.5, 0.1, 0.3);
     becU.uRing.value = t > tG ? (t - tG) * 2.6 : 0;
     surface.visible = becIn > 0.002;
+    becRig.visible = t > tC - 0.3;
     const peakH = becU.uTh.value + becU.uC.value;
     tip.set(CB.x, CB.y + 0.012 + peakH, CB.z);
     bU.uT.value = t; bU.uPh.value = phaseAt(t); bU.uViewport.value = info?.height ?? 800;
@@ -899,19 +905,19 @@ export function create(ctx, segment) {
     axisLabel.reveal = ramp(t, tC - 0.05, tC + 0.35, ease.outCubic);
 
     // ------------------------------------------------------------ the flash
-    const g = ramp(t, tG - 0.05, DUR, ease.inQuad);
-    const gl = ramp(t, tC + 0.3, tG, ease.outCubic) * 0.35 + g;
+    const g = ramp(t, tG, DUR + 0.1, ease.inCubic);
+    const gl = ramp(t, tC + 0.3, tG, ease.outCubic) * 0.3 + ramp(t, tG - 0.05, tG + 0.25, ease.outCubic) * 0.5 + g;
     tipGlow.visible = tipCore.visible = streak.visible = gl > 0.002;
     tipGlow.position.copy(tip); tipCore.position.copy(tip);
-    tipGlow.scale.setScalar(0.3 + 1.4 * g * g + 0.08 * beat);
-    tipGlow.material.color.set('#ffe6c4').multiplyScalar(1.2 + 3 * g);
-    tipCore.scale.setScalar(0.1 + 0.5 * g);
-    tipCore.material.color.setScalar(2 + 10 * g);
+    tipGlow.scale.setScalar(0.25 + 0.25 * ramp(t, tG - 0.05, tG + 0.25) + 2.2 * g + 0.06 * beat);
+    tipGlow.material.color.set('#ffe6c4').multiplyScalar(1.0 + 1.2 * ramp(t, tG - 0.05, tG + 0.25) + 3 * g);
+    tipCore.scale.setScalar(0.06 + 0.06 * ramp(t, tG - 0.05, tG + 0.2) + 0.6 * g);
+    tipCore.material.color.setScalar(2 + 4 * ramp(t, tG - 0.05, tG + 0.2) + 8 * g);
     streak.position.copy(tip); streak.quaternion.copy(camera.quaternion);
-    streak.scale.set(0.6 + 5.5 * g, 0.6 + 2 * g, 1);
+    streak.scale.set(0.8 + 1.6 * ramp(t, tG - 0.05, tG + 0.4, ease.outCubic) + 5 * g, 0.6 + 2 * g, 1);
     streak.material.uniforms.uI.value = gl * 1.6;
     tipLight.position.copy(tip).add(tmp.set(0, 0.15, 0));
-    tipLight.intensity = 1.5 * ramp(t, tC + 0.2, tG) + 16 * g;
+    tipLight.intensity = 1.5 * ramp(t, tC + 0.2, tG) + 3 * ramp(t, tG, tG + 0.3) + 14 * g;
     flashRings.forEach((m, i) => {
       const a = t - tG - i * 0.12;
       m.visible = a > 0;
@@ -939,7 +945,7 @@ export function create(ctx, segment) {
     else if (t < tC) { dof.focus = camera.position.distanceTo(FL); dof.range = 1.6; dof.amount = 0.35; }
     else { dof.focus = camera.position.distanceTo(tip) * 0.95; dof.range = 1.5; dof.amount = 0.35 * (1 - g); }
     bloom.strength = 0.72 + 0.15 * envelope(t, tB - 0.05, tB + 0.4, 0.05, 0.3) + 0.35 * g;
-    api.exposure = 1 + 0.35 * ramp(t, tG + 0.15, DUR, ease.inQuad);
+    api.exposure = 1 + 0.3 * ramp(t, tG + 0.3, DUR, ease.inQuad);
     api.harmony = lerp(0.65, 0.2, envelope(t, tB - 0.1, tC + 0.5, 0.15, 0.3));
   }
 

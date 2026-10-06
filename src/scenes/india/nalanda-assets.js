@@ -32,17 +32,17 @@ vec4 bCell(vec3 w, vec3 n){
   float s = along / BL + mod(course, 2.0) * 0.5;
   return vec4(floor(s), course, floor(other / 2.5), s);
 }
-float bRuin(vec2 xz){ return mix(uRuinLo, uRuinHi, bn2(xz * 0.07) * 0.65 + bn2(xz * 0.23 + 3.1) * 0.35); }
+float bRuin(vec2 xz){ float n = bn2(xz * 0.11) * 0.58 + bn2(xz * 0.37 + 3.1) * 0.32 + bn2(xz * 0.8 + 7.7) * 0.1; return mix(uRuinLo, uRuinHi, smoothstep(0.25, 0.8, n)); }
 // 1 where a brick stands: below the broken ruin line, or below the build front (which lags with distance
 // from the centre of the campus); hot = freshly laid
 float bVisible(vec3 w, vec3 n, out float hot){
   vec4 c = bCell(w - n * 0.02, n);
-  float r = bh3(c.xyz + 0.37);
+  float r = bh3(vec3(floor(c.x / 3.0), floor(c.y / 2.0), c.z) + 0.37) * 0.72 + bh3(c.xyz + 0.37) * 0.28;
   float base = c.y * BH;
   float ruin = bRuin(w.xz);
   float front = uRise - uDelayK * length(w.xz - uCentre);
   float tR = base + r * BH * uJag, tB = base + r * BH * 1.6;
-  hot = tR < ruin ? 0.0 : 1.0 - smoothstep(0.0, BH * 3.0, front - tB);
+  hot = tR < ruin ? 0.0 : 1.0 - smoothstep(0.0, BH * 2.0, front - tB);
   return (tR < ruin || tB < front) && w.y > uSlice ? 1.0 : 0.0;
 }`;
 
@@ -81,10 +81,10 @@ export function brickMaterial(U, { ruinLo = 0.5, ruinHi = 2.0, jag = 4, tint = [
           float mv = smoothstep(0.07, 0.07 + fv * 1.5 + 0.02, min(uv2, 1.0 - uv2));
           float brickM = ms * mv;
           float detail = 1.0 - smoothstep(0.1, 0.4, max(fs, fv));
-          vec3 bc = mix(vec3(0.25, 0.062, 0.03), vec3(0.45, 0.13, 0.058), r) * mix(0.82, 1.12, r2);
+          vec3 bc = mix(vec3(0.22, 0.058, 0.03), vec3(0.40, 0.12, 0.058), r) * mix(0.82, 1.12, r2);
           bc = mix(bc, vec3(0.16, 0.05, 0.03), step(0.94, r2) * 0.7);           // a few dark over-fired bricks
           vec3 mc = vec3(0.32, 0.25, 0.18);
-          vec3 avg = mix(vec3(0.34, 0.095, 0.045), mc, 0.14);
+          vec3 avg = mix(vec3(0.30, 0.088, 0.044), mc, 0.14);
           vec3 col = mix(avg, mix(mc, bc, brickM), detail);
           float bl = bn2(vBW.xz * 0.55 + vBW.y * 0.3) * 0.55 + bn2(vBW.xz * 2.7 - vBW.y * 1.3) * 0.45;
           col *= mix(0.74, 1.12, bl);
@@ -98,8 +98,8 @@ export function brickMaterial(U, { ruinLo = 0.5, ruinHi = 2.0, jag = 4, tint = [
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(0.82, 0.98, bMortar);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += vec3(1.0, 0.42, 0.12) * uHot * bHot * 5.0;
-        totalEmissiveRadiance += vec3(1.0, 0.7, 0.35) * 6.0 * (1.0 - smoothstep(0.0, 0.18, vBW.y - uSlice)) * step(-50.0, uSlice);`);
+        totalEmissiveRadiance += vec3(1.0, 0.42, 0.12) * uHot * bHot * 2.0;
+        totalEmissiveRadiance += vec3(1.0, 0.7, 0.35) * 1.2 * (1.0 - smoothstep(0.0, 0.08, vBW.y - uSlice)) * step(-50.0, uSlice);`);
   };
   m.customProgramCacheKey = () => 'nalanda-brick-v1';
   // shadows: the same discard, so the ruins cast ruin-shaped shadows
@@ -129,7 +129,7 @@ vec3 mapLand(vec2 p){
   float f = 0.0, a = 0.5, fr = 0.3;
   for (int i = 0; i < 9; i++) { f += a * mn(p * fr + float(i) * 7.13); fr *= 2.3; a *= 0.62; }
   float ridge = 1.0 - abs(mn(p * 0.9 + 3.0) * 2.0 - 1.0);
-  vec3 c = mix(vec3(0.020, 0.015, 0.010), vec3(0.060, 0.040, 0.022), smoothstep(0.35, 0.95, f));
+  vec3 c = mix(vec3(0.030, 0.022, 0.014), vec3(0.046, 0.032, 0.019), f);
   c += vec3(0.020, 0.012, 0.006) * pow(ridge, 6.0);
   return c;
 }
@@ -194,9 +194,9 @@ export function skyMaterial() {
 // Stylised monks: a robe of revolution (one shoulder bare is suggested by a sash band) and a shaven head.
 function lathe(points, seg = 12) { const g = new THREE.LatheGeometry(points.map(([r, y]) => new THREE.Vector2(r, y)), seg); g.computeVertexNormals(); return g; }
 export function monkGeometries() {
-  const standRobe = lathe([[0, 0], [0.25, 0], [0.27, 0.08], [0.24, 0.6], [0.21, 1.1], [0.2, 1.3], [0.17, 1.42], [0.08, 1.49], [0, 1.5]]);
+  const standRobe = lathe([[0, 0], [0.2, 0], [0.22, 0.06], [0.2, 0.5], [0.19, 0.95], [0.2, 1.22], [0.21, 1.34], [0.17, 1.44], [0.07, 1.5], [0, 1.5]]);
   const standHead = new THREE.SphereGeometry(0.105, 10, 8); standHead.translate(0, 1.6, 0);
-  const seatRobe = lathe([[0, 0], [0.44, 0], [0.45, 0.08], [0.38, 0.2], [0.24, 0.32], [0.2, 0.55], [0.18, 0.72], [0.08, 0.79], [0, 0.8]]);
+  const seatRobe = lathe([[0, 0], [0.4, 0], [0.42, 0.06], [0.4, 0.16], [0.22, 0.22], [0.17, 0.3], [0.16, 0.5], [0.19, 0.66], [0.17, 0.74], [0.07, 0.8], [0, 0.8]]);
   const seatHead = new THREE.SphereGeometry(0.105, 10, 8); seatHead.translate(0, 0.9, 0);
   return { standRobe, standHead, seatRobe, seatHead };
 }
@@ -316,7 +316,7 @@ export function buildMap(M) {
         float head = 1.0 - smoothstep(0.0, 6.0, uR - vD);
         gl_FragColor = vec4(uColor * uI * (0.55 + 2.5 * head) * uMap, 1.0);
       }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
   });
   const segs = [], dist = [];
   const addLine = (pts, closed) => {
@@ -349,4 +349,50 @@ export function buildMap(M) {
   river.renderOrder = 4; river.frustumCulled = false;
   group.add(river);
   return { group, ocean, land, coast, river };
+}
+
+// A route of light: a ribbon of constant on-screen width along a curve, drawn start → end by `progress`.
+export function ribbon(curve, { n = 160, width = 0.0032, color = '#ffd08a', intensity = 1.6 } = {}) {
+  const pts = curve.getSpacedPoints(n);
+  const pos = [], nxt = [], side = [], uu = [], idx = [];
+  pts.forEach((p, i) => {
+    const q = i < n ? pts[i + 1] : p.clone().multiplyScalar(2).sub(pts[i - 1]);
+    for (const sd of [-1, 1]) { pos.push(p.x, p.y, p.z); nxt.push(q.x, q.y, q.z); side.push(sd); uu.push(i / n); }
+    if (i < n) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aNext', new THREE.Float32BufferAttribute(nxt, 3));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 1));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(uu, 1));
+  g.setIndex(idx);
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uProgress: { value: 0 }, uOpacity: { value: 1 }, uW: { value: width }, uColor: { value: new THREE.Color(color) }, uI: { value: intensity } },
+    vertexShader: `attribute vec3 aNext; attribute float aSide, aU; uniform float uW; varying float vSide, vU;
+      void main(){
+        vec4 a = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 b = projectionMatrix * modelViewMatrix * vec4(aNext, 1.0);
+        float asp = projectionMatrix[1][1] / projectionMatrix[0][0];
+        vec2 d = (b.xy / b.w - a.xy / a.w) * vec2(asp, 1.0);
+        d = length(d) > 1e-6 ? normalize(d) : vec2(1.0, 0.0);
+        vec2 o = vec2(-d.y, d.x) * uW * aSide;
+        o.x /= asp;
+        a.xy += o * a.w;
+        vSide = aSide; vU = aU;
+        gl_Position = a;
+      }`,
+    fragmentShader: `uniform float uProgress, uOpacity, uI; uniform vec3 uColor; varying float vSide, vU;
+      void main(){
+        if (vU > uProgress) discard;
+        float e = 1.0 - smoothstep(0.2, 1.0, abs(vSide));
+        float head = (1.0 - smoothstep(0.0, 0.06, uProgress - vU)) * step(uProgress, 0.999);
+        gl_FragColor = vec4(uColor * uI * (1.0 + 3.0 * head) * e * uOpacity, 1.0);
+      }`,
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.frustumCulled = false;
+  Object.defineProperty(mesh, 'progress', { get() { return m.uniforms.uProgress.value; }, set(v) { m.uniforms.uProgress.value = v; mesh.visible = v > 0 && m.uniforms.uOpacity.value > 0; } });
+  Object.defineProperty(mesh, 'opacity', { get() { return m.uniforms.uOpacity.value; }, set(v) { m.uniforms.uOpacity.value = v; mesh.visible = v > 0 && m.uniforms.uProgress.value > 0; } });
+  return mesh;
 }

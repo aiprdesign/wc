@@ -111,30 +111,31 @@ function neckGeometry(lite) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
     parts.push(prep(g));
   }
-  const lathe = (pts, seg = 128) => prep(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg));
-  parts.push(lathe([[0, 0.6], [0.262, 0.6], [0.262, 0.6], [0.262, 0.64], [0.25, 0.645], [0.25, 0.69], [0.25, 0.69], [0.4, 0.69], [0.4, 0.69], [0.438, 0.693], [0.44, 0.708], [0.43, 0.712], [0.43, 0.712],
-    [0.43, 0.97], [0.43, 0.97], [0.44, 0.972], [0.442, 0.985], [0.43, 0.99], [0.43, 0.99], [0, 0.99]], 160));
+  const lathe = (pts, seg = 128) => { const g = new THREE.LatheGeometry(pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]).map(([r, y]) => new THREE.Vector2(r, y)), seg); g.computeVertexNormals(); return prep(g); };
+  parts.push(lathe([[0.2, 0.6], [0.262, 0.6], [0.262, 0.6], [0.262, 0.64], [0.25, 0.645], [0.25, 0.69], [0.25, 0.69], [0.4, 0.69], [0.4, 0.69], [0.438, 0.693], [0.44, 0.708], [0.43, 0.712], [0.43, 0.712],
+    [0.43, 0.97], [0.43, 0.97], [0.44, 0.972], [0.442, 0.985], [0.43, 0.99], [0.43, 0.99], [0.03, 0.99]], 160));
+  const cap = new THREE.CircleGeometry(0.035, 12); cap.rotateX(-Math.PI / 2); cap.translate(0, 0.99, 0); parts.push(prep(cap));
   return mergeGeometries(parts);
 }
 
 // 24-spoke wheel authored flat (facing +z), radius 1
-export function wheelParts({ spokes = 24, rimIn = 0.84, rimOut = 1, hub = 0.17, depth = 0.1, lobes = true } = {}) {
+export function wheelParts({ spokes = 24, rimIn = 0.84, rimOut = 1, hub = 0.17, depth = 0.1, lobes = true, lo = false } = {}) {
   const parts = [];
   const ring = new THREE.Shape(); ring.absarc(0, 0, rimOut, 0, TAU, false);
   const hole = new THREE.Path(); hole.absarc(0, 0, rimIn, 0, TAU, true); ring.holes.push(hole);
-  const rg = new THREE.ExtrudeGeometry(ring, { depth, bevelEnabled: true, bevelThickness: depth * 0.25, bevelSize: 0.02, bevelSegments: 2, curveSegments: 96 });
+  const rg = new THREE.ExtrudeGeometry(ring, { depth, bevelEnabled: true, bevelThickness: depth * 0.25, bevelSize: 0.02, bevelSegments: lo ? 1 : 2, curveSegments: lo ? 40 : 96 });
   rg.translate(0, 0, -depth / 2); parts.push(prep(rg));
   // spokes: slender lozenges, widest a third of the way out
   const sp = new THREE.Shape(), r0 = hub * 0.9, r1 = rimIn + 0.01, w = 0.032;
   sp.moveTo(r0, 0); sp.quadraticCurveTo(lerp(r0, r1, 0.3), w * 1.3, r1, w * 0.45); sp.lineTo(r1, -w * 0.45); sp.quadraticCurveTo(lerp(r0, r1, 0.3), -w * 1.3, r0, 0);
-  const sg = new THREE.ExtrudeGeometry(sp, { depth: depth * 0.6, bevelEnabled: true, bevelThickness: depth * 0.12, bevelSize: 0.006, bevelSegments: 1, curveSegments: 8 });
+  const sg = new THREE.ExtrudeGeometry(sp, { depth: depth * 0.6, bevelEnabled: true, bevelThickness: depth * 0.12, bevelSize: 0.006, bevelSegments: 1, curveSegments: lo ? 3 : 8 });
   sg.translate(0, 0, -depth * 0.3);
   const spk = prep(sg);
   for (let i = 0; i < spokes; i++) parts.push(spk.clone().rotateZ(i / spokes * TAU));
   // hub: a boss with a ring round it
-  const hb = new THREE.CylinderGeometry(hub, hub, depth * 1.4, 48); hb.rotateX(Math.PI / 2); parts.push(prep(hb));
-  const hr = new THREE.TorusGeometry(hub, depth * 0.22, 8, 48); hr.translate(0, 0, depth * 0.5); parts.push(prep(hr));
-  const hc = new THREE.SphereGeometry(hub * 0.55, 20, 10); hc.scale(1, 1, 0.6); hc.translate(0, 0, depth * 0.7); parts.push(prep(hc));
+  const hb = new THREE.CylinderGeometry(hub, hub, depth * 1.4, lo ? 16 : 48); hb.rotateX(Math.PI / 2); parts.push(prep(hb));
+  const hr = new THREE.TorusGeometry(hub, depth * 0.22, lo ? 5 : 8, lo ? 16 : 48); hr.translate(0, 0, depth * 0.5); parts.push(prep(hr));
+  const hc = new THREE.SphereGeometry(hub * 0.55, lo ? 10 : 20, lo ? 5 : 10); hc.scale(1, 1, 0.6); hc.translate(0, 0, depth * 0.7); parts.push(prep(hc));
   // little lobes on the inner rim between the spokes (as on the flag's chakra)
   if (lobes) for (let i = 0; i < spokes; i++) {
     const a = (i + 0.5) / spokes * TAU, l = new THREE.CylinderGeometry(0.032, 0.032, depth * 0.8, 12, 1, false, 0, Math.PI);
@@ -228,7 +229,7 @@ function lionPrims() {
 export function capitalGeometries(lite) {
   const R = CAP.abacusR;
   // abacus wheels (stone, in relief), at the four lions' feet
-  const wheelFlat = wheelParts({ depth: 0.12, lobes: false });
+  const wheelFlat = wheelParts({ depth: 0.12, lobes: false, lo: true });
   wheelFlat.scale(CAP.wheelR, CAP.wheelR, CAP.wheelR); wheelFlat.translate(0, CAP.wheelY, 0.004);
   const wheels = [0, 1, 2, 3].map((k) => bendOnDrum(wheelFlat.clone(), R, k * Math.PI / 2));
   // animals between them: bull to the right of the front wheel, horse to the left, then elephant, lion
@@ -236,12 +237,12 @@ export function capitalGeometries(lite) {
   const animals = kinds.map(([kind, slot, dir]) => {
     const prims = animalPrims(kind).map((p) => (dir > 0 ? p : p.type === 'ell'
       ? { ...p, c: [-p.c[0], p.c[1], p.c[2]], ang: -(p.ang ?? 0) } : { ...p, a: [-p.a[0], p.a[1], p.a[2]], b: [-p.b[0], p.b[1], p.b[2]] }));
-    const n = prep(meshBody(sdfBody(prims), [-0.165, -0.012, -0.012], [0.165, 0.2, 0.05], lite ? 0.006 : 0.0042));
+    const n = prep(meshBody(sdfBody(prims), [-0.165, -0.012, -0.012], [0.165, 0.2, 0.05], lite ? 0.0075 : 0.0058));
     n.translate(0, CAP.abacusY0 + 0.038, 0);
     // (the animals walk sunwise round the drum: each faces away from the wheel at the front lion's feet)
     return bendOnDrum(n, R, slot * Math.PI / 4);
   });
-  const lion = meshBody(sdfBody(lionPrims()), [-0.235, 0.0, -0.17], [0.235, 0.96, 0.46], lite ? 0.014 : 0.009);
+  const lion = meshBody(sdfBody(lionPrims()), [-0.235, 0.0, -0.17], [0.235, 0.96, 0.46], lite ? 0.017 : 0.0125);
   const lions = [0, 1, 2, 3].map((k) => { const g = lion.clone(); g.rotateY(k * Math.PI / 2); g.translate(0, CAP.abacusY1 - 0.004, 0); return g; });
   return {
     bell: bellGeometry(lite),
@@ -380,7 +381,7 @@ export function flagTexture() {
 // ------------------------------------------------------------------------------------------- the marchers
 // A column of figures along the road. Each vertex knows its walker's swing pivot (hip / shoulder) and gait
 // phase; the vertex shader swings limbs and carries every walker forward along the road (pure in uTime).
-export function marcherGeometry({ count, origin, dir, sStart, sEnd, seed = 1930 }) {
+export function marcherGeometry({ count, origin, dir, sStart, sEnd, shadowDir = dir, seed = 1930 }) {
   const r = rng(seed), side = new THREE.Vector3(-dir.z, 0, dir.x);   // (dir × up) points to the walker's right
   const pos = [], nrm = [], col = [], piv = [], swg = [];
   const shadow = [];
@@ -395,7 +396,7 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, seed = 1930 
   const basis = new THREE.Matrix4().makeBasis(side, new THREE.Vector3(0, 1, 0), dir.clone().negate());   // local −z = forward
   const parts = (lead) => {
     const torso = new THREE.CylinderGeometry(0.15, 0.19, 0.62, 7); torso.translate(0, 1.18, 0);
-    const head = new THREE.SphereGeometry(0.105, 8, 6); head.translate(0, 1.6, lead ? -0.04 : 0);
+    const head = new THREE.SphereGeometry(0.105, 6, 4); head.translate(0, 1.6, lead ? -0.04 : 0);
     const wrap = new THREE.CylinderGeometry(0.19, 0.24, 0.42, 7); wrap.translate(0, 0.78, 0);   // dhoti
     return { torso, head, wrap };
   };
@@ -423,9 +424,9 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, seed = 1930 
     }
     if (lead) add(staff.clone().rotateX(0.18).translate(0.3, 0.95, -0.22), new THREE.Color(0.3, 0.2, 0.12), P(0.23, 1.45, 0), -0.12, phase, m);
     // long morning shadow, falling ahead of the walker down the road (a tapering quad on the ground)
-    const len = 7.5 * scale, wd = 0.42 * scale;
-    const c0 = base.clone().addScaledVector(side, -wd / 2).add(V3(0, 0.08, 0)), c1 = base.clone().addScaledVector(side, wd / 2).add(V3(0, 0.08, 0));
-    const c2 = c1.clone().addScaledVector(dir, len).addScaledVector(side, -wd * 0.25), c3 = c0.clone().addScaledVector(dir, len).addScaledVector(side, wd * 0.25);
+    const len = 6.5 * scale, wd = 0.42 * scale, sside = V3(-shadowDir.z, 0, shadowDir.x);
+    const c0 = base.clone().addScaledVector(sside, -wd / 2).add(V3(0, 0.08, 0)), c1 = base.clone().addScaledVector(sside, wd / 2).add(V3(0, 0.08, 0));
+    const c2 = c1.clone().addScaledVector(shadowDir, len).addScaledVector(sside, -wd * 0.25), c3 = c0.clone().addScaledVector(shadowDir, len).addScaledVector(sside, wd * 0.25);
     for (const [v, u, w] of [[c0, 0, 0], [c1, 1, 0], [c2, 1, 1], [c0, 0, 0], [c2, 1, 1], [c3, 0, 1]]) shadow.push(v.x, v.y, v.z, u, w);
   }
   const g = new THREE.BufferGeometry();

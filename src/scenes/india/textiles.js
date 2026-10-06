@@ -35,8 +35,8 @@ const N_WARP = 104;
 const FELL0 = 0.62, FELL1 = -1.3, NP = 8, BAND = (FELL0 - FELL1) / NP;
 const HEDDLE_Z = -1.78, BACK_Z = -2.7, BACK_Y = 0.27;
 const BOLL = V3(-1.72, 0.56, 2.3);
-const FIG = V3(-4.4, 0, -8.0);        // the seated figure (base centre)
-const FIG_H = 2.6;
+const FIG = V3(-4.6, 0, -4.4);        // the seated figure (base centre)
+const FIG_H = 2.0;
 const GOLD = '#ffcf85', IVORY = '#ffeccc', INDIGO_HUD = '#cfe0ff';
 
 // ------------------------------------------------------------------ cloth shader (plain weave + print + dye + board)
@@ -126,7 +126,7 @@ ClothS cloth(vec2 p){
   // indigo front (from the west), with a wet, glinting edge
   float wob = 0.08 * (vnoise(p * 6.0) - 0.5) * 2.0 + 0.05 * sin(p.y * 7.0);
   float dye = sstep(uIndigo + 0.05, uIndigo - 0.05, p.x + wob);
-  float wet = exp(-pow((p.x + wob - uIndigo) / 0.07, 2.0));
+  float wd = (p.x + wob - uIndigo) / 0.045; float wet = exp(-wd * wd);
   vec3 col = mix(CREAM, INDIGO, dye);
   vec3 emis = vec3(0.0);
   // block printing: 4 × 4 impressions, stamped in a diagonal wave from the front-left
@@ -141,7 +141,7 @@ ClothS cloth(vec2 p){
     emis += mc * m.a * pm * 1.4 * exp(-max(0.0, uTime - ts) * 12.0);
   }
   col *= shade;
-  emis += vec3(0.05, 0.16, 0.9) * wet * 0.45 * step(-1.5, uIndigo);
+  emis += vec3(0.02, 0.09, 0.75) * wet * 0.35 * step(-1.5, uIndigo);
   // the ashtapada: gold lines of an 8 × 8 board, drawn from the centre out
   vec2 gl = abs(fract((p + 1.2) / ${SQ.toFixed(2)} + 0.5) - 0.5) * ${SQ.toFixed(2)};
   float inB = step(abs(p.x), 1.204) * step(abs(p.y), 1.204);
@@ -152,7 +152,7 @@ ClothS cloth(vec2 p){
   float gr = sstep(uGrid * 1.95, uGrid * 1.95 - 0.18, length(p));
   col = mix(col, GOLDC * 0.85, line * gr);
   emis += GOLDC * line * gr * (0.25 + uGridGlow);
-  float sw = exp(-pow((p.x - uSweep) / 0.06, 2.0)) + exp(-pow((p.x - uSweep2) / 0.06, 2.0));
+  float s1 = (p.x - uSweep) / 0.06, s2 = (p.x - uSweep2) / 0.06; float sw = exp(-s1 * s1) + exp(-s2 * s2);
   emis += vec3(1.0, 0.72, 0.38) * 0.9 * sw * step(abs(p.y), 1.25);
   o.col = col;
   o.rough = mix(0.9, 0.4, wet);
@@ -186,24 +186,25 @@ export function create(ctx, segment) {
   const boardSpot = new THREE.SpotLight('#fff0da', 0, 0, 0.55, 0.6, 2);
   boardSpot.position.set(2.4, 4.6, 3.6); boardSpot.target.position.set(0, 0, 0);
   scene.add(boardSpot, boardSpot.target);
-  const bollFill = new THREE.PointLight('#ffd9b0', 0.22, 2.5, 2); bollFill.position.copy(BOLL).add(V3(0.35, 0.18, 0.45)); scene.add(bollFill);
+  const bollFill = new THREE.PointLight('#ffd9b0', 0.4, 2.5, 2); bollFill.position.copy(BOLL).add(V3(0.35, 0.18, 0.45)); scene.add(bollFill);
   const sunLight = new THREE.DirectionalLight('#ff9a5a', 0); sunLight.position.set(-4.6, 1.2, -14); sunLight.target.position.copy(FIG); scene.add(sunLight, sunLight.target);
 
   // ---------------------------------------------------------------- sky, ground, air
   const skyU = {
     uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uGround: { value: new THREE.Color('#0a0605') },
-    uSunDir: { value: V3(-0.235, 0.016, -0.97).normalize() }, uSunCol: { value: new THREE.Color(1.0, 0.55, 0.25) }, uSun: { value: 0 }, uHalo: { value: 0 },
+    uSunDir: { value: V3(-0.17, 0.02, -0.98).normalize() }, uSunCol: { value: new THREE.Color(1.0, 0.55, 0.25) }, uSun: { value: 0 }, uHalo: { value: 0 },
   };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(90, 32, 16), new THREE.ShaderMaterial({
     uniforms: skyU, side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: /* glsl */ `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `uniform vec3 uTop, uHor, uGround, uSunDir, uSunCol; uniform float uSun, uHalo; varying vec3 vDir;
       void main(){ vec3 d = normalize(vDir); float h = d.y;
-        vec3 c = mix(uHor, uTop, smoothstep(0.0, 0.5, h));
+        vec3 c = mix(uHor, uTop, smoothstep(0.0, 0.32, h));
+        c = mix(c, c * vec3(1.0, 0.75, 1.15), smoothstep(0.02, 0.12, h) * (1.0 - smoothstep(0.12, 0.3, h)));
         c = mix(c, uGround, smoothstep(0.0, -0.08, h));
         float s = max(dot(d, normalize(uSunDir)), 0.0);
         float disc = smoothstep(0.99935, 0.99955, s);
-        c += uSunCol * (disc * uSun * 5.0 + pow(s, 40.0) * uHalo * 1.1 + pow(s, 6.0) * uHalo * 0.35);
+        c += uSunCol * (disc * uSun * 4.0 + pow(s, 300.0) * uHalo * 0.7 + pow(s, 14.0) * uHalo * 0.2);
         gl_FragColor = vec4(c, 1.0); }`,
   }));
   sky.renderOrder = -10; sky.frustumCulled = false;
@@ -225,7 +226,7 @@ export function create(ctx, segment) {
   const cottonMat = new THREE.MeshPhysicalMaterial({ color: '#efe6d2', roughness: 0.95, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#fff4e0') });
   const yarnMat = new THREE.MeshStandardMaterial({ color: '#e9dcc0', roughness: 0.8 });
   const lobeMat = new THREE.MeshPhysicalMaterial({ color: '#f4f0e8', roughness: 1, sheen: 1, sheenRoughness: 0.35, sheenColor: new THREE.Color('#fff6ea'), emissive: new THREE.Color('#2a2420') });
-  const burMat = new THREE.MeshStandardMaterial({ color: '#4a2c18', roughness: 0.75, side: THREE.DoubleSide });
+  const burMat = new THREE.MeshStandardMaterial({ color: '#8a5a34', roughness: 0.6, side: THREE.DoubleSide });
   const bractMat = new THREE.MeshStandardMaterial({ color: '#4d5a26', roughness: 0.7, side: THREE.DoubleSide });
   const leafMat = new THREE.MeshStandardMaterial({ color: '#3f6e2a', roughness: 0.55, side: THREE.DoubleSide });
   const stemMat = new THREE.MeshStandardMaterial({ color: '#5a3a24', roughness: 0.7 });
@@ -234,7 +235,7 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------- cotton plants and the hero boll
   const lobeGeos = [0, 1, 2, 3].map((k) => AS.lobeGeometry(k * 3.1 + 1));
-  const burGeo = AS.burGeometry(), bractGeo = AS.bractGeometry();
+  const burGeo = AS.burGeometry(0.058, 0.03), bractGeo = AS.bractGeometry();
   const orient = (m, a, tilt) => { m.rotation.set(tilt, Math.atan2(Math.cos(a), Math.sin(a)), 0, 'YXZ'); };
   // an open boll (static) or the hero (animated): returns parts to pose
   function makeBoll(parent, open = 1) {
@@ -247,7 +248,7 @@ export function create(ctx, segment) {
       for (const { m, a } of lobes) {
         const r = lerp(0.006, 0.021, o), s = lerp(0.5, 1, o);
         m.position.set(Math.cos(a) * r, lerp(-0.008, 0.01, o), Math.sin(a) * r);
-        m.scale.set(0.024 * s, 0.025 * s, 0.024 * s);
+        m.scale.set(0.027 * s, 0.028 * s, 0.027 * s);
       }
     };
     pose(open);
@@ -283,7 +284,7 @@ export function create(ctx, segment) {
     return { plant, top: stemCurve.getPointAt(1).add(base), out };
   }
   // hero plant: its top boll is the animated one
-  const hero = makePlant(V3(BOLL.x + 0.03, 0, BOLL.z + 0.04), BOLL.y - 0.045, 17, 2, true, V3(-0.03, BOLL.y - 0.045, -0.04));
+  const hero = makePlant(V3(BOLL.x + 0.03, 0, BOLL.z + 0.04), BOLL.y - 0.045, 17, 1, true, V3(-0.03, BOLL.y - 0.045, -0.04));
   const heroBoll = makeBoll(scene, 0);
   heroBoll.g.position.copy(BOLL); heroBoll.g.rotation.y = 0.4;
   shadowAll(heroBoll.g);
@@ -391,8 +392,10 @@ export function create(ctx, segment) {
   // print blocks (16 impressions)
   const blk = AS.blockGeometry(0.54);
   const dyeFace = new THREE.MeshStandardMaterial({ color: '#7a1a10', roughness: 0.6 });
-  const blocks = new THREE.InstancedMesh(blk.box, [wood, wood, wood, dyeFace, wood, wood], 16);
-  const knobs = new THREE.InstancedMesh(blk.knob, woodDark, 16);
+  const blockTex = AS.woodTexture({ seed: 9, base: [200, 142, 88], dark: [118, 70, 34] });
+  const blockWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#ffffff', roughness: 0.55 });
+  const blocks = new THREE.InstancedMesh(blk.box, [blockWood, blockWood, blockWood, dyeFace, blockWood, blockWood], 16);
+  const knobs = new THREE.InstancedMesh(blk.knob, wood, 16);
   for (const m of [blocks, knobs]) { m.castShadow = true; m.frustumCulled = false; scene.add(m); }
 
   // ---------------------------------------------------------------- chess
@@ -478,7 +481,8 @@ export function create(ctx, segment) {
       routeCurves[k].getPointAt(R(), p); p.x += (R() - 0.5) * 0.08; p.z += (R() - 0.5) * 0.08; p.y += R() * 0.05;
       figA[i * 3] = p.x; figA[i * 3 + 1] = p.y; figA[i * 3 + 2] = p.z;
       let x, y;
-      if (R() < 0.62) {
+      const onEdge = R() < 0.72;
+      if (onEdge) {
         const sg = figSegs[Math.floor(R() * figSegs.length)], u = R();
         x = lerp(sg[0].x, sg[1].x, u) + (R() - 0.5) * 0.008; y = lerp(sg[0].y, sg[1].y, u) + (R() - 0.5) * 0.008;
       } else {
@@ -486,14 +490,14 @@ export function create(ctx, segment) {
       }
       p.set(x, y, (R() - 0.5) * 0.03).applyMatrix4(figGroup.matrixWorld);
       figB[i * 3] = p.x; figB[i * 3 + 1] = p.y; figB[i * 3 + 2] = p.z;
-      cc.copy(cA).lerp(cB, R() * 0.6); figC[i * 3] = cc.r; figC[i * 3 + 1] = cc.g; figC[i * 3 + 2] = cc.b;
+      cc.copy(cA).lerp(cB, R() * 0.6).multiplyScalar(onEdge ? 1 : 0.3); figC[i * 3] = cc.r; figC[i * 3 + 1] = cc.g; figC[i * 3 + 2] = cc.b;
     }
   }
   const figPts = new MorphParticles({ count: N_FIG, positions: figA, targets: figB, colors: figC, size: 0.018, intensity: 1.6, opacity: 0, seed: 21, stagger: 0.6 });
   figPts.u.noiseFreq = 1.2; figPts.u.noiseSpeed = 0.2;
   figPts.material.fog = false;
   scene.add(figPts);
-  const sunGlow = glowSprite({ color: '#ff8a40', intensity: 0, scale: 9 }); sunGlow.position.set(FIG.x - 1.4, 1.0, FIG.z - 5.8); sunGlow.material.fog = false; scene.add(sunGlow);
+  const sunGlow = glowSprite({ color: '#ff8a40', intensity: 0, scale: 2.4 }); sunGlow.position.set(FIG.x - 1.1, 0.75, FIG.z - 6.2); sunGlow.material.fog = false; scene.add(sunGlow);
   const chestGlow = glowSprite({ color: '#ffc070', intensity: 0, scale: 1.4 }); chestGlow.material.fog = false; scene.add(chestGlow);
 
   // ---------------------------------------------------------------- screen HUD (callouts track world anchors)
@@ -502,32 +506,24 @@ export function create(ctx, segment) {
   const SQF = OUTPUT_ASPECT < 1.5, TALL = OUTPUT_ASPECT < 0.8, UC = TALL ? 1.85 : SQF ? 1.45 : 1, UCX = SQF ? 0.8 : 1;
   const PK = Math.pow(FILM_ASPECT / OUTPUT_ASPECT, 0.15);
   const mkCall = (label, sub, dx, dy, color = IVORY) => { const c = new Callout(label, { dx: dx * UCX, dy: dy * UC, size: 0.05 * UC, color, sub, intensity: 1.4 }); hud.scene.add(c); c.visible = false; return c; };
-  const callCotton = mkCall('COTTON', 'MEHRGARH · c. 5000 BC', -0.55, 0.3);
+  const callCotton = mkCall('COTTON', 'MEHRGARH · c. 5000 BC', -0.5, -0.2);
   const callIndigo = mkCall('INDIGO', "FROM THE GREEK INDIKON, 'INDIAN'", -0.6, 0.32, INDIGO_HUD);
-  const callChat = mkCall('CHATURANGA', 'INDIA · c. 6TH CENTURY AD', 0.55, 0.3, GOLD);
-  const callNodes = NODES.slice(1).map((n, i) => mkCall(n.name, null, i === 2 ? 0.4 : -0.35, i === 1 ? -0.22 : 0.22, GOLD));
-  const callYoga = mkCall('YOGA', 'UNESCO INTANGIBLE HERITAGE · 2016', 0.6, 0.25, IVORY);
-  // piece names under the front rank (chaturanga)
-  const NAMES = [[0, 'RATHA'], [1, 'ASHVA'], [2, 'GAJA'], [3, 'MANTRI'], [4, 'RAJA']];
-  const tags = NAMES.map(([f, txt]) => {
-    const tp = new TextPlane(txt, { font: FONTS.mono, height: 0.028 * UC, letterSpacing: 0.18, color: IVORY, intensity: 1.15, depthWrite: false });
-    tp.opacity = 0; hud.scene.add(tp);
-    return { tp, piece: pieces.find((p) => p.side === 0 && !p.pawn && p.f === f) };
-  });
-  const tagPad = (() => { const tp = new TextPlane('PADATI', { font: FONTS.mono, height: 0.028 * UC, letterSpacing: 0.18, color: IVORY, intensity: 1.15, depthWrite: false }); tp.opacity = 0; hud.scene.add(tp); return { tp, piece: pieces.find((p) => p.side === 0 && p.pawn && p.f === 6) }; })();
+  const callChat = mkCall('CHATURANGA', 'INDIA · c. 6TH CENTURY AD', 0.5, 0.2, GOLD);
+  const callNodes = NODES.slice(1).map((n, i) => mkCall(n.name, null, i === 2 ? -0.45 : -0.35, i === 1 ? -0.22 : i === 2 ? 0.06 : 0.22, GOLD));
+  const callYoga = mkCall('YOGA', 'UNESCO INTANGIBLE HERITAGE · 2016', 0.55, -0.16, IVORY);
   const tmp = new THREE.Vector3();
   const toHud = (w, out) => { tmp.copy(w).project(camera); return out.set(tmp.x * A * PK, tmp.y * PK, 0); };
   const anchors = [
-    [callCotton, () => V3(-0.75, CLOTH_Y, 0.95)],
+    [callCotton, () => V3(-0.95, CLOTH_Y, 0.85)],
     [callIndigo, () => V3(-0.75, CLOTH_Y, 0.55)],
-    [callChat, () => V3(0.15, CLOTH_Y + 0.29, 1.05)],
+    [callChat, () => V3(0.15, CLOTH_Y + 0.3, -1.05)],
     ...callNodes.map((c, i) => [c, () => NODES[i + 1].p.clone().add(V3(0, 0.05, 0))]),
-    [callYoga, () => figGroup.localToWorld(V3(0.17, 0.72, 0))],
+    [callYoga, () => figGroup.localToWorld(V3(0.42, 0.2, 0))],
   ];
 
   // ---------------------------------------------------------------- camera path
-  const CAM = [V3(-1.42, 0.62, 2.98), V3(-1.4, 0.615, 2.92), V3(-1.05, 0.82, 2.95), V3(0.9, 1.05, 2.4), V3(0.3, 3.1, 2.05), V3(1.1, 1.25, 2.45), V3(-0.6, 3.9, 4.0), V3(-1.5, 2.3, 2.4), V3(-3.0, 1.75, -2.0)];
-  const LOOK = [V3(-1.6, 0.6, 2.3), V3(-1.6, 0.6, 2.3), V3(-1.55, 0.3, 1.25), V3(-0.25, 0.12, 0.0), V3(0.0, 0.1, -0.2), V3(0.0, 0.22, 0.05), V3(-2.4, 0.0, -0.9), V3(-4.2, 1.3, -7.6), V3(-4.4, 1.35, -8.0)];
+  const CAM = [V3(-1.47, 0.6, 2.82), V3(-1.47, 0.6, 2.76), V3(-1.15, 0.8, 2.85), V3(0.7, 1.45, 1.75), V3(0.3, 3.1, 2.05), V3(1.1, 1.25, 2.45), V3(-0.3, 4.0, 4.1), V3(-2.3, 1.2, 1.5), V3(-3.95, 0.8, 0.0)];
+  const LOOK = [V3(-1.64, 0.61, 2.3), V3(-1.64, 0.61, 2.3), V3(-1.5, 0.22, 0.9), V3(-0.25, -0.1, -1.6), V3(0.0, 0.1, -0.2), V3(0.0, 0.22, 0.05), V3(-2.15, 0.0, -0.75), V3(-4.5, 0.95, -4.4), V3(-4.6, 0.95, -4.4)];
   const camCurve = new THREE.CatmullRomCurve3(CAM, false, 'centripetal'), lookCurve = new THREE.CatmullRomCurve3(LOOK, false, 'centripetal');
   const SK = [[0, 0], [tB, 1], [tL - 0.05, 2], [tL + 0.45, 3], [tC + 0.35, 4], [tK + 0.4, 5], [tS + 0.5, 6], [tY + 0.3, 7], [DUR, 8]];
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
@@ -584,13 +580,15 @@ export function create(ctx, segment) {
       camera.fov = lerp(lerp(30, 36, 1 - macro), 30, ramp(t, tY, DUR, ease.inQuad));
       camera.updateProjectionMatrix(); camera.updateMatrixWorld();
       sky.position.copy(camPos);
+      skyU.uSunDir.value.set(FIG.x - camPos.x, 0, FIG.z - camPos.z).normalize().setY(0.032).normalize();
+      sunGlow.position.copy(camPos).addScaledVector(skyU.uSunDir.value, camPos.distanceTo(FIG) + 7);
 
       // -------- sky and light: pre-dawn → sunrise
       const dawn = ramp(t, tS + 0.25, DUR, ease.inOutSine);
       skyU.uTop.value.copy(cTopA).lerp(cTopB, dawn);
       skyU.uHor.value.copy(cHorA).lerp(cHorB, dawn);
       skyU.uSun.value = ramp(t, tY - 0.1, DUR, ease.outCubic) * 1.2;
-      skyU.uHalo.value = 0.25 + 1.6 * dawn;
+      skyU.uHalo.value = 0.6 + 1.2 * dawn;
       scene.fog.color.copy(skyU.uHor.value).multiplyScalar(0.8);
       skyU.uGround.value.copy(scene.fog.color);
       scene.fog.density = lerp(0.05, 0.032, dawn);
@@ -598,17 +596,17 @@ export function create(ctx, segment) {
       key.color.setRGB(1, lerp(0.81, 0.62, dawn), lerp(0.6, 0.42, dawn));
       sunLight.intensity = 2.2 * dawn;
       hemi.intensity = 0.5 + 0.25 * dawn;
-      boardSpot.intensity = 46 * envelope(t, tC - 0.25, tY + 0.4, 0.3, 0.4);
-      bollFill.intensity = 0.22 * macro;
+      boardSpot.intensity = 34 * envelope(t, tC - 0.25, tY + 0.4, 0.3, 0.4);
+      bollFill.intensity = 0.4 * macro;
       dust.tick(t, info); dust.u.opacity = 0.5 * (1 - 0.6 * dawn);
 
       // -------- the boll opens; fibres stream into the thread
       const open = ramp(t, tB - 0.05, tB + 0.42, ease.outBack);
-      heroBoll.pose(sat(open) * 1.0 + Math.max(0, open - 1) * 0.6);
+      heroBoll.pose(lerp(0.4, 1, sat(open)) + Math.max(0, open - 1) * 0.6);
       heroBoll.g.rotation.y = 0.4 + t * 0.05;
       halo.tick(t, info);
-      halo.u.opacity = ramp(t, tB + 0.05, tB + 0.35) * (1 - ramp(t, tL + 0.3, tL + 0.7)) * 0.75;
-      halo.u.intensity = 1.0 + 0.4 * envelope(t, tB, tB + 0.5, 0.1, 0.3);
+      halo.u.opacity = ramp(t, tB + 0.05, tB + 0.35) * (1 - ramp(t, tL + 0.3, tL + 0.7)) * 0.4;
+      halo.u.intensity = 0.8 + 0.3 * envelope(t, tB, tB + 0.5, 0.1, 0.3);
       fibres.tick(t, info);
       const fm = ramp(t, tB + 0.2, tL + 0.05, ease.inOutSine);
       fibres.u.mix = fm;
@@ -617,7 +615,7 @@ export function create(ctx, segment) {
       fibres.visible = fibres.u.opacity > 0.002;
       thread.progress = ramp(t, tB + 0.35, tL - 0.02, ease.inOutSine);
       thread.opacity = 1 - ramp(t, tL + 0.35, tL + 0.6);
-      thread.intensity = 1.6 + 0.8 * envelope(t, tB + 0.3, tL + 0.2, 0.2, 0.3);
+      thread.intensity = 1.0 + 0.5 * envelope(t, tB + 0.3, tL + 0.2, 0.2, 0.3);
 
       // -------- the weave
       const W = weave(t);
@@ -642,7 +640,7 @@ export function create(ctx, segment) {
       shuttle.position.set(W.sx, shY, zf - 0.035);
       shuttle.rotation.set(0, 0, W.active && W.ph < 1 ? -W.dir * 0.04 : 0);
       const shutOut = ramp(t, tC - 0.05, tC + 0.15);
-      shuttle.scale.setScalar(1 - shutOut); shuttle.visible = shutOut < 0.999;
+      shuttle.scale.setScalar(1.35 * (1 - shutOut)); shuttle.visible = shutOut < 0.999;
       // the weft trailing from the selvedge into the shuttle
       const inPick = W.active && W.ph > 0 && W.ph < 1;
       weft.visible = inPick;
@@ -657,8 +655,8 @@ export function create(ctx, segment) {
       // -------- block printing and the indigo front
       for (let cz = 0; cz < 4; cz++) for (let cx = 0; cx < 4; cx++) {
         const i = cz * 4 + cx, ts = PRINT0 + (cx + (3 - cz)) * 0.05;
-        const down = ramp(t, ts - 0.13, ts, ease.inQuad), up = ramp(t, ts + 0.03, ts + 0.17, ease.inCubic);
-        const vis = t > ts - 0.14 && t < ts + 0.18;
+        const down = ramp(t, ts - 0.1, ts, ease.inQuad), up = ramp(t, ts + 0.025, ts + 0.12, ease.inCubic);
+        const vis = t > ts - 0.11 && t < ts + 0.125;
         if (!vis) { blocks.setMatrixAt(i, ZERO); knobs.setMatrixAt(i, ZERO); continue; }
         const y = CLOTH_Y + 0.04 + (1 - down) * 0.42 + up * 0.55;
         p4.set(-HALF + 0.65 * (cx + 0.5), y, -HALF + 0.65 * (cz + 0.5));
@@ -724,11 +722,11 @@ export function create(ctx, segment) {
       figPts.u.intensity = 1.5 + 0.5 * breath * fmx;
       figLines.progress = ramp(t, tY + 0.12, tY + 0.5, ease.inOutSine);
       figLines.opacity = 0.9; figLines.intensity = 1.5 + 0.6 * breath;
-      silMat.opacity = ramp(t, tY + 0.15, tY + 0.55) * 0.92; sil.visible = silMat.opacity > 0.002;
+      silMat.opacity = ramp(t, tY + 0.1, tY + 0.5) * 0.97; sil.visible = silMat.opacity > 0.002;
       figGroup.scale.setScalar(FIG_H * (1 + 0.006 * breath * fmx));
-      sunGlow.material.opacity = 1; sunGlow.material.color.setRGB(1.0, 0.5, 0.22).multiplyScalar(dawn * 1.1);
+      sunGlow.material.opacity = 1; sunGlow.material.color.setRGB(1.0, 0.42, 0.16).multiplyScalar(dawn * 0.4);
       chestGlow.position.copy(figGroup.localToWorld(wA.set(0, 0.55, 0.02)));
-      chestGlow.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(ramp(t, tY + 0.2, tY + 0.6) * (0.25 + 0.35 * breath));
+      chestGlow.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(ramp(t, tY + 0.2, tY + 0.6) * (0.1 + 0.15 * breath));
 
       // -------- HUD
       const callP = (c, a, b, out) => { const p = ramp(t, a, b, ease.outCubic); c.visible = p > 0 && out > 0; if (c.visible) c.reveal(p, out); };
@@ -737,8 +735,6 @@ export function create(ctx, segment) {
       callP(callChat, tK + 0.2, tK + 0.5, 1 - ramp(t, tY - 0.15, tY + 0.05));
       callNodes.forEach((c, k) => callP(c, routeT[k][1] - 0.02, routeT[k][1] + 0.22, 1 - ramp(t, tY + 0.05, tY + 0.3)));
       callP(callYoga, tY + 0.3, tY + 0.6, 1 - ramp(t, DUR - 0.12, DUR + 0.1));
-      const tagOn = ramp(t, tK + 0.3, tK + 0.5) * (1 - ramp(t, tS - 0.12, tS + 0.02));
-      for (const g of [...tags, tagPad]) { g.tp.opacity = tagOn * 0.95; g.tp.reveal = tagOn; }
       placeHud();
 
       // -------- lens and post
@@ -757,10 +753,6 @@ export function create(ctx, segment) {
   };
   function placeHud() {
     for (const [c, f] of anchors) { if (!c.visible) continue; toHud(f(), c.position); }
-    for (const g of [...tags, tagPad]) {
-      if (g.tp.opacity <= 0) continue;
-      toHud(wA.set(g.piece.x, CLOTH_Y - 0.02, g.piece.z + 0.17), g.tp.position);
-    }
   }
   return api;
 }

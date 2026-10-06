@@ -10,6 +10,7 @@
 // patch (rock fill shrinking from the top, hot band on the newly exposed stone), mirrored geometry under a
 // translucent water surface for the reflection, a time-lapse sky / sun, non-uniform terrain grid.
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES } from '../../timeline.js';
 import { ramp, ease, sat, lerp, envelope, smoothstep, rng, timeWarp, clamp } from '../../lib/math.js';
 import { fbm2 } from '../../lib/noise.js';
@@ -104,7 +105,7 @@ export function create(ctx, segment) {
   const cl = new Parts(); buildCliff(cl);
   kai.add(cl.build(M, { cliff: 0.08 }));
   const KW = K.X1 - K.X0, KD = K.Z1 - K.Z0;
-  const fillBody = new THREE.Mesh((() => { const g = rockBox(KW - 0.1, K.H, KD, { cell: 5, amp: 0.7, freq: 0.07, seed: 9 }); g.translate(0, K.H / 2, 0); return g; })(), M.cliff);
+  const fillBody = new THREE.Mesh((() => { const g = rockBox(KW - 0.1, K.H, KD, { cell: 3.5, amp: 0.7, freq: 0.07, seed: 9, front: 3.5 }); g.translate(0, K.H / 2, 0); return g; })(), M.cliff);
   fillBody.position.set((K.X0 + K.X1) / 2, 0, (K.Z0 + K.Z1) / 2);
   fillBody.castShadow = fillBody.receiveShadow = true;
   const cutMat = new THREE.MeshStandardMaterial({ map: M.basalt.map, color: '#e2cdb2', roughness: 0.9 });
@@ -269,35 +270,45 @@ export function create(ctx, segment) {
     ground.receiveShadow = true;
     scene.add(ground);
   }
-  // trees: round-crowned (neem, banyan) scattered on the plain, clear of the monuments and the camera
-  {
-    const parts = [new THREE.CylinderGeometry(0.25, 0.4, 3.2, 6).translate(0, 1.6, 0)];
-    for (const [x, y, z, r] of [[0, 4.4, 0, 2.6], [1.4, 3.9, 0.6, 1.9], [-1.3, 4.0, -0.5, 2.0], [0.2, 5.4, -0.9, 1.7]]) parts.push(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z));
-    const trunkFol = parts.map(prep);
-    const tree = new THREE.BufferGeometry();
-    // merge by hand (one geometry, foliage colour on the crown via vertex colours)
-    const n = trunkFol.reduce((s, g) => s + g.attributes.position.count, 0), P = new Float32Array(n * 3), N = new Float32Array(n * 3), C = new Float32Array(n * 3);
+  // trees: round-crowned (neem, banyan) scattered on the plain, clear of the monuments and the camera path
+  const pathPts = [];
+  function plantTrees() {
+    const r = rng(12);
+    const parts = [new THREE.CylinderGeometry(0.22, 0.42, 3.4, 6).translate(0, 1.7, 0)];
+    for (const [x, y, z, rr] of [[0, 4.6, 0, 2.6], [1.5, 4.0, 0.7, 1.9], [-1.4, 4.1, -0.5, 2.0], [0.2, 5.5, -0.8, 1.8]]) {
+      const g = mergeVertices(new THREE.IcosahedronGeometry(rr, 1).deleteAttribute('normal').deleteAttribute('uv')), p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) { const v = V(p.getX(i), p.getY(i), p.getZ(i)); const k = 1 + 0.16 * Math.sin(v.x * 3.1 + v.y * 2.3) * Math.sin(v.z * 2.7 - v.y * 1.7) + (r() - 0.5) * 0.08; p.setXYZ(i, v.x * k + x, v.y * k * 0.85 + y, v.z * k + z); }
+      g.computeVertexNormals();
+      parts.push(g);
+    }
+    const geos = parts.map((g) => prep(g));
+    const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), P = new Float32Array(n * 3), N = new Float32Array(n * 3), C = new Float32Array(n * 3);
     let o = 0;
-    trunkFol.forEach((g, gi) => {
+    geos.forEach((g, gi) => {
       P.set(g.attributes.position.array, o * 3); N.set(g.attributes.normal.array, o * 3);
-      const c = gi === 0 ? [0.25, 0.18, 0.12] : [0.2 + gi * 0.02, 0.26, 0.11];
-      for (let v = 0; v < g.attributes.position.count; v++) C.set(c, (o + v) * 3);
+      for (let v = 0; v < g.attributes.position.count; v++) { const sh = gi === 0 ? 1 : 0.8 + 0.4 * r(); C.set(gi === 0 ? [0.2, 0.15, 0.1] : [0.16 * sh, 0.2 * sh, 0.08 * sh], (o + v) * 3); }
       o += g.attributes.position.count;
     });
+    const tree = new THREE.BufferGeometry();
     tree.setAttribute('position', new THREE.BufferAttribute(P, 3)); tree.setAttribute('normal', new THREE.BufferAttribute(N, 3)); tree.setAttribute('color', new THREE.BufferAttribute(C, 3));
-    const r = rng(12), list = [];
-    const avoid = [[STUPA.x, STUPA.z, 34], [TOWER.x, TOWER.z + 15, 75], [-46, 60, 12], [-24, 62, 14], [184, 94, 18], [204, 104, 18]];
-    for (let k = 0; k < 4000 && list.length < (lite ? 140 : 260); k++) {
-      const x = -150 + r() * 780, z = -160 + r() * 380;
+    const list = [];
+    const avoid = [[STUPA.x, STUPA.z, 34], [TOWER.x, TOWER.z + 30, 100]];
+    for (let k = 0; k < 6000 && list.length < (lite ? 110 : 210); k++) {
+      const x = -150 + r() * 780, z = -200 + r() * 420;
       if (avoid.some(([ax, az, ar]) => Math.hypot(x - ax, z - az) < ar)) continue;
+      const y = groundH(x, z);
+      if (pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 26 + Math.max(0, p.y - y) * 0.15)) continue;
       const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 110 && lz > -120 && lz < 250) continue;
       if (Math.abs(x - KAI.x) < 50 && z - KAI.z < 30 && z - KAI.z > -36) continue;
       if (z - KAI.z < 36 && z - KAI.z > 18 && x - KAI.x > K.L - 5 && x - KAI.x < K.R + 5) continue;
-      list.push([x, groundH(x, z), z, 0.8 + r() * 0.9, r() * 6.28]);
+      list.push([x, y, z, 0.8 + r() * 0.9, r() * 6.28]);
     }
     const trees = new THREE.InstancedMesh(tree, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), list.length);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-    list.forEach(([x, y, z, s, a], i) => { q.setFromAxisAngle(V(0, 1, 0), a); m4.compose(V(x, y - 0.3, z), q, V(s, s, s)); trees.setMatrixAt(i, m4); });
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), tint = new THREE.Color();
+    list.forEach(([x, y, z, s, a], i) => {
+      q.setFromAxisAngle(V(0, 1, 0), a); m4.compose(V(x, y - 0.3, z), q, V(s, s * (0.85 + 0.3 * r()), s)); trees.setMatrixAt(i, m4);
+      tint.setRGB(0.85 + 0.3 * r(), 0.85 + 0.25 * r(), 0.8 + 0.2 * r()); trees.setColorAt(i, tint);
+    });
     trees.castShadow = trees.receiveShadow = true;
     scene.add(trees);
   }
@@ -333,9 +344,9 @@ export function create(ctx, segment) {
     return c;
   }
   label('GREAT STUPA · SANCHI', '3RD C. BC · BEGUN UNDER ASHOKA', V(15, 7, 10), T_ST + 0.12, T_KA - 0.1, { dx: 0.5, dy: -0.12 });
-  label('KAILASA · ELLORA · 8TH CENTURY', 'CARVED FROM ONE ROCK', V(KAI.x + 13, 12, KAI.z - 6), T_KA + 0.3, T_BR - 0.08, { dx: 0.55, dy: -0.18 });
+  label('KAILASA · ELLORA · 8TH CENTURY', 'CARVED FROM ONE ROCK', V(KAI.x + 10, 12, KAI.z - 4), T_KA + 0.3, T_BR - 0.08, { dx: 0.32, dy: -0.2 });
   label('THANJAVUR · 1010', '66 m GRANITE TOWER', V(TOWER.x - 9, 36, TOWER.z + 9), T_BR + 0.05, T_TJ - 0.15, { dx: -0.5, dy: -0.12 });
-  label('TAJ MAHAL · 1632–1653', 'AGRA · WHITE MAKRANA MARBLE', tajW(43.5, 28, 43.5), T_TJ + 0.1, dur + 1, { dx: 0.4, dy: -0.12 });
+  label('TAJ MAHAL · 1632–1653', 'AGRA · WHITE MAKRANA MARBLE', tajW(-43.5, 30, 43.5), T_TJ + 0.1, dur + 1, { dx: -0.42, dy: -0.12 });
   // the tower's height, drawn beside it
   const dimG = new THREE.Group();
   const dim66 = new Dimension(V(0, 0, 0), V(0, 66, 0), '66 m', { size: 2.6, tick: 1.6, color: '#ffe6bf', intensity: 1.8 });
@@ -351,7 +362,7 @@ export function create(ctx, segment) {
     [T_ST, V(-24, 4.6, 62), V(5, 10, 0)],
     [T_ST + 0.45, V(30, 36, 62), V(KAI.x - 30, 10, KAI.z)],
     [T_KA + 0.05, V(KAI.x - 34, 76, KAI.z + 96), V(KAI.x - 8, 12, KAI.z - 62)],
-    [T_KA + 0.6, V(KAI.x + 26, 70, KAI.z + 98), V(KAI.x - 2, 12, KAI.z - 60)],
+    [T_KA + 0.6, V(KAI.x + 24, 72, KAI.z + 98), V(KAI.x + 2, 10, KAI.z - 54)],
     [T_BR + 0.05, V(184, 6, 94), V(TOWER.x + 4, 38, TOWER.z)],
     [T_BR + 0.4, V(204, 6, 104), V(TOWER.x + 40, 34, TOWER.z + 24)],
     [T_TJ + 0.05, V(258, 7, TAJ.z), V(TAJ.x, 30, TAJ.z)],
@@ -362,6 +373,8 @@ export function create(ctx, segment) {
   const lookC = new THREE.CatmullRomCurve3(KEYS.map((k) => k[2]), false, 'centripetal');
   const warp = KEYS.map((k, i) => [k[0], i / (KEYS.length - 1)]);
   const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), shC = new THREE.Vector3();
+  for (let i = 0; i <= 160; i++) pathPts.push(posC.getPoint(i / 160));
+  plantTrees();
 
   const dof = { focus: 60, range: 60, amount: 0.12 };
   const bloom = { strength: 0.6 };

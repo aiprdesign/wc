@@ -67,13 +67,13 @@ function tubeAlong(curve, rFn, segs = 24, radial = 8) {
 
 // ------------------------------------------------------------------ textures
 // square solar-cell grid: dark blue cells, silver interconnects
-export function cellTexture(n = 8, seed = 4) {
+export function cellTexture(n = 12, seed = 4) {
   const r = rng(seed), S = 256, c = mkCanvas(S), g = c.getContext('2d');
   g.fillStyle = '#9aa0aa'; g.fillRect(0, 0, S, S);
   const cw = S / n;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const l = r() * 12;
-    g.fillStyle = `rgb(${18 + l},${26 + l},${66 + l * 1.4})`; g.fillRect(i * cw + 1.5, j * cw + 1.5, cw - 3, cw - 3);
+    g.fillStyle = `rgb(${26 + l},${42 + l},${104 + l * 1.4})`; g.fillRect(i * cw + 1, j * cw + 1, cw - 2, cw - 2);
     g.fillStyle = 'rgba(170,180,200,0.22)'; g.fillRect(i * cw + 1.5, j * cw + cw * 0.5, cw - 3, 1);
   }
   return toTexture(c, { repeat: true });
@@ -107,13 +107,13 @@ export function isroMaterials(env = null) {
   return {
     white: std({ color: '#e8e6e1', roughness: 0.42, metalness: 0, vertexColors: true, envMapIntensity: 0.7 }),
     paint: std({ color: '#ffffff', roughness: 0.5, metalness: 0.05, vertexColors: true, envMapIntensity: 0.6 }),
-    alu: std({ color: '#b9bcc1', roughness: 0.32, metalness: 0.9, envMapIntensity: 0.9 }),
+    alu: std({ color: '#b9bcc1', roughness: 0.38, metalness: 0.7, envMapIntensity: 0.7 }),
     dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#d9a548', map: mli, metalness: 1, roughness: 0.34, bumpMap: crinkle, bumpScale: 2.4, envMapIntensity: 1.0 }),
-    goldDeep: std({ color: '#b07a2c', map: mli, metalness: 1, roughness: 0.4, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
-    silver: std({ color: '#c9cdd3', metalness: 1, roughness: 0.3, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 1.0 }),
-    cells: std({ map: cells, color: '#ffffff', metalness: 0.4, roughness: 0.28, envMapIntensity: 1.2 }),
+    gold: std({ color: '#e3ad52', map: mli, metalness: 0.6, roughness: 0.38, bumpMap: crinkle, bumpScale: 2.4, envMapIntensity: 1.0 }),
+    goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
+    silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
+    cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
     array: std({ map: arrayTexture(), color: '#ffffff', metalness: 0.4, roughness: 0.3, envMapIntensity: 1.2, side: THREE.DoubleSide }),
     dish: std({ color: '#ecebe6', roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
     bay: std({ color: '#141416', roughness: 0.8, metalness: 0.2 }),
@@ -159,13 +159,13 @@ vec3 sky(vec3 d){
   float t = pow(clamp(e, 0.0, 1.0), 0.5);
   vec3 c;
   if (uMode == 0) {
-    vec3 hSun = vec3(1.25, 0.46, 0.13), hAway = vec3(0.17, 0.10, 0.17);
+    vec3 hSun = vec3(0.95, 0.36, 0.11), hAway = vec3(0.14, 0.08, 0.15);
     vec3 hor = mix(hAway, hSun, pow(az * 0.5 + 0.5, 2.6));
-    vec3 mid = mix(vec3(0.05, 0.05, 0.13), vec3(0.32, 0.17, 0.2), pow(az * 0.5 + 0.5, 3.0));
-    vec3 zen = vec3(0.006, 0.012, 0.04);
+    vec3 mid = mix(vec3(0.035, 0.04, 0.12), vec3(0.26, 0.12, 0.14), pow(az * 0.5 + 0.5, 3.0));
+    vec3 zen = vec3(0.005, 0.011, 0.045);
     c = mix(hor, mid, smoothstep(0.0, 0.16, e));
     c = mix(c, zen, smoothstep(0.12, 0.75, e));
-    c += vec3(1.4, 0.55, 0.16) * pow(max(dot(d, L), 0.0), 24.0) * 1.1;          // afterglow over the set sun
+    c += vec3(1.4, 0.55, 0.16) * pow(max(dot(d, L), 0.0), 40.0) * 0.7;          // afterglow over the set sun
     c += vec3(0.24, 0.1, 0.16) * exp(-abs(e - 0.05) * 30.0) * (0.5 - 0.5 * az) * 0.6;   // belt of Venus
     // thin stratus streaks lit from below
     float k = 1.0 / max(e + 0.035, 0.02);
@@ -329,19 +329,19 @@ export function makeLunarDust(n, { tEmit0, tLand, seed = 23, altAt }) {
 
 // ------------------------------------------------------------------ planets
 // The Moon (moonshot's crater shader) + an M3-style false-colour water/hydroxyl overlay at high latitudes,
-// painted in by a pushbroom scan line (uScan: −1 → 1 along the object's z axis).
+// painted in by a pushbroom scan line (uScan: −1 → 1 along the object's x axis).
 const MOON_WATER_FRAG = MOON_FRAG
   .replace('uniform float uBump, uGain;', 'uniform float uBump, uGain, uWater, uScan, uTime;')
   .replace('gl_FragColor = vec4(col * uGain, 1.0);', `
   float lat = abs(p.y);
-  float pol = smoothstep(0.62, 0.9, lat);
-  float patchy = smoothstep(-0.25, 0.55, snoise(p * 7.0) * 0.55 + snoise(p * 19.0) * 0.3 + (c1.y + c2.y) * 0.4 + (0.5 - h * 2.0) * 0.2);
-  float scan = smoothstep(uScan + 0.04, uScan - 0.02, p.z);
-  float edge = exp(-pow((p.z - uScan) / 0.015, 2.0)) * step(0.5, lat);
+  float pol = smoothstep(0.74, 0.93, lat + 0.05 * snoise(p * 5.0));
+  float patchy = smoothstep(0.05, 0.6, snoise(p * 9.0) * 0.5 + snoise(p * 23.0) * 0.3 + (0.2 - h * 3.0) * 0.3 + pol * 0.25);
+  float scan = smoothstep(uScan + 0.04, uScan - 0.02, p.x);
+  float edge = exp(-pow((p.x - uScan) / 0.015, 2.0)) * step(0.5, lat);
   float w = pol * patchy * scan * uWater;
   vec3 blue = vec3(0.08, 0.42, 1.0);
-  col = mix(col, col * 0.55 + blue * (0.18 + 0.6 * pol) * (0.35 + 0.65 * body), w * 0.85);
-  col += vec3(0.4, 0.75, 1.0) * edge * uWater * 0.8 * (0.3 + body);
+  col = mix(col, col * 0.4 + blue * 0.42 * (0.25 + 0.75 * body), w * 0.95);
+  col += vec3(0.4, 0.75, 1.0) * edge * uWater * 0.35 * (0.3 + body) * smoothstep(0.7, 0.85, lat);
   gl_FragColor = vec4(col * uGain, 1.0);`);
 export function moonWaterMesh(radius, sun, segs = 128) {
   const mat = new THREE.ShaderMaterial({
@@ -374,12 +374,12 @@ void main(){
   // canyon scar: a long trough along the equator over one hemisphere
   float lon = atan(p.z, p.x);
   float canyon = exp(-pow((p.y + 0.12 + 0.05 * sin(lon * 3.0)) / 0.025, 2.0)) * smoothstep(0.2, 0.6, sin(lon - 0.4)) * (0.6 + 0.4 * snoise(p * 20.0));
-  float h = craters(p * 5.0) * 0.6 + craters(p * 13.0 + 2.0) * 0.3 + fbm(p * 9.0) * 0.05 - canyon * 0.25;
-  vec3 rust = vec3(0.62, 0.27, 0.12), ochre = vec3(0.78, 0.45, 0.24), umber = vec3(0.24, 0.12, 0.07);
+  float h = craters(p * 4.0) * 0.5 + craters(p * 11.0 + 2.0) * 0.12 + fbm(p * 7.0) * 0.03 - canyon * 0.2;
+  vec3 rust = vec3(0.66, 0.24, 0.085), ochre = vec3(0.8, 0.42, 0.19), umber = vec3(0.28, 0.11, 0.05);
   vec3 alb = mix(rust, ochre, bright * 0.7);
-  alb = mix(alb, umber, dark * 0.75);
+  alb = mix(alb, umber, dark * 0.8);
   alb = mix(alb, umber * 0.7, canyon);
-  alb *= 0.85 + 0.3 * (snoise(p * 30.0) * 0.5 + 0.5);
+  alb *= 0.9 + 0.1 * snoise(p * 26.0) + 0.06 * snoise(p * 90.0);
   float cap = smoothstep(0.86, 0.92, p.y + 0.03 * snoise(p * 12.0));
   alb = mix(alb, vec3(0.95, 0.93, 0.9), cap);
   vec3 N = normalize(vN);
@@ -391,9 +391,9 @@ void main(){
   vec3 L = normalize(uSun), V = normalize(cameraPosition - vW);
   float ndl = max(dot(N, L), 0.0);
   float body = smoothstep(-0.05, 0.12, dot(normalize(vN), L));
-  vec3 col = alb * pow(ndl, 0.9) * body * 1.6;
+  vec3 col = alb * pow(ndl, 0.8) * body * 1.75;
   float mu = max(dot(normalize(vN), V), 0.0);
-  col += vec3(0.95, 0.55, 0.35) * pow(1.0 - mu, 3.0) * smoothstep(-0.2, 0.4, dot(normalize(vN), L)) * 0.35;
+  col += vec3(0.95, 0.5, 0.3) * pow(1.0 - mu, 4.0) * smoothstep(-0.2, 0.4, dot(normalize(vN), L)) * 0.22;
   gl_FragColor = vec4(col * uGain, 1.0);
 }`;
 const HAZE_FRAG = /* glsl */ `
@@ -403,10 +403,10 @@ void main(){ vec3 N = normalize(vN), V = normalize(cameraPosition - vW); float f
   float day = smoothstep(-0.25, 0.45, dot(N, normalize(uSun))); gl_FragColor = vec4(uColor * uI * day, f * day); }`;
 export function marsMesh(radius, sun, segs = 128) {
   const g = new THREE.Group();
-  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.6 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: MARS_FRAG });
+  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.25 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: MARS_FRAG });
   const body = new THREE.Mesh(new THREE.SphereGeometry(radius, segs, Math.round(segs * 0.7)), mat);
   const haze = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.018, 96, 64), new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sun }, uColor: { value: new THREE.Color('#ffb48a') }, uI: { value: 1.2 } },
+    uniforms: { uSun: { value: sun }, uColor: { value: new THREE.Color('#ff9a6a') }, uI: { value: 0.7 } },
     vertexShader: PLANET_VERT, fragmentShader: HAZE_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide,
   }));
   g.add(body, haze); g.userData.mat = mat;
@@ -468,21 +468,21 @@ export function palmGeometry(seed = 1, h = 9) {
   const lx = Math.cos(dir) * lean * h * 0.35, lz = Math.sin(dir) * lean * h * 0.35;
   const top = V3(lx, h, lz);
   const curve = new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(lx * 0.15, h * 0.35, lz * 0.15), V3(lx * 0.55, h * 0.72, lz * 0.55), top]);
-  geos.push(tubeAlong(curve, (u) => (0.2 * (1 - 0.45 * u)) * (1 + 0.06 * Math.sin(u * 160)) + (u < 0.05 ? (0.05 - u) * 2 : 0), 30, 7));
+  geos.push(tubeAlong(curve, (u) => (0.24 * (1 - 0.4 * u)) * (1 + 0.06 * Math.sin(u * 160)) + (u < 0.05 ? (0.05 - u) * 2 : 0), 30, 7));
   // fronds
   const pos = [], NF = 15 + Math.floor(R() * 4);
   const tmp = V3(), side = V3(), up = V3(0, 1, 0);
   for (let f = 0; f < NF; f++) {
-    const a = (f / NF) * TAU + R() * 0.3, el = 0.55 - R() * 0.9, L = 3.4 + R() * 1.4;
+    const a = (f / NF) * TAU + R() * 0.3, el = 0.75 - R() * 0.75, L = 3.6 + R() * 1.4;
     const d0 = V3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el));
     side.crossVectors(d0, up).normalize();
     const pts = [];
-    for (let i = 0; i <= 14; i++) { const s = i / 14; const p = top.clone().addScaledVector(d0, s * L); p.y -= (s * L) * (s * L) * 0.16 * (1.2 - el * 0.5); pts.push(p); }
+    for (let i = 0; i <= 14; i++) { const s = i / 14; const p = top.clone().addScaledVector(d0, s * L); p.y -= (s * L) * (s * L) * 0.13 * (1.3 - el * 0.4); pts.push(p); }
     for (let i = 1; i < 14; i++) {
       const s = i / 14, p = pts[i], tan = tmp.subVectors(pts[i + 1], pts[i - 1]).normalize();
-      const ll = 0.9 * Math.sin(Math.PI * Math.min(1, s * 1.15)) + 0.15;
+      const ll = 0.95 * Math.sin(Math.PI * Math.min(1, s * 1.1)) + 0.12;
       for (const sd of [-1, 1]) {
-        const tip = p.clone().addScaledVector(side, sd * ll * 0.85).addScaledVector(tan, ll * 0.35); tip.y -= ll * 0.55;
+        const tip = p.clone().addScaledVector(side, sd * ll * 0.9).addScaledVector(tan, ll * 0.45); tip.y -= ll * 0.3;
         const b = p.clone().addScaledVector(tan, 0.09);
         pos.push(p.x, p.y, p.z, b.x, b.y, b.z, tip.x, tip.y, tip.z);
       }
@@ -635,8 +635,8 @@ export function buildPad(M) {
   const tm = new THREE.Mesh(merge(T), M.steel); tm.castShadow = true; tm.receiveShadow = true; g.add(tm);
   // lightning masts
   const L = [];
-  for (const [x, z, h] of [[-38, -26, 74], [34, -30, 74], [30, 28, 70], [-40, 30, 70]]) {
-    L.push(cyl(0.5, 1.4, h, 8, [x, h / 2 - 1, z]));
+  for (const [x, z, h] of [[-52, -34, 76], [50, -46, 76]]) {
+    L.push(cyl(0.3, 0.85, h, 8, [x, h / 2 - 1, z]));
     L.push(cyl(0.06, 0.06, 6, 4, [x, h + 2, z]));
   }
   const lm = new THREE.Mesh(merge(L), M.steel); lm.castShadow = true; g.add(lm);

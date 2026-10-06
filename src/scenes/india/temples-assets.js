@@ -58,13 +58,18 @@ export class Parts {
 }
 const lathe = (pts, seg = 48) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(Math.max(r, 0), y)), seg);
 // box with a gentle noise displacement (consistent for coincident vertices, so no cracks): hewn rock
-export function rockBox(w, h, d, { cell = 4, amp = 0.6, freq = 0.08, seed = 0 } = {}) {
+export function rockBox(w, h, d, { cell = 4, amp = 0.6, freq = 0.08, seed = 0, front = 0, ragged = 0 } = {}) {
   const g = new THREE.BoxGeometry(w, h, d, Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)), Math.max(1, Math.round(d / cell)));
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const f = freq;
-    p.setXYZ(i, x + amp * noise3(x * f + seed, y * f, z * f), y + amp * 0.35 * noise3(x * f, y * f + seed + 7, z * f), z + amp * noise3(x * f, y * f, z * f + seed + 13));
+    // a natural, weathered face at the front (+z), cut-straight faces elsewhere; a ragged skyline on top
+    const fr = front * Math.min(1, Math.max(0, (z - (d / 2 - 8)) / 8)) * Math.min(1, (y + h / 2) / 6);
+    const a = amp + fr;
+    const top = ragged * Math.max(0, (y - (h / 2 - 1)) / 1) * (0.6 + noise3(x * 0.04 + seed, 3.1, z * 0.04));
+    p.setXYZ(i, x + a * noise3(x * f + seed, y * f, z * f), y + amp * 0.35 * noise3(x * f, y * f + seed + 7, z * f) + top * 2.5 + fr * 0.4 * noise3(x * 0.11, y * 0.11, seed),
+      z + a * noise3(x * f, y * f, z * f + seed + 13) + fr * 1.2 * noise3(x * 0.03 + seed, y * 0.05, 2.0));
   }
   g.computeVertexNormals();
   return g;
@@ -236,10 +241,11 @@ export function buildStupa(P) {
 // =========================================================================================== KAILASA
 // Trench c. 84 × 52 m cut 34 m down into the basalt; the temple stands free in it.
 export const K = { X0: -42, X1: 42, Z0: -30, Z1: 22, H: 34, L: -78, R: 78 };
-function vimanaTiers(P, key, s0, y0, tiers, dS, tH, kuta) {
+function vimanaTiers(P, key, s0, y0, tiers, dS, tH, kuta, band = 0) {
   let s = s0, y = y0;
   for (let i = 0; i < tiers; i++) {
     P.box(key, -s, s, y, y + tH, -s, s);
+    if (band) { const b = s * band; P.box(key, -b, b, y, y + tH * 0.8, -s - 0.7, s + 0.7); P.box(key, -s - 0.7, s + 0.7, y, y + tH * 0.8, -b, b); }
     P.box(key, -s - 0.25, s + 0.25, y + tH * 0.62, y + tH * 0.8, -s - 0.25, s + 0.25);   // cornice
     // parapet of miniature shrines: domed kutas at the corners, barrel-roofed salas between
     const n = Math.max(1, Math.round((2 * s) / (kuta * 2.6)) - 1);
@@ -340,7 +346,7 @@ export function buildKailasa(P) {
 export function buildCliff(P) {
   const H = K.H;
   const blocks = [[K.L, K.X0, -130, K.Z1], [K.X1, K.R, -130, K.Z1], [K.X0, K.X1, -78, K.Z0]];
-  blocks.forEach(([x0, x1, z0, z1], i) => P.add('cliff', rockBox(x1 - x0, H, z1 - z0, { cell: 5, amp: 0.9, freq: 0.07, seed: i * 3.1 }), (x0 + x1) / 2, H / 2, (z0 + z1) / 2));
+  blocks.forEach(([x0, x1, z0, z1], i) => P.add('cliff', rockBox(x1 - x0, H, z1 - z0, { cell: 3.5, amp: 0.7, freq: 0.07, seed: i * 3.1, front: i < 2 ? 3.5 : 0, ragged: 1 }), (x0 + x1) / 2, H / 2, (z0 + z1) / 2));
 }
 
 // =========================================================================================== THANJAVUR
@@ -367,7 +373,7 @@ export function buildTower(P) {
     P.box(G, -s - 0.6, s + 0.6, y1 - 0.2, y1, -s - 0.6, s + 0.6);
   }
   // thirteen tiers to c. 55 m
-  const top = vimanaTiers(P, G, S - 1.4, 15.4, 13, 0.72, 3.0, 1.9);
+  const top = vimanaTiers(P, G, S - 1.4, 15.4, 13, 0.72, 3.0, 1.9, 0.3);
   P.box(G, -4.8, 4.8, top.y, top.y + 2.4, -4.8, 4.8);
   P.box(G, -5.6, 5.6, top.y + 2.2, top.y + 2.8, -5.6, 5.6);
   // capstone (shikhara): octagonal dome; then the gilded kalasha
@@ -390,8 +396,8 @@ export function buildTower(P) {
   P.box(G, -5.6, 5.6, 7.5, 8.4, NZ - 5.6, NZ + 5.6);
   P.add(G, new THREE.ConeGeometry(5.6, 2.6, 4).rotateY(Math.PI / 4), 0, 9.7, NZ);
   P.add(G, new THREE.SphereGeometry(1.4, 10, 8).scale(1.6, 1, 2.2), 0, 2.8, NZ);   // the Nandi
-  // the courtyard cloister (back and sides only, so it never blocks the view)
-  for (const [x0, x1, z0, z1] of [[-55, 55, -58, -54], [-55, -51, -58, 0], [51, 55, -58, 0]]) P.box(G, x0, x1, 0, 6.5, z0, z1);
+  // the courtyard cloister (the back range only, so it never blocks the view)
+  P.box(G, -55, 55, 0, 6.5, -58, -54);
 }
 
 // =========================================================================================== TAJ MAHAL

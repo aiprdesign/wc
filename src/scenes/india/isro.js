@@ -68,9 +68,9 @@ export function create(ctx, segment) {
   const stars = A.makeStarfield(lite ? 3000 : 5200); scene.add(stars);
   const STU = stars.userData.u;
 
-  const SPACE_ENV = makeEnv(ctx.renderer, { ground: [0.02, 0.025, 0.04], glowDir: V3(0.5, 0.6, 0.6), glow: [1.1, 1.0, 0.9] });
+  const SPACE_ENV = makeEnv(ctx.renderer, { ground: [0.16, 0.15, 0.14], glowDir: V3(0.5, 0.6, 0.6), glow: [0.9, 0.85, 0.78] });
   const EARTH_ENV = makeEnv(ctx.renderer, { ground: [0.05, 0.12, 0.3], glowDir: V3(0.6, 0.5, 0.6), glow: [1.0, 0.95, 0.88] });
-  const MOON_ENV = makeEnv(ctx.renderer, { ground: [0.32, 0.31, 0.29], glowDir: V3(-0.85, 0.1, 0.5), glow: [1.2, 1.15, 1.05] });
+  const MOON_ENV = makeEnv(ctx.renderer, { ground: [0.3, 0.29, 0.27], glowDir: V3(-0.85, 0.1, 0.5), glow: [0.6, 0.58, 0.54] });
   const MG = A.isroMaterials(null);          // ground hardware: scene environment
   const MS = A.isroMaterials(SPACE_ENV);     // spacecraft in deep space
   const ME = A.isroMaterials(EARTH_ENV);     // in Earth orbit
@@ -102,10 +102,10 @@ export function create(ctx, segment) {
     .forEach(([x, z, v, s], i) => {
       const m = new THREE.Mesh(palmGeos[v], silM); m.position.set(x, 0, z); m.scale.setScalar(s); m.rotation.y = i * 1.7; m.castShadow = true; w1.add(m); palms.push(m);
     });
-  const church = new THREE.Mesh(A.churchGeometry(), silM); church.position.set(-27, 0, -27); church.rotation.y = 0.5; church.castShadow = true; w1.add(church);
-  const winM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb060').multiplyScalar(1.6), toneMapped: false });
-  for (let i = 0; i < 3; i++) { const wn = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.4), winM); wn.position.set(3.52, 2.4, -3.5 + i * 3.5); wn.rotation.y = Math.PI / 2; church.add(wn); }
-  { const door = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.4), winM); door.position.set(0, 1.2, 7.12); church.add(door); }
+  const church = new THREE.Mesh(A.churchGeometry(), silM); church.position.set(-36, 0, -34); church.rotation.y = 0.7; church.scale.setScalar(0.9); church.castShadow = true; w1.add(church);
+  const winM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb060').multiplyScalar(0.9), toneMapped: false });
+  for (let i = 0; i < 3; i++) { const wn = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 1.1), winM); wn.position.set(3.52, 2.4, -3.5 + i * 3.5); wn.rotation.y = Math.PI / 2; church.add(wn); }
+  { const door = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.0), winM); door.position.set(0, 1.0, 7.12); church.add(door); }
   const bike = new THREE.Mesh(A.bicycleGeometry(), silM); bike.position.set(-3.4, 0, 3.2); bike.rotation.set(0, 0.35, 0.1); bike.castShadow = true; w1.add(bike);
   // launcher + rocket
   const ELEV = THREE.MathUtils.degToRad(82);
@@ -121,7 +121,6 @@ export function create(ctx, segment) {
   const nikeGlow = glowSprite({ color: '#ffd6a0', intensity: 3, scale: 2.2 }); nikeGlow.position.set(0, -0.5, 0); nike.group.add(nikeGlow);
   const smoke1 = makeSmoke(lite ? 1800 : 3600, { t0: 0, t1: DUR, seed: 7 }); w1.add(smoke1);
   const S1U = smoke1.userData.u;
-  Object.assign(S1U, {});
   S1U.uV0.value = 0; S1U.uAcc.value = ACC1; S1U.uSpread0.value = 0.12; S1U.uSpreadK.value = 0.8; S1U.uLife.value = 3.0; S1U.uSize.value = 0.55; S1U.uHotK.value = 9;
   S1U.uAxis.value.copy(AX1); S1U.uGain.value = 0.42; S1U.uTint.value.set('#ffc6a8');
   const billow1 = A.makeBillow(lite ? 500 : 1000, { t0: tLaunch - 0.02, t1: tLaunch + 0.5, seed: 4, speed: [3, 10], rise: [0.3, 2.4], size: [0.6, 1.5] });
@@ -132,7 +131,7 @@ export function create(ctx, segment) {
   const floods = [];
   for (const [x, z] of [[-5, -3], [5.5, -4.5]]) {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 6), silM); pole.position.set(x, 3, z); w1.add(pole);
-    const gl = glowSprite({ color: '#ffe2b8', intensity: 2.2, scale: 1.6 }); gl.position.set(x, 6.1, z); w1.add(gl); floods.push(gl);
+    const gl = glowSprite({ color: '#ffe2b8', intensity: 1.4, scale: 1.0 }); gl.position.set(x, 6.1, z); w1.add(gl); floods.push(gl);
   }
   const S1CAM = new THREE.CatmullRomCurve3([V3(-7.8, 1.45, 17.4), V3(-8.3, 1.4, 16.5), V3(-8.9, 1.25, 15.4)]);
 
@@ -141,7 +140,7 @@ export function create(ctx, segment) {
   const arya = A.buildAryabhata(ME);
   const aryaSpin = new THREE.Group(); aryaSpin.rotation.set(0.42, 0, -0.2); aryaSpin.add(arya.group); w2.add(aryaSpin);
   const SUN2 = V3(0.55, 0.42, 0.72).normalize();
-  const EARTH2 = V3(-0.05, -1, -0.62).normalize().multiplyScalar(1.03);
+  const EARTH2 = V3(-0.1, -1, -0.08).normalize().multiplyScalar(1.03);
   const EROT2 = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0.3, 1.2, 0.2)));
   const aryaGlint = glowSprite({ color: '#fff4e0', intensity: 2.5, scale: 0.5 }); w2.add(aryaGlint);
 
@@ -175,7 +174,7 @@ export function create(ctx, segment) {
   const S3U = smoke3.userData.u;
   S3U.uV0.value = 0; S3U.uAcc.value = ACC3; S3U.uSpread0.value = 1.2; S3U.uSpreadK.value = 3.4; S3U.uLife.value = 3.0; S3U.uSize.value = 3.2; S3U.uHotK.value = 5;
   S3U.uAxis.value.set(0, 1, 0); S3U.uGain.value = 0.55; S3U.uTint.value.set('#ffd2b0');
-  const billow3 = A.makeBillow(lite ? 1400 : 2800, { t0: tIgn + 0.02, t1: tPs + 0.9, seed: 9, lobes: 1, speed: [10, 46], rise: [1, 14], size: [3, 8] });
+  const billow3 = A.makeBillow(lite ? 1400 : 2800, { t0: tIgn + 0.02, t1: tPs + 0.9, seed: 9, lobes: 1, speed: [16, 75], rise: [2, 18], size: [4, 10] });
   billow3.position.set(0, -2.2, 0); w3.add(billow3);
   const B3U = billow3.userData.u;
   B3U.uAmb.value.set('#141c2c'); B3U.uSunCol.value.set('#4a5a78'); B3U.uSun.value.set(0.3, 0.4, 0.8).normalize(); B3U.uFire.value.set('#ff9440');
@@ -190,17 +189,17 @@ export function create(ctx, segment) {
   ch1.group.rotation.set(0.25, -0.5, 0.12);
   const C1CAM = [V3(-9, 80, 152), V3(4, 79, 151)];
   const C1LOOK = [V3(-6, 67, 0), V3(8, 66, 0)];
-  const waterAnchor = V3(18, 100, 0).applyAxisAngle(V3(1, 0, 0), 0.42).normalize().multiplyScalar(99);   // on the polar blue
 
   // ================================================================ 5 · MANGALYAAN AT MARS, 24 SEPTEMBER 2014 (Mars radius 10)
   const w5 = mk();
-  const SUN5 = V3(0.35, 0.45, 0.82).normalize();
-  const mars = A.marsMesh(10, SUN5, lite ? 96 : 160); w5.add(mars);
+    const mars = A.marsMesh(10, V3(), lite ? 96 : 160); w5.add(mars);
   const marsBody = mars.children[0];
   mars.rotation.z = 0.44;
   const N5 = V3(0.1, 0.96, 0.25).normalize();
   const P5 = V3(-1, 0.05, 0.55); P5.addScaledVector(N5, -P5.dot(N5)).normalize();
   const Q5 = V3().crossVectors(N5, P5).normalize();
+  const SUN5 = V3().addScaledVector(Q5, 0.3).addScaledVector(P5, 0.6).addScaledVector(N5, -0.7).normalize();
+  mars.userData.mat.uniforms.uSun.value.copy(SUN5);
   const RP = 10.75, E5 = 0.86, PP = RP * (1 + E5);
   const orbitAt = (nu, out = V3()) => { const r = PP / (1 + E5 * Math.cos(nu)); return out.copy(P5).multiplyScalar(Math.cos(nu) * r).addScaledVector(Q5, Math.sin(nu) * r); };
   const ellA = new THREE.CatmullRomCurve3(Array.from({ length: 90 }, (_, i) => orbitAt((i / 89) * 2.55)));
@@ -215,9 +214,8 @@ export function create(ctx, segment) {
   const MOM_S = 0.065;
   const momG = new THREE.Group(); momG.scale.setScalar(MOM_S); momG.add(mom.group); w5.add(momG);
   {
-    const q = new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), Q5.clone().negate());   // engine (−y) points along the velocity: a retro-burn
-    momG.quaternion.copy(q);
-    mom.group.rotation.y = 0.9;
+    // engine (−y) points along the velocity (a retro-burn); the wing (+x) stands out radially; the bus faces −N (the camera side)
+    momG.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(P5, Q5.clone().negate(), N5.clone().negate()));
   }
   const momCore = A.plume(0.12, 0.3, 1.6, A.plumeMat('#fff3e0', 3.0)), momOut = A.plume(0.2, 1.1, 5.5, A.plumeMat('#ffc070', 1.0, { alpha: 0.6 }));
   momCore.position.copy(mom.exit); momOut.position.copy(mom.exit); mom.group.add(momCore, momOut);
@@ -226,7 +224,7 @@ export function create(ctx, segment) {
 
   // ================================================================ 6 · CHANDRAYAAN-3 NEAR THE SOUTH POLE, 23 AUGUST 2023 (metres)
   const w6 = mk();
-  const SUN6 = V3(-0.86, 0.072, 0.5).normalize();          // ~4° above the horizon
+  const SUN6 = V3(-0.86, 0.1, 0.5).normalize();            // ~6° above the horizon
   const EARTH6 = V3(0.55, 0.05, -0.83).normalize();          // Earth hangs low near the horizon
   const { field } = makeTerrainField(31, { RM: 520 });
   const lunarMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#f4efe6', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
@@ -278,8 +276,8 @@ export function create(ctx, segment) {
     const tex = A.treadTexture(); tex.repeat.set(1, 1);
     const pos = [], uv = [], STEP = 0.06, NSEG = 60, W = 0.07;
     const side = V3(-RAMP_DIR.z, 0, RAMP_DIR.x);
-    for (const off of [-prag.gauge, prag.gauge]) {
-      for (let i = 0; i < NSEG; i++) {
+    for (let i = 0; i < NSEG; i++) {
+      for (const off of [-prag.gauge, prag.gauge]) {
         const a = RAMP_END.clone().addScaledVector(RAMP_DIR, i * STEP).addScaledVector(side, off), b = a.clone().addScaledVector(RAMP_DIR, STEP);
         const pts = [a.clone().addScaledVector(side, -W), a.clone().addScaledVector(side, W), b.clone().addScaledVector(side, -W), b.clone().addScaledVector(side, W)];
         pts.forEach((p) => { p.y = field(p.x, p.z) + 0.006; });
@@ -299,8 +297,8 @@ export function create(ctx, segment) {
   const altAt = (t) => { const u = sat((t - D0) / (tSP - D0)); return 8.2 * (0.85 * (1 - u) ** 2 + 0.15 * (1 - u)); };
   const dust6 = A.makeLunarDust(lite ? 3000 : 6500, { tEmit0: tC3 + 0.12, tLand: tSP, altAt }); dust6.position.set(LAND.x, field(0, 0), LAND.z); w6.add(dust6);
   const D6U = dust6.userData.u; D6U.uSun.value.copy(SUN6);
-  const vikFx = vik.engines.map((p) => { const c = A.plume(0.07, 0.3, 1.6, A.plumeMat('#dfe8ff', 1.6)); c.position.copy(p); vik.group.add(c); return c; });
-  const vikGlow = glowSprite({ color: '#e6eeff', intensity: 1.6, scale: 2.2 }); vikGlow.position.set(0, -0.5, 0); vik.group.add(vikGlow);
+  const vikFx = vik.engines.map((p) => { const c = A.plume(0.07, 0.32, 1.4, A.plumeMat('#dfe8ff', 0.8)); c.position.copy(p); vik.group.add(c); return c; });
+  const vikGlow = glowSprite({ color: '#e6eeff', intensity: 1.0, scale: 1.8 }); vikGlow.position.set(0, -0.5, 0); vik.group.add(vikGlow);
   const C6CAM = new THREE.CatmullRomCurve3([V3(-4.9, 1.25, 11.2), V3(-4.1, 0.95, 8.9), V3(-3.0, 1.05, 7.7), V3(-3.6, 3.5, 11.5), V3(-8, 14, 24), V3(-14, 30, 40)], false, 'centripetal');
   const C6K = [[tC3 - 0.02, 0], [tSP, 1], [tSP + 0.55, 2], [tSP + 0.8, 2.55], [DUR - 0.2, 4.2], [DUR + 0.05, 5]];
   C6CAM.points.forEach((p) => { p.y += field(p.x, p.z); });
@@ -320,8 +318,8 @@ export function create(ctx, segment) {
   ];
   const tpLeft = (txt, o, x, y) => { const tp = new TextPlane(txt, o); tp.position.set(x + tp.worldWidth / 2, y, 0); tp.opacity = 0; hud.scene.add(tp); return tp; };
   const capMain = SHOTS.map((s) => tpLeft(s.main, { font: FONTS.mono, weight: 500, height: 0.04 * UI, letterSpacing: 0.3, color: '#f3f6fb', intensity: 1.15 }, HX(0.16), HY(-0.78)));
-  const capSub = SHOTS.map((s) => tpLeft(s.sub, { font: FONTS.mono, weight: 300, height: 0.024 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.85 }, HX(0.165), HY(-0.838)));
-  const capTag = SHOTS.map((s) => (s.tag ? tpLeft(s.tag, { font: FONTS.mono, weight: 400, height: 0.021 * UI, letterSpacing: 0.26, color: GOLD, intensity: 1.1 }, HX(0.165), HY(-0.885)) : null));
+  const capSub = SHOTS.map((s) => tpLeft(s.sub, { font: FONTS.mono, weight: 300, height: 0.024 * UI, letterSpacing: 0.26, color: ICE, intensity: 0.85, size: 80 }, HX(0.165), HY(-0.838)));
+  const capTag = SHOTS.map((s) => (s.tag ? tpLeft(s.tag, { font: FONTS.mono, weight: 400, height: 0.021 * UI, letterSpacing: 0.26, color: GOLD, intensity: 1.1, size: 80 }, HX(0.165), HY(-0.885)) : null));
   const capIdx = SHOTS.map((s, i) => tpLeft(`0${i + 1}`, { font: FONTS.mono, weight: 500, height: 0.026 * UI, letterSpacing: 0.2, color: GOLD, intensity: 1.3 }, HX(0.16), HY(-0.715)));
   const idxOf = tpLeft('/ 06', { font: FONTS.mono, weight: 300, height: 0.022 * UI, letterSpacing: 0.3, color: ICE, intensity: 0.75 }, HX(0.16) + 0.06 * UI, HY(-0.715));
   const RAIL_W = 0.95 * UI, RAIL_X = HX(0.16), RAIL_Y = HY(-0.935);
@@ -372,13 +370,13 @@ export function create(ctx, segment) {
     nikeCore.material.uniforms.uA.value = on * flick; nikeOut.material.uniforms.uA.value = 0.75 * on * flick;
     nikeCore.material.uniforms.uT.value = nikeOut.material.uniforms.uT.value = T;
     nikeGlow.material.opacity = on * flick; nikeGlow.scale.setScalar(2.2 + 1.8 * envelope(t, tLaunch - 0.02, tLaunch + 0.25, 0.02, 0.2));
-    nike.group.updateMatrixWorld(true);
+    launcher.group.updateMatrixWorld(true);
     const exitW = nike.group.localToWorld(tmp.copy(nike.exit));
     S1U.uT.value = Math.max(0, t - tLaunch); S1U.uSrc0.value.copy(exitW); S1U.uSrc1.value.copy(exitW);
     S1U.uSun.value.copy(KEY1); S1U.uViewport.value = RES.vh; S1U.uTEnd.value = 9;
     smoke1.visible = t > tLaunch;
-    B1U.uT.value = t; B1U.uViewport.value = RES.vh; B1U.uFireK.value = 1;
-    glowL.position.copy(exitW).addScaledVector(AX1, -0.6); glowL.color.set('#ffb070'); glowL.intensity = 260 * on * flick;
+    B1U.uT.value = t; B1U.uViewport.value = RES.vh; B1U.uFireK.value = 0.35;
+    glowL.position.copy(exitW).addScaledVector(AX1, -1.2); glowL.color.set('#ffb070'); glowL.intensity = 70 * on * flick;
     for (let i = 0; i < palms.length; i++) palms[i].rotation.z = Math.sin(T * 0.9 + i * 1.3) * 0.006;
     // camera: a low wide frame toward the afterglow; at launch it tilts up after the rocket (the cut is mid-tilt)
     const u = sat(t / cAr);
@@ -386,7 +384,7 @@ export function create(ctx, segment) {
     camera.position.copy(camPos);
     const rocketC = nike.group.localToWorld(tmp2.set(0, 4.2, 0));
     const follow = ramp(t, tLaunch + 0.06, cAr + 0.05, ease.inOutSine);
-    look.set(-4.4 + t * 0.25, 4.0, -1).lerp(tmp.copy(rocketC).add(V3(-1.8, 2 + 10 * follow, 0)), follow * 0.92);
+    look.set(-4.4 + t * 0.25, 4.0, -1).lerp(tmp.copy(rocketC).add(V3(-5.5 - 3 * follow, 1 + 6 * follow, 0)), follow * 0.9);
     camera.lookAt(look);
     camera.fov = 32 + 9 * ramp(t, tLaunch, cAr, ease.inQuad);
     SK.uMode.value = 0; SK.uSun.value.copy(SUN1); SK.uTime.value = t; SK.uGain.value = 1;
@@ -404,10 +402,11 @@ export function create(ctx, segment) {
     aryaSpin.rotation.y = k * 1.6;
     arya.group.rotation.y = 0.4 + k * 2.4;
     // camera arcs round the satellite, rising a touch (things drift up the frame: the tilt carries on)
-    const a = lerp(0.35, 1.05, ease.inOutSine(sat(k / 0.85)));
-    const r = lerp(3.4, 3.0, sat(k / 0.8));
-    camera.position.set(Math.sin(a) * r, lerp(-0.25, 0.32, ease.outCubic(sat(k / 0.8))), Math.cos(a) * r);
-    look.set(0, -0.18 + 0.1 * sat(k), 0);
+    const a = lerp(0.35, 0.95, ease.inOutSine(sat(k / 0.85)));
+    const r = lerp(5.0, 4.4, sat(k / 0.8));
+    camera.position.set(Math.sin(a) * r, lerp(0.2, 0.75, ease.outCubic(sat(k / 0.8))), Math.cos(a) * r);
+    const side = tmp2.set(Math.cos(a), 0, -Math.sin(a));
+    look.set(0, -0.05, 0).addScaledVector(side, -lerp(1.1, 0.7, sat(k / 0.8)));
     camera.lookAt(look);
     camera.fov = 30 - 2 * sat(k / 0.8);
     SU.uMode.value = 1; SU.uSun.value.copy(SUN2); SU.uPC.value.copy(EARTH2); SU.uPR.value = 1.0; SU.uPRot.value.copy(EROT2); SU.uTime.value = t;
@@ -449,11 +448,11 @@ export function create(ctx, segment) {
     SK.uMode.value = 1; SK.uSun.value.copy(SUN3); SK.uTime.value = t; SK.uGain.value = 1 + 0.5 * ign;
     sky.visible = true;
     STU.uOpacity.value = 0.5; STU.uHorizon.value = 1;
-    setKey(V3(0.55, 0.45, 0.7).normalize(), '#d8e4ff', 0.9, V3(0, 20, 0), 40, 220);
+    setKey(V3(0.55, 0.35, 0.75).normalize(), '#dfe8ff', 4.2, V3(0, 20, 0), 40, 220);
     setRim(V3(-0.6, 0.2, -0.7), '#5d78b8', 0.5);
     hemi.color.set('#30406a'); hemi.groundColor.set('#0c0c10'); hemi.intensity = 0.5;
     for (let i = 0; i < lampGlows.length; i++) lampGlows[i].material.opacity = 0.8 + 0.2 * Math.sin(T * 2 + i);
-    return ret(camera.position.distanceTo(pslvG.position), 0, 60, 0.85, 0.82, 0.95 + 0.1 * flash, 0.18);
+    return ret(camera.position.distanceTo(pslvG.position), 0, 60, 0.85, 0.82, 1.02 + 0.1 * flash, 0.25);
   }
 
   function shotCh1(t, T) {
@@ -469,7 +468,7 @@ export function create(ctx, segment) {
     ch1G.position.copy(ch1Pos);
     ch1.group.rotation.y = -0.5 + k * 0.35;
     moon.rotation.y = 0.15 + k * 0.03;
-    MW.uWater.value = ramp(t, tC1 + 0.08, tC1 + 0.3);
+    MW.uWater.value = ramp(t, tC1 + 0.08, tC1 + 0.3); MW.uGain.value = 0.72;
     MW.uScan.value = lerp(-0.6, 0.75, ramp(t, tC1 + 0.05, cMo - 0.05, ease.inOutSine));
     SU.uMode.value = 2; space.visible = true;
     STU.uOpacity.value = 0.8; STU.uHorizon.value = 0;
@@ -492,12 +491,11 @@ export function create(ctx, segment) {
     const dA = ramp(t, tMo + 0.08, tMo + 0.5, ease.inOutSine), dB = ramp(t, tMo + 0.38, cC3 - 0.02, ease.outCubic);
     orbA.progress = Math.max(0.0001, dA); orbA.opacity = 1; orbB.progress = Math.max(0.0001, dB); orbB.opacity = dB > 0 ? 1 : 0;
     hyp.progress = 1; hyp.opacity = 0.55 * (1 - ramp(t, tMo + 0.1, tMo + 0.5));
-    // camera: just behind and outside the spacecraft, looking down its path past the limb; a slow drift
-    const back = tmp.copy(Q5).negate();
-    camPos.copy(momPos).addScaledVector(back, lerp(1.25, 1.12, k)).addScaledVector(P5, lerp(0.95, 1.05, k)).addScaledVector(N5, lerp(0.42, 0.5, k));
+    // camera: behind, above and to the side of the spacecraft, looking down its path: Mars is the horizon below
+    camPos.copy(momPos).addScaledVector(Q5, lerp(-0.85, -0.72, k)).addScaledVector(P5, lerp(0.3, 0.36, k)).addScaledVector(N5, lerp(-1.0, -0.92, k));
     camera.position.copy(camPos);
-    look.copy(momPos).addScaledVector(Q5, 1.3).addScaledVector(P5, -0.45 - 0.05 * k).addScaledVector(N5, -0.08);
-    camera.up.copy(N5);
+    look.copy(momPos).addScaledVector(Q5, 0.75 + 0.1 * k).addScaledVector(P5, -0.12).addScaledVector(N5, 0.25);
+    camera.up.copy(P5);
     camera.lookAt(look);
     camera.near = 0.01;
     camera.fov = 34 - 2 * k;
@@ -506,6 +504,7 @@ export function create(ctx, segment) {
     setKey(SUN5, '#fff1de', 3.2, momPos, 0.5, 6);
     setRim(tmp2.copy(momPos).normalize().negate(), '#ff9a6a', 0.6);
     hemi.color.set('#101218'); hemi.groundColor.set('#5a2a16'); hemi.intensity = 0.35;
+    momG.updateMatrixWorld(true);
     glowL.position.copy(mom.group.localToWorld(tmp2.copy(mom.exit))); glowL.color.set('#ffc890'); glowL.intensity = 0.25 * burn;
     return ret(camPos.distanceTo(momPos), 0, 2, 0.85, 0.68, 0.98, 0.3);
   }
@@ -527,7 +526,6 @@ export function create(ctx, segment) {
     const rA = ramp(t, tRamp, tRamp + 0.28, ease.inOutCubic), rB = ramp(t, tRamp + 0.05, tRamp + 0.33, ease.inOutCubic);
     vik.rampA.rotation.z = lerp(Math.PI / 2, -ALPHA, rA);
     vik.rampB.rotation.z = lerp(Math.PI, 0, rB);
-    vik.rampB.position.y = lerp(0, 0, rB);
     const s = roverS(t);
     pathAt(s + 0.3, roverFront); pathAt(s - 0.3, roverRear);
     roverPos.copy(roverFront).add(roverRear).multiplyScalar(0.5);
@@ -537,16 +535,13 @@ export function create(ctx, segment) {
     prag.group.rotation.set(0, PSI, pitch, 'YZX');
     const trackLen = Math.max(0, s - 0.3 - S_FOOT);
     const nSeg = Math.min(tracks.userData.n, Math.floor(trackLen / tracks.userData.step));
-    tracks.geometry.setDrawRange(0, nSeg * 6); tracks.visible = nSeg > 0;
-    // second wheel line lives after the first in the buffer: draw it with an index-free range trick (two groups)
-    tracks.geometry.clearGroups(); tracks.geometry.addGroup(0, nSeg * 6, 0); tracks.geometry.addGroup(tracks.userData.n * 6, nSeg * 6, 0);
-    tracks.geometry.setDrawRange(0, Infinity);
+    tracks.geometry.setDrawRange(0, nSeg * 12); tracks.visible = nSeg > 0;
     // camera: low on the regolith for the descent, a small shake at touchdown, then a crane up and away
     const cu = timeWarp(t, C6K) / 5;
     C6CAM.getPoint(sat(cu), camPos);
     const sh = t > tSP ? 0.035 * Math.exp(-(t - tSP) * 9) : 0;
     camera.position.copy(camPos).add(tmp.set(Math.sin(T * 71) * sh, Math.sin(T * 53) * sh, 0));
-    const lookDescent = tmp.set(0.2, vikPos.y - LAND.y + 0.9 + field(0, 0), 0).lerp(V3(0.3, field(0, 0) + 0.9, 0), 0);
+    const lookDescent = tmp.set(0.2, vikPos.y - LAND.y + 0.9 + field(0, 0), 0);
     const lookRover = tmp2.copy(roverPos).add(V3(0, 0.35, 0)).lerp(vikPos, 0.35);
     look.copy(lookDescent).lerp(lookRover, ramp(t, tSP + 0.1, tSP + 0.6, ease.inOutSine));
     const away = ramp(t, tSP + 0.75, DUR + 0.1, ease.inQuad);
@@ -557,9 +552,9 @@ export function create(ctx, segment) {
     SU.uMode.value = 2; space.visible = true;
     STU.uOpacity.value = 0.55 + 0.4 * away; STU.uHorizon.value = 1;
     earth6.position.copy(camera.position).addScaledVector(EARTH6, 900);
-    setKey(SUN6, '#fff4e6', 4.2, tmp.set(0, field(0, 0), 2), 18, 220);
+    setKey(SUN6, '#fff4e6', 6.0, tmp.set(0, field(0, 0), 2), 18, 220);
     setRim(V3(0.4, 0.3, -0.8), '#8fa8e0', 0.12);
-    hemi.color.set('#0c1222'); hemi.groundColor.set('#24221f'); hemi.intensity = 0.35;
+    hemi.color.set('#0c1222'); hemi.groundColor.set('#4a4640'); hemi.intensity = 0.55;
     return ret(camera.position.distanceTo(vikPos), 0.35 * (1 - away), 4 + 20 * away, 0.6, 0.72, 1.0, 0.1);
   }
 
@@ -585,6 +580,7 @@ export function create(ctx, segment) {
     for (const c of CALLS) c.reveal(0, 0);
     if (shot === 1) pin(callArya, tmp.set(0.35, 0.35, 0.2), ramp(t, cAr + 0.15, cAr + 0.45), envelope(t, cAr + 0.12, cPs - 0.03, 0.05, 0.1));
     if (shot === 2) pin(callPslv, tmp.set(1.6, pslvG.position.y + 39.5, 0), ramp(t, tPs + 0.2, tPs + 0.5), envelope(t, tPs + 0.18, cC1 - 0.03, 0.05, 0.1));
+    if (shot === 3) moon.updateMatrixWorld();
     if (shot === 3) pin(callWater, moon.localToWorld(tmp.copy(V3(18, 100, 0).normalize().multiplyScalar(100))), ramp(t, tC1 + 0.35, tC1 + 0.62), envelope(t, tC1 + 0.32, cMo - 0.03, 0.05, 0.1));
     if (shot === 4) pin(callMom, momPos, ramp(t, tMo + 0.2, tMo + 0.5), envelope(t, tMo + 0.18, cC3 - 0.03, 0.05, 0.1));
     if (shot === 5) {

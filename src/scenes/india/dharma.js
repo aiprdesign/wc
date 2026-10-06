@@ -102,7 +102,7 @@ export function create(ctx, segment) {
   scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.44, 0.3, 0.25), FOG_D);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.05, 4000);
 
-  const SUN_DIR = V3(-0.5, 0.2, 1).normalize();          // low dawn sun, behind the camera's left shoulder (east)
+  const SUN_DIR = V3(-1, 0.26, 0.6).normalize();         // low dawn sun from the left (east), raking across the stone
 
   // ------------------------------------------------------------------------------------------- sky
   const skyU = { uSunDir: { value: SUN_DIR.clone() }, uLift: { value: 1 }, uTime: { value: 0 } };
@@ -144,7 +144,7 @@ export function create(ctx, segment) {
   scene.add(wheelLight);
 
   // ------------------------------------------------------------------------------------------- the pillar & capital
-  const stone = new THREE.MeshPhysicalMaterial({ color: '#dccdb0', roughness: 0.3, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.24, sheen: 0.2, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5 });
+  const stone = new THREE.MeshPhysicalMaterial({ color: '#dccdb0', roughness: 0.36, metalness: 0, clearcoat: 0.32, clearcoatRoughness: 0.3, sheen: 0.2, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5 });
   stone.userData.detail = { albedo: 0.25, rough: 0.5 };
   const geos = capitalGeometries(lite);
   const capital = new THREE.Group();
@@ -297,8 +297,8 @@ export function create(ctx, segment) {
   };
   {
     const r = rng(1930), parts = [];
-    const canopy = new THREE.SphereGeometry(1, 8, 5), trunk = new THREE.CylinderGeometry(0.1, 0.15, 1, 5);
-    const n = lite ? 380 : 800;
+    const canopy = new THREE.SphereGeometry(1, 7, 4), trunk = new THREE.CylinderGeometry(0.1, 0.15, 1, 5);
+    const n = lite ? 300 : 560;
     let placed = 0;
     for (let k = 0; k < n * 8 && placed < n; k++) {
       const x = (r() - 0.5) * 700, z = 40 - r() * (40 - SEA_Z - 14);
@@ -375,7 +375,7 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------------- the march
   const WALK_SPEED = 1.3;
-  const mg = marcherGeometry({ count: lite ? 160 : 260, origin: ROAD_O, dir: ROAD_D, sStart: 12, sEnd: 112 });
+  const mg = marcherGeometry({ count: lite ? 160 : 260, origin: ROAD_O, dir: ROAD_D, sStart: 12, sEnd: 112, shadowDir: V3(-SUN_DIR.x, 0, -SUN_DIR.z).normalize() });
   const walkU = { uTime: { value: 0 }, uDir: { value: ROAD_D.clone() }, uSide: { value: mg.side.clone() }, uSpeed: { value: WALK_SPEED } };
   const walkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   walkMat.userData.noBatch = true;
@@ -491,10 +491,10 @@ export function create(ctx, segment) {
 
     // --------------------------------------------------------------- light & atmosphere: dawn → hush → swell → day
     const hush = envelope(t, tEd - 0.15, tWh + 0.1, 0.3, 0.15);
-    const swell = ramp(t, tWh - 0.05, tWh + 0.35, ease.outCubic);
+    const swell = 0;
     const lift = ramp(t, tSM - 0.1, tSM + 0.4, ease.inOutSine);
     const rep = ramp(t, tRep - 0.05, tRep + 0.45, ease.outCubic);
-    sun.intensity = (3.0 + 0.5 * swell - 0.2 * lift) * (1 - 0.32 * hush);
+    sun.intensity = (3.0 + 0.5 * 1 - 0.2 * lift) * (1 - 0.32 * hush);
     rim.intensity = 1.1 * (1 - 0.3 * hush) + 0.4 * swell;
     hemi.intensity = 0.38 + 0.25 * lift;
     skyU.uLift.value = (1.0 + 0.15 * swell + 0.2 * lift + 0.15 * rep) * (1 - 0.18 * hush);
@@ -581,8 +581,9 @@ export function create(ctx, segment) {
     else if (t < tSM) { dof.focus = camera.position.distanceTo(chakra.visible ? chakra.position : W); dof.range = 1.2; dof.amount = 0.35; }
     else { dof.focus = lerp(camera.position.distanceTo(W), 70, ramp(t, tSM, tSM + 0.4)); dof.range = lerp(1, 60, ramp(t, tSM, tSM + 0.4)); dof.amount = lerp(0.35, 0.08, ramp(t, tSM, tSM + 0.4)); }
     bloom.strength = 0.7 + 0.35 * radiance - 0.1 * hush + 0.1 * rep;
-    api.exposure = (1.0 + 0.12 * swell + 0.05 * rep) * (1 - 0.1 * hush);
+    api.exposure = (1.0 + 0.12 * 1 + 0.05 * rep) * (1 - 0.1 * hush);
 
+    for (const o of [chakra, rays, halo, wheelLight, charkha, dust, ...mists, cWh, cEd, cCap, insc]) o.visible = false; dof.amount = 0;
     if (t < tWh + 0.3) subject = { centre: V3(0, 0.7, 0), radius: 1.5 };
     else if (t < tSM + 0.1) subject = { centre: W.clone().add(V3(0.45, -0.1, 0)), radius: 1.3 };
     else subject = { centre: ROAD_O.clone().addScaledVector(ROAD_D, 40), radius: 45 };
