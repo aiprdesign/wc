@@ -262,6 +262,26 @@ preset costs roughly 8 × 4 = 32× the GPU work of a draft frame.
 Colour moves from marble, bronze, parchment and gold to steel, electricity and cool white
 light across the running time. The final grade applies this shift as an era white balance.
 
+## The Indian film
+
+| # | time | sequence | what you see |
+|---|------|----------|--------------|
+| 0 | 0:00 | **The Idea** | the shared cold open: a stupa, zero, a PSLV and the Moon flash in gold; a Sulba Sutra construction draws a Nagara temple; ACHIEVEMENTS OF INDIAN CIVILIZATION slams together |
+| I | 0:10 | **The Indus Cities** | Mohenjo-daro rises from the plain, streets on a grid, an x-ray of the covered drains, the Great Bath fills, chert weights and a seal |
+| II | 0:17 | **Language & Grammar** | a palm-leaf manuscript fans open; Panini's rules derive *bhavati*; Brahmi branches into the scripts of Asia |
+| III | 0:22 | **Zero & the Decimal System** | the Bakhshali dot, place value (205), Brahmagupta's rules (628), the digits travel west |
+| IV | 0:28 | **Astronomy** | the Earth turns on its axis (Aryabhata, 499), π = 62832/20000, the sine table, the Samrat Yantra at Jaipur |
+| V | 0:34 | **Metallurgy** | a crucible furnace, wootz steel's watered pattern, the Iron Pillar of Delhi, Zawar's zinc |
+| VI | 0:40 | **Surgery & Medicine** | Sushruta's instruments and the cheek-flap rhinoplasty as a hologram |
+| VII | 0:44 | **Architecture** | Sanchi, Kailasa carved down from the rock, Thanjavur, the Taj Mahal |
+| VIII | 0:48 | **The First Universities** | Nalanda rebuilds; scholars, the library, routes across Asia |
+| IX | 0:54 | **The Path of Peace** | the Lion Capital, Ashoka's edicts, the chakra, the charkha, the Salt March, 1947 · 1950 |
+| X | 0:59 | **Gifts to the World** | cotton, the loom, chintz and indigo, chaturanga becoming chess, yoga |
+| XI | 1:05 | **The Modern Mind** | Ramanujan's 1729, the Raman effect, Bose's condensate |
+| XII | 1:09 | **To the Moon & Mars** | Thumba 1963, Aryabhata 1975, PSLV, Chandrayaan-1, Mangalyaan, Chandrayaan-3 at the south pole |
+| – | 1:17 | **Legacy** | the montage: city grid → zero → dharma chakra → vimana → Mars orbit → stars |
+| – | 1:23 | **Finale** | Earth turned to India: *From the Indus to the Moon, five thousand years of curiosity, craft and discovery.* |
+
 ## How it's built
 
 ```
@@ -273,6 +293,7 @@ src/core/post.js      depth of field, 6 transition shaders, ACES film grade (CA,
 src/core/player.js    audio-clock transport, seeking, MP4/WebM recording
 src/core/export.js    frame-perfect in-browser video export (WebCodecs → MP4 / WebM) and its dialog
 src/audio/            procedural score + sound design, pre-rendered in an OfflineAudioContext
+src/audio/india/      the Indian film's layer: tanpura, sitar, bansuri, santoor, tabla, bells; its sound design
 src/scenes/<id>.js    one module per sequence (see docs/SCENE_GUIDE.md); src/scenes/india/<id>.js for the Indian film
 src/lib/              motion-design toolkit: typography, particles, line reveals, HUD, materials, textures
 tools/                headless frame capture, contact sheets, offline MP4 render, typeface builder
