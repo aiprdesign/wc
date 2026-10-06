@@ -21,8 +21,8 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffd590';
 // world layout (metres)
 const STUPA = V(0, 0, 0);
-const KAI = V(125, 0, -45);
-const TOWER = V(250, 0, -50);
+const KAI = V(125, 0, -115);
+const TOWER = V(252, 0, -30);
 const TAJ = V(487.5, 0, 160);          // plinth centre; its front (local +z) faces world −x, down the channel
 const TAJ_RY = -Math.PI / 2;
 const WATER_Y = -0.35;
@@ -126,7 +126,7 @@ export function create(ctx, segment) {
   cutRect.position.y = 0;
   kai.add(cutRect);
   // dust and chips lifting off the fresh cut (a pure function of time: each grain loops on its own phase)
-  const NCH = lite ? 1200 : 2600;
+  const NCH = lite ? 500 : 1000;
   const chipGeo = new THREE.BufferGeometry();
   {
     const r = rng(77), a = new Float32Array(NCH * 4);
@@ -139,15 +139,15 @@ export function create(ctx, segment) {
     vertexShader: `attribute vec4 aSeed; uniform float uCut, uTime, uOn, uScale; uniform vec4 uBox; varying float vA;
       void main(){
         float life = fract(uTime * 0.9 * aSeed.w + aSeed.z);
-        vec3 p = vec3(mix(uBox.x, uBox.y, aSeed.x), uCut + life * (2.5 + 4.0 * aSeed.y), mix(uBox.z, uBox.w, aSeed.y));
+        vec3 p = vec3(mix(uBox.x, uBox.y, aSeed.x), uCut + life * (3.0 + 7.0 * fract(aSeed.y * 7.13)), mix(uBox.z, uBox.w, aSeed.y));
         p.x += sin(aSeed.z * 40.0 + life * 3.0) * 1.5 * life; p.z += cos(aSeed.x * 37.0 + life * 2.0) * 1.5 * life;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = uScale * (0.35 + 0.65 * aSeed.w) * 260.0 / -mv.z;
+        gl_PointSize = uScale * (0.5 + 0.8 * aSeed.w) * 420.0 / -mv.z;
         vA = uOn * (1.0 - life) * smoothstep(0.0, 0.08, life);
       }`,
     fragmentShader: `uniform vec3 uColor; varying float vA;
-      void main(){ vec2 q = gl_PointCoord - 0.5; float d = dot(q, q); if (d > 0.25) discard; gl_FragColor = vec4(uColor * 1.6, vA * (1.0 - d * 4.0) * 0.5); }`,
+      void main(){ vec2 q = gl_PointCoord - 0.5; float d = dot(q, q); if (d > 0.25) discard; gl_FragColor = vec4(uColor * 1.4, vA * pow(1.0 - d * 4.0, 2.0) * 0.35); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const chips = new THREE.Points(chipGeo, chipMat); chips.frustumCulled = false;
@@ -235,11 +235,15 @@ export function create(ctx, segment) {
     let h = (0.9 * fbm2(x / 70, z / 70, 3) + 0.25) * flat;
     // the Deccan escarpment round Kailasa: a plateau at the cliff top, the trench left clear
     const dx = x - KAI.x, dz = z - KAI.z;
-    // talus at the foot of the cliff (not in the trench)
-    h += 7 * smoothstep(48, 22, dz) * smoothstep(22, 18, -dz) * smoothstep(165, 150, Math.abs(dx)) * smoothstep(40, 50, Math.abs(dx)) * (0.6 + 0.4 * fbm2(x / 20, z / 20, 2));
-    let m = smoothstep(175, 146, Math.abs(dx)) * smoothstep(22, 6, dz);
+    // talus at the foot of the cliff (not in front of the trench)
+    const inX = smoothstep(K.L - 4, K.L + 6, dx) * smoothstep(K.R + 4, K.R - 6, dx);
+    h += 6 * smoothstep(34, 22, dz) * smoothstep(20, 23, dz) * inX * smoothstep(40, 52, Math.abs(dx)) * (0.6 + 0.4 * fbm2(x / 20, z / 20, 2));
+    // the plateau: inside the cliff blocks (their faces are the escarpment) and on behind them
+    // (beyond the cut cliff the ridge falls away as a natural hillside)
+    const ext = Math.max(0, K.L - dx, dx - K.R);
+    let m = smoothstep(K.L - 90, K.L + 6, dx) * smoothstep(K.R + 90, K.R - 6, dx) * smoothstep(22 + ext * 0.9, 6, dz) * (1 - 0.35 * smoothstep(0, 80, ext));
     m *= Math.max(smoothstep(42, 52, Math.abs(dx)), 1 - smoothstep(-40, -30, dz));
-    h = lerp(h, 33.4 + 2.5 * fbm2(x / 60, z / 60, 3) * smoothstep(-80, -110, dz), m);
+    h = lerp(h, 33.4 + 2.5 * fbm2(x / 60, z / 60, 3) * smoothstep(-80, -110, dz) * smoothstep(0, 10, ext + Math.max(0, -dz - 140)) + 4 * fbm2(x / 35, z / 35, 3) * smoothstep(0, 20, ext), m);
     // distant hills (kept low towards the sun)
     const rx = x - 250, rz = z - 30, r = Math.hypot(rx, rz);
     const toSun = Math.max(0, (rx * SUN_AZ.x + rz * SUN_AZ.y) / Math.max(r, 1));
@@ -247,7 +251,7 @@ export function create(ctx, segment) {
     return lerp(h, -95, dip);
   }
   {
-    const xs = axisCoords(-160, 640, lite ? 8 : 6, 3200), zs = axisCoords(-170, 240, lite ? 8 : 6, 3200);
+    const xs = axisCoords(-160, 640, lite ? 8 : 6, 3200), zs = axisCoords(-210, 290, lite ? 8 : 6, 3200);
     const nx = xs.length, nz = zs.length, pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), idx = [];
     const cA = new THREE.Color('#9a8150'), cB = new THREE.Color('#6b5a36'), cC = new THREE.Color('#55602e'), cR = new THREE.Color('#7a6a5a'), tmp = new THREE.Color();
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
@@ -282,12 +286,13 @@ export function create(ctx, segment) {
     });
     tree.setAttribute('position', new THREE.BufferAttribute(P, 3)); tree.setAttribute('normal', new THREE.BufferAttribute(N, 3)); tree.setAttribute('color', new THREE.BufferAttribute(C, 3));
     const r = rng(12), list = [];
-    const avoid = [[STUPA.x, STUPA.z, 34], [KAI.x, KAI.z - 10, 100], [TOWER.x, TOWER.z + 15, 80], [-30, 56, 14], [20, 70, 14], [215, 62, 18], [238, 92, 16]];
+    const avoid = [[STUPA.x, STUPA.z, 34], [TOWER.x, TOWER.z + 15, 75], [-46, 60, 12], [-24, 62, 14], [184, 94, 18], [204, 104, 18]];
     for (let k = 0; k < 4000 && list.length < (lite ? 140 : 260); k++) {
       const x = -150 + r() * 780, z = -160 + r() * 380;
       if (avoid.some(([ax, az, ar]) => Math.hypot(x - ax, z - az) < ar)) continue;
       const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 110 && lz > -120 && lz < 250) continue;
-      if (Math.abs(x - KAI.x) < 90 && z - KAI.z < 24) continue;
+      if (Math.abs(x - KAI.x) < 50 && z - KAI.z < 30 && z - KAI.z > -36) continue;
+      if (z - KAI.z < 36 && z - KAI.z > 18 && x - KAI.x > K.L - 5 && x - KAI.x < K.R + 5) continue;
       list.push([x, groundH(x, z), z, 0.8 + r() * 0.9, r() * 6.28]);
     }
     const trees = new THREE.InstancedMesh(tree, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), list.length);
@@ -329,12 +334,13 @@ export function create(ctx, segment) {
   }
   label('GREAT STUPA · SANCHI', '3RD C. BC · BEGUN UNDER ASHOKA', V(15, 7, 10), T_ST + 0.12, T_KA - 0.1, { dx: 0.5, dy: -0.12 });
   label('KAILASA · ELLORA · 8TH CENTURY', 'CARVED FROM ONE ROCK', V(KAI.x + 13, 12, KAI.z - 6), T_KA + 0.3, T_BR - 0.08, { dx: 0.55, dy: -0.18 });
-  label('THANJAVUR · 1010', '66 m GRANITE TOWER', V(TOWER.x + 10, 40, TOWER.z + 10), T_BR + 0.05, T_TJ - 0.15, { dx: 0.5, dy: -0.1 });
+  label('THANJAVUR · 1010', '66 m GRANITE TOWER', V(TOWER.x - 9, 36, TOWER.z + 9), T_BR + 0.05, T_TJ - 0.15, { dx: -0.5, dy: -0.12 });
   label('TAJ MAHAL · 1632–1653', 'AGRA · WHITE MAKRANA MARBLE', tajW(43.5, 28, 43.5), T_TJ + 0.1, dur + 1, { dx: 0.4, dy: -0.12 });
   // the tower's height, drawn beside it
   const dimG = new THREE.Group();
   const dim66 = new Dimension(V(0, 0, 0), V(0, 66, 0), '66 m', { size: 2.6, tick: 1.6, color: '#ffe6bf', intensity: 1.8 });
   dimG.add(dim66);
+  dim66.label.rotation.z = 0; dim66.label.position.set(5.5, 33, 0);
   dimG.position.set(TOWER.x + 22, 0, TOWER.z + 18);
   dim66.traverse((o) => { if (o.material) { o.material.depthTest = false; o.renderOrder = 20; } });
   scene.add(dimG);
@@ -343,11 +349,11 @@ export function create(ctx, segment) {
   const KEYS = [
     [-0.25, V(-46, 3.4, 60), V(2, 9.5, 0)],
     [T_ST, V(-24, 4.6, 62), V(5, 10, 0)],
-    [T_ST + 0.45, V(28, 34, 70), V(KAI.x - 30, 10, KAI.z)],
-    [T_KA + 0.05, V(KAI.x - 34, 80, KAI.z + 82), V(KAI.x, 4, KAI.z - 6)],
-    [T_KA + 0.6, V(KAI.x + 30, 76, KAI.z + 84), V(KAI.x + 3, 4, KAI.z - 8)],
-    [T_BR + 0.05, V(204, 6, 88), V(TOWER.x, 34, TOWER.z)],
-    [T_BR + 0.4, V(222, 6, 96), V(TOWER.x + 30, 34, TOWER.z + 15)],
+    [T_ST + 0.45, V(30, 36, 62), V(KAI.x - 30, 10, KAI.z)],
+    [T_KA + 0.05, V(KAI.x - 34, 76, KAI.z + 96), V(KAI.x - 8, 12, KAI.z - 62)],
+    [T_KA + 0.6, V(KAI.x + 26, 70, KAI.z + 98), V(KAI.x - 2, 12, KAI.z - 60)],
+    [T_BR + 0.05, V(184, 6, 94), V(TOWER.x + 4, 38, TOWER.z)],
+    [T_BR + 0.4, V(204, 6, 104), V(TOWER.x + 40, 34, TOWER.z + 24)],
     [T_TJ + 0.05, V(258, 7, TAJ.z), V(TAJ.x, 30, TAJ.z)],
     [dur + 0.3, V(298, 6.6, TAJ.z), V(TAJ.x, 31, TAJ.z)],
   ];
@@ -376,7 +382,8 @@ export function create(ctx, segment) {
     skyMat.uniforms.uSunCol.value.copy(SUN0).lerp(SUN1, day);
     sun.color.copy(SUN0).lerp(SUN1, day);
     sun.intensity = lerp(3.4, 2.9, day);
-    fill.intensity = lerp(0.55, 0.45, day);
+    fill.intensity = lerp(0.55, 0.28, day);
+    scene.environmentIntensity = lerp(0.36, 0.2, day);
     scene.fog.color.copy(skyMat.uniforms.uHor.value).multiplyScalar(0.8);
     waterMat.uniforms.uTime.value = t;
 

@@ -318,8 +318,9 @@ export function inscriptionCanvas({ W = 1024, H = 1024, lines = 8, perLine = 14,
     (s) => { s.m(0.3, 0); s.l(0.3, 1); s.m(0.3, 0); s.q(0.95, 0.5, 0.3, 1); },            // D (da)
     (s) => { s.circ(0.5, 0.5, 0.36); s.dot(0.5, 0.5); },                                   // ⊙ (tha)
     (s) => { s.m(0.15, 0.1); s.l(0.85, 0.1); s.m(0.5, 0.1); s.l(0.5, 1); },               // T
-    (s) => { s.m(0.8, 0.05); s.l(0.2, 0.05); s.l(0.2, 0.95); s.l(0.8, 0.95); s.m(0.2, 0.5); s.l(0.65, 0.5); },   // E (ja)
-    (s) => { s.m(0.2, 0); s.l(0.2, 1); s.l(0.8, 1); s.m(0.8, 0.45); s.l(0.8, 1); },       // L-hook (ha)
+    (s) => { s.circ(0.5, 0.3, 0.22); s.m(0.5, 0.52); s.l(0.5, 1); s.m(0.2, 0.78); s.l(0.8, 0.78); },   // ♀-like (circle on a cross)
+    (s) => { s.m(0.1, 0.2); s.q(0.3, 1.0, 0.5, 0.45); s.q(0.7, 1.0, 0.9, 0.2); },        // double loop (ha)
+    (s) => { s.m(0.5, 0); s.l(0.5, 0.55); s.arc(0.5, 0.75, 0.2, -Math.PI / 2, Math.PI * 1.5); },   // stem on a ring
     (s) => { s.m(0.5, 0); s.l(0.5, 1); s.m(0.5, 0.35); s.l(0.85, 0.15); s.m(0.5, 0.65); s.l(0.15, 0.85); },   // forked
   ];
   for (let li = 0; li < lines; li++) {
@@ -408,7 +409,7 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, seed = 1930 
     const base = origin.clone().addScaledVector(dir, s).addScaledVector(side, lane);
     const m = basis.clone().setPosition(base);
     const phase = r() * TAU, tone = 0.82 + r() * 0.18;
-    const cloth = new THREE.Color(0.86 * tone, 0.82 * tone, 0.74 * tone), skin = new THREE.Color(0.33, 0.2, 0.13);
+    const cloth = new THREE.Color(0.6 * tone, 0.56 * tone, 0.5 * tone), skin = new THREE.Color(0.26, 0.15, 0.1);
     const { torso, head, wrap } = parts(lead);
     const P = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(m);
     const scale = lead ? 0.96 : 0.92 + r() * 0.14;
@@ -423,7 +424,7 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, seed = 1930 
     if (lead) add(staff.clone().rotateX(0.18).translate(0.3, 0.95, -0.22), new THREE.Color(0.3, 0.2, 0.12), P(0.23, 1.45, 0), -0.12, phase, m);
     // long morning shadow, falling ahead of the walker down the road (a tapering quad on the ground)
     const len = 7.5 * scale, wd = 0.42 * scale;
-    const c0 = base.clone().addScaledVector(side, -wd / 2).add(V3(0, 0.03, 0)), c1 = base.clone().addScaledVector(side, wd / 2).add(V3(0, 0.03, 0));
+    const c0 = base.clone().addScaledVector(side, -wd / 2).add(V3(0, 0.08, 0)), c1 = base.clone().addScaledVector(side, wd / 2).add(V3(0, 0.08, 0));
     const c2 = c1.clone().addScaledVector(dir, len).addScaledVector(side, -wd * 0.25), c3 = c0.clone().addScaledVector(dir, len).addScaledVector(side, wd * 0.25);
     for (const [v, u, w] of [[c0, 0, 0], [c1, 1, 0], [c2, 1, 1], [c0, 0, 0], [c2, 1, 1], [c3, 0, 1]]) shadow.push(v.x, v.y, v.z, u, w);
   }

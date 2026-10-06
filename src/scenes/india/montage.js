@@ -260,6 +260,7 @@ export function create(ctx, segment) {
   const DUR = segment.end - segment.start;
   const lite = ctx.engine?.quality === 'lite';
   const r = rng(5551);
+  const NARROW = OUTPUT_ASPECT < 1.5;
 
   // ---- camera path (pure functions of t; also used at build time to orient the later forms) ----------
   const elK = [[0, 0.6], [C[1] - 0.32, 0.66], [C[1] + 0.2, 0.98], [C[2] + 0.1, 1.08], [C[3] - 0.36, 1.06], [C[3] + 0.2, 0.0], [C[4] - 0.34, 0.04], [C[4] + 0.18, 0.3], [C[5] - 0.1, 0.27], [C[5] + 0.6, 0.15], [DUR, 0.12]];
@@ -267,7 +268,8 @@ export function create(ctx, segment) {
   const TY = [[0, 0], [C[3] - 0.36, 0], [C[3] + 0.2, 3.25], [C[4] - 0.34, 3.05], [C[4] + 0.18, 0.15], [DUR, 0.15]];
   const azAt = (t) => 0.5 + 0.17 * t + 0.22 * intSmooth(t, C[3] - 0.4, C[3] + 0.2) - 0.22 * intSmooth(t, C[4] - 0.4, C[4] + 0.2) + 0.2 * intSmooth(t, C[5] - 0.1, C[5] + 0.6);
   const camPose = (t, pos, tgt) => {
-    const el = timeWarp(t, elK), az = azAt(t), D = timeWarp(t, DK);
+    // open matte (tall frames): look down more steeply on the city so it fills the extended frame
+    const el = timeWarp(t, elK) + (NARROW ? 0.32 * (1 - smoothstep(C[1] - 0.3, C[1] + 0.2, t)) : 0), az = azAt(t), D = timeWarp(t, DK);
     tgt.set(0, timeWarp(t, TY), 0);
     pos.set(Math.cos(el) * Math.sin(az) * D, Math.sin(el) * D, Math.cos(el) * Math.cos(az) * D).add(tgt);
     return { el, az, D };
@@ -285,7 +287,7 @@ export function create(ctx, segment) {
   const hubLight = new THREE.PointLight(0xffc070, 0, 14, 1.6);
   hubLight.position.set(0, 0.8, 0);
   scene.add(key, key.target, rim, hubLight);
-  const WARM = new THREE.Color('#ffe2bc'), COOL = new THREE.Color('#c9d8ff');
+  const WARM = new THREE.Color('#ffd2a0'), COOL = new THREE.Color('#c9d8ff');
 
   // ---- sky dome + floor ------------------------------------------------------------------------------
   const tEnd = DUR - 0.25;
@@ -320,7 +322,7 @@ export function create(ctx, segment) {
 
   // ---- S0: the Indus city -------------------------------------------------------------------------
   const city = buildCity(rng(77));
-  const brick = new THREE.MeshStandardMaterial({ color: '#8a5434', roughness: 0.9, metalness: 0 });
+  const brick = new THREE.MeshStandardMaterial({ color: '#b0521f', roughness: 0.88, metalness: 0 });
   const cityMesh = new THREE.Mesh(city.geo, brick);
   cityMesh.castShadow = cityMesh.receiveShadow = true;
   const cityG = new THREE.Group();
@@ -405,15 +407,15 @@ export function create(ctx, segment) {
       void main(){
         vec3 p = normalize(vObj);
         float n = snoise(p * 2.3) * 0.5 + snoise(p * 5.1) * 0.25 + snoise(p * 12.0) * 0.12 + snoise(p * 26.0) * 0.05;
-        vec3 base = mix(vec3(0.42, 0.15, 0.06), vec3(0.78, 0.4, 0.19), smoothstep(-0.35, 0.45, n));
+        vec3 base = mix(vec3(0.45, 0.12, 0.035), vec3(0.85, 0.36, 0.12), smoothstep(-0.35, 0.45, n));
         float dark = smoothstep(0.1, 0.5, snoise(p * 1.7 + 3.1) + n * 0.3);
-        base = mix(base, vec3(0.2, 0.09, 0.05), dark * 0.65);
+        base = mix(base, vec3(0.2, 0.07, 0.03), dark * 0.65);
         float crater = smoothstep(0.55, 0.75, snoise(p * 18.0 + 9.0));
         base *= 1.0 - crater * 0.2;
         base = mix(base, vec3(0.95, 0.93, 0.9), smoothstep(0.88, 0.93, abs(p.y) + n * 0.04));
         vec3 N = normalize(vN), Vd = normalize(cameraPosition - vW);
         float l = dot(N, uSun);
-        vec3 col = base * (max(l, 0.0) * 2.6 + 0.012);
+        vec3 col = base * (max(l, 0.0) * 2.1 + 0.012);
         float rim = pow(1.0 - max(dot(N, Vd), 0.0), 3.0);
         col += vec3(1.0, 0.55, 0.32) * rim * 0.9 * smoothstep(-0.2, 0.5, l);
         gl_FragColor = vec4(col, uO);
@@ -490,7 +492,7 @@ export function create(ctx, segment) {
     const tmp = new THREE.Vector3();
     for (let i = 0; i < N; i++) {
       const q = i / N;
-      if (q < 0.3) { const u = r() * 2 - 1, th = r() * TAU, s = Math.sqrt(1 - u * u), rr = MR * (1.03 + r() * 0.05); put(P4, i, M.x + s * Math.cos(th) * rr, M.y + u * rr, M.z + s * Math.sin(th) * rr); }
+      if (q < 0.2) { const u = r() * 2 - 1, th = r() * TAU, s = Math.sqrt(1 - u * u), rr = MR * (1.03 + r() * 0.05); put(P4, i, M.x + s * Math.cos(th) * rr, M.y + u * rr, M.z + s * Math.sin(th) * rr); }
       else if (q < 0.76) { orbitAt(r() * TAU, tmp); put(P4, i, tmp.x + (r() - 0.5) * 0.08, tmp.y + (r() - 0.5) * 0.08, tmp.z + (r() - 0.5) * 0.08); }
       else if (q < 0.84) { arrival.getPoint(r(), tmp); put(P4, i, tmp.x + (r() - 0.5) * 0.05, tmp.y + (r() - 0.5) * 0.05, tmp.z + (r() - 0.5) * 0.05); }
       else { const a = r() * TAU, rr = 2.2 + Math.pow(r(), 0.6) * 9; tmp.copy(M).addScaledVector(RIGHT, Math.cos(a) * rr).addScaledVector(D2, Math.sin(a) * rr * 0.8); put(P4, i, tmp.x, tmp.y + (r() - 0.5) * 0.3, tmp.z); }
@@ -611,7 +613,7 @@ export function create(ctx, segment) {
     key.color.copy(WARM).lerp(COOL, toCool);
     key.intensity = 3.2 * (1 - 0.6 * smoothstep(C[4] - 0.3, C[4], t));
     key.target.position.set(0, 0, 0);
-    scene.environmentIntensity = 0.45 * (1 - 0.6 * toCool);
+    scene.environmentIntensity = (0.22 + 0.23 * smoothstep(C[1] - 0.4, C[1], t)) * (1 - 0.6 * toCool);
     const hubOn = envelope(t, C[1] - 0.2, C[3] - 0.05, 0.3, 0.35);
     hubLight.intensity = 7 * hubOn * (1 + hit * 0.8);
     skyMat.uniforms.uHor.value.set('#2a1a0e').lerp(tmpC.set('#060812'), smoothstep(C[4] - 0.4, C[5], t));
@@ -619,7 +621,7 @@ export function create(ctx, segment) {
     scene.fog.color.copy(skyMat.uniforms.uHor.value);
     const fogK = smoothstep(C[1] - 0.4, C[1] + 0.2, t);
     scene.fog.near = lerp(9, 22, fogK); scene.fog.far = lerp(30, 150, fogK);
-    floorMat.opacity = 1 - smoothstep(C[4] - 0.25, C[4] + 0.3, t);
+    floorMat.opacity = 1 - smoothstep(C[4] - 0.45, C[4] - 0.12, t);
     floor.visible = floorMat.opacity > 0.002;
 
     // ---- S0 city: rises as the shot opens, gold edges and streets draw outward, then it sinks
@@ -627,7 +629,7 @@ export function create(ctx, segment) {
     const sink = ramp(t, C[1] - 0.42, C[1] - 0.02, ease.inCubic);
     cityG.scale.set(1, Math.max(0.001, rise * (1 - sink)), 1);
     cityG.visible = sink < 0.999;
-    brick.color.set('#8a5434').multiplyScalar(1 - 0.5 * sink);
+    brick.color.set('#b0521f').multiplyScalar(1 - 0.5 * sink);
     cityEdges.progress = Math.min(1.1, ramp(t, -0.5, 0.7, ease.outCubic) * 1.1);
     cityEdges.opacity = 0.85 * (1 - sink);
     cityEdges.intensity = 0.7 + hit * 0.6 + beat * 0.25;
@@ -684,9 +686,9 @@ export function create(ctx, segment) {
     enclosure.progress = ramp(t, C[3] - 0.1, C[3] + 0.4); enclosure.opacity = 1 - vOut;
 
     // ---- S4 Mars: the planet, the arrival, the burn on the cue, the long ellipse
-    const mIn = ramp(t, C[4] - 0.3, C[4] + 0.1, ease.outCubic), mOut = ramp(t, C[5] - 0.05, C[5] + 0.5);
+    const mIn = ramp(t, C[4] - 0.24, C[4] + 0.1, ease.outCubic), mOut = ramp(t, C[5] - 0.12, C[5] + 0.3);
     mars.visible = mIn > 0 && mOut < 1;
-    mars.scale.setScalar(Math.max(0.001, lerp(0.5, 1, mIn) * (1 - 0.15 * mOut)));
+    mars.scale.setScalar(Math.max(0.001, lerp(0.25, 1, mIn) * (1 - 0.15 * mOut)));
     mars.rotation.y = 0.6 + t * 0.25;
     marsMat.uniforms.uO.value = mIn * (1 - mOut);
     const aU = ramp(t, C[4] - 0.42, C[4], ease.inQuad);         // craft along the arrival arc, speeding up

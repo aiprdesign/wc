@@ -235,7 +235,7 @@ export function buildStupa(P) {
 
 // =========================================================================================== KAILASA
 // Trench c. 84 × 52 m cut 34 m down into the basalt; the temple stands free in it.
-export const K = { X0: -42, X1: 42, Z0: -30, Z1: 22, H: 34 };
+export const K = { X0: -42, X1: 42, Z0: -30, Z1: 22, H: 34, L: -78, R: 78 };
 function vimanaTiers(P, key, s0, y0, tiers, dS, tH, kuta) {
   let s = s0, y = y0;
   for (let i = 0; i < tiers; i++) {
@@ -338,8 +338,8 @@ export function buildKailasa(P) {
 }
 // The cliff round the trench (three blocks of hewn rock) — key 'cliff'.
 export function buildCliff(P) {
-  const H = K.H, back = -78, side = 150;
-  const blocks = [[-side, K.X0, back, K.Z1], [K.X1, side, back, K.Z1], [K.X0, K.X1, back, K.Z0]];
+  const H = K.H;
+  const blocks = [[K.L, K.X0, -130, K.Z1], [K.X1, K.R, -130, K.Z1], [K.X0, K.X1, -78, K.Z0]];
   blocks.forEach(([x0, x1, z0, z1], i) => P.add('cliff', rockBox(x1 - x0, H, z1 - z0, { cell: 5, amp: 0.9, freq: 0.07, seed: i * 3.1 }), (x0 + x1) / 2, H / 2, (z0 + z1) / 2));
 }
 
@@ -391,7 +391,7 @@ export function buildTower(P) {
   P.add(G, new THREE.ConeGeometry(5.6, 2.6, 4).rotateY(Math.PI / 4), 0, 9.7, NZ);
   P.add(G, new THREE.SphereGeometry(1.4, 10, 8).scale(1.6, 1, 2.2), 0, 2.8, NZ);   // the Nandi
   // the courtyard cloister (back and sides only, so it never blocks the view)
-  for (const [x0, x1, z0, z1] of [[-70, 70, -62, -58], [-70, -66, -62, 90], [66, 70, -62, 90]]) P.box(G, x0, x1, 0, 6.5, z0, z1);
+  for (const [x0, x1, z0, z1] of [[-55, 55, -58, -54], [-55, -51, -58, 0], [51, 55, -58, 0]]) P.box(G, x0, x1, 0, 6.5, z0, z1);
 }
 
 // =========================================================================================== TAJ MAHAL

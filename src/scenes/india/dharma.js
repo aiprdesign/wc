@@ -24,7 +24,7 @@ import {
   inscriptionCanvas, flagTexture, marcherGeometry,
 } from './dharma-assets.js';
 
-const GROUND_Y = -13;
+const GROUND_Y = -6;
 const SEA_Z = -488;
 const HUD_GOLD = '#ffe2ae';
 
@@ -33,15 +33,15 @@ const SKY_GLSL = /* glsl */ `
 uniform vec3 uSunDir; uniform float uLift;
 vec3 skyCol(vec3 d){
   float h = d.y;
-  vec3 zen = vec3(0.06, 0.09, 0.22), mid = vec3(0.40, 0.34, 0.50), hor = vec3(1.0, 0.64, 0.44);
+  vec3 zen = vec3(0.016, 0.026, 0.075), mid = vec3(0.16, 0.13, 0.24), hor = vec3(0.66, 0.38, 0.25);
   vec3 c = mix(hor, mid, smoothstep(0.0, 0.17, h));
   c = mix(c, zen, smoothstep(0.12, 0.7, h));
   float s = max(dot(d, uSunDir), 0.0);
-  c += vec3(1.0, 0.6, 0.3) * (pow(s, 5.0) * 0.8 + pow(s, 60.0) * 2.2);
+  c += vec3(1.0, 0.6, 0.3) * (pow(s, 5.0) * 0.45 + pow(s, 60.0) * 1.6);
   vec2 ah = normalize(d.xz + 1e-5), sh = normalize(uSunDir.xz);
   float anti = max(dot(ah, -sh), 0.0);
-  c += vec3(0.6, 0.34, 0.44) * anti * anti * exp(-abs(h - 0.07) * 13.0) * 0.55;      // the anti-twilight arch
-  c = mix(c, vec3(0.66, 0.5, 0.48), smoothstep(0.0, -0.06, h));
+  c += vec3(0.6, 0.34, 0.44) * anti * anti * exp(-abs(h - 0.07) * 13.0) * 0.3;      // the anti-twilight arch
+  c = mix(c, vec3(0.34, 0.24, 0.21), smoothstep(0.0, -0.06, h));
   return c * uLift;
 }`;
 
@@ -98,8 +98,8 @@ export function create(ctx, segment) {
   const scene = new THREE.Scene();
   scene.environment = ctx.env;
   scene.environmentIntensity = 0.3;
-  const FOG_D = 0.0017;
-  scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.8, 0.58, 0.5), FOG_D);
+  const FOG_D = 0.0012;
+  scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.44, 0.3, 0.25), FOG_D);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.05, 4000);
 
   const SUN_DIR = V3(-0.5, 0.2, 1).normalize();          // low dawn sun, behind the camera's left shoulder (east)
@@ -118,7 +118,7 @@ export function create(ctx, segment) {
         float n = snoise(vec3(d.x * 2.2 + uTime * 0.01, d.y * 26.0, d.z * 2.2)) * 0.6 + snoise(vec3(d.x * 7.0, d.y * 60.0, d.z * 7.0)) * 0.4;
         float cl = smoothstep(0.15, 0.7, n) * band;
         float s = max(dot(d, uSunDir), 0.0);
-        c = mix(c, vec3(1.15, 0.62, 0.48) * uLift * (0.7 + 0.6 * s), cl * 0.55);
+        c = mix(c, vec3(0.85, 0.44, 0.32) * uLift * (0.7 + 0.6 * s), cl * 0.5);
         gl_FragColor = vec4(c, 1.0);
       }`,
     side: THREE.BackSide, depthWrite: false, fog: false,
@@ -144,8 +144,8 @@ export function create(ctx, segment) {
   scene.add(wheelLight);
 
   // ------------------------------------------------------------------------------------------- the pillar & capital
-  const stone = new THREE.MeshPhysicalMaterial({ color: '#d4bd96', roughness: 0.3, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.24, sheen: 0.2, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5 });
-  stone.userData.detail = { albedo: 0.6, rough: 0.6 };
+  const stone = new THREE.MeshPhysicalMaterial({ color: '#dccdb0', roughness: 0.3, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.24, sheen: 0.2, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5 });
+  stone.userData.detail = { albedo: 0.25, rough: 0.5 };
   const geos = capitalGeometries(lite);
   const capital = new THREE.Group();
   scene.add(capital);
@@ -243,14 +243,14 @@ export function create(ctx, segment) {
   // ------------------------------------------------------------------------------------------- the land
   const fieldTex = (() => {
     const N = 1024, c = mkCanvas(N, N), g = c.getContext('2d'), r = rng(47);
-    g.fillStyle = '#5d5a35'; g.fillRect(0, 0, N, N);
-    const tones = ['#6b6a3a', '#7a6c3e', '#4f5a2e', '#8a7a4a', '#5f6633', '#6e5a36', '#7d7a46', '#55602f'];
+    g.fillStyle = '#4e4c2e'; g.fillRect(0, 0, N, N);
+    const tones = ['#5a5a33', '#665c36', '#48522b', '#6e6440', '#525a2e', '#5c4c30', '#686640', '#4a542b'];
     for (let i = 0; i < 260; i++) {
       g.save(); g.translate(r() * N, r() * N); g.rotate((r() - 0.5) * 0.25);
       g.fillStyle = tones[Math.floor(r() * tones.length)];
       const w = 40 + r() * 160, h = 30 + r() * 110;
       g.fillRect(-w / 2, -h / 2, w, h);
-      g.strokeStyle = 'rgba(40,36,20,0.5)'; g.lineWidth = 2; g.strokeRect(-w / 2, -h / 2, w, h);
+      g.strokeStyle = 'rgba(40,36,20,0.35)'; g.lineWidth = 3; g.strokeRect(-w / 2, -h / 2, w, h);
       g.restore();
     }
     const img = g.getImageData(0, 0, N, N);
@@ -263,7 +263,7 @@ export function create(ctx, segment) {
     t.repeat.set(32, 12);
     return t;
   })();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 1300 + (-SEA_Z - 8)), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1, color: '#c9c0a8' }));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 1300 + (-SEA_Z - 8)), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1, color: '#a89c86' }));
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(0, GROUND_Y, (1300 + SEA_Z + 8) / 2);
   ground.receiveShadow = false;
@@ -280,7 +280,7 @@ export function create(ctx, segment) {
     g.fillStyle = gr; g.fillRect(0, 0, 64, 256);
     return toTexture(c, { srgb: false });
   })();
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(8, roadLen), new THREE.MeshStandardMaterial({ color: '#d8bc90', roughness: 1, alphaMap: roadAlpha, transparent: true, depthWrite: false }));
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(8, roadLen), new THREE.MeshStandardMaterial({ color: '#8a6a4a', roughness: 1, alphaMap: roadAlpha, transparent: true, depthWrite: false }));
   road.rotation.x = -Math.PI / 2;
   road.rotation.z = Math.atan2(ROAD_D.x, -ROAD_D.z) * -1;
   road.position.copy(ROAD_O).addScaledVector(ROAD_D, roadLen / 2 - 2).add(V3(0, 0.04, 0));
@@ -288,31 +288,35 @@ export function create(ctx, segment) {
   scene.add(road);
 
   // trees and groves, scattered by a noise density (kept off the road and the pillar's foot)
+  const colorize = (g, c) => {
+    const gg = g.index ? g.toNonIndexed() : g; gg.deleteAttribute('uv');
+    const cc = new Float32Array(gg.attributes.position.count * 3);
+    for (let i = 0; i < cc.length; i += 3) cc.set(c, i);
+    gg.setAttribute('color', new THREE.BufferAttribute(cc, 3));
+    return gg;
+  };
   {
-    const r = rng(1930), parts = [], col = [];
-    const canopy = new THREE.IcosahedronGeometry(1, 0), trunk = new THREE.CylinderGeometry(0.12, 0.18, 1, 5);
-    const n = lite ? 700 : 1500;
+    const r = rng(1930), parts = [];
+    const canopy = new THREE.SphereGeometry(1, 8, 5), trunk = new THREE.CylinderGeometry(0.1, 0.15, 1, 5);
+    const n = lite ? 380 : 800;
     let placed = 0;
-    for (let k = 0; k < n * 6 && placed < n; k++) {
-      const x = (r() - 0.5) * 700, z = 60 - r() * (60 - SEA_Z - 14);
+    for (let k = 0; k < n * 8 && placed < n; k++) {
+      const x = (r() - 0.5) * 700, z = 40 - r() * (40 - SEA_Z - 14);
       const off = Math.abs((x - ROAD_O.x) * -ROAD_D.z + (z - ROAD_O.z) * ROAD_D.x);
-      if (off < 7 + r() * 4 || Math.hypot(x, z) < 8 || z > 30 && Math.abs(x) < 40) continue;
+      if (off < 9 + r() * 5 || Math.hypot(x, z) < 45) continue;
       const dens = fbm2(x * 0.012, z * 0.012, 3);
-      if (dens < 0.05 + r() * 0.25 && r() > 0.12) continue;
-      const s = 2 + r() * 2.6, h = 2.5 + r() * 3;
-      const cn = canopy.clone().scale(s, s * (0.75 + r() * 0.35), s).translate(x, GROUND_Y + h + s * 0.5, z);
-      const tr = trunk.clone().scale(1, h + s * 0.3, 1).translate(x, GROUND_Y + (h + s * 0.3) / 2, z);
-      const shade = 0.75 + r() * 0.45, coastal = sat((-z - 380) / 80);
-      for (const [g, c] of [[cn, [0.11 * shade, 0.16 * shade + coastal * 0.03, 0.07 * shade]], [tr, [0.12, 0.08, 0.05]]]) {
-        const gg = g.toNonIndexed(); gg.deleteAttribute('uv');
-        const cc = new Float32Array(gg.attributes.position.count * 3);
-        for (let i = 0; i < cc.length; i += 3) cc.set(c, i);
-        gg.setAttribute('color', new THREE.BufferAttribute(cc, 3));
-        parts.push(gg);
+      if (dens < 0.05 + r() * 0.25 && r() > 0.1) continue;
+      const s = 1.1 + r() * 1.0, h = 1.0 + r() * 1.2, shade = 0.75 + r() * 0.45, coastal = sat((-z - 380) / 80);
+      const leaf = [0.075 * shade, 0.11 * shade + coastal * 0.02, 0.045 * shade];
+      const blobs = [[0, 0, 0, 1], [(r() - 0.5) * s, -s * 0.25, (r() - 0.5) * s, 0.75]];
+      for (const [bx, by, bz, bs] of blobs) {
+        const g = canopy.clone().scale(s * bs, s * bs * (0.7 + r() * 0.3), s * bs).translate(x + bx, GROUND_Y + h + s * 0.55 + by, z + bz);
+        parts.push(colorize(g, leaf));
       }
+      parts.push(colorize(trunk.clone().scale(1, h + s * 0.3, 1).translate(x, GROUND_Y + (h + s * 0.3) / 2, z), [0.09, 0.06, 0.04]));
       placed++;
     }
-    const trees = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true }));
+    const trees = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
     scene.add(trees);
   }
 
@@ -346,7 +350,7 @@ export function create(ctx, segment) {
 
   // dawn mist: layered sheets of drifting noise lit by the low sun
   const mistU = { uTime: { value: 0 }, uOp: { value: 1 }, uLift: skyU.uLift };
-  const mists = [-3.2, -6.5, -10.2].map((y, i) => {
+  const mists = [-1.15, -2.7, -4.3].map((y, i) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.ShaderMaterial({
       uniforms: { ...mistU, uSeed: { value: i * 17.3 }, uK: { value: 1 - i * 0.18 } },
       vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
@@ -354,10 +358,12 @@ export function create(ctx, segment) {
         void main(){
           vec2 p = vW.xz * 0.018 + vec2(uTime * 0.05, uSeed);
           float n = snoise(vec3(p, uSeed)) * 0.55 + snoise(vec3(p * 2.7, uSeed + 3.0)) * 0.3 + snoise(vec3(p * 7.0, uSeed + 9.0)) * 0.15;
-          float a = smoothstep(-0.25, 0.65, n) * uOp * uK;
-          a *= 1.0 - smoothstep(250.0, 650.0, length(vW.xz - vec2(0.0, -150.0)));
-          vec3 c = mix(vec3(0.85, 0.7, 0.68), vec3(1.15, 0.86, 0.68), smoothstep(0.0, 0.8, n)) * uLift;
-          gl_FragColor = vec4(c, a * 0.62);
+          float dens = smoothstep(-0.45, 0.75, n) * uOp * uK;
+          dens *= 1.0 - smoothstep(250.0, 650.0, length(vW.xz - vec2(0.0, -150.0)));
+          vec3 V = normalize(vW - cameraPosition);
+          float a = 1.0 - exp(-dens * 0.22 / max(abs(V.y), 0.025));       // a slab: thicker at grazing angles
+          vec3 c = mix(vec3(0.34, 0.25, 0.26), vec3(0.66, 0.47, 0.36), smoothstep(-0.2, 0.8, n)) * uLift;
+          gl_FragColor = vec4(c, a * 0.9);
         }`,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
     }));
@@ -369,7 +375,7 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------------- the march
   const WALK_SPEED = 1.3;
-  const mg = marcherGeometry({ count: lite ? 170 : 300, origin: ROAD_O, dir: ROAD_D, sStart: 16, sEnd: 126 });
+  const mg = marcherGeometry({ count: lite ? 160 : 260, origin: ROAD_O, dir: ROAD_D, sStart: 12, sEnd: 112 });
   const walkU = { uTime: { value: 0 }, uDir: { value: ROAD_D.clone() }, uSide: { value: mg.side.clone() }, uSpeed: { value: WALK_SPEED } };
   const walkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
   walkMat.userData.noBatch = true;
@@ -408,10 +414,10 @@ export function create(ctx, segment) {
   const shadows = new THREE.Mesh(mg.shadow, shMat);
   shadows.frustumCulled = false; shadows.renderOrder = 2;
   scene.add(shadows);
-  const LEAD = ROAD_O.clone().addScaledVector(ROAD_D, 126 + 2.2);
+  const LEAD = ROAD_O.clone().addScaledVector(ROAD_D, 112 + 2.2);
 
   // ------------------------------------------------------------------------------------------- the flag
-  const POLE = V3(12.5, GROUND_Y, 1.5), POLE_H = 20.5, FLAG_W = 3.6, FLAG_H = 2.4;
+  const POLE = V3(9.2, GROUND_Y, -4), POLE_H = 11.5, FLAG_W = 2.7, FLAG_H = 1.8;
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, POLE_H, 10), new THREE.MeshStandardMaterial({ color: '#d8d4cc', roughness: 0.35, metalness: 0.6 }));
   pole.position.copy(POLE).add(V3(0, POLE_H / 2, 0));
   scene.add(pole);
@@ -432,7 +438,7 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------------- callouts
   const mk = (label, sub, dx, dy) => { const c = new Callout(label, { dx, dy, size: 0.05, color: HUD_GOLD, sub, intensity: 1.5 }); scene.add(c); return c; };
-  const cCap = mk('LION CAPITAL · SARNATH', "c. 250 BC · INDIA'S NATIONAL EMBLEM", 0.55, 0.32);
+  const cCap = mk('LION CAPITAL · SARNATH', "c. 250 BC · INDIA'S NATIONAL EMBLEM", -0.5, -0.3);
   const cEd = mk("ASHOKA'S EDICTS · c. 260 BC", 'NONVIOLENCE · TOLERANCE · CARE FOR ALL LIVING BEINGS', 0.5, -0.18);
   const cWh = mk('THE ASHOKA CHAKRA · 24 SPOKES', "ON INDIA'S FLAG", 0.42, 0.3);
   const cCh = mk('THE CHARKHA', 'HAND SPINNING · SELF-RELIANCE', 0.36, 0.26);
@@ -441,29 +447,29 @@ export function create(ctx, segment) {
   const cCon = mk('CONSTITUTION · 26 JANUARY 1950', "THE WORLD'S LARGEST DEMOCRACY", -0.5, 0.36);
   const REF = 4.4;                                          // callouts are authored for this camera distance
   const anchors = {
-    cap: V3(CAP.abacusR * 0.86, CAP.wheelY, CAP.abacusR * 0.5),
+    cap: V3(-CAP.abacusR * 0.95, CAP.wheelY - 0.05, CAP.abacusR * 0.3),
     ed: V3(Math.sin(0.95) * 0.34, -0.42, Math.cos(0.95) * 0.34),
     ind: POLE.clone().add(V3(FLAG_W * 0.85, POLE_H - 0.4, -FLAG_W * 0.45)),
-    con: V3(-26, GROUND_Y + 2, SEA_Z + 10),
+    con: V3(-30, GROUND_Y + 1, SEA_Z + 6),
   };
   const place = (c, anchor, p, out = 1) => {
     c.position.copy(anchor);
     faceCamera(c, camera);
-    c.scale.setScalar(camera.position.distanceTo(anchor) / REF);
+    c.scale.setScalar(camera.position.distanceTo(anchor) / REF * Math.tan(camera.fov * Math.PI / 360) / Math.tan(17.5 * Math.PI / 180));
     c.reveal(p, out);
     c.visible = p > 0 && out > 0;
   };
 
   // ------------------------------------------------------------------------------------------- camera path
   const camKeys = [
-    [-0.4, V3(-1.85, 0.42, 5.35)], [0.0, V3(-1.62, 0.47, 5.12)], [tEd, V3(-0.62, 0.36, 4.4)], [tWh, V3(0.22, 0.5, 4.15)],
-    [tWh + 0.5, V3(0.2, 1.02, 4.85)], [tCh, V3(0.42, 1.1, 4.95)], [tSM - 0.12, V3(1.25, 1.28, 4.85)],
-    [tSM + 0.38, V3(4.4, 6.4, 12.6)], [tRep + 0.3, V3(6.2, 8.4, 17.6)], [DUR + 0.5, V3(6.9, 8.95, 18.9)],
+    [-0.4, V3(-1.5, 0.62, 3.75)], [0.0, V3(-1.3, 0.62, 3.6)], [tEd - 0.25, V3(-0.62, 0.42, 3.55)], [tEd + 0.4, V3(-0.08, -0.22, 3.4)],
+    [tWh, V3(0.08, -0.1, 3.5)], [tWh + 0.5, V3(0.2, 1.0, 4.85)], [tCh, V3(0.42, 1.08, 4.95)], [tSM - 0.12, V3(1.2, 1.25, 4.85)],
+    [tSM + 0.4, V3(3.3, 2.4, 10.2)], [tRep + 0.3, V3(5.0, 3.3, 13.6)], [DUR + 0.5, V3(5.6, 3.55, 14.8)],
   ];
   const lookKeys = [
-    [-0.4, V3(0, 1.16, 0)], [0.0, V3(0, 1.16, 0)], [tEd, V3(0.02, 0.62, 0)], [tEd + 0.45, V3(0.06, 0.42, 0)], [tWh, V3(0.02, 0.72, 0.5)],
+    [-0.4, V3(-1.02, 1.12, -0.36)], [0.0, V3(-0.95, 1.12, -0.33)], [tEd - 0.25, V3(-0.35, 0.85, -0.1)], [tEd + 0.4, V3(0.03, -0.55, 0)], [tWh, V3(0.02, -0.22, 0.3)],
     [tWh + 0.5, W.clone()], [tCh, W.clone()], [tSM - 0.12, W.clone().add(V3(0.5, -0.1, 0))],
-    [tSM + 0.38, V3(-2.5, -8, -62)], [tRep + 0.3, V3(-6, -9.2, -112)], [DUR + 0.5, V3(-7, -9.2, -122)],
+    [tSM + 0.4, V3(-4, -3, -40)], [tRep + 0.3, V3(-8, -4.6, -80)], [DUR + 0.5, V3(-9, -4.6, -90)],
   ];
   const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmp = new THREE.Vector3();
   const dof = { focus: 5, range: 1.5, amount: 0.35 };
@@ -480,7 +486,7 @@ export function create(ctx, segment) {
     camPos.x += Math.sin(t * 0.8) * 0.02; camPos.y += Math.sin(t * 1.1 + 1) * 0.012;
     camera.position.copy(camPos);
     camera.lookAt(camLook);
-    camera.fov = lerp(35, 38, ramp(t, tSM - 0.1, tRep + 0.3));
+    camera.fov = 35 - 13 * envelope(t, tEd - 0.05, tWh + 0.5, 0.5, 0.45) + 2 * ramp(t, tSM - 0.1, tRep + 0.3);
     camera.updateProjectionMatrix();
 
     // --------------------------------------------------------------- light & atmosphere: dawn → hush → swell → day
@@ -488,19 +494,20 @@ export function create(ctx, segment) {
     const swell = ramp(t, tWh - 0.05, tWh + 0.35, ease.outCubic);
     const lift = ramp(t, tSM - 0.1, tSM + 0.4, ease.inOutSine);
     const rep = ramp(t, tRep - 0.05, tRep + 0.45, ease.outCubic);
-    sun.intensity = (3.0 + 0.6 * swell + 0.5 * lift) * (1 - 0.32 * hush);
+    sun.intensity = (3.0 + 0.5 * swell - 0.2 * lift) * (1 - 0.32 * hush);
     rim.intensity = 1.1 * (1 - 0.3 * hush) + 0.4 * swell;
     hemi.intensity = 0.38 + 0.25 * lift;
-    skyU.uLift.value = (1.0 + 0.25 * swell + 0.15 * lift + 0.2 * rep) * (1 - 0.18 * hush);
+    skyU.uLift.value = (1.0 + 0.15 * swell + 0.2 * lift + 0.15 * rep) * (1 - 0.18 * hush);
     skyU.uTime.value = t;
     scene.environmentIntensity = 0.3 + 0.12 * swell;
     mistU.uTime.value = t;
-    mistU.uOp.value = 1 - 0.8 * ramp(t, tSM - 0.2, tSM + 0.45);
+    mistU.uOp.value = 1 - ramp(t, tSM - 0.25, tSM + 0.35);
+    for (const m of mists) m.visible = mistU.uOp.value > 0.002;
     scene.fog.density = FOG_D;
 
     // --------------------------------------------------------------- the inscription (the hush)
     insU.uP.value = lerp(-0.02, 1.02, ramp(t, tEd - 0.05, tEd + 0.72, ease.inOutSine));
-    insU.uGlow.value = 0.45 + 0.4 * swell;
+    insU.uGlow.value = 0.8 + 0.4 * swell;
     insc.visible = t > tEd - 0.1;
 
     // --------------------------------------------------------------- the wheel lifts off in gold and turns
@@ -512,26 +519,26 @@ export function create(ctx, segment) {
     const sc = lerp(CAP.wheelR * 1.03, 0.53, ease.inOutSine(fly));
     chakra.scale.setScalar(sc);
     chakra.rotation.set(0, 0, -ang);
-    gold.emissiveIntensity = 0.15 + 1.6 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) + 0.8 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
+    gold.emissiveIntensity = 0.1 + 0.55 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) + 0.5 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
     const out = ramp(t, tCh - 0.04, tCh + 0.3, ease.inOutSine);
     setDis(chakraU, 1, out);
-    const radiance = envelope(t, tWh, tCh + 0.4, 0.35, 0.45);
-    raysU.uI.value = radiance * (1.25 + 0.15 * Math.sin(t * 9));
+    const radiance = envelope(t, tWh, tCh + 0.25, 0.35, 0.35);
+    raysU.uI.value = radiance * (0.42 + 0.05 * Math.sin(t * 9));
     raysU.uRot.value = ang / 24 * 1.0 + t * 0.05;
     rays.visible = radiance > 0.001;
     rays.position.copy(chakra.position).addScaledVector(tmp.copy(camera.position).sub(chakra.position).normalize(), -0.08);
     faceCamera(rays, camera);
     rays.scale.setScalar(lerp(1.0, 5.4, fly));
     halo.position.copy(chakra.position);
-    halo.material.opacity = radiance * 0.55;
+    halo.material.opacity = radiance * 0.22;
     halo.visible = radiance > 0.001;
     halo.scale.setScalar(lerp(0.3, 2.4, fly));
     wheelLight.position.copy(chakra.position).add(V3(0, 0, 0.4));
-    wheelLight.intensity = radiance * 9;
+    wheelLight.intensity = radiance * fly * fly * 2.2;
 
     // --------------------------------------------------------------- the charkha
     const ckIn = ramp(t, tCh - 0.06, tCh + 0.26, ease.inOutSine), ckFr = ramp(t, tCh + 0.06, tCh + 0.42, ease.inOutSine);
-    const ckOut = ramp(t, tSM + 0.02, tSM + 0.32, ease.inOutSine);
+    const ckOut = ramp(t, tSM - 0.06, tSM + 0.2, ease.inOutSine);
     setDis(ckWheelU, ckIn, ckOut); setDis(ckFrameU, ckFr, ckOut);
     charkha.visible = ckIn > 0 && ckOut < 1;
     ckWheel.rotation.z = -ang;
@@ -570,15 +577,15 @@ export function create(ctx, segment) {
     dust.tick(t, info);
     dust.u.opacity = 0.45 * (1 - lift);
     dust.visible = lift < 1;
-    if (t < tWh + 0.1) { dof.focus = camera.position.distanceTo(tmp.set(0, t < tEd ? 1.2 : 0.4, 0.2)); dof.range = 1.6; dof.amount = 0.35; }
-    else if (t < tSM) { dof.focus = camera.position.distanceTo(chakra.visible ? chakra.position : W); dof.range = 0.9; dof.amount = 0.5; }
-    else { dof.focus = lerp(camera.position.distanceTo(W), 70, ramp(t, tSM, tSM + 0.4)); dof.range = lerp(1, 60, ramp(t, tSM, tSM + 0.4)); dof.amount = lerp(0.5, 0.12, ramp(t, tSM, tSM + 0.4)); }
+    if (t < tWh + 0.1) { dof.focus = camera.position.distanceTo(tmp.set(0, lerp(1.2, -0.5, ramp(t, tEd - 0.2, tEd + 0.3)), lerp(0.1, 0.33, ramp(t, tEd - 0.2, tEd + 0.3)))); dof.range = 1.6; dof.amount = 0.2; }
+    else if (t < tSM) { dof.focus = camera.position.distanceTo(chakra.visible ? chakra.position : W); dof.range = 1.2; dof.amount = 0.35; }
+    else { dof.focus = lerp(camera.position.distanceTo(W), 70, ramp(t, tSM, tSM + 0.4)); dof.range = lerp(1, 60, ramp(t, tSM, tSM + 0.4)); dof.amount = lerp(0.35, 0.08, ramp(t, tSM, tSM + 0.4)); }
     bloom.strength = 0.7 + 0.35 * radiance - 0.1 * hush + 0.1 * rep;
     api.exposure = (1.0 + 0.12 * swell + 0.05 * rep) * (1 - 0.1 * hush);
 
     if (t < tWh + 0.3) subject = { centre: V3(0, 0.7, 0), radius: 1.5 };
     else if (t < tSM + 0.1) subject = { centre: W.clone().add(V3(0.45, -0.1, 0)), radius: 1.3 };
-    else subject = { centre: ROAD_O.clone().addScaledVector(ROAD_D, 70), radius: 75 };
+    else subject = { centre: ROAD_O.clone().addScaledVector(ROAD_D, 40), radius: 45 };
   }
 
   const api = {
