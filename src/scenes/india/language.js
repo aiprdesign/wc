@@ -599,10 +599,9 @@ export function create(ctx, segment) {
   const dof = { focus: 7, range: 3, amount: 0.35 };
   const bloom = { strength: 0.75 };
   const tmpV = new THREE.Vector3();
-  let lastT = 0;
 
   function update(t, info) {
-    lastT = t;
+
     const T = info?.T ?? t + segment.start;
     // ---- camera
     camAt(t);
