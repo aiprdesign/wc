@@ -588,6 +588,7 @@ export function create(ctx, segment) {
   function label(parent, text, sub, at, a, b, { dx = 0.55, dy = 0.32, color = '#ffe6bf', k = 1 } = {}) {
     const c = new Callout(text, { dx, dy, size: 0.07, color, sub, intensity: 1.55 });
     c.position.copy(at); c.userData.win = [a, b]; c.userData.k = k;
+    c.traverse((o) => { if (o.material) { o.material.depthTest = false; o.material.depthWrite = false; o.renderOrder = 20; } });   // labels read over the set
     parent.add(c); labels.push(c);
     return c;
   }
@@ -599,9 +600,9 @@ export function create(ctx, segment) {
   label(drains, 'HOUSE DRAIN', 'FROM A BATHING ROOM', V(fHouse.x, DY1 + 0.05, fHouse.side > 0 ? 3.4 : -3.4), T_DRAIN + 0.32, T_BATH - 0.05, { dx: -0.45, dy: 0.3 });
   label(drains, 'BAKED BRICK · 1 : 2 : 4', 'THICK : WIDE : LONG', V(39, 1.1, ST_HW), T_DRAIN + 0.42, T_BATH, { dx: 0.4, dy: 0.25 });
   label(city, 'GREAT BATH', 'c. 12 × 7 m · 2.4 m DEEP', V(POOL.x1 + 0.4, DECK_Y + 0.2, POOL.z0 - 0.4), T_BATH + 0.15, T_WT + 0.05, { dx: 0.45, dy: 0.42 });
-  label(city, 'BITUMEN SEAL', 'WATERTIGHT BRICK LINING', V(POOL.x1, DECK_Y - 1.3, POOL.z1 - 1.5), T_BATH + 0.35, T_WT + 0.05, { dx: 0.45, dy: -0.32 });
+  label(city, 'BITUMEN SEAL', 'WATERTIGHT BRICK LINING', V(POOL.x0 + 0.05, DECK_Y - 0.9, 2.5), T_BATH + 0.35, T_WT + 0.05, { dx: -0.45, dy: 0.12 });
   const wL = label(shop, 'CHERT CUBE WEIGHTS', 'RATIOS 1 · 2 · 4 · 8 · 16 · 32 · 64', V(weights[2].x, weights[2].s + 0.001, weights[2].z), T_WT + 0.12, dur + 1, { dx: 0.4, dy: 0.42 });
-  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.3, dy: 0.2 });
+  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.3, dy: 0.1 });
   label(shop, 'UNIT 16 ≈ 13.7 g', null, V(weights[4].x, weights[4].s, weights[4].z), T_WT + 0.3, dur + 1, { dx: -0.3, dy: 0.5 });
   label(shop, 'STEATITE SEAL', 'SCRIPT STILL UNDECIPHERED', V(seal.position.x - 0.012, 0.009, seal.position.z), T_WT + 0.7, dur + 1, { dx: -0.42, dy: -0.08 });
   void wL;
@@ -756,7 +757,6 @@ export function create(ctx, segment) {
     api.exposure = (inShop ? 1.0 : 1.12) + 0.35 * (1 - ramp(t, T_WT, T_WT + 0.18)) * (t >= T_WT ? 1 : 0);
   }
 
-  { let tri = 0, pts = 0; scene.traverse((o) => { if (o.isPoints) pts += o.geometry.attributes.position.count; else if (o.geometry) { const g = o.geometry; tri += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); console.warn('[indus] tris', Math.round(tri), 'points', pts); }
   api.arSubject = (t) => (t >= T_WT ? { centre: V(0.03, 0.01, 0.02), radius: 0.2 }
     : t >= T_BATH - 0.2 ? { centre: V(-40, CIT_Y, 0), radius: 32 }
     : t >= T_DRAIN - 0.1 ? { centre: V(60, 0, 0), radius: 40 }

@@ -544,7 +544,7 @@ export function create(ctx, segment) {
   groupA.add(smokeHaze);
 
   // callout on the cutaway
-  const calloutA = new Callout('SEALED CLAY CRUCIBLE', { dx: 0.24, dy: -0.07, size: 0.019, color: '#ffe2c0', sub: 'IRON + CHARCOAL / PLANT MATTER MELT INTO STEEL', intensity: 1.3 });
+  const calloutA = new Callout('SEALED CLAY CRUCIBLE', { dx: 0.27, dy: -0.05, size: 0.019, color: '#ffe2c0', sub: 'IRON + CHARCOAL / PLANT MATTER MELT INTO STEEL', intensity: 1.3 });
   backCallout(calloutA); groupA.add(calloutA);
 
   // =========================================================================================================
@@ -630,8 +630,10 @@ export function create(ctx, segment) {
   const clothM = new THREE.Mesh(new THREE.PlaneGeometry(6, 6, 1, 1).rotateX(-Math.PI / 2), cloth); clothM.receiveShadow = true; groupB.add(clothM);
   const bokeh = [];
   { const r = rng(71); for (let i = 0; i < 14; i++) { const s = glowSprite({ color: r() < 0.6 ? '#ff9a4a' : '#ffd29a', intensity: 0.5 + r() * 0.5, scale: 0.05 + r() * 0.08 }); s.position.set(-0.6 + r() * 2.2, 0.15 + r() * 0.5, -0.9 - r() * 1.4); groupB.add(s); bokeh.push(s); } }
-  const calloutB = new Callout('WOOTZ CRUCIBLE STEEL · SOUTH INDIA', { dx: -0.012, dy: 0.012, size: 0.002, color: '#ffe6c8', sub: 'FROM c. 300 BC · TRADED TO PERSIA AND SYRIA: "DAMASCUS" BLADES', intensity: 1.3 });
+  const calloutB = new Callout('WOOTZ CRUCIBLE STEEL · SOUTH INDIA', { dx: 0.012, dy: -0.013, size: 0.002, color: '#ffe6c8', sub: 'FROM c. 300 BC · TRADED TO PERSIA AND SYRIA: "DAMASCUS" BLADES', intensity: 1.3 });
   backCallout(calloutB, { alpha: 0.35 }); groupB.add(calloutB);
+  // (a macro label floats over the blade and the cloth: drawn over them, never cut by them)
+  calloutB.traverse((o) => { if (o.material) { o.material.depthTest = false; o.renderOrder = 20; } });
 
   // =========================================================================================================
   // SET C — the Iron Pillar of Delhi, Qutb complex, in daylight
@@ -834,12 +836,12 @@ export function create(ctx, segment) {
     groupD.add(new THREE.Mesh(strip(back), retMat), new THREE.Mesh(strip(caps), retCapMat), new THREE.Mesh(strip(full), retMat));
   }
   // charge in the front bulbs (roasted ore + charcoal), fuel packed round the retorts
-  const chargeMat = hotMaterial({ origin: OD, scale: 50, crack: 0.35, heat: 0.62, base: [0.08, 0.05, 0.035] });
-  groupD.add(new THREE.Mesh(lumps(150, (r) => {
+  const chargeMat = hotMaterial({ origin: OD, scale: 50, crack: 0.15, heat: 0.66, base: [0.08, 0.05, 0.035] });
+  groupD.add(new THREE.Mesh(lumps(240, (r) => {
     const x = RX[Math.floor(r() * RX.length)], y = 1.36 + r() * 0.32, rr = 0.1 * Math.sqrt(r()), a = Math.PI + (r() - 0.5) * Math.PI;
     const z = Math.cos(a) * rr; if (z > -0.004) return null;
     return V(x + Math.sin(a) * rr * 1.1, y, z);
-  }, 93, 0.012, 0.022), chargeMat));
+  }, 93, 0.009, 0.016), chargeMat));
   const fuelMat = hotMaterial({ origin: OD, scale: 14, crack: 1, heat: 0.8, base: [0.03, 0.02, 0.015] });
   groupD.add(new THREE.Mesh(lumps(420, (r) => {
     const x = -1.45 + r() * 2.9, y = 1.14 + r() * 0.85, z = -1.45 + r() * 1.3;
@@ -857,7 +859,7 @@ export function create(ctx, segment) {
     RX.forEach((x) => { back.push(pot.back.clone().translate(x, 0.15, 0)); caps.push(pot.cap.clone().translate(x, 0.15, 0)); for (const z of [-0.5, -0.95]) full.push(pot.full.clone().translate(x + (z < -0.6 ? 0.2 : 0), 0.15, z)); });
     groupD.add(new THREE.Mesh(mergeGeometries(back), potMat), new THREE.Mesh(mergeGeometries(caps), potCapMat), new THREE.Mesh(mergeGeometries(full), potMat));
   }
-  const zincMat = new THREE.MeshStandardMaterial({ color: '#d9dfe4', metalness: 1, roughness: 0.14 });
+  const zincMat = new THREE.MeshStandardMaterial({ color: '#d9dfe4', metalness: 1, roughness: 0.18, emissive: '#9fb0c4', emissiveIntensity: 0.35 });
   zincMat.userData.detail = { albedo: 0.02, rough: 0.3, bump: 0.000005, scratch: 0, grime: 0 };
   const pools = RX.map((x) => {
     const g = new THREE.Group(); g.position.set(x, 0.172, 0); groupD.add(g);
@@ -1017,8 +1019,8 @@ export function create(ctx, segment) {
       camA(t, cp); tgtA(t, ct);
       cp.x += Math.sin(t * 1.3) * 0.012; cp.y += Math.sin(t * 1.7 + 1) * 0.008;
       camera.fov = lerp(36, 31, ramp(t, tC - 0.2, tW));
-      calloutA.position.set(0.07, 0.3 + 0.2, 0.012);
-      calloutA.reveal(ramp(t, tC + 0.1, tC + 0.45), 1 - ramp(t, tW - 0.06, tW));
+      calloutA.position.set(0.06, 0.3 + 0.2, 0.2);
+      calloutA.reveal(ramp(t, tC + 0.05, tC + 0.35), 1 - ramp(t, tW - 0.04, tW));
       dof.focus = lerp(cp.distanceTo(ct), Math.hypot(cp.x, cp.y - 0.45, cp.z), ramp(t, tC, tC + 0.3)); dof.range = lerp(1.6, 0.4, ramp(t, tC, tW)); dof.amount = 0.5;
       bloom.strength = lerp(0.72 + 0.12 * beat, 0.32, open);
       api.exposure = lerp(1.0, 0.9, open);
@@ -1039,8 +1041,8 @@ export function create(ctx, segment) {
       scene.fog.density = 0.0;
       camB(t, cp); tgtB(t, ct); cp.add(OB); ct.add(OB);
       camera.fov = 30;
-      calloutB.position.set(0.31, 0.008, bladeC(0.378) + 0.012);
-      calloutB.reveal(ramp(t, tW + 0.08, tW + 0.4), 1 - ramp(t, tP - 0.05, tP));
+      calloutB.position.set(0.25, 0.008, bladeC(0.305) + 0.004);
+      calloutB.reveal(ramp(t, tW + 0.03, tW + 0.3), 1 - ramp(t, tP - 0.04, tP));
       dof.focus = cp.distanceTo(ct); dof.range = 0.12; dof.amount = 0.5;
       bloom.strength = 0.65;
       api.exposure = 1.05;
@@ -1059,11 +1061,11 @@ export function create(ctx, segment) {
       scene.environmentIntensity = 0.35;
       scene.fog.color.set(0xb9ae9c); scene.fog.density = 0.0045;
       filmMat.uniforms.uTime.value = T;
-      filmMat.uniforms.uReveal.value = lerp(-0.2, 6.3, ramp(t, tP + 0.3, tP + 0.75, ease.inOutSine));
+      filmMat.uniforms.uReveal.value = lerp(-0.2, 6.3, ramp(t, tP + 0.14, tP + 0.6, ease.inOutSine));
       filmMat.uniforms.uOpacity.value = 0.55 * (1 - ramp(t, tZ - 0.1, tZ));
       calloutC1.position.set(0, 5.4, 0); calloutC2.position.set(0, 2.6, 0);
-      calloutC1.reveal(ramp(t, tP + 0.05, tP + 0.4), 1);
-      calloutC2.reveal(ramp(t, tP + 0.3, tP + 0.65), 1);
+      calloutC1.reveal(ramp(t, tP + 0.02, tP + 0.3), 1);
+      calloutC2.reveal(ramp(t, tP + 0.16, tP + 0.46), 1);
       dimC.reveal(ramp(t, tP + 0.1, tP + 0.5), 1);
       dof.focus = Math.hypot(cp.x - OC.x, cp.z); dof.range = 8; dof.amount = 0.2;
       bloom.strength = 0.3;
@@ -1100,8 +1102,8 @@ export function create(ctx, segment) {
       cp.x += Math.sin(t * 1.1) * 0.01;
       const shake = burst * 0.02; cp.x += Math.sin(T * 91) * shake; cp.y += Math.sin(T * 77 + 1) * shake;
       camera.fov = 35;
-      calloutD1.reveal(ramp(t, tZ + 0.05, tZ + 0.4), 1 - ramp(t, dur - 0.25, dur));
-      calloutD2.reveal(ramp(t, tZ + 0.22, tZ + 0.55), 1 - ramp(t, dur - 0.25, dur));
+      calloutD1.reveal(ramp(t, tZ - 0.02, tZ + 0.24), 1 - ramp(t, dur - 0.15, dur));
+      calloutD2.reveal(ramp(t, tZ + 0.08, tZ + 0.34), 1 - ramp(t, dur - 0.15, dur));
       dof.focus = cp.distanceTo(ct); dof.range = 2.2; dof.amount = 0.3;
       bloom.strength = 0.7 + 0.5 * burst;
       api.exposure = 1.0 + 0.25 * burst;

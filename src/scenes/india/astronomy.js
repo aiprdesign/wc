@@ -410,7 +410,7 @@ export function create(ctx, segment) {
   sine.add(chords);
   const chordDot = glowSprite({ color: '#fff0d0', intensity: 2.6, scale: 0.13 });
   sine.add(chordDot);
-  const jyaCallout = new Callout('JYA · HALF-CHORD', { dx: -0.95, dy: -0.48, size: 0.062, color: '#ffe6bf', sub: 'R SIN θ', intensity: 1.4 });
+  const jyaCallout = new Callout('JYA · HALF-CHORD', { dx: -0.95, dy: -0.48, size: 0.075, color: '#ffe6bf', sub: 'R SIN θ', intensity: 1.4 });
   jyaCallout.position.set(Math.cos(60 * DEG) * R, Math.sin(60 * DEG) * R * 0.55, 0.002);
   sine.add(jyaCallout);
   const etym = new TextPlane('JYA → JIBA → SINUS → SINE', { font: FONTS.mono, height: 0.058, letterSpacing: 0.22, color: '#fff0d6', intensity: 1.3, align: 'left' });
@@ -771,7 +771,6 @@ export function create(ctx, segment) {
         arrowHead.quaternion.setFromUnitVectors(V(0, 1, 0), tmpA.clone().sub(tmpB).normalize());
         arrowHead.material.opacity = sat(spinArc.progress * 6) * axO; arrowHead.visible = arrowHead.material.opacity > 0.01;
       }
-      arrowHead.visible = false; spinArc.visible = false;
       // label at the north pole
       tmpA.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(-0.97).add(tmpB.setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(-0.22));
       earthCallout.position.copy(tmpA);
