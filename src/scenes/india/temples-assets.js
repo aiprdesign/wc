@@ -106,7 +106,7 @@ function basaltTexture(size = 256) {
     const n = fbm2(x / 22 + 3, y / 22, 4) * 0.5 + 0.5;
     const k = 0.7 + 0.22 * band + 0.3 * n + (r() - 0.5) * 0.16;
     const i = (y * size + x) * 4;
-    d[i] = 108 * k; d[i + 1] = 94 * k; d[i + 2] = 82 * k; d[i + 3] = 255;
+    d[i] = 142 * k; d[i + 1] = 122 * k; d[i + 2] = 104 * k; d[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   g.strokeStyle = 'rgba(40,30,24,0.25)';
@@ -125,8 +125,8 @@ export function makeMaterials() {
   return {
     sand: new THREE.MeshStandardMaterial({ map: sandMap, color: '#e6cfa8', roughness: 0.86 }),
     sandDark: new THREE.MeshStandardMaterial({ map: sandMap, color: '#b49a78', roughness: 0.9 }),
-    basalt: new THREE.MeshStandardMaterial({ map: basaltMap, color: '#c8b6a2', roughness: 0.88 }),
-    cliff: new THREE.MeshStandardMaterial({ map: basaltMap, color: '#b4a08a', roughness: 0.95 }),
+    basalt: new THREE.MeshStandardMaterial({ map: basaltMap, color: '#f2dcc4', roughness: 0.88 }),
+    cliff: new THREE.MeshStandardMaterial({ map: basaltMap, color: '#e6cdb0', roughness: 0.95 }),
     granite: new THREE.MeshStandardMaterial({ map: graniteMap, color: '#f0d2a8', roughness: 0.78 }),
     marble: new THREE.MeshPhysicalMaterial({ map: marbleMap, color: '#f6f1ea', roughness: 0.38, sheen: 0.3, sheenRoughness: 0.6, sheenColor: new THREE.Color('#fff0dc') }),
     marbleShade: new THREE.MeshStandardMaterial({ map: marbleMap, color: '#b9b2aa', roughness: 0.5 }),
@@ -338,7 +338,7 @@ export function buildKailasa(P) {
 }
 // The cliff round the trench (three blocks of hewn rock) — key 'cliff'.
 export function buildCliff(P) {
-  const H = K.H, back = -78, side = 86;
+  const H = K.H, back = -78, side = 150;
   const blocks = [[-side, K.X0, back, K.Z1], [K.X1, side, back, K.Z1], [K.X0, K.X1, back, K.Z0]];
   blocks.forEach(([x0, x1, z0, z1], i) => P.add('cliff', rockBox(x1 - x0, H, z1 - z0, { cell: 5, amp: 0.9, freq: 0.07, seed: i * 3.1 }), (x0 + x1) / 2, H / 2, (z0 + z1) / 2));
 }

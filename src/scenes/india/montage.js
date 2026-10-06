@@ -275,7 +275,7 @@ export function create(ctx, segment) {
 
   // ---- lights ----------------------------------------------------------------------------------------
   const key = new THREE.DirectionalLight(0xffe2bc, 3.2);
-  key.position.set(-7, 9, 6);
+  key.position.set(-8, 6.5, 5);
   key.castShadow = true;
   key.shadow.mapSize.set(lite ? 1024 : 2048, lite ? 1024 : 2048);
   key.shadow.bias = -0.0005; key.shadow.normalBias = 0.02;
@@ -320,7 +320,7 @@ export function create(ctx, segment) {
 
   // ---- S0: the Indus city -------------------------------------------------------------------------
   const city = buildCity(rng(77));
-  const brick = new THREE.MeshStandardMaterial({ color: '#a8714a', roughness: 0.9, metalness: 0 });
+  const brick = new THREE.MeshStandardMaterial({ color: '#8a5434', roughness: 0.9, metalness: 0 });
   const cityMesh = new THREE.Mesh(city.geo, brick);
   cityMesh.castShadow = cityMesh.receiveShadow = true;
   const cityG = new THREE.Group();
@@ -328,7 +328,7 @@ export function create(ctx, segment) {
   const cityEdges = revealLines(city.geo, { order: 'radial', mode: 'edges', threshold: 30, color: '#ffc77a', headColor: '#fff4dc', intensity: 0.75, head: 0.06 });
   cityG.add(cityEdges);
   const [px, py, pz, pw, pd] = city.pool;
-  const poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#9fd8ff').multiplyScalar(1.6), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const poolMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#7fb8e0').multiplyScalar(0.9), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const pool = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd).rotateX(-Math.PI / 2), poolMat);
   pool.position.set(px, py, pz);
   cityG.add(pool);
@@ -354,7 +354,7 @@ export function create(ctx, segment) {
     d.position.set(Math.cos(a) * (R0 + 1.15), 0.05, -Math.sin(a) * (R0 + 1.15));
     zeroG.add(d); digits.push(d);
   }
-  const bindu = glowSprite({ color: '#ffd28a', intensity: 3, scale: 1.2 });
+  const bindu = glowSprite({ color: '#ffd28a', intensity: 1.6, scale: 1.0 });
   bindu.position.y = 0.25;
   zeroG.add(bindu);
 
@@ -366,7 +366,7 @@ export function create(ctx, segment) {
   const wheelG = new THREE.Group(); wheelG.position.y = 0.06;
   const wheelEdges = revealLines(wheelGeo, { order: 'radial', mode: 'edges', threshold: 35, color: '#ffe6b8', headColor: '#ffffff', intensity: 0.9, head: 0.05 });
   wheelG.add(wheel, wheelEdges);
-  const hubGlow = glowSprite({ color: '#ffcf80', intensity: 2.5, scale: 2.2 }); hubGlow.position.y = 0.3;
+  const hubGlow = glowSprite({ color: '#ffcf80', intensity: 1.2, scale: 1.6 }); hubGlow.position.y = 0.3;
   wheelG.add(hubGlow);
   scene.add(wheelG);
 
@@ -529,7 +529,7 @@ export function create(ctx, segment) {
       uBurst: { value: 0 }, uBurstC: { value: new THREE.Vector3() }, uNoise: { value: 0.012 }, uStarPx: { value: 2 }, uHit: { value: 0 }, uOpacity: { value: 1 },
       uCol: { value: ['#ffc77e', '#ffe9c4', '#ffd690', '#ffc070', '#ffd2a8', '#e8eeff'].map((c) => new THREE.Color(c)) },
       uSize: { value: [0.04, 0.05, 0.036, 0.042, 0.046, 0.05] },
-      uInt: { value: [0.7, 1.7, 0.85, 0.95, 1.25, 1.5] },
+      uInt: { value: [0.55, 0.42, 0.5, 0.7, 0.5, 1.5].map((v, i) => (i < 5 ? v * Math.pow(40000 / N, 0.6) : v)) },
     },
     vertexShader: cloudVert, fragmentShader: cloudFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
@@ -613,10 +613,12 @@ export function create(ctx, segment) {
     key.target.position.set(0, 0, 0);
     scene.environmentIntensity = 0.45 * (1 - 0.6 * toCool);
     const hubOn = envelope(t, C[1] - 0.2, C[3] - 0.05, 0.3, 0.35);
-    hubLight.intensity = 30 * hubOn * (1 + hit * 0.8);
+    hubLight.intensity = 7 * hubOn * (1 + hit * 0.8);
     skyMat.uniforms.uHor.value.set('#2a1a0e').lerp(tmpC.set('#060812'), smoothstep(C[4] - 0.4, C[5], t));
     skyMat.uniforms.uNeb.value = smoothstep(C[5] - 0.3, C[5] + 0.7, t);
     scene.fog.color.copy(skyMat.uniforms.uHor.value);
+    const fogK = smoothstep(C[1] - 0.4, C[1] + 0.2, t);
+    scene.fog.near = lerp(9, 22, fogK); scene.fog.far = lerp(30, 150, fogK);
     floorMat.opacity = 1 - smoothstep(C[4] - 0.25, C[4] + 0.3, t);
     floor.visible = floorMat.opacity > 0.002;
 
@@ -625,7 +627,7 @@ export function create(ctx, segment) {
     const sink = ramp(t, C[1] - 0.42, C[1] - 0.02, ease.inCubic);
     cityG.scale.set(1, Math.max(0.001, rise * (1 - sink)), 1);
     cityG.visible = sink < 0.999;
-    brick.color.set('#a8714a').multiplyScalar(1 - 0.5 * sink);
+    brick.color.set('#8a5434').multiplyScalar(1 - 0.5 * sink);
     cityEdges.progress = Math.min(1.1, ramp(t, -0.5, 0.7, ease.outCubic) * 1.1);
     cityEdges.opacity = 0.85 * (1 - sink);
     cityEdges.intensity = 0.7 + hit * 0.6 + beat * 0.25;
@@ -653,7 +655,7 @@ export function create(ctx, segment) {
       d.position.y = 0.05 + (1 - u) * -0.2;
     });
     bindu.material.opacity = zIn * (1 - ramp(t, C[3] - 0.3, C[3])) ;
-    bindu.scale.setScalar(1.1 + hit * 0.8 + beat * 0.3);
+    bindu.scale.setScalar(0.8 + hit * 0.5 + beat * 0.2);
     bindu.position.y = lerp(0.25, 0.22, zOut);
 
     // ---- S2 wheel: cast in gold from the ring, turning ever faster
@@ -669,7 +671,7 @@ export function create(ctx, segment) {
     wheelEdges.progress = ramp(t, C[2] - 0.2, C[2] + 0.25) * 1.1;
     wheelEdges.opacity = 0.8 * (1 - wOut);
     hubGlow.material.opacity = wIn * (1 - wOut) * 0.8;
-    hubGlow.scale.setScalar(1.6 + hit * 1.2 + beat * 0.4);
+    hubGlow.scale.setScalar(1.1 + hit * 0.7 + beat * 0.25);
 
     // ---- S3 vimana: rises out of the ground course by course, gold edges climbing with it
     const vIn = ramp(t, C[3] - 0.2, C[3] + 0.22, ease.outCubic), vOut = ramp(t, C[4] - 0.36, C[4] - 0.02, ease.inCubic);

@@ -23,7 +23,7 @@ const GOLD = '#ffd590';
 const STUPA = V(0, 0, 0);
 const KAI = V(125, 0, -45);
 const TOWER = V(250, 0, -50);
-const TAJ = V(487.5, 0, 110);          // plinth centre; its front (local +z) faces world −x, down the channel
+const TAJ = V(487.5, 0, 160);          // plinth centre; its front (local +z) faces world −x, down the channel
 const TAJ_RY = -Math.PI / 2;
 const WATER_Y = -0.35;
 const GARDEN = { x0: -70, x1: 70, z0: -60, z1: 237.5, ch: 5 };   // Taj-local garden rect and channel half-width
@@ -191,12 +191,12 @@ export function create(ctx, segment) {
   // cypresses along the channel (and their reflections)
   const cypGeo = (() => { const g = new THREE.LatheGeometry([[0, 0], [0.25, 0], [0.25, 1.2], [1.5, 2.2], [1.9, 4.5], [1.6, 7], [0.9, 9.2], [0, 10.5]].map(([r, y]) => new THREE.Vector2(r, y)), 10); return g; })();
   const cypPos = [];
-  for (let z = 56; z < GARDEN.z1 - 4; z += 7.5) for (const x of [-9, 9, -20, 20]) if (Math.abs(x) < 15 || (Math.floor(z / 7.5) % 2 === 0)) cypPos.push([x, z]);
+  for (let z = 58; z < GARDEN.z1 - 10; z += 11) for (const x of [-12, 12, -30, 30]) if (Math.abs(x) < 20 || (Math.round(z / 11) % 2 === 0)) cypPos.push([x, z]);
   const cyp = new THREE.InstancedMesh(cypGeo, M.foliage, cypPos.length), cypM = new THREE.InstancedMesh(cypGeo, M.foliage, cypPos.length);
   {
     const m4 = new THREE.Matrix4(), r = rng(5);
     cypPos.forEach(([x, z], i) => {
-      const w = tajW(x, 0, z), s = 0.85 + r() * 0.3;
+      const w = tajW(x, 0, z), s = 0.62 + r() * 0.16;
       m4.makeScale(s, s * (0.9 + r() * 0.25), s).setPosition(w.x, 0, w.z); cyp.setMatrixAt(i, m4);
       m4.makeScale(s, -s * (0.9 + r() * 0.25), s).setPosition(w.x, 2 * WATER_Y, w.z); cypM.setMatrixAt(i, m4);
     });
@@ -235,14 +235,16 @@ export function create(ctx, segment) {
     let h = (0.9 * fbm2(x / 70, z / 70, 3) + 0.25) * flat;
     // the Deccan escarpment round Kailasa: a plateau at the cliff top, the trench left clear
     const dx = x - KAI.x, dz = z - KAI.z;
-    let m = smoothstep(110, 82, Math.abs(dx)) * smoothstep(22, 6, dz);
+    // talus at the foot of the cliff (not in the trench)
+    h += 7 * smoothstep(48, 22, dz) * smoothstep(22, 18, -dz) * smoothstep(165, 150, Math.abs(dx)) * smoothstep(40, 50, Math.abs(dx)) * (0.6 + 0.4 * fbm2(x / 20, z / 20, 2));
+    let m = smoothstep(175, 146, Math.abs(dx)) * smoothstep(22, 6, dz);
     m *= Math.max(smoothstep(42, 52, Math.abs(dx)), 1 - smoothstep(-40, -30, dz));
     h = lerp(h, 33.4 + 2.5 * fbm2(x / 60, z / 60, 3) * smoothstep(-80, -110, dz), m);
     // distant hills (kept low towards the sun)
     const rx = x - 250, rz = z - 30, r = Math.hypot(rx, rz);
     const toSun = Math.max(0, (rx * SUN_AZ.x + rz * SUN_AZ.y) / Math.max(r, 1));
     h += smoothstep(500, 1300, r) * (50 + 70 * fbm2(x / 380, z / 380, 4)) * (1 - 0.85 * toSun);
-    return lerp(h, -1.5, dip);
+    return lerp(h, -95, dip);
   }
   {
     const xs = axisCoords(-160, 640, lite ? 8 : 6, 3200), zs = axisCoords(-170, 240, lite ? 8 : 6, 3200);
@@ -325,10 +327,10 @@ export function create(ctx, segment) {
     scene.add(c); labels.push(c);
     return c;
   }
-  label('GREAT STUPA · SANCHI', '3RD C. BC · BEGUN UNDER ASHOKA', V(13, 15.5, 6), T_ST + 0.15, T_KA - 0.05, { dx: 0.5, dy: 0.3 });
-  label('KAILASA · ELLORA · 8TH CENTURY', 'CARVED FROM ONE ROCK', V(KAI.x + 12, 30, KAI.z - 20), T_KA + 0.3, T_BR - 0.05, { dx: 0.5, dy: 0.3 });
-  label('THANJAVUR · 1010', '66 m GRANITE TOWER', V(TOWER.x + 4, 62, TOWER.z), T_BR + 0.08, T_TJ - 0.12, { dx: 0.45, dy: 0.12 });
-  label('TAJ MAHAL · 1632–1653', 'AGRA · WHITE MAKRANA MARBLE', tajW(0, 66, 0), T_TJ + 0.12, dur + 1, { dx: 0.5, dy: 0.25 });
+  label('GREAT STUPA · SANCHI', '3RD C. BC · BEGUN UNDER ASHOKA', V(15, 7, 10), T_ST + 0.12, T_KA - 0.1, { dx: 0.5, dy: -0.12 });
+  label('KAILASA · ELLORA · 8TH CENTURY', 'CARVED FROM ONE ROCK', V(KAI.x + 13, 12, KAI.z - 6), T_KA + 0.3, T_BR - 0.08, { dx: 0.55, dy: -0.18 });
+  label('THANJAVUR · 1010', '66 m GRANITE TOWER', V(TOWER.x + 10, 40, TOWER.z + 10), T_BR + 0.05, T_TJ - 0.15, { dx: 0.5, dy: -0.1 });
+  label('TAJ MAHAL · 1632–1653', 'AGRA · WHITE MAKRANA MARBLE', tajW(43.5, 28, 43.5), T_TJ + 0.1, dur + 1, { dx: 0.4, dy: -0.12 });
   // the tower's height, drawn beside it
   const dimG = new THREE.Group();
   const dim66 = new Dimension(V(0, 0, 0), V(0, 66, 0), '66 m', { size: 2.6, tick: 1.6, color: '#ffe6bf', intensity: 1.8 });
@@ -339,16 +341,17 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------- camera
   const KEYS = [
-    [-0.25, V(-52, 3.2, 52), V(0, 9.5, 0)],
-    [T_ST, V(-30, 4.5, 56), V(4, 10, 0)],
-    [T_ST + 0.45, V(18, 20, 80), V(70, 12, -28)],
-    [T_KA + 0.05, V(92, 52, 46), V(KAI.x, 10, KAI.z - 2)],
-    [T_KA + 0.6, V(150, 50, 44), V(KAI.x + 6, 8, KAI.z - 4)],
-    [T_BR + 0.05, V(214, 9, 64), V(TOWER.x, 33, TOWER.z)],
-    [T_BR + 0.42, V(236, 6, 92), V(330, 26, 40)],
-    [T_TJ + 0.05, V(255, 4.6, 110), V(TAJ.x, 30, TAJ.z)],
-    [dur + 0.3, V(296, 4.2, 110), V(TAJ.x, 31, TAJ.z)],
+    [-0.25, V(-46, 3.4, 60), V(2, 9.5, 0)],
+    [T_ST, V(-24, 4.6, 62), V(5, 10, 0)],
+    [T_ST + 0.45, V(28, 34, 70), V(KAI.x - 30, 10, KAI.z)],
+    [T_KA + 0.05, V(KAI.x - 34, 80, KAI.z + 82), V(KAI.x, 4, KAI.z - 6)],
+    [T_KA + 0.6, V(KAI.x + 30, 76, KAI.z + 84), V(KAI.x + 3, 4, KAI.z - 8)],
+    [T_BR + 0.05, V(204, 6, 88), V(TOWER.x, 34, TOWER.z)],
+    [T_BR + 0.4, V(222, 6, 96), V(TOWER.x + 30, 34, TOWER.z + 15)],
+    [T_TJ + 0.05, V(258, 7, TAJ.z), V(TAJ.x, 30, TAJ.z)],
+    [dur + 0.3, V(298, 6.6, TAJ.z), V(TAJ.x, 31, TAJ.z)],
   ];
+
   const posC = new THREE.CatmullRomCurve3(KEYS.map((k) => k[1]), false, 'centripetal');
   const lookC = new THREE.CatmullRomCurve3(KEYS.map((k) => k[2]), false, 'centripetal');
   const warp = KEYS.map((k, i) => [k[0], i / (KEYS.length - 1)]);
