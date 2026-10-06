@@ -338,7 +338,7 @@ export function create(ctx, segment) {
   }
 
   // the scholars' groups in the hero courtyard (the last one on the raised platform)
-  const GROUPS = [V(-6.0, 0.1, -6.2), V(4.2, 0.1, -7.6), V(-7.4, 0.1, 3.4), V(1.0, 0.1, 6.6), V(8.1, 1.0, 0.0)];
+  const GROUPS = [V(-3.6, 0.1, -6.6), V(4.6, 0.1, -7.6), V(-2.6, 0.1, 3.6), V(3.6, 0.1, 7.4), V(8.1, 1.0, 0.0)];
   for (const g of GROUPS.slice(0, 4)) box(vihMat, g.x - 0.6, g.x + 0.6, 0.1, 0.35, g.z - 0.6, g.z + 0.6);
   for (const x of VIH_X) vihara(x, 0, x === 0);
   for (const x of TEM_X) temple(x, TEM_Z);
@@ -500,14 +500,14 @@ export function create(ctx, segment) {
   vihLabel.position.set(-19.5, VH + 1.2, -19.5);
   const temLabel = new Callout('CHAITYA · TEMPLE', { dx: 4, dy: 4.5, size: 1.0, color: LABEL, sub: 'STEPPED BRICK · CORNER TOWERS', intensity: 1.5 });
   temLabel.position.set(-27.5, 22, TEM_Z);
-  const SUBJ = [['GRAMMAR', 'SHABDAVIDYA', -1.6, 1.2], ['LOGIC', 'HETUVIDYA', 1.6, 1.2], ['MEDICINE', 'CHIKITSAVIDYA', -1.6, 1.0], ['THE VEDAS', null, 1.6, 1.1], ['BUDDHIST PHILOSOPHY', null, 1.6, 1.6]];
+  const SUBJ = [['GRAMMAR', 'SHABDAVIDYA', -1.6, 1.1], ['LOGIC', 'HETUVIDYA', 1.6, 1.1], ['MEDICINE', 'CHIKITSAVIDYA', -1.8, 0.9], ['THE VEDAS', null, 1.6, 1.0], ['BUDDHIST PHILOSOPHY', null, 1.8, 0.5]];
   const subjLabels = SUBJ.map(([l, s, dx, dy], i) => {
     const c = new Callout(l, { dx, dy, size: 0.36, color: '#ffd89a', sub: s, intensity: 1.8 });
-    c.position.copy(GROUPS[i]).add(V(0, i === 4 ? 1.6 : 1.4, 0));
+    c.position.copy(GROUPS[i]).add(V(0, i === 4 ? 1.2 : 1.4, 0));
     return c;
   });
-  const libLabel = new Callout('DHARMAGANJA · THE LIBRARY', { dx: -3.2, dy: 1.6, size: 0.62, color: LABEL, sub: "THE 'MART OF TRUTH'", intensity: 1.6 });
-  libLabel.position.set(LIB.x0 + 0.2, 12.4, LIB.z0 + 2.5);
+  const libLabel = new Callout('DHARMAGANJA · THE LIBRARY', { dx: 3.4, dy: 1.4, size: 0.62, color: LABEL, sub: "THE 'MART OF TRUTH'", intensity: 1.6 });
+  libLabel.position.set(LIB.x0 + 1.2, 13.2, LIB.z1 - 2.5);
   scene.add(ruinLabel, vihLabel, temLabel, libLabel, ...subjLabels);
   // the library's section line, drawn up the cut face as the facade peels away
   const cutPts = [V(LIB.x0 + 1, 0.6, LIB.z0 + 1)];
@@ -585,9 +585,9 @@ export function create(ctx, segment) {
   // ------------------------------------------------------------------------------------- camera
   // t < T_ZOOM: keyframes (position, look); from T_ZOOM: orbit about a target with a log-distance climb
   const T_ZOOM = 2.8;
-  const G_MAP = proj(98.0, 14.5).multiplyScalar(DEG);                  // the map's centre at the end (metres)
-  const RK = [[2.8, Math.log(33)], [3.12, Math.log(37)], [3.3, Math.log(90)], [3.46, Math.log(1600)], [3.62, Math.log(7e4)], [3.82, Math.log(9e5)], [4.1, Math.log(4.4e6)], [4.5, Math.log(7.3e6)], [5.0, Math.log(8.4e6)]];
-  const R_END = 7.3e6;
+  const G_MAP = proj(98.0, 16.0).multiplyScalar(DEG);                  // the map's centre at the end (metres)
+  const RK = [[2.8, Math.log(33)], [3.12, Math.log(37)], [3.3, Math.log(90)], [3.46, Math.log(1600)], [3.62, Math.log(7e4)], [3.82, Math.log(9e5)], [4.1, Math.log(4.9e6)], [4.5, Math.log(8.2e6)], [5.0, Math.log(9.4e6)]];
+  const R_END = 8.2e6;
   const zoomU = (r) => sat((Math.log(r) - Math.log(30)) / (Math.log(R_END) - Math.log(30)));
   const libTarget = (t, out) => out.set(LIB.x0 + 7, lerp(5.5, 13.5, ramp(t, T_ZOOM, 3.25, ease.inOutSine)), lerp(-1.5, -3, ramp(t, T_ZOOM, 3.25)));
   const _g = new THREE.Vector3(), _d = new THREE.Vector3();
@@ -608,7 +608,7 @@ export function create(ctx, segment) {
   const KEYS = [
     [-0.3, V(-29.5, 5.2, 28.5), V(0, 0.2, -3)],
     [1.05, V(-25.0, 6.6, 22.5), V(2, 0.8, -5)],
-    [1.95, V(-50, 33, 56), V(6, 2, -24)],
+    [1.95, V(-54, 31, 50), V(12, 3, -46)],
     [2.3, V(-16.5, 12.6, 6.5), V(3, 0.2, -1)],
     [2.56, V(-12, 12.2, 5.5), V(5, 0.5, -1.5)],
     [T_ZOOM, kp.clone(), kl.clone()],
@@ -656,7 +656,7 @@ export function create(ctx, segment) {
     // ---- light: afternoon → golden hour → dusk → night
     skyAt(t, SK);
     const el = timeWarp(t, [[0, 0.44], [1.1, 0.3], [1.95, 0.12], [2.45, -0.02], [3.0, -0.12]]);
-    const az = timeWarp(t, [[0, 2.55], [2.0, 2.8], [3.0, 2.9]]);
+    const az = timeWarp(t, [[0, 3.55], [2.0, 3.45], [3.0, 3.4]]);
     const sd = V(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az) - 0.25).normalize();
     sun.position.copy(sun.target.position).addScaledVector(sd, 200);
     sun.color.copy(SK.sun);
@@ -682,7 +682,7 @@ export function create(ctx, segment) {
     lampMat.uniforms.uVP.value = info?.height ?? 800;
     yardLights.forEach((l, i) => { l.intensity = lampK * (9 + 2 * Math.sin(t * 9 + i * 2)) * (1 - ramp(t, 3.0, 3.4)); });
     GL.uGlowY.value = lerp(-2, 22, ramp(t, tLib - 0.12, tLib + 0.42, ease.inOutSine));
-    GL.uGlowK.value = libK * 0.75;
+    GL.uGlowK.value = libK * 1.1;
     GL.uTime.value = t;
     libLight.position.set(LIB.x0 + 6, Math.min(GL.uGlowY.value, 18) + 1.5, 0);
     libLight.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
@@ -787,7 +787,7 @@ export function create(ctx, segment) {
     dof.focus = camera.position.distanceTo(camLook);
     dof.range = 8;
     bloom.strength = 0.7 + 0.15 * lampK * (1 - mapK) + 0.1 * mapK;
-    api.exposure = lerp(0.95, 1.25, night) * lerp(1, 0.95, mapK);
+    api.exposure = lerp(0.95, 1.4, night) * lerp(1, 0.9, mapK);
   }
 
   const AR_C = [V(0, 2, -15), V(0, 1, 0), V((LIB.x0 + LIB.x1) / 2, 8, 0)];

@@ -126,8 +126,8 @@ float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mh(i), mh(i + vec2(1.0, 0.0)), f.x), mix(mh(i + vec2(0.0, 1.0)), mh(i + vec2(1.0)), f.x), f.y); }
 // p: map units (x east, y = z south)
 vec3 mapLand(vec2 p){
-  float f = 0.0, a = 0.5, fr = 0.3;
-  for (int i = 0; i < 9; i++) { f += a * mn(p * fr + float(i) * 7.13); fr *= 2.3; a *= 0.62; }
+  float f = 0.0, a = 0.5, fr = 1.2;
+  for (int i = 0; i < 8; i++) { f += a * mn(p * fr + float(i) * 7.13); fr *= 2.3; a *= 0.62; }
   float ridge = 1.0 - abs(mn(p * 0.9 + 3.0) * 2.0 - 1.0);
   vec3 c = mix(vec3(0.030, 0.022, 0.014), vec3(0.046, 0.032, 0.019), f);
   c += vec3(0.020, 0.012, 0.006) * pow(ridge, 6.0);

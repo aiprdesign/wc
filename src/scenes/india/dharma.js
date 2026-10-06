@@ -499,7 +499,7 @@ export function create(ctx, segment) {
     hemi.intensity = 0.38 + 0.25 * lift;
     skyU.uLift.value = (1.0 + 0.15 * swell + 0.2 * lift + 0.15 * rep) * (1 - 0.18 * hush);
     skyU.uTime.value = t;
-    scene.environmentIntensity = 0.3 + 0.12 * 1;
+    scene.environmentIntensity = 0.3;
     mistU.uTime.value = t;
     mistU.uOp.value = 1 - ramp(t, tSM - 0.25, tSM + 0.35);
     for (const m of mists) m.visible = mistU.uOp.value > 0.002;
