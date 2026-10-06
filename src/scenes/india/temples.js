@@ -16,7 +16,12 @@ import { ramp, ease, sat, lerp, envelope, smoothstep, rng, timeWarp, clamp } fro
 import { fbm2 } from '../../lib/noise.js';
 import { progressLine } from '../../lib/lines.js';
 import { Callout, Dimension, faceCamera } from '../../lib/hud.js';
-import { Parts, makeMaterials, buildStupa, buildKailasa, buildCliff, buildTower, buildTaj, rockBox, prep, K, TAJ_PY } from './temples-assets.js';
+import { Parts, makeMaterials, buildCliff, rockBox, prep, K, TAJ_PY } from './temples-assets.js';
+// one module per monument (each a high-detail model; see the files)
+import { buildStupa } from './temple-sanchi.js';
+import { buildKailasa } from './temple-kailasa.js';
+import { buildTower } from './temple-thanjavur.js';
+import { buildTaj } from './temple-taj.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffd590';
@@ -83,16 +88,18 @@ export function create(ctx, segment) {
   const M = makeMaterials();
 
   // ------------------------------------------------------------------------------------- monuments
-  const stupa = new Parts(); buildStupa(stupa);
+  const stupa = new Parts(); buildStupa(stupa, M, { lite });
   const stupaG = stupa.build(M, { sand: 0.22, sandDark: 0.3 });
   stupaG.position.copy(STUPA);
   scene.add(stupaG);
 
   // Kailasa: temple (carved), cliff, and the rock fill that is cut away
   const kai = new THREE.Group(); kai.position.copy(KAI); scene.add(kai);
-  const kt = new Parts(); buildKailasa(kt);
+  const kt = new Parts(); buildKailasa(kt, M, { lite });
   const cutU = { uCut: { value: 100 }, uCutHot: { value: new THREE.Color('#ffb060') } };
-  M.basalt.onBeforeCompile = (sh) => {
+  // the carving glow applies to the temple's basalt and to any material its model registers with
+  // userData.kailasaCut (src/scenes/india/temple-kailasa.js)
+  const cutHook = (sh) => {
     Object.assign(sh.uniforms, cutU);
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vCutY;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n vCutY = (modelMatrix * vec4(transformed, 1.0)).y;');
@@ -100,7 +107,11 @@ export function create(ctx, segment) {
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         { float dc = vCutY - uCut; totalEmissiveRadiance += uCutHot * (2.2 * exp(-max(dc, 0.0) / 0.35) + 0.25 * exp(-max(dc, 0.0) / 3.0)) * step(0.0, dc); }`);
   };
-  M.basalt.customProgramCacheKey = () => 'kailasa-cut-v1';
+  for (const m of new Set([M.basalt, ...Object.values(M).filter((x) => x?.userData?.kailasaCut)])) {
+    const prev = m.onBeforeCompile, key = m.customProgramCacheKey?.() ?? '';
+    m.onBeforeCompile = (sh, r) => { prev?.call(m, sh, r); cutHook(sh); };
+    m.customProgramCacheKey = () => `${key}|kailasa-cut-v1`;
+  }
   kai.add(kt.build(M, { basalt: 0.18, dark: 0.2 }));
   const cl = new Parts(); buildCliff(cl);
   kai.add(cl.build(M, { cliff: 0.08 }));
@@ -155,13 +166,13 @@ export function create(ctx, segment) {
   kai.add(chips);
 
   // Brihadeeswarar
-  const tw = new Parts(); buildTower(tw);
+  const tw = new Parts(); buildTower(tw, M, { lite });
   const towerG = tw.build(M, { granite: 0.2, graniteDark: 0.2 });
   towerG.position.copy(TOWER);
   scene.add(towerG);
 
   // Taj Mahal, its garden, channel and reflection
-  const tj = new Parts(); buildTaj(tj);
+  const tj = new Parts(); buildTaj(tj, M, { lite });
   const tajG = tj.build(M, { marble: 0.06, marbleShade: 0.06, redsand: 0.2 });
   tajG.position.copy(TAJ); tajG.rotation.y = TAJ_RY;
   scene.add(tajG);
