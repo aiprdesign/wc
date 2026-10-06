@@ -45,7 +45,7 @@
 //                   into a tender reprise that gathers, breathes (ideasLine), swells on the
 //                   sunrise into the final button at 71.0, and resolves in D major.
 
-import { BEAT, CUES as C } from '../timeline.js';
+import { BEAT, MUSIC_CUES as C } from '../timeline.js';
 import * as I from './instruments.js';
 import * as O from './orchestra.js';
 import * as X from './sfx.js';

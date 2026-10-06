@@ -33,7 +33,8 @@
 //   then, on the rendered buffer: loudness trim → tape/console saturation →
 //   two-band glue compressor → room tone → limiter at -1 dBFS
 
-import { DURATION, FILM_DURATION, TIME_SCALE, CUES as C } from '../timeline.js';
+import { DURATION, FILM_DURATION, TIME_SCALE, MUSIC_CUES as C } from '../timeline.js';
+import { FILM_ID } from '../film.js';
 import { Studio, mulberry32 } from './core.js';
 import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
 import { applyGain, limit, rmsBetween, saturate, glue2, roomTone } from './mastering.js';
@@ -144,6 +145,11 @@ function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.fi
   bus('synth', 0.8, [[hallIn, 0.2]], { er: 0.1 });
   bus('sfx', 0.8, [[hallIn, 0.3]], { to: sfxTone, er: 0.3 });
   bus('fx', 0.9, [[hallIn, 0.35]], { er: 0.15 });
+  // the Indian film's layer (src/audio/india/): sitar, bansuri, santoor, tanpura, tabla, bells
+  bus('india', 2.4, [[hallIn, 0.45]], { er: 0.25 });
+  bus('indiaFar', 2.4, [[hallIn, 1.1]], { er: 0.45 });
+  bus('indiaPerc', 2.2, [[hallIn, 0.14]], { er: 0.3 });
+  bus('indiaEnd', 2.4, [[spaceIn, 0.6]], { to: finale });
   bus('end', 1.0, [[spaceIn, 0.7]], { to: finale });
   bus('endDry', 1.0, [[spaceIn, 0.15]], { to: finale });
 }
@@ -166,7 +172,8 @@ function mixInto(dst, src) {
   }
 }
 
-export async function renderScore(sampleRate = 48000, { voiceOver = true } = {}) {
+// (`only`, for diagnostics: 'india' renders just the Indian layer, 'score' everything but it)
+export async function renderScore(sampleRate = 48000, { voiceOver = true, only = '' } = {}) {
   const voP = voiceOver ? loadVoiceOver(sampleRate) : Promise.resolve(null);   // decodes while the score renders
   // Two studios render in parallel (one OfflineAudioContext = one render thread
   // each), sharing noise and pre-rendered buffers. Both have the same mixer (so
@@ -179,9 +186,16 @@ export async function renderScore(sampleRate = 48000, { voiceOver = true } = {})
   const B = new Studio(sampleRate, FILM_DURATION + TAIL, 1815, A);
   buildMixer(A, { space: false });
   buildMixer(B, { stage: false, hallUntil: C.earthReveal + 3.5 });
-  const { kicks } = arrangeMusic(A, 'orchestra');
-  arrangeMusic(B, 'rhythm');
-  arrangeCues(B);
+  // the Indian film: the same score architecture under an Indian layer (tanpura, sitar, bansuri,
+  // santoor, tabla, temple bells) and its own sound design (src/audio/india/)
+  const india = FILM_ID === 'india' ? await import('./india/layer.js') : null;
+  let kicks = [];
+  if (only !== 'india') {
+    ({ kicks } = arrangeMusic(A, 'orchestra'));
+    arrangeMusic(B, 'rhythm');
+    arrangeCues(B, india?.chapterCues);
+  }
+  if (india && only !== 'score') { india.arrangeIndia(A, 'melody'); india.arrangeIndia(B, 'rhythm'); }
   warmSfx(B);
   warmPercussion(B);
   duckStrings(A, kicks);
@@ -189,6 +203,7 @@ export async function renderScore(sampleRate = 48000, { voiceOver = true } = {})
   const [buffer, b2] = await Promise.all([A.render(), B.render()]);
   mixInto(buffer, b2);
 
+  if (only) return buffer;   // (diagnostics: the raw mix, unmastered, so the parts compare)
   // Master: set the loud body of the film to a consistent level, glue it with a
   // gentle compressor, then brickwall-limit to -1 dBFS.
   // (the buffer is in film time)

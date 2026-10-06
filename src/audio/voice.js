@@ -3,8 +3,10 @@
 // decoded at the score's sample rate, the music ducks smoothly under each line (look-ahead so
 // the dip starts just before the first syllable), and the sum is limited once more.
 import { limit } from './mastering.js';
+import { FILM } from '../film.js';
 
-export const VO_URL = new URL('../../assets/audio/narration.mp3', import.meta.url).href;   // resolves from this module, whatever the page
+// each film's own narration (src/films/<id>.js), resolved from this module whatever the page
+export const VO_URL = new URL(`../../${FILM.narration}`, import.meta.url).href;
 
 /** Fetch + decode the narration at `sampleRate`; resolves null if it is unavailable. */
 export async function loadVoiceOver(sampleRate = 48000, url = VO_URL) {

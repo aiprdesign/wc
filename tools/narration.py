@@ -1,9 +1,11 @@
-# Regenerates assets/audio/narration.mp3 (British narrator, Kokoro TTS voice bm_george).
+# Regenerates a film's narration (British narrator, Kokoro TTS voice bm_george):
+#   python3 tools/narration.py            → vo.wav for assets/audio/narration.mp3        (the Western film)
+#   python3 tools/narration.py india      → vo.wav for assets/audio/india/narration.mp3  (the Indian film)
 # Setup: pip install kokoro-onnx soundfile; download kokoro-v1.0.onnx + voices-v1.0.bin from
 # github.com/thewh1teagle/kokoro-onnx releases (model-files-v1.0) into the working directory.
 # Then: python3 tools/narration.py && ffmpeg -i vo.wav -ac 1 -ar 48000 -b:a 96k assets/audio/narration.mp3
 # British narrator voice-over, placed on the FILM clock (story × 100/72).
-import json, numpy as np, soundfile as sf
+import json, sys, numpy as np, soundfile as sf
 from kokoro_onnx import Kokoro
 TS = 100 / 72
 VOICE, SPEED = 'bm_george', 0.92
@@ -29,6 +31,29 @@ LINES = [  # (story seconds, text)
   (67.55, "Ideas build upon ideas."),
   (72.9,  "The journey continues."),
 ]
+LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js), on the same clock
+  (0.5,   "Every achievement begins as an idea."),
+  (4.1,   "And some ideas change the world."),
+  (8.1,   "On the Indus, more than four thousand years ago, cities rose on a grid."),
+  (12.5,  "Panini wrote down the rules of language itself."),
+  (16.0,  "Then came zero, and the digits the whole world uses."),
+  (20.6,  "Aryabhata taught that the Earth turns on its axis."),
+  (25.1,  "Indian smiths made steel the world desired."),
+  (29.0,  "Sushruta's surgeons learned to rebuild a nose."),
+  (32.0,  "Whole temples were carved from living rock."),
+  (35.0,  "At Nalanda, scholars came from across Asia to learn."),
+  (38.6,  "From Ashoka to Gandhi: the power of peace."),
+  (42.9,  "Cotton, chess and yoga: gifts to every continent."),
+  (46.9,  "Ramanujan. Raman. Bose. The modern mind."),
+  (49.95, "Then India reached for space."),
+  (53.2,  "Mars at the first attempt… and the Moon's south pole."),
+  (56.2,  "The world is one family."),
+  (62.4,  "From the Indus to the Moon…"),
+  (64.25, "five thousand years of curiosity, craft, and discovery."),
+  (67.55, "Ideas build upon ideas."),
+  (72.9,  "The journey continues."),
+]
+if len(sys.argv) > 1 and sys.argv[1] == 'india': LINES = LINES_INDIA
 k = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
 SR = 48000
 DUR = 78.3 * TS

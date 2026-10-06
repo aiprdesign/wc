@@ -6,7 +6,7 @@ import * as I from './instruments.js';
 import * as X from './sfx.js';
 import * as O from './orchestra.js';
 import { groove } from './music.js';
-import { headingList, kickTiming, onBeat } from '../lib/headings.js';
+import { headingList, kickTiming, onBeat, SWAPS } from '../lib/headings.js';
 
 function opening(S) {
   // v12 — trailer cold open (the hits themselves — sub, taiko, BRAAM, stabs — live in music.js)
@@ -359,14 +359,16 @@ function frontier(S) {
 }
 
 function montage(S) {
-  // one morph every 0.8 s: short whoosh centred on the morph + a rising glint
-  const morphs = [C.mColumns, C.mGears, C.mOrbits, C.mAtoms, C.mCircuit, C.mStars];
+  // one morph every 0.8 s: short whoosh centred on the morph + a rising glint (each film's own
+  // morph cues: the montage's word swaps)
+  const morphs = SWAPS.map(([cue]) => C[cue]);
   const glints = [86, 88, 89, 91, 93, 95];
   morphs.forEach((t, i) => {
     S.at(t - 0.2, () => I.whoosh(S, t - 0.2, 0.45, { level: 0.05 + i * 0.006, f0: 600, f1: 5000, pan0: i % 2 ? 0.6 : -0.6, pan1: i % 2 ? -0.6 : 0.6, peak: 0.45, kind: 'white' }));
     S.at(t, () => I.bell(S, t, glints[i], { level: 0.02, decay: 1.2, pan: i % 2 ? 0.4 : -0.4 }));
   });
-  // echoes of each era under the morphs
+  // echoes of each era under the morphs (the Western film's; the Indian film adds its own)
+  if (C.mColumns == null) return;
   S.at(C.mColumns, () => X.stoneGrind(S, C.mColumns, C.mColumns + 0.6, { level: 0.12, grow: false }));
   S.at(C.mGears, () => I.metal(S, C.mGears, 220, { level: 0.07, decay: 0.8, pan: 0.3 }));
   S.at(C.mCircuit, () => X.sparks(S, C.mCircuit, 0.4, { level: 0.05, bursts: 1 }));
@@ -443,10 +445,12 @@ function transitionAir(S) {
   }
 }
 
-export function arrangeCues(S) {
+// `chapters`: the film's own chapter sound design between the shared opening and montage
+// (the Western film's by default; the Indian film passes src/audio/india/cues.js).
+export function arrangeCues(S, chapters = [classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, frontier]) {
   transitionAir(S);
   headings(S);
-  for (const section of [opening, classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, frontier, montage, finale]) {
+  for (const section of [opening, ...chapters, montage, finale]) {
     section(S);
   }
 }

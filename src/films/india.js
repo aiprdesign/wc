@@ -115,6 +115,20 @@ const CUES = {
   sunrise: 69.6, finalImpact: 71.0, closingLine: 72.8, fadeOut: 76.0,
 };
 
+// The score: the trailer score's architecture (src/audio/music.js) is written against the Western
+// film's beat names; here each of those names is pinned to the Indian picture's beat at (nearly) the
+// same moment, so every orchestral hit lands on this film's own picture. The Indian layer
+// (src/audio/india/) plays on top, on this film's own cues.
+const MUSIC_CUES = {
+  ...CUES,
+  templeReveal: CUES.greatBath, wordCivic: CUES.sutras, wordLaw: CUES.grammarTree, wordRepresentation: 14.35,
+  goldenRatio: CUES.dotZero, model3D: CUES.brahmagupta, fallStart: CUES.aryabhata, gear: CUES.forge,
+  rocketLaunch: CUES.library, earthWide: CUES.asiaRoutes, moonLanding: CUES.wheel, footprint: CUES.charkha,
+  earthrise: CUES.saltMarch, calculator: CUES.cottonBoll, processorDive: CUES.chessSpread, pageSphere: CUES.ramanBeam,
+  shuttle: CUES.thumba, hubble: CUES.aryabhataSat, genome: CUES.pslv, webb: CUES.chandrayaan1, rover: CUES.mangalyaan,
+  artemis: CUES.chandrayaan3, marsVision: CUES.southPole,
+};
+
 // Colour temperature of the grade over time: +1 = terracotta/bronze/gold, -1 = steel/electric/cool.
 const WARMTH_KEYS = [
   [0, 0.9], [8, 1.0], [16, 0.85], [20, 0.6], [25, 1.0], [29, 0.6], [32, 0.9], [39, 0.75],
@@ -160,7 +174,7 @@ export default {
   short: 'Indian Civilization',
   slug: 'achievements-of-indian-civilization',
   DURATION: 78,
-  SEGMENTS, CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, SWAPS,
+  SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, SWAPS,
   note: "India's achievements grew through exchange with civilizations across Asia, Africa and Europe.",
   sceneDir: './india',                             // src/scenes/india/<id>.js
   soundtrack: 'assets/audio/india/soundtrack.mp3',

@@ -35,6 +35,8 @@ export const BAR = BEAT * 4;             // 2.0 s
 export const SEGMENTS = FILM.SEGMENTS;
 export const CUES = FILM.CUES;
 export const WARMTH_KEYS = FILM.WARMTH_KEYS;
+// the beat names the trailer score (audio/music.js) is written against, pinned to this film's picture
+export const MUSIC_CUES = FILM.MUSIC_CUES ?? CUES;
 
 export function segmentById(id) {
   return SEGMENTS.find((s) => s.id === id);
