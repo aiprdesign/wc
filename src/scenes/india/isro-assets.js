@@ -91,6 +91,24 @@ export function arrayTexture(cols = 16, rows = 8, seed = 6) {
   g.strokeStyle = '#c4c8cf'; g.lineWidth = 4; g.strokeRect(2, 2, W - 4, H - 4);
   return toTexture(c);
 }
+// gold MLI foil: large soft panels, crinkle glints, a couple of taped seams (near-white: the material sets the gold)
+export function foilTexture(seed = 29) {
+  const S = 256, r = rng(seed), c = mkCanvas(S), g = c.getContext('2d');
+  g.fillStyle = '#efe6d2'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 26; i++) {
+    const x = r() * S, y = r() * S, rad = 30 + r() * 90, l = r() > 0.5 ? 255 : 196;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(${l},${l - 12},${l - 40},0.22)`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  }
+  for (let i = 0; i < 140; i++) {
+    const x = r() * S, y = r() * S, a = r() * TAU, len = 6 + r() * 30;
+    g.strokeStyle = r() > 0.5 ? 'rgba(255,250,230,0.45)' : 'rgba(120,96,60,0.3)'; g.lineWidth = 0.6 + r() * 1.2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
+  }
+  g.fillStyle = 'rgba(150,120,70,0.35)'; g.fillRect(S * 0.5 - 1.5, 0, 3, S); g.fillRect(0, S * 0.62 - 1.5, S, 3);
+  return toTexture(c, { repeat: true });
+}
+
 // tyre-tread dents for the rover tracks (r = depth)
 export function treadTexture() {
   const c = mkCanvas(64, 256), g = c.getContext('2d');
@@ -103,8 +121,8 @@ export function treadTexture() {
 export function isroMaterials(env = null) {
   const crinkle = crinkleTexture(7, 256);
   const mli = mliTexture(256, 23); mli.repeat.set(2, 2);
-  const mliBig = mli.clone(); mliBig.repeat.set(0.75, 0.75); mliBig.needsUpdate = true;
   const cells = cellTexture();
+  const foil = foilTexture();
   const std = (o) => { const m = new THREE.MeshStandardMaterial(o); if (env) m.envMap = env; return m; };
   return {
     white: std({ color: '#e8e6e1', roughness: 0.42, metalness: 0, vertexColors: true, envMapIntensity: 0.7 }),
@@ -112,7 +130,7 @@ export function isroMaterials(env = null) {
     alu: std({ color: '#b9bcc1', roughness: 0.38, metalness: 0.7, envMapIntensity: 0.7 }),
     dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#dba84c', map: mliBig, metalness: 0.4, roughness: 0.42, bumpMap: crinkle, bumpScale: 0.8, envMapIntensity: 0.85 }),
+    gold: std({ color: '#e8b552', map: foil, metalness: 0.42, roughness: 0.36, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 1.0 }),
     goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
     silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
     cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
@@ -122,6 +140,7 @@ export function isroMaterials(env = null) {
     concrete: std({ color: '#8a8780', roughness: 0.92, metalness: 0, envMapIntensity: 0.4 }),
     steel: std({ color: '#6c6f74', roughness: 0.55, metalness: 0.6, envMapIntensity: 0.5 }),
     wheel: std({ color: '#9a9ca0', roughness: 0.45, metalness: 0.8, envMapIntensity: 0.7 }),
+    ramp: std({ color: '#b4b3ae', roughness: 0.55, metalness: 0.25, envMapIntensity: 0.6 }),
   };
 }
 
@@ -163,8 +182,8 @@ vec3 sky(vec3 d){
   if (uMode == 0) {
     vec3 hSun = vec3(0.95, 0.36, 0.11), hAway = vec3(0.14, 0.08, 0.15);
     vec3 hor = mix(hAway, hSun, pow(az * 0.5 + 0.5, 2.6));
-    vec3 mid = mix(vec3(0.02, 0.026, 0.085), vec3(0.2, 0.085, 0.1), pow(az * 0.5 + 0.5, 3.0));
-    vec3 zen = vec3(0.003, 0.008, 0.034);
+    vec3 mid = mix(vec3(0.025, 0.034, 0.1), vec3(0.2, 0.085, 0.1), pow(az * 0.5 + 0.5, 3.0));
+    vec3 zen = vec3(0.006, 0.014, 0.05);
     c = mix(hor, mid, smoothstep(0.0, 0.16, e));
     c = mix(c, zen, smoothstep(0.12, 0.75, e));
     c += vec3(1.3, 0.5, 0.15) * (pow(max(dot(d, L), 0.0), 60.0) * 0.35 + pow(max(dot(d, L), 0.0), 6.0) * 0.08) * smoothstep(0.25, 0.0, e);          // afterglow over the set sun
@@ -334,11 +353,12 @@ export function makeLunarDust(n, { tEmit0, tLand, seed = 23, altAt }) {
 // The Moon (moonshot's crater shader) + an M3-style false-colour water/hydroxyl overlay at high latitudes,
 // painted in by a pushbroom scan line (uScan: −1 → 1 along the object's x axis).
 const MOON_WATER_FRAG = MOON_FRAG
+  .replace('c3 = craters(p * 21.0 + 7.7);', 'c3 = craters(p * 31.0 + 7.7);')
   .replace('(c1.y + c2.y * 0.6 + c3.y * 0.3) * 0.18', '(c1.y * 0.12 + c2.y * 0.5 + c3.y * 0.3) * 0.18')
   .replace('uniform float uBump, uGain;', 'uniform float uBump, uGain, uWater, uScan, uTime;')
   .replace('gl_FragColor = vec4(col * uGain, 1.0);', `
   float lat = abs(p.y);
-  float pol = smoothstep(0.78, 0.9, lat + 0.06 * snoise(p * 5.0));
+  float pol = smoothstep(0.84, 0.92, lat + 0.05 * snoise(p * 5.0));
   float patchy = smoothstep(-0.3, 0.3, snoise(p * 8.0) * 0.5 + snoise(p * 21.0) * 0.3 + snoise(p * 47.0) * 0.15 + pol * 0.25);
   float scan = 1.0 - smoothstep(uScan - 0.02, uScan + 0.04, p.x);
   float edge = exp(-pow((p.x - uScan) / 0.015, 2.0)) * step(0.5, lat);
@@ -351,7 +371,7 @@ const MOON_WATER_FRAG = MOON_FRAG
   gl_FragColor = vec4(col * uGain, 1.0);`);
 export function moonWaterMesh(radius, sun, segs = 128) {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.9 }, uGain: { value: 1 }, uWater: { value: 0 }, uScan: { value: -1.2 }, uTime: { value: 0 } },
+    uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.55 }, uGain: { value: 1 }, uWater: { value: 0 }, uScan: { value: -1.2 }, uTime: { value: 0 } },
     vertexShader: PLANET_VERT, fragmentShader: MOON_WATER_FRAG,
   });
   return new THREE.Mesh(new THREE.SphereGeometry(radius, segs, Math.round(segs * 0.7)), mat);
@@ -742,9 +762,9 @@ export function buildVikram(M) {
   // ramp: segment A hinged at the bay floor edge (axis z), segment B hinged at A's far end
   const rampSeg = () => [box(VIKRAM.rampLen, 0.03, 0.86, [VIKRAM.rampLen / 2, 0.015, 0]), box(VIKRAM.rampLen, 0.06, 0.03, [VIKRAM.rampLen / 2, 0.06, 0.43]), box(VIKRAM.rampLen, 0.06, 0.03, [VIKRAM.rampLen / 2, 0.06, -0.43])];
   const rampA = new THREE.Group(); rampA.position.set(1.0, BY, 0); g.add(rampA);
-  add(rampSeg(), M.silver, rampA);
+  add(rampSeg(), M.ramp, rampA);
   const rampB = new THREE.Group(); rampB.position.set(VIKRAM.rampLen, 0, 0); rampA.add(rampB);
-  add(rampSeg(), M.silver, rampB);
+  add(rampSeg(), M.ramp, rampB);
   return { group: g, rampA, rampB, engines: [[-0.55, -0.55], [-0.55, 0.55], [0.55, -0.55], [0.55, 0.55]].map(([x, z]) => V3(x, -0.26, z)) };
 }
 

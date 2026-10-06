@@ -531,7 +531,7 @@ export function create(ctx, segment) {
     const sc = lerp(CAP.wheelR * 1.03, 0.53, ease.inOutSine(fly));
     chakra.scale.setScalar(sc);
     chakra.rotation.set(0, 0, -ang);
-    gold.emissiveIntensity = 0.06 + 0.22 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) + 0.12 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
+    gold.emissiveIntensity = 0.03 + 0.13 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) * lerp(0.4, 1, ramp(t, tWh + 0.3, tWh + 0.5)) + 0.12 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
     const out = ramp(t, tCh - 0.04, tCh + 0.3, ease.inOutSine);
     setDis(chakraU, 1, out);
     const radiance = envelope(t, tWh, tCh + 0.25, 0.35, 0.35);
@@ -540,11 +540,11 @@ export function create(ctx, segment) {
     rays.visible = radiance > 0.001;
     rays.position.copy(chakra.position).addScaledVector(tmp.copy(camera.position).sub(chakra.position).normalize(), -0.08);
     faceCamera(rays, camera);
-    rays.scale.setScalar(lerp(1.0, 5.4, fly));
+    rays.scale.setScalar(sc * 10.5);
     halo.position.copy(chakra.position);
     halo.material.opacity = radiance * 0.1;
     halo.visible = radiance > 0.001;
-    halo.scale.setScalar(lerp(0.3, 2.4, fly));
+    halo.scale.setScalar(sc * 4.5);
     wheelLight.position.copy(chakra.position).add(V3(0, 0.1, -0.9));
     wheelLight.intensity = radiance * fly * fly * 1.6;
 
