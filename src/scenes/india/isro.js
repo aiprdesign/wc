@@ -217,18 +217,19 @@ export function create(ctx, segment) {
   const EARTH6 = V3(0.55, 0.05, -0.83).normalize();          // Earth hangs low near the horizon
   const field = A.southPoleField(31, { RM: 520 });
   const lunarMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#f4efe6', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
-  const terrain = new THREE.Mesh(terrainGeometry(field, { size: 140, segs: lite ? 190 : 300, k: 1.6, uvScale: 1 / 4 }), lunarMat);
+  const terrain = new THREE.Mesh(terrainGeometry(field, { size: 140, segs: lite ? 180 : 250, k: 1.6, uvScale: 1 / 4 }), lunarMat);
   terrain.receiveShadow = true; terrain.castShadow = true; w6.add(terrain);
   {
-    const rockGeo = new THREE.IcosahedronGeometry(1, 1);
+    const rockGeo = new THREE.IcosahedronGeometry(1, 2);
     const p = rockGeo.attributes.position, v = V3(), rr = rng(5);
-    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); v.multiplyScalar(0.75 + rr() * 0.5); v.y *= 0.6; p.setXYZ(i, v.x, v.y, v.z); }
+    const bumps = Array.from({ length: 6 }, () => V3(rr() - 0.5, rr() - 0.5, rr() - 0.5).normalize());
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).normalize(); let k = 1; bumps.forEach((b, j) => { k -= Math.max(0, v.dot(b) - 0.5) * (0.6 + j * 0.05); }); v.multiplyScalar(k); v.y *= 0.6; p.setXYZ(i, v.x, v.y, v.z); }
     rockGeo.computeVertexNormals();
-    const rockMat = new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: 0.92, bumpMap: reg.bump, bumpScale: 2, flatShading: true });
+    const rockMat = new THREE.MeshStandardMaterial({ color: '#8d8a84', roughness: 0.92, bumpMap: reg.bump, bumpScale: 2 });
     const N = lite ? 160 : 320, rocks = new THREE.InstancedMesh(rockGeo, rockMat, N), M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = V3(), pos = V3();
     let n = 0, tries = 0;
     while (n < N && tries++ < 6000) {
-      const x = (rr() - 0.5) * 90, z = (rr() - 0.5) * 90 - 10, size = 0.05 + Math.pow(rr(), 5) * 1.2;
+      const x = (rr() - 0.5) * 90, z = (rr() - 0.5) * 90 - 10, size = 0.04 + Math.pow(rr(), 5) * 0.7;
       if (Math.hypot(x, z) < 4.5 || (Math.abs(x) < 1.6 && z > 0 && z < 7)) continue;
       pos.set(x, field(x, z) - size * 0.2, z); e.set(rr() * 0.4, rr() * TAU, rr() * 0.4); q.setFromEuler(e); s.set(size * (0.8 + rr() * 0.5), size, size * (0.8 + rr() * 0.5));
       M4.compose(pos, q, s); rocks.setMatrixAt(n++, M4);
@@ -402,7 +403,7 @@ export function create(ctx, segment) {
     look.set(0, -0.05, 0).addScaledVector(side, -lerp(1.1, 0.7, sat(k / 0.8)));
     camera.lookAt(look);
     camera.fov = 30 - 2 * sat(k / 0.8);
-    SU.uMode.value = 1; SU.uSun.value.copy(SUN2); SU.uPC.value.copy(EARTH2); SU.uPR.value = 1.0; SU.uPRot.value.copy(EROT2); SU.uTime.value = t;
+    SU.uMode.value = 1; SU.uSun.value.copy(SUN2); SU.uPC.value.copy(EARTH2); SU.uPR.value = 1.0; SU.uPRot.value.copy(EROT2); SU.uTime.value = t; SU.uGain.value = 0.72;
     space.visible = true;
     STU.uOpacity.value = 0.6; STU.uHorizon.value = 0;
     setKey(SUN2, '#fff6ea', 3.4, V3(0, 0, 0), 1.6, 20);

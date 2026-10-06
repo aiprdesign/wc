@@ -371,7 +371,7 @@ const MOON_WATER_FRAG = MOON_FRAG
   gl_FragColor = vec4(col * uGain, 1.0);`);
 export function moonWaterMesh(radius, sun, segs = 128) {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.55 }, uGain: { value: 1 }, uWater: { value: 0 }, uScan: { value: -1.2 }, uTime: { value: 0 } },
+    uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.4 }, uGain: { value: 1 }, uWater: { value: 0 }, uScan: { value: -1.2 }, uTime: { value: 0 } },
     vertexShader: PLANET_VERT, fragmentShader: MOON_WATER_FRAG,
   });
   return new THREE.Mesh(new THREE.SphereGeometry(radius, segs, Math.round(segs * 0.7)), mat);
