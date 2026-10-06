@@ -531,11 +531,11 @@ export function create(ctx, segment) {
     const sc = lerp(CAP.wheelR * 1.03, 0.53, ease.inOutSine(fly));
     chakra.scale.setScalar(sc);
     chakra.rotation.set(0, 0, -ang);
-    gold.emissiveIntensity = 0.06 + 0.22 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) + 0.3 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
+    gold.emissiveIntensity = 0.06 + 0.22 * envelope(t, tWh - 0.05, tCh + 0.3, 0.25, 0.4) + 0.12 * Math.exp(-Math.max(0, t - tWh) * 5) * (t > tWh ? 1 : 0);
     const out = ramp(t, tCh - 0.04, tCh + 0.3, ease.inOutSine);
     setDis(chakraU, 1, out);
     const radiance = envelope(t, tWh, tCh + 0.25, 0.35, 0.35);
-    raysU.uI.value = radiance * (0.55 + 0.06 * Math.sin(t * 9));
+    raysU.uI.value = radiance * lerp(0.3, 1, fly) * (0.55 + 0.06 * Math.sin(t * 9));
     raysU.uRot.value = ang / 24 * 1.0 + t * 0.05;
     rays.visible = radiance > 0.001;
     rays.position.copy(chakra.position).addScaledVector(tmp.copy(camera.position).sub(chakra.position).normalize(), -0.08);
@@ -581,7 +581,7 @@ export function create(ctx, segment) {
     place(cCap, anchors.cap, ramp(t, tLion + 0.3, tLion + 0.75, ease.outCubic), 1 - ramp(t, tEd + 0.05, tEd + 0.3));
     place(cEd, anchors.ed, ramp(t, tEd + 0.2, tEd + 0.62, ease.outCubic), 1 - ramp(t, tWh + 0.02, tWh + 0.25));
     place(cWh, tmp.set(0.44, 0.24, 0).multiplyScalar(sc / 0.53).add(chakra.position), ramp(t, tWh + 0.35, tWh + 0.68, ease.outCubic), 1 - ramp(t, tCh - 0.02, tCh + 0.15));
-    place(cCh, W.clone().add(V3(S.x + 0.02, S.y + 0.05, 0.1)), ramp(t, tCh + 0.2, tCh + 0.5, ease.outCubic), 1 - ramp(t, tSM + 0.02, tSM + 0.2));
+    place(cCh, W.clone().add(V3(S.x + 0.02, S.y + 0.05, 0.1)), ramp(t, tCh + 0.2, tCh + 0.5, ease.outCubic), 1 - ramp(t, tSM - 0.2, tSM));
     place(cSM, LEAD.clone().addScaledVector(ROAD_D, WALK_SPEED * t).add(V3(0, 2.0, 0)), ramp(t, tSM + 0.2, tSM + 0.52, ease.outCubic), 1 - ramp(t, tRep + 0.12, tRep + 0.3));
     place(cInd, anchors.ind, ramp(t, tRep + 0.1, tRep + 0.42, ease.outCubic));
     place(cCon, anchors.con, ramp(t, tRep + 0.18, tRep + 0.5, ease.outCubic));
