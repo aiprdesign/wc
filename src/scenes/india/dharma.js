@@ -495,11 +495,11 @@ export function create(ctx, segment) {
     const lift = ramp(t, tSM - 0.1, tSM + 0.4, ease.inOutSine);
     const rep = ramp(t, tRep - 0.05, tRep + 0.45, ease.outCubic);
     sun.intensity = (3.0 + 0.5 * 1 - 0.2 * lift) * (1 - 0.32 * hush);
-    rim.intensity = 1.1 * (1 - 0.3 * hush) + 0.4 * swell;
+    rim.intensity = 1.1 * (1 - 0.3 * hush) + 0.4 * 1;
     hemi.intensity = 0.38 + 0.25 * lift;
     skyU.uLift.value = (1.0 + 0.15 * swell + 0.2 * lift + 0.15 * rep) * (1 - 0.18 * hush);
     skyU.uTime.value = t;
-    scene.environmentIntensity = 0.3 + 0.12 * swell;
+    scene.environmentIntensity = 0.3 + 0.12 * 1;
     mistU.uTime.value = t;
     mistU.uOp.value = 1 - ramp(t, tSM - 0.25, tSM + 0.35);
     for (const m of mists) m.visible = mistU.uOp.value > 0.002;
