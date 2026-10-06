@@ -97,7 +97,7 @@ export function foilTexture(seed = 29) {
   g.fillStyle = '#efe6d2'; g.fillRect(0, 0, S, S);
   for (let i = 0; i < 26; i++) {
     const x = r() * S, y = r() * S, rad = 30 + r() * 90, l = r() > 0.5 ? 255 : 196;
-    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(${l},${l - 12},${l - 40},0.22)`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(${l},${l - 12},${l - 40},0.12)`); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.fillRect(0, 0, S, S);
   }
   for (let i = 0; i < 140; i++) {
@@ -127,10 +127,10 @@ export function isroMaterials(env = null) {
   return {
     white: std({ color: '#e8e6e1', roughness: 0.42, metalness: 0, vertexColors: true, envMapIntensity: 0.7 }),
     paint: std({ color: '#ffffff', roughness: 0.5, metalness: 0.05, vertexColors: true, envMapIntensity: 0.6 }),
-    alu: std({ color: '#b9bcc1', roughness: 0.38, metalness: 0.7, envMapIntensity: 0.7 }),
+    alu: std({ color: '#b2b5ba', roughness: 0.5, metalness: 0.6, envMapIntensity: 0.6 }),
     dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#e8b552', map: foil, metalness: 0.42, roughness: 0.36, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 1.0 }),
+    gold: std({ color: '#f2bc46', map: foil, metalness: 0.45, roughness: 0.34, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 1.0 }),
     goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
     silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
     cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
@@ -337,7 +337,7 @@ export function makeLunarDust(n, { tEmit0, tLand, seed = 23, altAt }) {
         gl_Position = projectionMatrix * mv;
         bool bloom = aO.z > 0.5;
         float fade = bloom ? exp(-age * 2.4) : exp(-age * 2.6) * (1.0 - smoothstep(uLand + 0.04, uLand + 0.4, uTime));
-        vA = fade * smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(9.0, 20.0, r)) * (bloom ? 0.2 : 0.26);
+        vA = fade * smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(9.0, 20.0, r)) * (bloom ? 0.09 : 0.2);
         vL = 0.55 + 0.45 * max(dot(normalize(vec3(cos(aP.x), 0.3, sin(aP.x))), normalize(uSun)), 0.0);
         gl_PointSize = aO.y * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z) * (bloom ? 1.0 + age * 1.6 : 1.0);
       }`,
