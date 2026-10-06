@@ -73,3 +73,43 @@ American Nike-Apache that was India's first rocket, the Soviet launch of India's
 ## On-screen captions inside the chapters
 
 <!-- filled in from the chapter scenes (src/scenes/india/*.js) -->
+
+| Chapter | Caption (on screen) | Status | Sources |
+|---|---|---|---|
+| I Indus | CITADEL · LOWER TOWN · STREETS ON A GRID · NORTH–SOUTH · EAST–WEST | Correct | [Britannica: Mohenjo-daro](https://www.britannica.com/place/Mohenjo-daro) |
+| I Indus | COVERED BRICK DRAIN · HOUSE DRAIN · FROM A BATHING ROOM · BAKED BRICK · 1 : 2 : 4 | Correct | [Britannica: Indus civilization](https://www.britannica.com/topic/Indus-civilization) |
+| I Indus | GREAT BATH · c. 12 × 7 m · 2.4 m DEEP · BITUMEN SEAL | Correct | [UNESCO: Mohenjo-daro](https://whc.unesco.org/en/list/138/) |
+| I Indus | CHERT CUBE WEIGHTS · RATIOS 1·2·4·8·16·32·64 · UNIT 16 ≈ 13.7 g · THEN DECIMAL · 160 · 320 | Correct (Hemmy 1937; Kenoyer) | J. M. Kenoyer, *Ancient Cities of the Indus Valley Civilization* (1998) |
+| I Indus | STEATITE SEAL · SCRIPT STILL UNDECIPHERED (the seal's signs are not drawn) | Correct | [Britannica: Indus script](https://www.britannica.com/topic/Indus-script) |
+| II Language | ASHTADHYAYI · 3,959 SUTRAS · 8 CHAPTERS · PALM-LEAF FOLIO · CUT WITH A STYLUS · INKED WITH SOOT | Correct | [Britannica: Panini](https://www.britannica.com/biography/Panini-Indian-grammarian) |
+| II Language | √BHU + A (3.1.68) + TI (3.4.78) → BHO (7.3.84) → BHAVATI (6.1.78) | Correct (the textbook derivation of *bhavati*) | G. Cardona, *Pāṇini: His Work and its Traditions* (1988) |
+| II Language | PANINI–BACKUS FORM · A NAME PROPOSED BY P. Z. INGERMAN, 1967 | Correct | P. Z. Ingerman, "Pānini-Backus Form Suggested", *Comm. ACM* 10(3), 1967 |
+| II Language | BRAHMI · KA · 3RD C. BC → DEVANAGARI · TIBETAN · BENGALI · TAMIL · SINHALA · KHMER · THAI | Correct (Thai via Old Khmer; glyphs stylised) | [Wikipedia: Brahmic scripts](https://en.wikipedia.org/wiki/Brahmic_scripts) |
+| III Zero | 25 → 205 · 2 × 100 + 0 × 10 + 5 × 1 | Correct (arithmetic) | — |
+| III Zero | BRAHMAGUPTA · AD 628 · BRAHMASPHUTASIDDHANTA · a + 0 = a · a − 0 = a · a × 0 = 0 · FORTUNES (+) AND DEBTS (−) | Correct | [MacTutor: Brahmagupta](https://mathshistory.st-andrews.ac.uk/Biographies/Brahmagupta/) |
+| III Zero | BAGHDAD · AL-KHWARIZMI · c. 825 · PISA · FIBONACCI · LIBER ABACI 1202 | Correct | [MacTutor: Indian numerals](https://mathshistory.st-andrews.ac.uk/HistTopics/Indian_numerals/) |
+| III Zero | (a dot on a birch-bark leaf: the Bakhshali placeholder; no date shown, as its dating is debated) | Depiction | [Bodleian: Bakhshali manuscript](https://www.bodleian.ox.ac.uk/) |
+| IV Astronomy | THE EARTH TURNS ON ITS AXIS · ARYABHATIYA, 499 · π ≈ 62832 / 20000 = 3.1416 · ASANNA, 'APPROXIMATE' | Correct | [MacTutor: Aryabhata](https://mathshistory.st-andrews.ac.uk/Biographies/Aryabhata_I/) |
+| IV Astronomy | JYA TABLE · R = 3438 · STEP 3°45' (differences 225 … 7, summing to 3438) · JYA → JIBA → SINUS → SINE | Correct | [MacTutor: Aryabhata](https://mathshistory.st-andrews.ac.uk/Biographies/Aryabhata_I/) |
+| IV Astronomy | SAMRAT YANTRA · JAIPUR · 1734 · ACCURATE TO ABOUT 2 SECONDS (the shadow's clock reading is computed for the drawn sun) | Correct | [UNESCO: Jantar Mantar](https://whc.unesco.org/en/list/1338/) |
+| V Metal | SEALED CLAY CRUCIBLE · IRON + CHARCOAL / PLANT MATTER MELT INTO STEEL · WOOTZ CRUCIBLE STEEL · SOUTH INDIA · FROM c. 300 BC · "DAMASCUS" BLADES | Correct | Srinivasan & Ranganathan, *India's Legendary Wootz Steel* (2004) |
+| V Metal | IRON PILLAR · c. AD 400 · ~6 TONNES · 7.2 m · QUTB COMPLEX, DELHI · MISAWITE PASSIVE LAYER | Correct | Balasubramaniam, *Current Science* 78 (2000) |
+| V Metal | ZAWAR, RAJASTHAN · ZINC BY DISTILLATION · c. 9TH–14TH C. AD · EUROPE: 1738 · ZINC BOILS AT 907 °C | Correct | Craddock et al., *Indian Journal of History of Science* (1985) |
+| VI Surgery | 101 BLUNT · 20 SHARP INSTRUMENTS · YANTRAS · SHASTRAS · SIMHAMUKHA / KANKAMUKHA FORCEPS | Correct | Bhishagratna (tr.), *The Sushruta Samhita* (1907), Sutrasthana 7–8 |
+| VI Surgery | NASAL RECONSTRUCTION · CHEEK FLAP · LEAF TEMPLATE · CATARACT COUCHING · 300+ PROCEDURES · PRACTISED FIRST ON MODELS · GOURDS · CUCUMBERS · LEATHER BAGS OF WATER | Correct | Bhishagratna (tr.), *The Sushruta Samhita*, Sutrasthana 9, 16 |
+| VII Architecture | GREAT STUPA · SANCHI · 3RD C. BC · BEGUN UNDER ASHOKA | Correct | [UNESCO: Sanchi](https://whc.unesco.org/en/list/524/) |
+| VII Architecture | KAILASA · ELLORA · 8TH CENTURY · CARVED FROM ONE ROCK | Correct | [UNESCO: Ellora](https://whc.unesco.org/en/list/243/) |
+| VII Architecture | THANJAVUR · 1010 · 66 m GRANITE TOWER · TAJ MAHAL · 1632–1653 · AGRA · WHITE MAKRANA MARBLE | Correct | [UNESCO: Great Living Chola Temples](https://whc.unesco.org/en/list/250/) · [UNESCO: Taj Mahal](https://whc.unesco.org/en/list/252/) |
+| VIII Nalanda | NALANDA MAHAVIHARA · BIHAR · UNESCO WORLD HERITAGE 2016 · VIHARA · CHAITYA · DHARMAGANJA, 'MART OF TRUTH' | Correct | [UNESCO: Nalanda](https://whc.unesco.org/en/list/1502/) |
+| VIII Nalanda | GRAMMAR / SHABDAVIDYA · LOGIC / HETUVIDYA · MEDICINE / CHIKITSAVIDYA · THE VEDAS · BUDDHIST PHILOSOPHY | Correct | [UNESCO: Nalanda](https://whc.unesco.org/en/list/1502/) |
+| VIII Nalanda | XUANZANG · 630s (overland via Central Asia) · YIJING · 670s (by sea via Srivijaya) · coastlines schematic | Correct | [Britannica: Xuanzang](https://www.britannica.com/biography/Xuanzang) · [Wikipedia: Yijing (monk)](https://en.wikipedia.org/wiki/Yijing_(monk)) |
+| IX Peace | LION CAPITAL · SARNATH · c. 250 BC · INDIA'S NATIONAL EMBLEM · ASHOKA'S EDICTS · c. 260 BC (the inscription is drawn, not real text) | Correct | [Britannica: Ashoka](https://www.britannica.com/biography/Ashoka) |
+| IX Peace | THE ASHOKA CHAKRA · 24 SPOKES · ON INDIA'S FLAG · THE CHARKHA · SALT MARCH · 1930 · 385 km TO DANDI | Correct | [Britannica: Salt March](https://www.britannica.com/event/Salt-March) |
+| IX Peace | INDEPENDENCE · 15 AUGUST 1947 · CONSTITUTION · 26 JANUARY 1950 · THE WORLD'S LARGEST DEMOCRACY | Correct | [Britannica: India, independence](https://www.britannica.com/place/India) |
+| X Gifts | COTTON · MEHRGARH · c. 5000 BC · INDIGO · FROM THE GREEK INDIKON, 'INDIAN' | Correct | Moulherat et al., *J. Archaeological Science* 29 (2002) · [Britannica: indigo](https://www.britannica.com/technology/indigo-dye) |
+| X Gifts | CHATURANGA · INDIA · c. 6TH CENTURY AD · SHATRANJ · PERSIA · ARAB WORLD · CHESS · EUROPE · YOGA · UNESCO INTANGIBLE HERITAGE · 2016 | Correct | [Britannica: Chess, history](https://www.britannica.com/topic/chess/History) · [UNESCO: Yoga](https://ich.unesco.org/en/RL/yoga-01163) |
+| XI Modern | 1729 = 1³ + 12³ = 9³ + 10³ · 1729 = 7 · 13 · 19 · Ramanujan's 1914 series for 1/π · p(n) to 490 · p(5k + 4) ≡ 0 (mod 5) · LETTER TO HARDY · 1913 | Correct | [MacTutor: Ramanujan](https://mathshistory.st-andrews.ac.uk/Biographies/Ramanujan/) · OEIS A000041 |
+| XI Modern | THE RAMAN EFFECT · 1928 · NOBEL PRIZE IN PHYSICS · 1930 · RAYLEIGH / RAMAN lines (their brightness exaggerated for visibility) | Correct | [Nobel Prize: C. V. Raman](https://www.nobelprize.org/prizes/physics/1930/raman/facts/) |
+| XI Modern | BOSE STATISTICS · 1924 · BOSONS ARE NAMED AFTER S. N. BOSE · BOSE–EINSTEIN CONDENSATE · FIRST MADE 1995 | Correct | [Nobel Prize in Physics 2001](https://www.nobelprize.org/prizes/physics/2001/summary/) |
+| Montage | I · HARAPPA · III · SHUNYA · IX · DHARMA CHAKRA · VII · VIMANA · THANJAVUR 1010 · XII · MANGALYAAN · IV · TARA · STARS | Correct (Sanskrit terms: shunya = zero, tara = star; the orbit is drawn not to scale) | — |
+
