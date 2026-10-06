@@ -137,9 +137,11 @@ export function create(ctx, segment) {
   const bitMat = riseMaterial(new THREE.MeshStandardMaterial({ map: brick.map, bumpMap: brick.bump, bumpScale: 1.2, color: '#4b3a30', roughness: 0.42 }), U, 'bit');
   const voidMat = riseMaterial(new THREE.MeshStandardMaterial({ color: '#2b1d14', roughness: 0.95 }), U, 'void');
   const depthMat = riseDepth(U);
+  const leafMat = riseMaterial(new THREE.MeshStandardMaterial({ color: '#53622c', roughness: 0.85, flatShading: true }), U, 'leaf');
 
   // ------------------------------------------------------------------------------------- the city
-  const walls = new Acc(), roof = new Acc(), bit = new Acc(), voids = new Acc();
+  const walls = new Acc(), roof = new Acc(), bit = new Acc(), voids = new Acc(), leaves = new Acc();
+  const crownG = new THREE.IcosahedronGeometry(1, 1), trunkG = new THREE.CylinderGeometry(0.12, 0.18, 1, 5).toNonIndexed();
   const r = rng(1931);
   const fronts = [];                                         // houses fronting the drain street → house drains
   const riseDelay = (x, z) => T_DUST + 0.6 * sat(Math.hypot(x - 70, (z + 10) * 0.9) / 190) + 0.06 * Math.sin(z * 0.07 + x * 0.03) ** 2;
@@ -158,7 +160,13 @@ export function create(ctx, segment) {
       walls.box(x0, x0 + rr, Y0, Y1, z0 + rr, z1 - rr, blk, jit, { top: roof, faces: 'px nx py' });
       walls.box(x1 - rr, x1, Y0, Y1, z0 + rr, z1 - rr, blk, jit, { top: roof, faces: 'px nx py' });
       walls.box(x0 + rr, x1 - rr, Y0, Y0 + 0.05, z0 + rr, z1 - rr, blk, jit, { faces: 'py' });   // brick-paved courtyard
-      if (r() < 0.35) {                                                                           // a round-ish well head
+      const cw = Math.min(w, d) - 2 * rr;
+      if (cw > 3 && r() < 0.4) {                                                                  // a shade tree in the courtyard
+        const tx = (x0 + x1) / 2 + (r() - 0.5), tz = (z0 + z1) / 2 + (r() - 0.5), th = 2.6 + r() * 2, cr = Math.min(2.6, cw * 0.42);
+        leaves.geo(trunkG.clone().scale(1, th, 1).translate(tx, Y0 + th / 2, tz), blk, jit);
+        leaves.geo(crownG.clone().scale(cr, cr * 0.75, cr).translate(tx, Y0 + th + cr * 0.4, tz), blk, jit);
+        leaves.geo(crownG.clone().scale(cr * 0.7, cr * 0.55, cr * 0.7).translate(tx + cr * 0.5, Y0 + th + cr * 0.1, tz - cr * 0.3), blk, jit);
+      } else if (r() < 0.35) {                                                                    // a round-ish well head
         const wx = x0 + rr + 0.9, wz = z0 + rr + 0.9;
         walls.box(wx - 0.5, wx + 0.5, Y0, Y0 + 0.7, wz - 0.5, wz + 0.5, blk, jit);
         voids.box(wx - 0.32, wx + 0.32, Y0, Y0 + 0.71, wz - 0.32, wz + 0.32, blk, jit, { faces: 'py' });
@@ -181,7 +189,7 @@ export function create(ctx, segment) {
       const dx = x0 + 1 + r() * Math.max(0.1, w - 3.2);
       voids.box(dx, dx + 1.05, Y0, Y0 + 2.05, Math.min(zf, zf + out * 0.04), Math.max(zf, zf + out * 0.04), blk, jit);
       const cxh = dx > cx ? x0 + 0.8 + r() * (w * 0.3) : x1 - 0.8 - r() * (w * 0.3);
-      walls.box(cxh - 0.22, cxh + 0.22, Y0, Y1 - 0.2, Math.min(zf, zf + out * 0.3), Math.max(zf, zf + out * 0.3), blk, jit);
+      walls.box(cxh - 0.25, cxh + 0.25, Y0, Y0 + 0.9, Math.min(zf, zf + out * 0.32), Math.max(zf, zf + out * 0.32), blk, jit);   // drain outlet at the foot of the wall
       fronts.push({ x: cxh, side });
     }
   }
@@ -263,7 +271,7 @@ export function create(ctx, segment) {
   }
 
   const cityMeshes = [];
-  for (const [acc, mat] of [[walls, brickMat], [roof, roofMat], [bit, bitMat], [voids, voidMat]]) {
+  for (const [acc, mat] of [[walls, brickMat], [roof, roofMat], [bit, bitMat], [voids, voidMat], [leaves, leafMat]]) {
     const m = new THREE.Mesh(acc.geometry(), mat);
     m.castShadow = acc !== voids; m.receiveShadow = true; m.customDepthMaterial = depthMat; m.frustumCulled = false;
     city.add(m); cityMeshes.push(m);
@@ -344,6 +352,15 @@ export function create(ctx, segment) {
       const c2 = crown.clone().scale(s * 0.8, s * 0.55, s * 0.8).translate(x + 1.1 * s, y0 + 3.1 * s, z + 0.6 * s);
       parts.push(t1, c1, c2); n++;
     }
+    // low scrub scattered over the plain (denser near the camera's opening run: parallax, scale)
+    const bush = new THREE.IcosahedronGeometry(0.6, 0);
+    for (let k = 0; k < (lite ? 900 : 1800); k++) {
+      const near = k % 2 === 0;
+      const x = near ? 120 + rt() * 230 : -500 + rt() * 1100, z = near ? 60 + rt() * 240 : -700 + rt() * 1300;
+      if ((x > -140 && x < 205 && z > -130 && z < 125) || riverDist(x, z) < RIVER_W * 0.55) continue;
+      const sx = 0.6 + rt() * 1.4;
+      parts.push(bush.clone().scale(sx, sx * (0.35 + rt() * 0.3), sx * (0.8 + rt() * 0.5)).translate(x, 0.1, z));
+    }
     for (const q of parts) { q.deleteAttribute('uv'); }
     const trees = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: '#56602f', roughness: 0.9, flatShading: true }));
     trees.castShadow = trees.receiveShadow = true;
@@ -384,10 +401,10 @@ export function create(ctx, segment) {
     // house drains: from each chute across under the street into the main drain
     for (const f of fronts) {
       const z0 = f.side > 0 ? DRAIN_Z + CW + WT : -ST_HW, z1 = f.side > 0 ? ST_HW : DRAIN_Z - CW - WT;
-      const w = 0.1, wt = 0.1, y0 = DY1 - 0.32, y1 = DY1 + 0.02;
+      const w = 0.15, wt = 0.1, y0 = DY1 - 0.32, y1 = DY1 + 0.02;
       dBrick.box(f.x - w - wt, f.x - w, y0, y1, z0, z1, STATIC, NOJIT, { faces: 'px nx py' });
       dBrick.box(f.x + w, f.x + w + wt, y0, y1, z0, z1, STATIC, NOJIT, { faces: 'px nx py' });
-      dCover.box(f.x - w - wt, f.x + w + wt, y1, y1 + 0.05, z0, z1, STATIC, NOJIT, { faces: 'px nx py' });
+      (f.x > LIFT[0] && f.x < LIFT[1] ? dLift : dCover).box(f.x - w - wt, f.x + w + wt, y1, y1 + 0.05, z0, z1, STATIC, NOJIT, { faces: 'px nx py' });
       dWaterHouse.box(f.x - w, f.x + w, y0 + 0.08, y0 + 0.09, z0, z1, STATIC, NOJIT, { faces: 'py' });
     }
   }
@@ -578,15 +595,15 @@ export function create(ctx, segment) {
   label(city, 'LOWER TOWN', 'HOUSES OF BAKED BRICK', V(150, 8, -40), T_DUST + 1.05, T_GRID + 0.9);
   label(city, 'STREETS ON A GRID', 'NORTH–SOUTH · EAST–WEST', V(72, 1, -40), T_GRID + 0.35, T_DRAIN - 0.05, { dx: 0.5, dy: 0.28 });
   label(drains, 'COVERED BRICK DRAIN', 'UNDER THE STREET', V(56, DY1 + 0.1, DRAIN_Z + CW + WT), T_DRAIN + 0.2, T_BATH - 0.05, { dx: 0.42, dy: 0.4 });
-  const fHouse = fronts.filter((f) => f.x > 42 && f.x < 66).sort((p, q) => q.x - p.x)[0] ?? fronts[0];
+  const fHouse = fronts.slice().sort((p, q) => Math.abs(p.x - 47) - Math.abs(q.x - 47))[0];
   label(drains, 'HOUSE DRAIN', 'FROM A BATHING ROOM', V(fHouse.x, DY1 + 0.05, fHouse.side > 0 ? 3.4 : -3.4), T_DRAIN + 0.32, T_BATH - 0.05, { dx: -0.45, dy: 0.3 });
-  label(drains, 'BAKED BRICK · 1 : 2 : 4', 'THICK : WIDE : LONG', V(32, 2.2, ST_HW), T_DRAIN + 0.42, T_BATH, { dx: 0.4, dy: 0.25 });
+  label(drains, 'BAKED BRICK · 1 : 2 : 4', 'THICK : WIDE : LONG', V(39, 1.1, ST_HW), T_DRAIN + 0.42, T_BATH, { dx: 0.4, dy: 0.25 });
   label(city, 'GREAT BATH', 'c. 12 × 7 m · 2.4 m DEEP', V(POOL.x1 + 0.4, DECK_Y + 0.2, POOL.z0 - 0.4), T_BATH + 0.15, T_WT + 0.05, { dx: 0.45, dy: 0.42 });
   label(city, 'BITUMEN SEAL', 'WATERTIGHT BRICK LINING', V(POOL.x1, DECK_Y - 1.3, POOL.z1 - 1.5), T_BATH + 0.35, T_WT + 0.05, { dx: 0.45, dy: -0.32 });
   const wL = label(shop, 'CHERT CUBE WEIGHTS', 'RATIOS 1 · 2 · 4 · 8 · 16 · 32 · 64', V(weights[2].x, weights[2].s + 0.001, weights[2].z), T_WT + 0.12, dur + 1, { dx: 0.4, dy: 0.42 });
-  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.36, dy: 0.36 });
+  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.3, dy: 0.2 });
   label(shop, 'UNIT 16 ≈ 13.7 g', null, V(weights[4].x, weights[4].s, weights[4].z), T_WT + 0.3, dur + 1, { dx: -0.3, dy: 0.5 });
-  label(shop, 'STEATITE SEAL', 'SCRIPT STILL UNDECIPHERED', V(seal.position.x, 0.01, seal.position.z), T_WT + 0.7, dur + 1, { dx: 0.36, dy: -0.3 });
+  label(shop, 'STEATITE SEAL', 'SCRIPT STILL UNDECIPHERED', V(seal.position.x - 0.012, 0.009, seal.position.z), T_WT + 0.7, dur + 1, { dx: -0.42, dy: -0.08 });
   void wL;
   // the pool's dimensions, drawn flat on the deck
   const dimG = new THREE.Group();
@@ -601,10 +618,12 @@ export function create(ctx, segment) {
     [-0.4, V(300, 13, 262), V(60, 6, -12)],
     [0.45, V(262, 17, 224), V(52, 5, -12)],
     [1.15, V(200, 38, 158), V(46, 2, -10)],
-    [1.85, V(130, 70, 84), V(48, 0, -6)],
-    [2.3, V(96, 4.8, -1.8), V(80, -0.8, 1.4)],
-    [2.8, V(42, 4.4, -1.8), V(27, -0.8, 1.4)],
-    [3.25, V(-14, 26, 21), V(-39, 8.8, 0)],
+    [1.85, V(160, 60, 36), V(62, 0, -4)],
+    [2.2, V(112, 13, -1), V(90, -0.7, 1.2)],
+    [2.5, V(82, 7.8, -2.2), V(68, -0.7, 1.2)],
+    [2.8, V(50, 7.4, -2.2), V(36, -0.7, 1.2)],
+    [3.05, V(18, 15, 5), V(-30, 6, 0)],
+    [3.35, V(-13, 25, 19), V(-39.5, 8.8, 0)],
     [3.8, V(-27, 17.5, 16), V(-40.5, 9.2, -0.6)],
   ];
   const SHOP_KEYS = [
@@ -665,18 +684,18 @@ export function create(ctx, segment) {
     ghost.progress = ramp(t, T_DRAIN, T_DRAIN + 0.5); ghost.opacity = 0.35 * sat(xr * 1.5);
     lifted.position.y = 0.55 * ramp(t, T_DRAIN + 0.1, T_DRAIN + 0.55, ease.outCubic);
     for (const m of [wMain, wHouse]) m.uniforms.uTime.value = t;
-    work.intensity = 45 * xr;
+    work.intensity = 45 * xr * (1 - ramp(t, T_BATH - 0.25, T_BATH));
     riverMat.uniforms.uTime.value = t;
 
     // the Great Bath fills
-    const fillK = ramp(t, T_BATH - 0.1, T_BATH + 0.65, ease.inOutSine);
+    const fillK = ramp(t, T_BATH, T_BATH + 0.72, ease.inOutSine);
     poolWater.position.y = lerp(DECK_Y - POOL_D + 0.02, DECK_Y - 0.28, fillK);
     poolWater.visible = fillK > 0.001 && !inShop;
     poolMat.uniforms.uTime.value = t;
     spill.visible = fillK > 0 && fillK < 1 && !inShop;
     spill.scale.y = Math.max(0.01, DECK_Y - poolWater.position.y - 0.05);
     spill.position.y = DECK_Y - spill.scale.y / 2 - 0.02;
-    spill.material.opacity = 0.5 * (1 - ramp(t, T_BATH + 0.5, T_BATH + 0.65));
+    spill.material.opacity = 0.5 * (1 - ramp(t, T_BATH + 0.55, T_BATH + 0.72));
     const dimP = ramp(t, T_BATH + 0.1, T_BATH + 0.55);
     dLong.reveal(dimP, 1 - ramp(t, T_WT - 0.05, T_WT)); dShort.reveal(ramp(t, T_BATH + 0.2, T_BATH + 0.65), 1 - ramp(t, T_WT - 0.05, T_WT));
 
@@ -684,6 +703,7 @@ export function create(ctx, segment) {
     if (!inShop) {
       pose(cityPath, t);
       camPos.y = Math.max(camPos.y, 2.6);
+      if (camPos.y < 14 && camPos.x > 10) camPos.z = clamp(camPos.z, -3.4, 3.4);   // never into the houses lining the street
       camPos.x += Math.sin(t * 1.3) * 0.25; camPos.y += Math.sin(t * 1.7 + 1) * 0.12;
       camera.near = 0.5; camera.far = 6000; camera.fov = lerp(34, 38, ramp(t, 1.9, 2.4)) - 4 * ramp(t, 2.9, 3.6);
     } else {
@@ -736,6 +756,7 @@ export function create(ctx, segment) {
     api.exposure = (inShop ? 1.0 : 1.12) + 0.35 * (1 - ramp(t, T_WT, T_WT + 0.18)) * (t >= T_WT ? 1 : 0);
   }
 
+  { let tri = 0, pts = 0; scene.traverse((o) => { if (o.isPoints) pts += o.geometry.attributes.position.count; else if (o.geometry) { const g = o.geometry; tri += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); console.warn('[indus] tris', Math.round(tri), 'points', pts); }
   api.arSubject = (t) => (t >= T_WT ? { centre: V(0.03, 0.01, 0.02), radius: 0.2 }
     : t >= T_BATH - 0.2 ? { centre: V(-40, CIT_Y, 0), radius: 32 }
     : t >= T_DRAIN - 0.1 ? { centre: V(60, 0, 0), radius: 40 }

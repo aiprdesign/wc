@@ -21,7 +21,7 @@ import { progressLine, segmentsLine, revealLines, circlePoints } from '../../lib
 import { glowSprite } from '../../lib/materials.js';
 import { Dust } from '../../lib/particles.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
-import { GLSL_NOISE } from '../../lib/noise.js';
+import { GLSL_NOISE, fbm2 } from '../../lib/noise.js';
 import { bakeEarth, earthVert, earthFrag, atmoVert, atmoFrag } from '../finale-earth.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -296,14 +296,10 @@ export function create(ctx, segment) {
   atmo.renderOrder = 3;
   night.add(atmo);
 
-  // the axis (dashed, through the poles) and on out to the celestial pole among the fixed stars
+  // the axis (dashed, through the poles)
   const axisDash = segmentsLine(Array.from({ length: 30 }, (_, i) => { const y = -1.75 + i * 0.1167; return [V(0, y, 0), V(0, y + 0.07, 0)]; }),
     { color: GOLD, intensity: 1.6, orderFn: (a, b, i) => (i / 30) * 0.6, stagger: 0.6 });
-  const axisFar = progressLine([V(0, 1.75, 0), V(0, 900, 0)], { color: GOLD, intensity: 0.5, head: 0.0 });
-  tilt.add(axisDash, axisFar);
-  const poleStar = glowSprite({ color: '#fff2da', intensity: 3.5, scale: 18 });
-  tilt.add(poleStar);
-  poleStar.position.set(0, 880, 0);
+  tilt.add(axisDash);
   // the turning: an arc arrow round the equator, eastward
   const spinArcPts = circlePoints(1.28, 64, { start: -0.35, end: 2.0, plane: 'xz' }).map((p) => p.set(p.x, 0, -p.z));
   const spinArc = progressLine(spinArcPts, { color: GOLD, intensity: 1.8, head: 0.08 });
@@ -319,11 +315,11 @@ export function create(ctx, segment) {
   equatorGrp.add(equator);
   night.add(equatorGrp);
 
-  const earthCallout = new Callout('THE EARTH TURNS ON ITS AXIS', { dx: -0.75, dy: -0.06, size: 0.12, color: '#ffe6bf', sub: 'ARYABHATIYA, 499', intensity: 1.6 });
+  const earthCallout = new Callout('THE EARTH TURNS ON ITS AXIS', { dx: -0.62, dy: -0.06, size: 0.12, color: '#ffe6bf', sub: 'ARYABHATIYA, 499', intensity: 1.6 });
   night.add(earthCallout);
   const poleLabel = new TextPlane('THE STARS STAND STILL', { font: FONTS.mono, height: 0.07, letterSpacing: 0.3, color: '#dfe8ff', intensity: 1.0 });
   earthCallout.add(poleLabel);
-  poleLabel.position.set(-0.75 - 0.024 - poleLabel.worldWidth / 2, -0.06 - 0.12 * 2.05, 0);
+  poleLabel.position.set(-0.62 - 0.024 - poleLabel.worldWidth / 2, -0.06 - 0.12 * 2.05, 0);
 
   // =========================================================================== shot 2: π
   // The diagram plane: a ground line, a circle of diameter D that rolls out its circumference.
@@ -358,7 +354,7 @@ export function create(ctx, segment) {
     const x = X0 + k * D, big = k === Math.PI;
     const tk = segmentsLine([[V(x, YG - (big ? 0.12 : 0.07), 0), V(x, YG + (big ? 0.12 : 0.07), 0)]], { color: big ? '#fff2d6' : GOLD, intensity: big ? 2.4 : 1.4, orderFn: () => 0, stagger: 0 });
     const lb = new TextPlane(label, { font: big ? FONTS.serif : FONTS.mono, italic: big, weight: big ? 600 : 400, height: big ? 0.15 : 0.065, letterSpacing: big ? 0 : 0.2, color: big ? '#fff0d6' : '#ffe2b8', intensity: big ? 1.7 : 1.1 });
-    lb.position.set(x, YG + (big ? 0.27 : 0.17), 0);
+    lb.position.set(big ? x + R + 0.28 : x, big ? YG + 0.12 : YG + 0.17, 0);
     G.add(tk, lb);
     ticks.push({ x, tk, lb });
   }
@@ -366,10 +362,10 @@ export function create(ctx, segment) {
   G.add(diaLabel);
   const eqPi = new TextPlane('π ≈ 62832 / 20000 = 3.1416', { font: FONTS.serif, italic: true, weight: 600, height: 0.26, color: '#fff0d6', intensity: 1.6 });
   eqPi.position.set(-0.25, YG - 0.42, 0);
-  const eqRule = new TextPlane('(100 + 4) × 8 + 62000 = 62832, THE CIRCUMFERENCE OF A CIRCLE OF DIAMETER 20000', { font: FONTS.mono, size: 72, height: 0.052, letterSpacing: 0.16, color: '#ffe2b8', intensity: 1.05 });
-  eqRule.position.set(-0.25, YG - 0.69, 0);
+  const eqRule = new TextPlane('(100 + 4) × 8 + 62000 = 62832, THE CIRCUMFERENCE OF A CIRCLE OF DIAMETER 20000', { font: FONTS.mono, size: 72, height: 0.06, letterSpacing: 0.16, color: '#ffe2b8', intensity: 1.05 });
+  eqRule.position.set(-0.25, YG - 0.7, 0);
   const eqAsanna = new TextPlane('ARYABHATA CALLS IT ASANNA: "APPROXIMATE"', { font: FONTS.mono, height: 0.046, letterSpacing: 0.22, color: '#ffd9a0', intensity: 0.95 });
-  eqAsanna.position.set(-0.25, YG - 0.81, 0);
+  eqAsanna.position.set(-0.25, YG - 0.83, 0);
   G.add(eqPi, eqRule, eqAsanna);
 
   // =========================================================================== shot 3: the jya
@@ -597,16 +593,34 @@ export function create(ctx, segment) {
   const paveTex = (() => {
     const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
     const g = c.getContext('2d'), rr = rng(77);
-    g.fillStyle = '#b98c66'; g.fillRect(0, 0, N, N);
+    g.fillStyle = '#d9c3ab'; g.fillRect(0, 0, N, N);
     for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(${rr() < 0.5 ? '90,60,40' : '230,200,170'},${0.04 + rr() * 0.06})`; g.fillRect(rr() * N, rr() * N, 6 + rr() * 40, 6 + rr() * 40); }
     g.strokeStyle = 'rgba(70,45,30,0.55)'; g.lineWidth = 2;
     for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(0, i * 64); g.lineTo(N, i * 64); g.stroke(); }
     for (let j = 0; j < 8; j++) for (let i = 0; i <= 4; i++) { const x = i * 128 + (j % 2) * 64; g.beginPath(); g.moveTo(x, j * 64); g.lineTo(x, j * 64 + 64); g.stroke(); }
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(70, 70); t.anisotropy = 8;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(75, 75); t.anisotropy = 8;
     return t;
   })();
-  const court = new THREE.Mesh(new THREE.BoxGeometry(300, 0.4, 300), new THREE.MeshStandardMaterial({ map: paveTex, color: '#c9a585', roughness: 0.9 }));
-  court.position.set(0, -0.2, 2);
+  // the ground: paving with dust and wear, lawns between the instruments (vertex colours on a fine grid)
+  const courtGeo = new THREE.PlaneGeometry(300, 300, 150, 150); courtGeo.rotateX(-Math.PI / 2);
+  {
+    const p = courtGeo.attributes.position, col = new Float32Array(p.count * 3);
+    const pave = new THREE.Color('#d8b896'), lawn = new THREE.Color('#8a9a50'), curb = new THREE.Color('#e6d2b8'), c = new THREE.Color();
+    const inRect = (x, z, [x0, z0, x1, z1]) => x > x0 && x < x1 && z > z0 && z < z1;
+    const lawns = [[22, 12, 62, 46], [-62, 12, -22, 46], [24, -70, 72, -14], [-80, -48, -24, -12], [-20, 52, 20, 90], [30, 54, 80, 96], [-80, 54, -30, 96]];
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), n = fbm2(x * 0.02, z * 0.02, 4), n2 = fbm2(x * 0.11 + 7, z * 0.11, 3);
+      c.copy(pave).multiplyScalar(0.82 + 0.28 * n + 0.08 * n2);
+      for (const L of lawns) {
+        if (inRect(x, z, L)) { c.copy(lawn).multiplyScalar(0.75 + 0.4 * n2 + 0.2 * n); break; }
+        if (inRect(x, z, [L[0] - 1.6, L[1] - 1.6, L[2] + 1.6, L[3] + 1.6])) { c.copy(curb); break; }
+      }
+      col.set([c.r, c.g, c.b], i * 3);
+    }
+    courtGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
+  const court = new THREE.Mesh(courtGeo, new THREE.MeshStandardMaterial({ map: paveTex, vertexColors: true, roughness: 0.92 }));
+  court.position.set(0, 0, 2);
   court.receiveShadow = true;
   jaipur.add(court);
   const plain = new THREE.Mesh(new THREE.CircleGeometry(1400, 64), new THREE.MeshStandardMaterial({ color: '#a27c5a', roughness: 1 }));
@@ -746,8 +760,6 @@ export function create(ctx, segment) {
       atmoMat.uniforms.uAtmo.value = 1.3 * dim;
       const axP = ramp(t, tAry - 0.15, tAry + 0.45, ease.outCubic), axO = 1 - ramp(t, tPi - 0.1, tPi + 0.25);
       axisDash.progress = axP; axisDash.opacity = axO;
-      axisFar.progress = ramp(t, tAry + 0.1, tAry + 0.9, ease.inQuad); axisFar.opacity = 0.6 * axO;
-      poleStar.material.opacity = (0.35 + 0.65 * ramp(t, tAry + 0.5, tAry + 0.9)) * (1 - 0.6 * toDiag);
       spinArc.progress = ramp(t, tAry + 0.1, tAry + 0.6, ease.outCubic); spinArc.opacity = axO;
       spinArc.rotation.y = -t * 0.9;
       {
@@ -759,6 +771,7 @@ export function create(ctx, segment) {
         arrowHead.quaternion.setFromUnitVectors(V(0, 1, 0), tmpA.clone().sub(tmpB).normalize());
         arrowHead.material.opacity = sat(spinArc.progress * 6) * axO; arrowHead.visible = arrowHead.material.opacity > 0.01;
       }
+      arrowHead.visible = false; spinArc.visible = false;
       // label at the north pole
       tmpA.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(-0.97).add(tmpB.setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(-0.22));
       earthCallout.position.copy(tmpA);
@@ -776,7 +789,6 @@ export function create(ctx, segment) {
       tmpA.copy(Gw).add(V(X0, YG + R, 0));
       equatorGrp.position.set(0, 0, 0).lerp(tmpA, trans);
       equatorGrp.scale.setScalar(lerp(1.012, R, trans));
-      equatorGrp.rotation.z += 0;               // (no spin: a circle)
       const rollStart = tPi + 0.28, rollEnd = tSine - 0.08;
       const rolling = t >= rollStart;
       equator.opacity = rolling ? 0 : eqIn * (0.85 + 0.15 * trans);
@@ -790,7 +802,7 @@ export function create(ctx, segment) {
       spoke.progress = 1; spoke.opacity = wheelO * (1 - ramp(t, rollEnd, tSine + 0.15));
       hubDot.material.opacity = wheelO * (1 - 0.5 * ramp(t, rollEnd, tSine + 0.2));
       groundGuide.progress = ramp(t, tPi - 0.1, tPi + 0.4, ease.outCubic); groundGuide.opacity = 1 - ramp(t, tSine + 0.2, tSine + 0.6);
-      diaLabel.position.set(X0, YG + R + 0.13, 0.01);
+      diaLabel.position.set(X0 + sR, YG + R + 0.12, 0.01);
       diaLabel.reveal = ramp(t, rollStart - 0.05, rollStart + 0.2); diaLabel.opacity = ramp(t, rollStart - 0.05, rollStart) * (1 - ramp(t, rollStart + 0.3, rollStart + 0.45));
       for (const tk of ticks) {
         const reached = ramp(sR, tk.x - X0 - 0.02, tk.x - X0 + 0.08, (x) => x);

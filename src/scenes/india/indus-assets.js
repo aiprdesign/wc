@@ -73,7 +73,7 @@ export function soilTexture({ size = 512, seed = 9 } = {}) {
       v += w * ((a + (b - a) * tx) * (1 - ty) + (cc + (dd - cc) * tx) * ty);
     }
     const k = (y * size + x) * 4, s = 0.78 + 0.4 * (v - 0.5);
-    d[k] = 205 * s; d[k + 1] = 170 * s; d[k + 2] = 128 * s; d[k + 3] = 255;
+    d[k] = 200 * s; d[k + 1] = 180 * s; d[k + 2] = 150 * s; d[k + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   for (let i = 0; i < 2200; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,60,35,0.18)' : 'rgba(250,225,190,0.12)'; g.fillRect(r() * size, r() * size, 1 + r() * 2, 1 + r() * 2); }
@@ -206,6 +206,14 @@ export class Acc {
     this.quad(V(x0, y0, z0), V(x1, y0, z0), V(x1, y1, z0), V(x0, y1, z0), blk, jit);   // north wall, facing +z
     this.quad(V(x1, y0, z1), V(x0, y0, z1), V(x0, y1, z1), V(x1, y1, z1), blk, jit);   // south wall, facing -z
     if (floor) floor.quad(V(x0, y0, z1), V(x1, y0, z1), V(x1, y0, z0), V(x0, y0, z0), blk, jit);
+  }
+  // any non-indexed geometry (trees in courtyards), placed already
+  geo(g, blk = STATIC, jit = NOJIT) {
+    const p = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < p.count; i++) {
+      this.p.push(p.getX(i), p.getY(i), p.getZ(i)); this.n.push(n.getX(i), n.getY(i), n.getZ(i)); this.uv.push(0, 0);
+      this.b.push(...blk); this.j.push(...jit);
+    }
   }
   geometry() {
     const g = new THREE.BufferGeometry();
