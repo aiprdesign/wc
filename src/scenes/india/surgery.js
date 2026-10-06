@@ -352,7 +352,7 @@ export function create(ctx, segment) {
   const callHeron = mkCall('KANKAMUKHA', 'HERON-FACED FORCEPS', -0.7, 0.26);
   const callEye = mkCall('CATARACT COUCHING', 'EYE SURGERY', -0.62, 0.2);
   const callProc = mkCall('300+ PROCEDURES', '121 INSTRUMENTS', 0.62, -0.22);
-  const modelLab = centerText('PRACTISED FIRST ON MODELS · GOURDS · CUCUMBERS · LEATHER BAGS OF WATER', BOT - 0.02, { height: 0.034, intensity: 0.85, size: 72 });
+  const modelLab = centerText('PRACTISED FIRST ON MODELS · GOURDS · CUCUMBERS · LEATHER BAGS OF WATER', SQ ? BOT - 0.55 : BOT - 0.02, { height: 0.034, intensity: 0.85, size: 72 });
   const anchors = [
     [callLion, () => lion.g.localToWorld(lion.b.head.clone())],
     [callHeron, () => heron.g.localToWorld(heron.b.head.clone())],
