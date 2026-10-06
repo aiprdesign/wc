@@ -146,8 +146,8 @@ export function wheelParts({ spokes = 24, rimIn = 0.84, rimOut = 1, hub = 0.17, 
 
 // the four animals of the abacus in low relief (x along the drum, facing +x; y up; z out of the surface)
 function animalPrims(kind) {
-  const L = (x0, y0, x1, y1, ra, rb, k = 0.006) => cone([x0, y0, 0], [x1, y1, 0], ra, rb, k, 0.42);
-  const E = (x, y, rx, ry, rz, k = 0.008, ang = 0) => ell([x, y, 0], [rx, ry, rz], k, ang);
+  const L = (x0, y0, x1, y1, ra, rb, k = 0.006) => cone([x0, y0, 0], [x1, y1, 0], ra * 1.3, rb * 1.3, k * 1.3, 0.55);
+  const E = (x, y, rx, ry, rz, k = 0.008, ang = 0) => ell([x, y, 0], [rx * 1.05, ry * 1.08, Math.max(rz, 0.03)], k * 1.2, ang);
   if (kind === 'elephant') return [
     E(0, 0.098, 0.082, 0.052, 0.026, 0), E(-0.02, 0.118, 0.06, 0.04, 0.026), E(0.083, 0.112, 0.042, 0.044, 0.028),
     E(0.064, 0.112, 0.026, 0.036, 0.036, 0.004),                                              // ear, standing proud
@@ -196,20 +196,28 @@ function lionPrims() {
     P.push(cone([s * 0.08, 0.1, 0.3], [s * 0.08, 0.04, 0.322], 0.04, 0.038, 0.02));
     P.push(ell([s * 0.08, 0.034, 0.34], [0.047, 0.034, 0.058], 0.025));                            // forepaw
     for (const t of [-1.5, -0.5, 0.5, 1.5]) P.push(ell([s * 0.08 + t * 0.019, 0.022, 0.387], [0.012, 0.018, 0.017], 0.006));   // toes
-    P.push(ell([s * 0.05, 0.788, 0.33], [0.048, 0.05, 0.05], 0.02));                               // cheeks
-    P.push(ell([s * 0.034, 0.866, 0.344], [0.036, 0.016, 0.03], 0.01, s * 0.3));                   // brow ridges
-    P.push(ell([s * 0.04, 0.846, 0.354], [0.013, 0.009, 0.01], 0.004));                            // eyes
-    P.push(ell([s * 0.074, 0.905, 0.238], [0.026, 0.031, 0.016], 0.01));                           // ears
+    P.push(ell([s * 0.062, 0.79, 0.325], [0.05, 0.055, 0.05], 0.02));                             // cheeks
+    P.push(ell([s * 0.033, 0.798, 0.405], [0.034, 0.03, 0.028], 0.012));                           // whisker pads
+    P.push(ell([s * 0.04, 0.869, 0.358], [0.038, 0.017, 0.03], 0.01, s * 0.3));                    // brow ridges
+    P.push(ell([s * 0.044, 0.849, 0.366], [0.014, 0.01, 0.01], 0.004));                            // eyes
+    P.push(ell([s * 0.08, 0.93, 0.25], [0.026, 0.03, 0.016], 0.01));                               // ears
   }
   P.push(ell([0, 0.36, 0.05], [0.12, 0.2, 0.17], 0.05));                                           // torso
   P.push(ell([0, 0.47, 0.19], [0.128, 0.17, 0.12], 0.06));                                          // chest
   P.push(ell([0, 0.67, 0.13], [0.168, 0.25, 0.155], 0.05));                                         // mane mass
-  P.push(ell([0, 0.83, 0.268], [0.094, 0.09, 0.094], 0.03));                                        // cranium
-  P.push(ell([0, 0.806, 0.372], [0.054, 0.04, 0.056], 0.02));                                       // upper muzzle
-  P.push(cone([0, 0.872, 0.322], [0, 0.828, 0.408], 0.03, 0.022, 0.02));                            // nose bridge
-  P.push(ell([0, 0.822, 0.424], [0.022, 0.015, 0.012], 0.008));                                     // nose pad
-  P.push(cone([0, 0.718, 0.29], [0, 0.726, 0.35], 0.032, 0.026, 0.02));                             // throat → chin
-  P.push(ell([0, 0.726, 0.36], [0.04, 0.019, 0.048], 0.008));                                       // lower jaw (the mouth stands open)
+  P.push(ell([0, 0.835, 0.265], [0.108, 0.1, 0.1], 0.03));                                         // cranium
+  P.push(ell([0, 0.88, 0.33], [0.07, 0.035, 0.04], 0.02));                                          // forehead
+  P.push(ell([0, 0.8, 0.375], [0.064, 0.048, 0.06], 0.02));                                         // muzzle
+  P.push(cone([0, 0.885, 0.33], [0, 0.835, 0.42], 0.034, 0.025, 0.02));                             // nose bridge
+  P.push(ell([0, 0.828, 0.433], [0.026, 0.017, 0.014], 0.008));                                     // nose pad
+  P.push(cone([0, 0.716, 0.29], [0, 0.726, 0.36], 0.034, 0.026, 0.02));                             // throat → chin
+  P.push(ell([0, 0.728, 0.372], [0.045, 0.02, 0.05], 0.008));                                       // lower jaw (the mouth stands open)
+  // the ruff: a ring of locks framing the face
+  for (let k = 0; k < 16; k++) {
+    const f = k / 16 * TAU, cx = Math.cos(f), cy = Math.sin(f);
+    const p = [cx * 0.128, 0.815 + cy * 0.125, 0.3 - 0.02 * Math.abs(cy)];
+    P.push(cone(p, [p[0] + cx * 0.05, p[1] + cy * 0.05 - 0.012, p[2] - 0.035], 0.03, 0.009, 0.012));
+  }
   // the mane: tiers of flame-like locks hanging down, brick-bonded, wrapping round to the neighbours
   for (let j = 0; j < 7; j++) {
     const y = 0.905 - j * 0.066, s = Math.sqrt(Math.max(0.05, 1 - ((y - 0.67) / 0.27) ** 2));
@@ -237,8 +245,8 @@ export function capitalGeometries(lite) {
   const animals = kinds.map(([kind, slot, dir]) => {
     const prims = animalPrims(kind).map((p) => (dir > 0 ? p : p.type === 'ell'
       ? { ...p, c: [-p.c[0], p.c[1], p.c[2]], ang: -(p.ang ?? 0) } : { ...p, a: [-p.a[0], p.a[1], p.a[2]], b: [-p.b[0], p.b[1], p.b[2]] }));
-    const n = prep(meshBody(sdfBody(prims), [-0.165, -0.012, -0.012], [0.165, 0.2, 0.05], lite ? 0.0075 : 0.0058));
-    n.translate(0, CAP.abacusY0 + 0.038, 0);
+    const n = prep(meshBody(sdfBody(prims), [-0.175, -0.014, -0.012], [0.175, 0.205, 0.05], lite ? 0.0075 : 0.0058));
+    n.scale(1.1, 1.1, 1.0); n.translate(0, CAP.abacusY0 + 0.03, 0);
     // (the animals walk sunwise round the drum: each faces away from the wheel at the front lion's feet)
     return bendOnDrum(n, R, slot * Math.PI / 4);
   });
@@ -395,33 +403,39 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, shadowDir = 
   };
   const basis = new THREE.Matrix4().makeBasis(side, new THREE.Vector3(0, 1, 0), dir.clone().negate());   // local −z = forward
   const parts = (lead) => {
-    const torso = new THREE.CylinderGeometry(0.15, 0.19, 0.62, 7); torso.translate(0, 1.18, 0);
-    const head = new THREE.SphereGeometry(0.105, 6, 4); head.translate(0, 1.6, lead ? -0.04 : 0);
-    const wrap = new THREE.CylinderGeometry(0.19, 0.24, 0.42, 7); wrap.translate(0, 0.78, 0);   // dhoti
-    return { torso, head, wrap };
+    const torso = new THREE.CylinderGeometry(0.2, 0.16, 0.6, 7); torso.translate(0, 1.18, 0); torso.scale(1, 1, 0.72);
+    const head = new THREE.SphereGeometry(0.1, 6, 4); head.translate(0, 1.6, lead ? -0.04 : 0);
+    const wrap = new THREE.CylinderGeometry(0.17, 0.22, 0.4, 7); wrap.translate(0, 0.7, 0); wrap.scale(1, 1, 0.8);   // dhoti
+    const neck = new THREE.CylinderGeometry(0.045, 0.05, 0.1, 5); neck.translate(0, 1.5, 0);
+    return { torso, head, wrap, neck };
   };
   const leg = new THREE.CylinderGeometry(0.055, 0.045, 0.62, 5); leg.translate(0, -0.31, 0);
   const arm = new THREE.CylinderGeometry(0.045, 0.04, 0.6, 5); arm.translate(0, -0.3, 0);
   const staff = new THREE.CylinderGeometry(0.018, 0.018, 1.75, 5);
+  const cap = new THREE.CylinderGeometry(0.085, 0.1, 0.07, 6); cap.translate(0, 1.69, 0);
   for (let i = 0; i < count; i++) {
     const lead = i === 0;
-    const s = lead ? sEnd + 2.2 : lerp(sEnd, sStart, (i + r() * 0.6) / count);
-    const lane = lead ? 0 : ((i % 3) - 1) * 0.85 + (r() - 0.5) * 0.35;
+    const row = Math.floor((i - 1) / 2), s = lead ? sEnd + 2.6 : sEnd - (row + 0.5) * (sEnd - sStart) / Math.ceil(count / 2) + (r() - 0.5) * 0.7;
+    const lane = lead ? 0 : (i % 2 ? -0.5 : 0.5) + (r() - 0.5) * 0.3;
     const base = origin.clone().addScaledVector(dir, s).addScaledVector(side, lane);
     const m = basis.clone().setPosition(base);
     const phase = r() * TAU, tone = 0.82 + r() * 0.18;
-    const cloth = new THREE.Color(0.6 * tone, 0.56 * tone, 0.5 * tone), skin = new THREE.Color(0.26, 0.15, 0.1);
-    const { torso, head, wrap } = parts(lead);
+    const shawl = r() < 0.18, cloth = new THREE.Color(0.62 * tone, 0.58 * tone, 0.51 * tone), skin = new THREE.Color(0.2, 0.11, 0.07);
+    const top = shawl ? new THREE.Color(0.42 * tone, 0.3 * tone, 0.18 * tone) : cloth;
+    const { torso, head, wrap, neck } = parts(lead);
     const P = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(m);
     const scale = lead ? 0.96 : 0.92 + r() * 0.14;
     const ms = m.clone().multiply(new THREE.Matrix4().makeScale(scale, scale, scale));
-    add(torso, cloth, P(0, 0, 0), 0, phase, ms);
+    add(torso, top, P(0, 0, 0), 0, phase, ms);
     add(head, skin, P(0, 0, 0), 0, phase, ms);
+    add(neck, skin, P(0, 0, 0), 0, phase, ms);
     add(wrap, cloth, P(0, 0, 0), 0, phase, ms);
+    if (!lead && r() < 0.7) add(cap, new THREE.Color(0.7, 0.68, 0.62), P(0, 0, 0), 0, phase, ms);
     for (const sd of [-1, 1]) {
       add(leg.clone().translate(sd * 0.09, 0.9, 0), skin, P(sd * 0.09 * scale, 0.9 * scale, 0), sd * 0.42, phase, ms);
-      add(arm.clone().translate(sd * 0.23, 1.45, 0), lead && sd > 0 ? skin : cloth, P(sd * 0.23 * scale, 1.45 * scale, 0), -sd * (lead && sd > 0 ? 0.12 : 0.32), phase, ms);
+      add(arm.clone().translate(sd * 0.23, 1.45, 0), lead && sd > 0 ? skin : top, P(sd * 0.23 * scale, 1.45 * scale, 0), -sd * (lead && sd > 0 ? 0.12 : 0.32), phase, ms);
     }
+    if (!lead && r() < 0.14) add(staff.clone().scale(1, 0.85, 1).rotateX(0.12).translate(0.27, 0.8, -0.12), new THREE.Color(0.24, 0.16, 0.1), P(0.23 * scale, 1.45 * scale, 0), -0.3, phase, ms);
     if (lead) add(staff.clone().rotateX(0.18).translate(0.3, 0.95, -0.22), new THREE.Color(0.3, 0.2, 0.12), P(0.23, 1.45, 0), -0.12, phase, m);
     // long morning shadow, falling ahead of the walker down the road (a tapering quad on the ground)
     const len = 6.5 * scale, wd = 0.42 * scale, sside = V3(-shadowDir.z, 0, shadowDir.x);

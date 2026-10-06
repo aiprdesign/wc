@@ -204,7 +204,7 @@ export function create(ctx, segment) {
         c = mix(c, uGround, smoothstep(0.0, -0.08, h));
         float s = max(dot(d, normalize(uSunDir)), 0.0);
         float disc = smoothstep(0.99935, 0.99955, s);
-        c += uSunCol * (disc * uSun * 4.0 + pow(s, 300.0) * uHalo * 0.7 + pow(s, 14.0) * uHalo * 0.2);
+        c += uSunCol * (disc * uSun * 2.6 + pow(s, 300.0) * uHalo * 0.7 + pow(s, 14.0) * uHalo * 0.2);
         gl_FragColor = vec4(c, 1.0); }`,
   }));
   sky.renderOrder = -10; sky.frustumCulled = false;
@@ -222,6 +222,8 @@ export function create(ctx, segment) {
   const woodTex = AS.woodTexture(); woodTex.repeat.set(2, 1);
   const wood = new THREE.MeshStandardMaterial({ map: woodTex, color: '#e0b890', roughness: 0.62 });
   const woodDark = new THREE.MeshStandardMaterial({ map: woodTex, color: '#7a5038', roughness: 0.55 });
+  const blockTex = AS.woodTexture({ seed: 9, base: [200, 142, 88], dark: [118, 70, 34] });
+  const blockWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#ffffff', roughness: 0.55 });
   const brass = new THREE.MeshStandardMaterial({ color: '#d8a656', metalness: 1, roughness: 0.32 });
   const cottonMat = new THREE.MeshPhysicalMaterial({ color: '#efe6d2', roughness: 0.95, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#fff4e0') });
   const yarnMat = new THREE.MeshStandardMaterial({ color: '#e9dcc0', roughness: 0.8 });
@@ -359,7 +361,7 @@ export function create(ctx, segment) {
   // shuttle
   const shG = AS.shuttleGeometry();
   const shuttle = new THREE.Group();
-  shuttle.add(new THREE.Mesh(shG.wood, wood), new THREE.Mesh(shG.brass, brass), new THREE.Mesh(shG.pirn, yarnMat));
+  shuttle.add(new THREE.Mesh(shG.wood, blockWood), new THREE.Mesh(shG.brass, brass), new THREE.Mesh(shG.pirn, yarnMat));
   shadowAll(shuttle); scene.add(shuttle);
   const weft = progressLine([V3(0, 0, 0), V3(1, 0, 0)], { color: '#fff0d8', intensity: 1.4, additive: false });
   weft.material.transparent = true; scene.add(weft);
@@ -390,10 +392,8 @@ export function create(ctx, segment) {
   scene.add(cloth);
 
   // print blocks (16 impressions)
-  const blk = AS.blockGeometry(0.54);
+  const blk = AS.blockGeometry(0.46);
   const dyeFace = new THREE.MeshStandardMaterial({ color: '#7a1a10', roughness: 0.6 });
-  const blockTex = AS.woodTexture({ seed: 9, base: [200, 142, 88], dark: [118, 70, 34] });
-  const blockWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#ffffff', roughness: 0.55 });
   const blocks = new THREE.InstancedMesh(blk.box, [blockWood, blockWood, blockWood, dyeFace, blockWood, blockWood], 16);
   const knobs = new THREE.InstancedMesh(blk.knob, wood, 16);
   for (const m of [blocks, knobs]) { m.castShadow = true; m.frustumCulled = false; scene.add(m); }
@@ -508,9 +508,9 @@ export function create(ctx, segment) {
   const mkCall = (label, sub, dx, dy, color = IVORY) => { const c = new Callout(label, { dx: dx * UCX, dy: dy * UC, size: 0.05 * UC, color, sub, intensity: 1.4 }); hud.scene.add(c); c.visible = false; return c; };
   const callCotton = mkCall('COTTON', 'MEHRGARH · c. 5000 BC', -0.5, -0.2);
   const callIndigo = mkCall('INDIGO', "FROM THE GREEK INDIKON, 'INDIAN'", -0.6, 0.32, INDIGO_HUD);
-  const callChat = mkCall('CHATURANGA', 'INDIA · c. 6TH CENTURY AD', 0.5, 0.2, GOLD);
+  const callChat = mkCall('CHATURANGA', 'INDIA · c. 6TH CENTURY AD', TALL ? -0.4 : 0.45, 0.12, GOLD);
   const callNodes = NODES.slice(1).map((n, i) => mkCall(n.name, null, i === 2 ? -0.45 : -0.35, i === 1 ? -0.22 : i === 2 ? 0.06 : 0.22, GOLD));
-  const callYoga = mkCall('YOGA', 'UNESCO INTANGIBLE HERITAGE · 2016', 0.55, -0.16, IVORY);
+  const callYoga = mkCall('YOGA', 'UNESCO INTANGIBLE HERITAGE · 2016', TALL ? 0.1 : 0.55, TALL ? -0.3 : -0.16, IVORY);
   const tmp = new THREE.Vector3();
   const toHud = (w, out) => { tmp.copy(w).project(camera); return out.set(tmp.x * A * PK, tmp.y * PK, 0); };
   const anchors = [
@@ -518,12 +518,12 @@ export function create(ctx, segment) {
     [callIndigo, () => V3(-0.75, CLOTH_Y, 0.55)],
     [callChat, () => V3(0.15, CLOTH_Y + 0.3, -1.05)],
     ...callNodes.map((c, i) => [c, () => NODES[i + 1].p.clone().add(V3(0, 0.05, 0))]),
-    [callYoga, () => figGroup.localToWorld(V3(0.42, 0.2, 0))],
+    [callYoga, () => figGroup.localToWorld(TALL ? V3(0.05, 0.08, 0) : V3(0.42, 0.2, 0))],
   ];
 
   // ---------------------------------------------------------------- camera path
   const CAM = [V3(-1.47, 0.6, 2.82), V3(-1.47, 0.6, 2.76), V3(-1.15, 0.8, 2.85), V3(0.7, 1.45, 1.75), V3(0.3, 3.1, 2.05), V3(1.1, 1.25, 2.45), V3(-0.3, 4.0, 4.1), V3(-2.3, 1.2, 1.5), V3(-3.95, 0.8, 0.0)];
-  const LOOK = [V3(-1.64, 0.61, 2.3), V3(-1.64, 0.61, 2.3), V3(-1.5, 0.22, 0.9), V3(-0.25, -0.1, -1.6), V3(0.0, 0.1, -0.2), V3(0.0, 0.22, 0.05), V3(-2.15, 0.0, -0.75), V3(-4.5, 0.95, -4.4), V3(-4.6, 0.95, -4.4)];
+  const LOOK = [V3(-1.64, 0.61, 2.3), V3(-1.64, 0.61, 2.3), V3(-1.5, 0.22, 0.9), V3(-0.25, -0.1, -1.6), V3(0.0, 0.1, -0.2), V3(0.0, 0.22, 0.05), V3(-1.95, 0.0, -0.7), V3(-4.5, 0.95, -4.4), V3(-4.6, 0.95, -4.4)];
   const camCurve = new THREE.CatmullRomCurve3(CAM, false, 'centripetal'), lookCurve = new THREE.CatmullRomCurve3(LOOK, false, 'centripetal');
   const SK = [[0, 0], [tB, 1], [tL - 0.05, 2], [tL + 0.45, 3], [tC + 0.35, 4], [tK + 0.4, 5], [tS + 0.5, 6], [tY + 0.3, 7], [DUR, 8]];
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
@@ -571,13 +571,20 @@ export function create(ctx, segment) {
       // -------- camera
       const s = timeWarp(t, SK) / 8;
       camCurve.getPoint(sat(s), camPos); lookCurve.getPoint(sat(s), look);
+      // during the weave the camera rides back with the fell, keeping it (and the shuttle) below the heading
+      const wLoom = envelope(t, tL - 0.25, tC + 0.3, 0.4, 0.35);
+      if (wLoom > 0) {
+        const fz = lerp(FELL0, FELL1 + 0.15, ease.inOutSine(sat((t - P0 + 0.05) / (NP * PER))));
+        camPos.lerp(wA.set(0.55, 1.25, fz + 1.55), wLoom);
+        look.lerp(wB.set(-0.2, 0.0, fz - 0.95), wLoom);
+      }
       if (s > 1) camPos.lerp(look, Math.min(0.3, (s - 1) * 2));
       camPos.x += Math.sin(t * 1.3) * 0.006; camPos.y += Math.sin(t * 1.7 + 1) * 0.005;
       camera.position.copy(camPos);
       camera.up.set(Math.sin(t * 0.8) * 0.01, 1, 0).normalize();
       camera.lookAt(look);
       const macro = 1 - ramp(t, tB + 0.35, tL + 0.2);
-      camera.fov = lerp(lerp(30, 36, 1 - macro), 30, ramp(t, tY, DUR, ease.inQuad));
+      camera.fov = lerp(lerp(30, 36, 1 - macro), 30, ramp(t, tY, DUR, ease.inQuad)) + 5 * envelope(t, tS - 0.2, tY + 0.35, 0.35, 0.4);
       camera.updateProjectionMatrix(); camera.updateMatrixWorld();
       sky.position.copy(camPos);
       skyU.uSunDir.value.set(FIG.x - camPos.x, 0, FIG.z - camPos.z).normalize().setY(0.032).normalize();
@@ -655,10 +662,10 @@ export function create(ctx, segment) {
       // -------- block printing and the indigo front
       for (let cz = 0; cz < 4; cz++) for (let cx = 0; cx < 4; cx++) {
         const i = cz * 4 + cx, ts = PRINT0 + (cx + (3 - cz)) * 0.05;
-        const down = ramp(t, ts - 0.1, ts, ease.inQuad), up = ramp(t, ts + 0.025, ts + 0.12, ease.inCubic);
-        const vis = t > ts - 0.11 && t < ts + 0.125;
+        const down = ramp(t, ts - 0.075, ts, ease.inQuad), up = ramp(t, ts + 0.02, ts + 0.09, ease.inCubic);
+        const vis = t > ts - 0.08 && t < ts + 0.095;
         if (!vis) { blocks.setMatrixAt(i, ZERO); knobs.setMatrixAt(i, ZERO); continue; }
-        const y = CLOTH_Y + 0.04 + (1 - down) * 0.42 + up * 0.55;
+        const y = CLOTH_Y + 0.04 + (1 - down) * 0.36 + up * 0.5;
         p4.set(-HALF + 0.65 * (cx + 0.5), y, -HALF + 0.65 * (cz + 0.5));
         e4.set((1 - down) * 0.12 - up * 0.18, (i % 3) * 0.02, (1 - down) * -0.08);
         q4.setFromEuler(e4); s4.setScalar(1 - up * 0.5);
@@ -722,9 +729,9 @@ export function create(ctx, segment) {
       figPts.u.intensity = 1.5 + 0.5 * breath * fmx;
       figLines.progress = ramp(t, tY + 0.12, tY + 0.5, ease.inOutSine);
       figLines.opacity = 0.9; figLines.intensity = 1.5 + 0.6 * breath;
-      silMat.opacity = ramp(t, tY + 0.1, tY + 0.5) * 0.97; sil.visible = silMat.opacity > 0.002;
+      silMat.opacity = ramp(t, tY + 0.05, tY + 0.35) * 0.97; sil.visible = silMat.opacity > 0.002;
       figGroup.scale.setScalar(FIG_H * (1 + 0.006 * breath * fmx));
-      sunGlow.material.opacity = 1; sunGlow.material.color.setRGB(1.0, 0.42, 0.16).multiplyScalar(dawn * 0.4);
+      sunGlow.material.opacity = 1; sunGlow.material.color.setRGB(1.0, 0.42, 0.16).multiplyScalar(dawn * 0.3);
       chestGlow.position.copy(figGroup.localToWorld(wA.set(0, 0.55, 0.02)));
       chestGlow.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(ramp(t, tY + 0.2, tY + 0.6) * (0.1 + 0.15 * breath));
 

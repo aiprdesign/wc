@@ -46,7 +46,7 @@ const SKY_KEYS = [
   { t: 1.1, hor: C(0.8, 0.6, 0.42), zen: C(0.19, 0.3, 0.56), sun: C(1.0, 0.7, 0.42), si: 3.8 },
   { t: 1.9, hor: C(0.85, 0.42, 0.2), zen: C(0.12, 0.16, 0.36), sun: C(1.0, 0.52, 0.24), si: 3.4 },
   { t: 2.4, hor: C(0.34, 0.16, 0.16), zen: C(0.04, 0.06, 0.16), sun: C(0.9, 0.3, 0.12), si: 0.5 },
-  { t: 2.9, hor: C(0.07, 0.06, 0.1), zen: C(0.01, 0.015, 0.045), sun: C(0.5, 0.2, 0.1), si: 0.0 },
+  { t: 2.9, hor: C(0.05, 0.045, 0.075), zen: C(0.008, 0.012, 0.035), sun: C(0.5, 0.2, 0.1), si: 0.0 },
 ];
 function skyAt(t, out) {
   let i = 0;
@@ -456,7 +456,7 @@ export function create(ctx, segment) {
         float k = aGroup < 0.5 ? uG.x : aGroup < 1.5 ? uG.y : uG.z;
         float fl = 0.8 + 0.2 * sin(uTime * (7.0 + aSeed * 5.0) + aSeed * 30.0) * sin(uTime * 3.1 + aSeed * 11.0);
         float px = aSize * projectionMatrix[1][1] * 0.5 * uVP / max(-mv.z, 0.1);
-        vI = k * fl * min(1.0, px * px / 9.0);
+        vI = k * fl * max(min(1.0, px * px / 9.0), 0.12);
         gl_PointSize = max(px, 3.0);
         gl_Position = projectionMatrix * mv;
         if (k <= 0.001) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -473,6 +473,26 @@ export function create(ctx, segment) {
   const lamps = new THREE.Points(lampGeo, lampMat);
   lamps.frustumCulled = false; lamps.renderOrder = 6;
   scene.add(lamps);
+  // the plain by night, seen on the climb: scattered village lamps thinning out with distance
+  const vil = [], rv = rng(1190);
+  for (let k = 0; k < (lite ? 900 : 2200); k++) {
+    const d = k % 2 ? Math.exp(lerp(Math.log(400), Math.log(4e5), Math.pow(rv(), 0.55))) : 4e5 * Math.sqrt(rv()), a = rv() * Math.PI * 2;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d * 0.8;
+    if (Math.hypot(x, z) < 2500) continue;
+    const n = 1 + Math.floor(rv() * 4);
+    for (let j = 0; j < n; j++) vil.push(x + (rv() - 0.5) * d * 0.004, 2, z + (rv() - 0.5) * d * 0.004);
+  }
+  const vilGeo = new THREE.BufferGeometry();
+  vilGeo.setAttribute('position', new THREE.Float32BufferAttribute(vil, 3));
+  const vilMat = new THREE.ShaderMaterial({
+    uniforms: { uK: { value: 0 }, uR: { value: 1 } },
+    vertexShader: 'uniform float uK, uR; varying float vK; void main(){ vK = uK * smoothstep(0.012, 0.1, length(position.xz) / uR); gl_PointSize = 2.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'varying float vK; void main(){ gl_FragColor = vec4(vec3(1.0, 0.6, 0.28) * vK, 1.0); }',
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  });
+  const villages = new THREE.Points(vilGeo, vilMat);
+  villages.frustumCulled = false; villages.renderOrder = 5;
+  scene.add(villages);
 
   // ------------------------------------------------------------------------------------- lights
   const sun = new THREE.DirectionalLight('#ffd7a8', 3);
@@ -494,8 +514,8 @@ export function create(ctx, segment) {
   scene.add(dust);
 
   // ------------------------------------------------------------------------------------- labels
-  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: 2.6, dy: -1.6, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
-  ruinLabel.position.set(-4, 1.8, 17.2);
+  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: 1.8, dy: -2.0, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
+  ruinLabel.position.set(-21, 1.6, 6);
   const vihLabel = new Callout('VIHARA · MONASTERY', { dx: -4, dy: 5, size: 1.0, color: LABEL, sub: 'STUDENT CELLS ROUND A COURTYARD', intensity: 1.5 });
   vihLabel.position.set(-19.5, VH + 1.2, -19.5);
   const temLabel = new Callout('CHAITYA · TEMPLE', { dx: 4, dy: 4.5, size: 1.0, color: LABEL, sub: 'STEPPED BRICK · CORNER TOWERS', intensity: 1.5 });
@@ -506,8 +526,8 @@ export function create(ctx, segment) {
     c.position.copy(GROUPS[i]).add(V(0, i === 4 ? 1.2 : 1.4, 0));
     return c;
   });
-  const libLabel = new Callout('DHARMAGANJA · THE LIBRARY', { dx: 3.4, dy: 1.4, size: 0.62, color: LABEL, sub: "THE 'MART OF TRUTH'", intensity: 1.6 });
-  libLabel.position.set(LIB.x0 + 1.2, 13.2, LIB.z1 - 2.5);
+  const libLabel = new Callout('DHARMAGANJA', { dx: 1.5, dy: 0.9, size: 0.55, color: LABEL, sub: "THE LIBRARY · 'MART OF TRUTH'", intensity: 1.6 });
+  libLabel.position.set(LIB.x0 + 1.1, 10.2, LIB.z1 - 1.1);
   scene.add(ruinLabel, vihLabel, temLabel, libLabel, ...subjLabels);
   // the library's section line, drawn up the cut face as the facade peels away
   const cutPts = [V(LIB.x0 + 1, 0.6, LIB.z0 + 1)];
@@ -529,11 +549,11 @@ export function create(ctx, segment) {
   // routes: waypoints (lon, lat); arcs lift off the map a little
   const ROUTES = [
     { pts: [[85.44, 25.13], [80.5, 27.8], [75.5, 31.2], [72.8, 33.75], [69.0, 34.9], [66.9, 36.7], [67.0, 39.65], [71.5, 40.5], [76.0, 39.5], [82.5, 41.5], [89.2, 42.9], [94.7, 40.1], [100.0, 37.5], [104.0, 36.0], [108.9, 34.3]], t0: 0.0, d: 0.62, lift: 1.2, col: '#ffd08a' },   // Xuanzang: overland to Chang'an
-    { pts: [[108.9, 34.3], [114.0, 35.6], [119.0, 37.0], [123.5, 37.5], [126.9, 37.0], [129.2, 35.8]], t0: 0.5, d: 0.3, lift: 0.8, col: '#ffd08a' },                                                       // on to Korea
+    { pts: [[108.9, 34.3], [114.0, 35.6], [119.0, 37.0], [123.5, 37.5], [126.9, 37.0], [129.2, 35.8]], t0: 0.36, d: 0.26, lift: 0.8, col: '#ffd08a' },                                                     // on to Korea
     { pts: [[85.44, 25.13], [87.0, 27.0], [89.0, 28.6], [91.1, 29.65]], t0: 0.1, d: 0.25, lift: 1.5, col: '#ffe0a8' },                                                                                       // over the Himalaya to Tibet
     { pts: [[85.44, 25.13], [87.9, 22.3], [88.4, 20.0], [86.5, 16.0], [83.0, 12.0], [81.6, 9.6], [80.4, 8.35]], t0: 0.12, d: 0.4, lift: 0.7, col: '#ffc070' },                                              // by sea to Sri Lanka
     { pts: [[85.44, 25.13], [87.9, 22.3], [90.5, 17.0], [93.0, 10.5], [97.0, 7.0], [100.4, 5.9], [102.5, 2.8], [104.75, -2.99]], t0: 0.18, d: 0.45, lift: 0.8, col: '#ffc070' },                           // Tamralipti → Kedah → Srivijaya
-    { pts: [[104.75, -2.99], [106.5, 1.5], [108.5, 7.0], [110.0, 12.0], [112.0, 17.5], [113.3, 23.1]], t0: 0.48, d: 0.35, lift: 0.8, col: '#ffc070' },                                                      // Yijing's sea route to Guangzhou
+    { pts: [[104.75, -2.99], [106.5, 1.5], [108.5, 7.0], [110.0, 12.0], [112.0, 17.5], [113.3, 23.1]], t0: 0.34, d: 0.3, lift: 0.8, col: '#ffc070' },                                                       // Yijing's sea route to Guangzhou
   ];
   const routes = ROUTES.map((R) => {
     const base = R.pts.map(([lon, lat]) => W(lon, lat));
@@ -550,8 +570,8 @@ export function create(ctx, segment) {
     const pul = [0, 1, 2].map(() => { const s = glowSprite({ color: '#ffe2b8', intensity: 1.6, scale: 1.1 }); s.renderOrder = 8; mapFx.add(s); return s; });
     return { ...R, curve, tube, head, pul };
   });
-  const nalandaGlow = glowSprite({ color: '#ffc070', intensity: 4, scale: 3.4 });
-  const nalandaHalo = glowSprite({ color: '#ff9040', intensity: 0.9, scale: 9 });
+  const nalandaGlow = glowSprite({ color: '#ffc070', intensity: 2.6, scale: 3.4 });
+  const nalandaHalo = glowSprite({ color: '#ff9040', intensity: 0.5, scale: 9 });
   nalandaGlow.renderOrder = nalandaHalo.renderOrder = 8;
   nalandaGlow.position.set(0, 0.1, 0); nalandaHalo.position.set(0, 0.1, 0);
   mapFx.add(nalandaHalo, nalandaGlow);
@@ -560,8 +580,8 @@ export function create(ctx, segment) {
   mapFx.add(nalandaRing);
   const PLACES = [
     ['NALANDA', 85.44, 25.13, 1.0, 0, 1.25, '#ffd89a'],
-    ["CHANG'AN", 108.9, 34.3, 1.0, 0.5, 1.0, LABEL], ['KOREA', 129.2, 35.8, 1.0, 0.75, 1.0, LABEL], ['TIBET', 91.1, 29.65, 1.0, 0.3, 1.0, LABEL],
-    ['SRI LANKA', 80.4, 8.35, -1.0, 0.45, 1.0, LABEL], ['SRIVIJAYA', 104.75, -2.99, 1.0, 0.55, 1.0, LABEL], ['CENTRAL ASIA', 67.0, 39.65, -1.0, 0.32, 1.0, LABEL],
+    ["CHANG'AN", 108.9, 34.3, 1.0, 0.5, 1.0, LABEL], ['KOREA', 129.2, 35.8, -1.0, 0.56, 1.0, LABEL], ['TIBET', 91.1, 29.65, 1.0, 0.3, 1.0, LABEL],
+    ['SRI LANKA', 80.4, 8.35, -1.0, 0.45, 1.0, LABEL], ['SRIVIJAYA', 104.75, -2.99, 1.0, 0.4, 1.0, LABEL], ['CENTRAL ASIA', 67.0, 39.65, -1.0, 0.32, 1.0, LABEL],
     ['TAKSHASHILA', 72.8, 33.75, -1.0, 0.18, 0.8, '#d8c4a0'],
   ];
   const places = PLACES.map(([name, lon, lat, side, t0, k, col]) => {
@@ -574,12 +594,12 @@ export function create(ctx, segment) {
     mapFx.add(lab, dot);
     return { lab, dot, at, side, t0, k };
   });
-  const ROUTE_LABELS = [['XUANZANG · 630s', 0, 0.62, 0.18], ['YIJING · 670s', 5, 0.5, 0.62]];
-  const routeLabels = ROUTE_LABELS.map(([txt, ri, u, t0]) => {
+  const ROUTE_LABELS = [['XUANZANG · 630s', 0, 0.56, 0.2, -1], ['YIJING · 670s', 5, 0.5, 0.42, 1]];
+  const routeLabels = ROUTE_LABELS.map(([txt, ri, u, t0, up]) => {
     const lab = new TextPlane(txt, { font: FONTS.mono, weight: 400, height: 1, color: '#ffe8c4', intensity: 1.3, letterSpacing: 0.12 });
     lab.renderOrder = 12; lab.material.depthTest = false;
     mapFx.add(lab);
-    return { lab, ri, u, t0 };
+    return { lab, ri, u, t0, up };
   });
 
   // ------------------------------------------------------------------------------------- camera
@@ -608,9 +628,10 @@ export function create(ctx, segment) {
   const KEYS = [
     [-0.3, V(-29.5, 5.2, 28.5), V(0, 0.2, -3)],
     [1.05, V(-25.0, 6.6, 22.5), V(2, 0.8, -5)],
-    [1.95, V(-54, 31, 50), V(12, 3, -46)],
-    [2.3, V(-16.5, 12.6, 6.5), V(3, 0.2, -1)],
-    [2.56, V(-12, 12.2, 5.5), V(5, 0.5, -1.5)],
+    [1.72, V(-36, 31, 52), V(4, 2, -44)],
+    [2.15, V(-17, 12.8, 6.8), V(3, 0.2, -1)],
+    [2.52, V(-10, 12.4, 5.5), V(14, 3.5, -1.5)],
+    [2.68, V(12, 16.5, 8), V(52, 10, -2)],
     [T_ZOOM, kp.clone(), kl.clone()],
   ];
   const KX = (sel, c) => KEYS.map((k) => [k[0], k[sel][c]]);
@@ -655,7 +676,7 @@ export function create(ctx, segment) {
 
     // ---- light: afternoon → golden hour → dusk → night
     skyAt(t, SK);
-    const el = timeWarp(t, [[0, 0.44], [1.1, 0.3], [1.95, 0.12], [2.45, -0.02], [3.0, -0.12]]);
+    const el = timeWarp(t, [[0, 0.44], [1.1, 0.32], [1.75, 0.2], [2.4, -0.02], [3.0, -0.12]]);
     const az = timeWarp(t, [[0, 3.55], [2.0, 3.45], [3.0, 3.4]]);
     const sd = V(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az) - 0.25).normalize();
     sun.position.copy(sun.target.position).addScaledVector(sd, 200);
@@ -675,20 +696,23 @@ export function create(ctx, segment) {
 
     // ---- lamps and lamplight
     const lampK = ramp(t, tSch - 0.4, tSch + 0.25);
-    const libK = ramp(t, tLib - 0.25, tLib + 0.15);
-    const fadeUp = 1 - ramp(Math.log(r), Math.log(4e4), Math.log(4e5));
+    const libK = ramp(t, tLib - 0.4, tLib);
+    const fadeUp = 1 - ramp(Math.log(r), Math.log(2500), Math.log(2.5e4));
     lampMat.uniforms.uG.value.set(lampK * 1.0, ramp(t, tSch - 0.25, tSch + 0.4) * 0.8, Math.max(libK, lampK * 0.4) * 1.1).multiplyScalar(fadeUp * (1 + 0.12 * pulse(T, { decay: 6 }) * lampK));
     lampMat.uniforms.uTime.value = t;
     lampMat.uniforms.uVP.value = info?.height ?? 800;
     yardLights.forEach((l, i) => { l.intensity = lampK * (9 + 2 * Math.sin(t * 9 + i * 2)) * (1 - ramp(t, 3.0, 3.4)); });
-    GL.uGlowY.value = lerp(-2, 22, ramp(t, tLib - 0.12, tLib + 0.42, ease.inOutSine));
+    GL.uGlowY.value = lerp(-2, 22, ramp(t, tLib - 0.36, tLib + 0.25, ease.inOutSine));
     GL.uGlowK.value = libK * 1.1;
     GL.uTime.value = t;
-    libLight.position.set(LIB.x0 + 6, Math.min(GL.uGlowY.value, 18) + 1.5, 0);
-    libLight.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
+    libLight.position.set(LIB.x0 + 6, Math.min(GL.uGlowY.value, 12) + 1.5, 0);
+    libLight.intensity = libK * 26 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
     libGlow.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
-    facadeMat.userData.u.uSlice.value = t < tLib - 0.15 ? -100 : lerp(0.4, LIB_TOP + 1.5, ramp(t, tLib - 0.12, tLib + 0.38, ease.inOutSine));
+    facadeMat.userData.u.uSlice.value = t < tLib - 0.38 ? -100 : lerp(0.4, LIB_TOP + 1.5, ramp(t, tLib - 0.36, tLib + 0.2, ease.inOutSine));
 
+    vilMat.uniforms.uK.value = 0.55 * ramp(Math.log(r), Math.log(250), Math.log(1500)) * (1 - ramp(Math.log(r), Math.log(6e5), Math.log(3e6)));
+    villages.visible = vilMat.uniforms.uK.value > 0.001;
+    vilMat.uniforms.uR.value = r;
     // ---- figures
     const live = (x, z, h = 1.6) => sat((frontAt(x, z) - h * 0.6) / 1.4) * ramp(t, tRise + 0.25, tRise + 0.6);
     seated.forEach((s, i) => {
@@ -722,9 +746,9 @@ export function create(ctx, segment) {
     show(temLabel, tRise + 0.6, tSch + 0.1);
     subjLabels.forEach((c, i) => show(c, tSch + 0.02 + i * 0.09, tLib + 0.05, 0.3, 0.2));
     show(libLabel, tLib + 0.05, tMap - 0.15, 0.3, 0.2);
-    cutLine.progress = ramp(t, tLib - 0.12, tLib + 0.42, ease.inOutSine);
+    cutLine.progress = ramp(t, tLib - 0.36, tLib + 0.25, ease.inOutSine);
     cutLine.opacity = 1 - ramp(Math.log(r), Math.log(200), Math.log(1500));
-    slabLines.forEach((l, i) => { l.progress = ramp(t, tLib - 0.05 + i * 0.12, tLib + 0.15 + i * 0.12); l.opacity = cutLine.opacity; });
+    slabLines.forEach((l, i) => { l.progress = ramp(t, tLib - 0.2 + i * 0.12, tLib + i * 0.12); l.opacity = cutLine.opacity; });
 
     // ---- the map
     const mapK = ramp(Math.log(r), Math.log(600), Math.log(6000));
@@ -748,7 +772,7 @@ export function create(ctx, segment) {
     });
     const nk = ramp(Math.log(r), Math.log(2e3), Math.log(2e4));
     const ns = camScale(nalandaGlow.position);
-    nalandaGlow.scale.setScalar(ns * 0.03 * (1 + 0.25 * pulse(T, { decay: 5 }))); nalandaHalo.scale.setScalar(ns * 0.09);
+    nalandaGlow.scale.setScalar(ns * 0.016 * (1 + 0.25 * pulse(T, { decay: 5 }))); nalandaHalo.scale.setScalar(ns * 0.05);
     nalandaGlow.material.opacity = nalandaHalo.material.opacity = nk;
     nalandaGlow.visible = nalandaHalo.visible = nk > 0;
     nalandaRing.scale.setScalar(ns * 0.022); nalandaRing.progress = ramp(t, tMap - 0.2, tMap + 0.2); nalandaRing.opacity = nk;
@@ -775,7 +799,7 @@ export function create(ctx, segment) {
       L.lab.scale.setScalar(s);
       faceCamera(L.lab, camera);
       _d.set(0, 1, 0).applyQuaternion(camera.quaternion);
-      L.lab.position.copy(_p).addScaledVector(_d, s * 1.1);
+      L.lab.position.copy(_p).addScaledVector(_d, s * 1.1 * L.up);
       L.lab.reveal = p; L.lab.opacity = 1;
     });
 

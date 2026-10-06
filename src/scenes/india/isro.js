@@ -22,7 +22,7 @@ import { segmentsLine, progressTube } from '../../lib/lines.js';
 import { glowSprite } from '../../lib/materials.js';
 import { Callout } from '../../lib/hud.js';
 import { makeBackdrop, makeSmoke } from '../frontier-assets.js';
-import { makeEnv, regolithTextures, makeTerrainField, terrainGeometry, earthMesh } from '../moonshot-assets.js';
+import { makeEnv, regolithTextures, terrainGeometry, earthMesh } from '../moonshot-assets.js';
 import * as A from './isro-assets.js';
 
 const V3 = A.V3;
@@ -127,12 +127,6 @@ export function create(ctx, segment) {
   billow1.position.set(0, 0.2, 0); w1.add(billow1);
   const B1U = billow1.userData.u;
   B1U.uAmb.value.set('#2a2230'); B1U.uSunCol.value.set('#a0603c'); B1U.uSun.value.copy(KEY1);
-  // floodlights on two poles by the launcher
-  const floods = [];
-  for (const [x, z] of [[-5, -3], [5.5, -4.5]]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 6, 6), silM); pole.position.set(x, 3, z); w1.add(pole);
-    const gl = glowSprite({ color: '#ffe2b8', intensity: 1.4, scale: 1.0 }); gl.position.set(x, 6.1, z); w1.add(gl); floods.push(gl);
-  }
   const S1CAM = new THREE.CatmullRomCurve3([V3(-7.8, 1.45, 17.4), V3(-8.3, 1.4, 16.5), V3(-8.9, 1.25, 15.4)]);
 
   // ================================================================ 2 · ARYABHATA IN ORBIT, 1975 (metres; Earth on the backdrop)
@@ -174,10 +168,10 @@ export function create(ctx, segment) {
   const S3U = smoke3.userData.u;
   S3U.uV0.value = 0; S3U.uAcc.value = ACC3; S3U.uSpread0.value = 1.2; S3U.uSpreadK.value = 3.4; S3U.uLife.value = 3.0; S3U.uSize.value = 3.2; S3U.uHotK.value = 5;
   S3U.uAxis.value.set(0, 1, 0); S3U.uGain.value = 0.55; S3U.uTint.value.set('#ffd2b0');
-  const billow3 = A.makeBillow(lite ? 1400 : 2800, { t0: tIgn + 0.02, t1: tPs + 0.9, seed: 9, lobes: 1, speed: [16, 75], rise: [2, 18], size: [4, 10] });
+  const billow3 = A.makeBillow(lite ? 2000 : 4200, { t0: tIgn + 0.02, t1: tPs + 0.9, seed: 9, lobes: 1, speed: [14, 75], rise: [2, 20], size: [2.6, 7] });
   billow3.position.set(0, -2.2, 0); w3.add(billow3);
   const B3U = billow3.userData.u;
-  B3U.uAmb.value.set('#141c2c'); B3U.uSunCol.value.set('#4a5a78'); B3U.uSun.value.set(0.3, 0.4, 0.8).normalize(); B3U.uFire.value.set('#ff9440');
+  B3U.uAmb.value.set('#1a2232'); B3U.uSunCol.value.set('#3e4a62'); B3U.uSun.value.set(0.3, 0.4, 0.8).normalize(); B3U.uFire.value.set('#ff9440');
 
   // ================================================================ 4 · CHANDRAYAAN-1 AT THE MOON, 2008 (Moon radius 100)
   const w4 = mk();
@@ -203,19 +197,14 @@ export function create(ctx, segment) {
   const RP = 10.75, E5 = 0.86, PP = RP * (1 + E5);
   const orbitAt = (nu, out = V3()) => { const r = PP / (1 + E5 * Math.cos(nu)); return out.copy(P5).multiplyScalar(Math.cos(nu) * r).addScaledVector(Q5, Math.sin(nu) * r); };
   const ellA = new THREE.CatmullRomCurve3(Array.from({ length: 90 }, (_, i) => orbitAt((i / 89) * 2.55)));
-  const ellB = new THREE.CatmullRomCurve3(Array.from({ length: 90 }, (_, i) => orbitAt(-2.55 + (i / 89) * 2.55)));
-  const orbA = progressTube(ellA, { radius: 0.018, segments: 300, color: '#ffc45a', intensity: 2.2 }); w5.add(orbA);
-  const orbB = progressTube(ellB, { radius: 0.018, segments: 300, color: '#ffc45a', intensity: 2.2 }); w5.add(orbB);
-  // the approach: a hyperbola arriving at periapsis (dim, fades once captured)
-  const HE = 1.35, HP = RP * (1 + HE);
-  const hypPts = Array.from({ length: 60 }, (_, i) => { const nu = -2.0 + (i / 59) * 2.0, r = HP / (1 + HE * Math.cos(nu)); return V3().copy(P5).multiplyScalar(Math.cos(nu) * r).addScaledVector(Q5, Math.sin(nu) * r); });
-  const hyp = progressTube(new THREE.CatmullRomCurve3(hypPts), { radius: 0.01, segments: 160, color: '#cfe0ff', intensity: 0.8 }); w5.add(hyp);
+  const orbA = progressTube(ellA, { radius: 0.016, segments: 360, color: '#ffc45a', intensity: 2.0 }); w5.add(orbA);
   const mom = A.buildMOM(MS);
   const MOM_S = 0.065;
   const momG = new THREE.Group(); momG.scale.setScalar(MOM_S); momG.add(mom.group); w5.add(momG);
   {
     // engine (−y) points along the velocity (a retro-burn); the wing (+x) stands out radially; the bus faces −N (the camera side)
     momG.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(P5, Q5.clone().negate(), N5.clone().negate()));
+    mom.wing.rotation.x = Math.PI / 2 - 0.35;
   }
   const momCore = A.plume(0.12, 0.3, 1.6, A.plumeMat('#fff3e0', 3.0)), momOut = A.plume(0.2, 1.1, 5.5, A.plumeMat('#ffc070', 1.0, { alpha: 0.6 }));
   momCore.position.copy(mom.exit); momOut.position.copy(mom.exit); mom.group.add(momCore, momOut);
@@ -226,9 +215,9 @@ export function create(ctx, segment) {
   const w6 = mk();
   const SUN6 = V3(-0.86, 0.1, 0.5).normalize();            // ~6° above the horizon
   const EARTH6 = V3(0.55, 0.05, -0.83).normalize();          // Earth hangs low near the horizon
-  const { field } = makeTerrainField(31, { RM: 520 });
+  const field = A.southPoleField(31, { RM: 520 });
   const lunarMat = new THREE.MeshStandardMaterial({ map: reg.albedo, bumpMap: reg.bump, bumpScale: 1.4, color: '#f4efe6', roughness: 0.96, metalness: 0, envMapIntensity: 0.02 });
-  const terrain = new THREE.Mesh(terrainGeometry(field, { size: 150, segs: lite ? 180 : 260, k: 1.65, uvScale: 1 / 4 }), lunarMat);
+  const terrain = new THREE.Mesh(terrainGeometry(field, { size: 140, segs: lite ? 190 : 300, k: 1.6, uvScale: 1 / 4 }), lunarMat);
   terrain.receiveShadow = true; terrain.castShadow = true; w6.add(terrain);
   {
     const rockGeo = new THREE.IcosahedronGeometry(1, 1);
@@ -299,7 +288,7 @@ export function create(ctx, segment) {
   const D6U = dust6.userData.u; D6U.uSun.value.copy(SUN6);
   const vikFx = vik.engines.map((p) => { const c = A.plume(0.07, 0.32, 1.4, A.plumeMat('#dfe8ff', 0.8)); c.position.copy(p); vik.group.add(c); return c; });
   const vikGlow = glowSprite({ color: '#e6eeff', intensity: 1.0, scale: 1.8 }); vikGlow.position.set(0, -0.5, 0); vik.group.add(vikGlow);
-  const C6CAM = new THREE.CatmullRomCurve3([V3(-4.9, 1.25, 11.2), V3(-4.1, 0.95, 8.9), V3(-3.0, 1.05, 7.7), V3(-3.6, 3.5, 11.5), V3(-8, 14, 24), V3(-14, 30, 40)], false, 'centripetal');
+  const C6CAM = new THREE.CatmullRomCurve3([V3(-4.9, 1.25, 11.2), V3(-4.1, 0.95, 8.9), V3(-3.0, 1.05, 7.7), V3(-3.8, 3.2, 11.0), V3(-7, 11, 20), V3(-11, 22, 31)], false, 'centripetal');
   const C6K = [[tC3 - 0.02, 0], [tSP, 1], [tSP + 0.55, 2], [tSP + 0.8, 2.55], [DUR - 0.2, 4.2], [DUR + 0.05, 5]];
   C6CAM.points.forEach((p) => { p.y += field(p.x, p.z); });
 
@@ -349,7 +338,12 @@ export function create(ctx, segment) {
     out.set((tmp3.x / (z * th)) * FILM_ASPECT, (tmp3.y / (z * tv)) * HH, 0);
     return out;
   };
-  const pin = (call, world, p, o) => { projHud(world, call.position); call.reveal(p, o); };
+  const pin = (call, world, p, o) => {
+    tmp3.copy(world).applyMatrix4(camera.matrixWorldInverse); const behind = tmp3.z > 0;
+    projHud(world, call.position);
+    const inside = !behind && Math.abs(call.position.x) < FILM_ASPECT * 0.92 && Math.abs(call.position.y) < HH * 0.9;
+    call.reveal(inside ? p : 0, inside ? o : 0);
+  };
   const cuts = [cAr, cPs, cC1, cMo, cC3];
   const cutW = [0.5, 0.65, 0.45, 0.3, 0.5];
   const shotOf = (t) => (t < cAr ? 0 : t < cPs ? 1 : t < cC1 ? 2 : t < cMo ? 3 : t < cC3 ? 4 : 5);
@@ -389,18 +383,17 @@ export function create(ctx, segment) {
     camera.fov = 32 + 9 * ramp(t, tLaunch, cAr, ease.inQuad);
     SK.uMode.value = 0; SK.uSun.value.copy(SUN1); SK.uTime.value = t; SK.uGain.value = 1;
     sky.visible = true;
-    STU.uOpacity.value = 0.35; STU.uHorizon.value = 1;
+    STU.uOpacity.value = 0.14; STU.uHorizon.value = 3;
     setKey(KEY1, '#ff9a5c', 1.5, V3(0, 3, 0), 22, 120);
     setRim(V3(0.5, 0.35, 0.9), '#7f8fc8', 0.5);
     hemi.color.set('#4a4870'); hemi.groundColor.set('#1a120c'); hemi.intensity = 0.55;
-    for (const f of floods) f.material.opacity = 0.85 + 0.15 * Math.sin(T * 3 + f.position.x);
-    return ret(camera.position.distanceTo(rocketC), 0.25, 14, 0.85, 0.75, 1.0, 0.25);
+    return ret(camera.position.distanceTo(rocketC), 0, 14, 0.85, 0.62, 1.0, 0.25);
   }
 
   function shotArya(t, T) {
     const k = t - cAr;
-    aryaSpin.rotation.y = k * 1.6;
-    arya.group.rotation.y = 0.4 + k * 2.4;
+    aryaSpin.rotation.y = k * 0.5;
+    arya.group.rotation.y = 0.4 + k * 1.2;
     // camera arcs round the satellite, rising a touch (things drift up the frame: the tilt carries on)
     const a = lerp(0.35, 0.95, ease.inOutSine(sat(k / 0.85)));
     const r = lerp(5.0, 4.4, sat(k / 0.8));
@@ -417,7 +410,7 @@ export function create(ctx, segment) {
     hemi.color.set('#000000'); hemi.groundColor.set('#2c4f8a'); hemi.intensity = 0.7;
     // a sun glint off the cells as a face swings through the mirror angle
     aryaGlint.position.copy(V3(0.3, 0.45, 0.4).applyEuler(aryaSpin.rotation).multiplyScalar(0.95));
-    aryaGlint.material.opacity = Math.pow(Math.max(0, Math.sin(k * 7.5 + 1.2)), 12) * 0.9;
+    aryaGlint.material.opacity = Math.pow(Math.max(0, Math.sin(k * 4.0 + 0.4)), 12) * 0.8;
     return ret(camera.position.length(), 0, 3, 1, 0.75, 1.02, 0.4);
   }
 
@@ -442,7 +435,7 @@ export function create(ctx, segment) {
     const k = sat((t - cPs) / (cC1 - cPs));
     const sh = 0.25 * envelope(t, tIgn, tIgn + 0.5, 0.02, 0.45);
     camera.position.set(lerp(36, 33, k) + Math.sin(T * 73) * sh, 2.6 + Math.sin(T * 61) * sh, lerp(124, 119, k));
-    look.set(-2, 21 + Math.max(0, y - 0.6) * 0.75, 0);
+    look.set(-15, 19 + Math.max(0, y - 0.6) * 0.75, 0);
     camera.lookAt(look);
     camera.fov = 30 + 2 * k;
     SK.uMode.value = 1; SK.uSun.value.copy(SUN3); SK.uTime.value = t; SK.uGain.value = 1 + 0.5 * ign;
@@ -464,7 +457,7 @@ export function create(ctx, segment) {
     camera.updateMatrixWorld();
     // the orbiter crosses the frame left → right, 10 m from the lens (its polar orbit runs over the pole)
     const fwd = tmp.subVectors(look, camPos).normalize(), right = tmp2.crossVectors(fwd, V3(0, 1, 0)).normalize(), up = V3().crossVectors(right, fwd);
-    ch1Pos.copy(camPos).addScaledVector(fwd, 10).addScaledVector(right, lerp(-6.2, 4.6, k)).addScaledVector(up, 0.95 - 0.25 * k);
+    ch1Pos.copy(camPos).addScaledVector(fwd, 15).addScaledVector(right, lerp(-8.5, 6.5, k)).addScaledVector(up, 0.6 - 0.3 * k);
     ch1G.position.copy(ch1Pos);
     ch1.group.rotation.y = -0.5 + k * 0.35;
     moon.rotation.y = 0.15 + k * 0.03;
@@ -475,7 +468,7 @@ export function create(ctx, segment) {
     setKey(SUN4, '#fff4e8', 3.4, ch1Pos, 6, 40);
     setRim(V3(-0.6, -0.4, -0.5), '#8090b0', 0.35);
     hemi.color.set('#202430'); hemi.groundColor.set('#3a3a3c'); hemi.intensity = 0.45;
-    return ret(10, 0, 20, 0.9, 0.72, 1.0, 0.3);
+    return ret(15, 0, 20, 0.9, 0.72, 1.0, 0.3);
   }
 
   function shotMom(t, T) {
@@ -488,11 +481,10 @@ export function create(ctx, segment) {
     momCore.material.uniforms.uT.value = momOut.material.uniforms.uT.value = T; momGlow.material.opacity = burn * flick;
     marsBody.rotation.y = 1.2 + t * 0.08;
     // gold orbit draws itself from the spacecraft, forward round the planet, and back
-    const dA = ramp(t, tMo + 0.08, tMo + 0.5, ease.inOutSine), dB = ramp(t, tMo + 0.38, cC3 - 0.02, ease.outCubic);
-    orbA.progress = Math.max(0.0001, dA); orbA.opacity = 1; orbB.progress = Math.max(0.0001, dB); orbB.opacity = dB > 0 ? 1 : 0;
-    hyp.progress = 1; hyp.opacity = 0.55 * (1 - ramp(t, tMo + 0.1, tMo + 0.5));
+    const dA = ramp(t, tMo + 0.06, cC3 - 0.1, ease.inOutSine);
+    orbA.progress = Math.max(0.0001, dA); orbA.opacity = 1;
     // camera: behind, above and to the side of the spacecraft, looking down its path: Mars is the horizon below
-    camPos.copy(momPos).addScaledVector(Q5, lerp(-0.85, -0.72, k)).addScaledVector(P5, lerp(0.3, 0.36, k)).addScaledVector(N5, lerp(-1.0, -0.92, k));
+    camPos.copy(momPos).addScaledVector(Q5, lerp(-0.7, -0.6, k)).addScaledVector(P5, lerp(0.26, 0.31, k)).addScaledVector(N5, lerp(-0.85, -0.78, k));
     camera.position.copy(camPos);
     look.copy(momPos).addScaledVector(Q5, 0.75 + 0.1 * k).addScaledVector(P5, -0.12).addScaledVector(N5, 0.25);
     camera.up.copy(P5);
@@ -520,7 +512,7 @@ export function create(ctx, segment) {
     const flick = 0.85 + 0.15 * Math.sin(T * 97) * Math.sin(T * 43);
     for (const c of vikFx) { c.visible = eng > 0; c.material.uniforms.uA.value = flick * 0.8; c.material.uniforms.uT.value = T; }
     vikGlow.visible = eng > 0; vikGlow.material.opacity = flick * (0.5 + 0.5 * sat(1 - alt / 8));
-    glowL.position.copy(vikPos).add(tmp.set(0, -0.9, 0)); glowL.color.set('#dfe8ff'); glowL.intensity = 30 * eng * flick;
+    glowL.position.copy(vikPos).add(tmp.set(0, -0.9, 0)); glowL.color.set('#dfe8ff'); glowL.intensity = 10 * eng * flick;
     D6U.uTime.value = t; D6U.uViewport.value = RES.vh; dust6.visible = t > tC3;
     // ramp unfolds, then the rover rolls out
     const rA = ramp(t, tRamp, tRamp + 0.28, ease.inOutCubic), rB = ramp(t, tRamp + 0.05, tRamp + 0.33, ease.inOutCubic);
@@ -545,14 +537,15 @@ export function create(ctx, segment) {
     const lookRover = tmp2.copy(roverPos).add(V3(0, 0.35, 0)).lerp(vikPos, 0.35);
     look.copy(lookDescent).lerp(lookRover, ramp(t, tSP + 0.1, tSP + 0.6, ease.inOutSine));
     const away = ramp(t, tSP + 0.75, DUR + 0.1, ease.inQuad);
-    look.lerp(tmp.copy(camera.position).addScaledVector(EARTH6, 60).add(V3(0, 14, 0)), away * 0.85);
+    look.lerp(tmp.copy(camera.position).addScaledVector(EARTH6, 60).add(V3(0, 6, 0)), away * 0.5);
     camera.lookAt(look);
     camera.fov = 31 + 3 * ramp(t, tC3, tSP) + 6 * away;
     // sky: black, stars, Earth low on the horizon (kept at infinity)
     SU.uMode.value = 2; space.visible = true;
     STU.uOpacity.value = 0.55 + 0.4 * away; STU.uHorizon.value = 1;
     earth6.position.copy(camera.position).addScaledVector(EARTH6, 900);
-    setKey(SUN6, '#fff4e6', 6.0, tmp.set(0, field(0, 0), 2), 18, 220);
+    setKey(SUN6, '#fff4e6', 6.0, tmp.set(0, field(0, 0), 2), lerp(16, 60, away), 260);
+    key.shadow.normalBias = 0.12; key.shadow.bias = -0.0012;
     setRim(V3(0.4, 0.3, -0.8), '#8fa8e0', 0.12);
     hemi.color.set('#0c1222'); hemi.groundColor.set('#4a4640'); hemi.intensity = 0.55;
     return ret(camera.position.distanceTo(vikPos), 0.35 * (1 - away), 4 + 20 * away, 0.6, 0.72, 1.0, 0.1);
@@ -624,7 +617,7 @@ export function create(ctx, segment) {
       for (let i = 0; i < worlds.length; i++) worlds[i].visible = i === shot;
       sky.visible = false; space.visible = false;
       camera.near = 0.1; camera.far = 3000; camera.up.set(0, 1, 0);
-      glowL.intensity = 0;
+      glowL.intensity = 0; key.shadow.normalBias = 0.03; key.shadow.bias = -0.0004;
       SU.uGain.value = 1; SU.uEarthK.value = 0; SU.uHaze.value = 1; SU.uMoonK.value = 0; SU.uAur.value = 1; SU.uSunK.value = 1;
       const r = [shotThumba, shotArya, shotPslv, shotCh1, shotMom, shotC3][shot](t, T);
       camera.updateProjectionMatrix();

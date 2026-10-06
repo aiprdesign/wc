@@ -128,9 +128,7 @@ float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 vec3 mapLand(vec2 p){
   float f = 0.0, a = 0.5, fr = 1.2;
   for (int i = 0; i < 8; i++) { f += a * mn(p * fr + float(i) * 7.13); fr *= 2.3; a *= 0.62; }
-  float ridge = 1.0 - abs(mn(p * 0.9 + 3.0) * 2.0 - 1.0);
-  vec3 c = mix(vec3(0.030, 0.022, 0.014), vec3(0.046, 0.032, 0.019), f);
-  c += vec3(0.020, 0.012, 0.006) * pow(ridge, 6.0);
+  vec3 c = vec3(0.037, 0.026, 0.016) * (0.86 + 0.28 * f);
   return c;
 }
 float graticule(vec2 p){
@@ -226,13 +224,13 @@ const MAINLAND = [[35.0, 29.4], [35.7, 27.5], [37.5, 24.5], [39.1, 21.7], [40.5,
   [126.6, 35.1], [126.3, 34.5], [127.4, 34.7], [128.5, 34.9], [129.2, 35.2], [129.5, 35.9], [129.4, 36.8], [129.1, 37.7], [128.6, 38.4], [128.1, 38.9],
   [127.5, 39.6], [128.4, 40.0], [129.7, 40.8], [129.8, 41.7], [130.7, 42.3], [131.4, 42.8], [132.4, 43.2], [133.9, 42.8], [135.5, 43.9], [137.2, 45.4],
   [138.6, 47.0], [140.2, 48.5], [140.6, 50.0], [141.3, 52.2], [141.5, 53.5], [140.5, 56.0], [138.0, 58.0]];
-const MAINLAND_CLOSE = [[138.0, 64.0], [20.0, 64.0], [20.0, 34.0], [34.2, 31.3]];
+const MAINLAND_CLOSE = [[138.0, 75.0], [10.0, 75.0], [10.0, 34.0], [34.2, 31.3]];
 const CASPIAN = [[49.0, 46.5], [51.5, 47.0], [53.0, 45.3], [51.3, 44.5], [52.7, 42.0], [53.0, 40.5], [54.0, 38.0], [53.9, 36.9], [51.8, 36.6], [50.0, 37.4],
   [49.0, 38.5], [49.5, 40.3], [48.0, 41.8], [47.5, 43.5], [47.0, 44.6], [48.0, 46.0]];
 const AFRICA = [[34.9, 29.5], [34.2, 27.8], [32.6, 29.9], [33.5, 27.0], [35.5, 24.0], [36.9, 22.0], [37.4, 19.0], [38.6, 17.9], [39.7, 15.3], [41.2, 14.2],
   [42.4, 13.0], [43.3, 11.8], [44.3, 10.4], [45.8, 10.8], [47.6, 11.2], [49.0, 11.3], [51.2, 11.8], [51.1, 10.4], [50.4, 8.5], [49.4, 6.5], [47.9, 4.3],
   [46.0, 2.2], [43.5, -0.5], [41.6, -1.8], [40.1, -3.3], [39.2, -5.5], [39.4, -7.5], [39.7, -10.0], [40.5, -14.0], [40.6, -20.0]];
-const AFRICA_CLOSE = [[20.0, -20.0], [20.0, 31.0], [32.3, 31.3]];
+const AFRICA_CLOSE = [[10.0, -20.0], [10.0, 31.0], [32.3, 31.3]];
 const ISLANDS = [
   [[79.9, 9.7], [80.4, 9.8], [81.2, 8.6], [81.9, 7.4], [81.6, 6.4], [80.6, 5.9], [80.0, 6.4], [79.8, 7.6], [79.7, 8.7]],                               // Sri Lanka
   [[95.3, 5.6], [96.3, 5.2], [97.5, 5.2], [98.5, 4.0], [100.4, 2.3], [101.4, 2.0], [103.4, 0.6], [103.8, -1.0], [104.8, -2.2], [106.0, -3.2], [105.9, -5.8],
@@ -274,13 +272,13 @@ export function buildMap(M) {
     fragmentShader: `uniform float uMap, uR; varying vec2 vP;\n${MAP_GLSL}
       void main(){
         float d = length(vP);
-        vec3 c = vec3(0.004, 0.010, 0.020) * (0.8 + 0.4 * mn(vP * 0.4)) * (1.0 - smoothstep(30.0, 90.0, d) * 0.7);
+        vec3 c = vec3(0.004, 0.010, 0.020) * (0.8 + 0.4 * mn(vP * 0.4)) * (1.0 - smoothstep(30.0, 150.0, d) * 0.85);
         c += vec3(1.0, 0.7, 0.4) * 0.05 * graticule(vP) * (1.0 - smoothstep(uR * 0.6, uR, d)) * step(0.01, uR);
         gl_FragColor = vec4(c * uMap, 1.0);
       }`,
     depthWrite: false,
   });
-  const oceanG = new THREE.PlaneGeometry(220, 160, 1, 1); oceanG.rotateX(-Math.PI / 2); oceanG.translate(10, 0, -5);
+  const oceanG = new THREE.PlaneGeometry(1600, 1600, 1, 1); oceanG.rotateX(-Math.PI / 2);
   const ocean = new THREE.Mesh(oceanG, oceanMat);
   ocean.position.y = -6 / DEG; ocean.renderOrder = -10; ocean.frustumCulled = false;
   group.add(ocean);
@@ -297,8 +295,9 @@ export function buildMap(M) {
     vertexShader: 'varying vec2 vP; void main(){ vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform float uMap, uR, uMapK; varying vec2 vP;\n${MAP_GLSL}
       void main(){
-        vec3 c = mapLand(vP) * uMapK;
-        c += vec3(1.0, 0.7, 0.4) * 0.06 * graticule(vP) * (1.0 - smoothstep(uR * 0.6, uR, length(vP))) * step(0.01, uR);
+        float far = smoothstep(32.0, 70.0, length(vP * vec2(1.0, 1.3)));
+        vec3 c = mix(mapLand(vP) * uMapK, vec3(0.004, 0.010, 0.020) * 0.5, far);
+        c += vec3(1.0, 0.7, 0.4) * 0.06 * graticule(vP) * (1.0 - far) * (1.0 - smoothstep(uR * 0.6, uR, length(vP))) * step(0.01, uR);
         gl_FragColor = vec4(c, 1.0);
       }`,
     depthWrite: false,

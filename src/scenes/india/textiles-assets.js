@@ -22,9 +22,9 @@ function prep(g) {
 export const merge = (list) => mergeGeometries(list.map(prep));
 
 // smooth lathe profile through [r, y] knots (a Catmull-Rom spline), revolved
-function lathe(knots, { seg = 26, n = 0, smooth = true } = {}) {
+function lathe(knots, { seg = 20, n = 0, smooth = true } = {}) {
   let pts = knots.map(([r, y]) => V2(Math.max(0, r), y));
-  if (smooth) pts = new THREE.SplineCurve(pts).getPoints(n || knots.length * 5).map((p) => V2(Math.max(0, p.x), p.y));
+  if (smooth) pts = new THREE.SplineCurve(pts).getPoints(n || knots.length * 3).map((p) => V2(Math.max(0, p.x), p.y));
   return new THREE.LatheGeometry(pts, seg);
 }
 const at = (g, x, y, z) => g.translate(x, y, z);
@@ -36,7 +36,7 @@ function between(g, a, b) {
   return g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
 }
 const rod = (a, b, r0, r1 = r0, seg = 10) => between(new THREE.CylinderGeometry(r1, r0, 1, seg), a, b);
-const ell = (rx, ry, rz, x, y, z, seg = 16) => new THREE.SphereGeometry(1, seg, Math.max(8, seg * 0.7 | 0)).scale(rx, ry, rz).translate(x, y, z);
+const ell = (rx, ry, rz, x, y, z, seg = 14) => new THREE.SphereGeometry(1, seg, Math.max(8, seg * 0.7 | 0)).scale(rx, ry, rz).translate(x, y, z);
 
 // ------------------------------------------------------------------------------------------------ textures
 export function woodTexture({ seed = 3, base = [116, 70, 38], dark = [62, 34, 16] } = {}) {
@@ -91,7 +91,7 @@ export function reedTexture(dents = 104) {
 // ------------------------------------------------------------------------------------------------ cotton
 // A fibre lobe of the open boll: a lumpy, puffed sphere (noise-displaced), ~unit radius.
 export function lobeGeometry(seed = 1) {
-  const g = new THREE.SphereGeometry(1, 28, 20), p = g.attributes.position, v = new THREE.Vector3();
+  const g = new THREE.SphereGeometry(1, 18, 12), p = g.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
     const n = 0.16 * noise3(v.x * 2.2 + seed, v.y * 2.2, v.z * 2.2) + 0.07 * noise3(v.x * 6 - seed, v.y * 6, v.z * 6) + 0.035 * noise3(v.x * 15, v.y * 15 + seed, v.z * 15);
@@ -123,7 +123,7 @@ export function burGeometry(len = 0.075, width = 0.034) {
 
 // A frilly, deeply toothed bract (the three leafy bracts that cup the boll).
 export function bractGeometry(len = 0.07, width = 0.05) {
-  const NU = 18, NV = 10, pos = [], idx = [];
+  const NU = 14, NV = 8, pos = [], idx = [];
   for (let i = 0; i <= NU; i++) {
     const u = i / NU;
     const w = width * Math.pow(Math.sin(Math.PI * Math.min(1, 0.15 + u * 0.85)), 0.5) * (1 - 0.5 * u);

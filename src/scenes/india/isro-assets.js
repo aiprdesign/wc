@@ -110,7 +110,7 @@ export function isroMaterials(env = null) {
     alu: std({ color: '#b9bcc1', roughness: 0.38, metalness: 0.7, envMapIntensity: 0.7 }),
     dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#e3ad52', map: mli, metalness: 0.6, roughness: 0.38, bumpMap: crinkle, bumpScale: 2.4, envMapIntensity: 1.0 }),
+    gold: std({ color: '#dba84c', metalness: 0.35, roughness: 0.45, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 0.8 }),
     goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
     silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
     cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
@@ -161,11 +161,11 @@ vec3 sky(vec3 d){
   if (uMode == 0) {
     vec3 hSun = vec3(0.95, 0.36, 0.11), hAway = vec3(0.14, 0.08, 0.15);
     vec3 hor = mix(hAway, hSun, pow(az * 0.5 + 0.5, 2.6));
-    vec3 mid = mix(vec3(0.035, 0.04, 0.12), vec3(0.26, 0.12, 0.14), pow(az * 0.5 + 0.5, 3.0));
-    vec3 zen = vec3(0.005, 0.011, 0.045);
+    vec3 mid = mix(vec3(0.02, 0.026, 0.085), vec3(0.2, 0.085, 0.1), pow(az * 0.5 + 0.5, 3.0));
+    vec3 zen = vec3(0.003, 0.008, 0.034);
     c = mix(hor, mid, smoothstep(0.0, 0.16, e));
     c = mix(c, zen, smoothstep(0.12, 0.75, e));
-    c += vec3(1.4, 0.55, 0.16) * pow(max(dot(d, L), 0.0), 40.0) * 0.7;          // afterglow over the set sun
+    c += vec3(1.3, 0.5, 0.15) * (pow(max(dot(d, L), 0.0), 60.0) * 0.35 + pow(max(dot(d, L), 0.0), 6.0) * 0.08) * smoothstep(0.25, 0.0, e);          // afterglow over the set sun
     c += vec3(0.24, 0.1, 0.16) * exp(-abs(e - 0.05) * 30.0) * (0.5 - 0.5 * az) * 0.6;   // belt of Venus
     // thin stratus streaks lit from below
     float k = 1.0 / max(e + 0.035, 0.02);
@@ -273,8 +273,9 @@ export function makeBillow(n, { t0 = 0, t1 = 1, seed = 5, lobes = 0, speed = [4,
         float lit = 0.35 + 0.65 * max(dot(rad, normalize(uSun)), 0.0);
         float top = smoothstep(0.0, 8.0, y);
         float hot = exp(-age * 2.2) * exp(-r * 0.05);
-        vCol = uAmb * (0.6 + 0.6 * aB.y) + uSunCol * lit * (0.3 + 0.7 * top) + uFire * uFireK * (hot * 3.0 + exp(-y * 0.12) * 0.35);
-        vA = smoothstep(0.0, 0.06, age) * (0.35 + 0.4 * aB.z) * uK;
+        float dist = length(vec2(r, y));
+        vCol = uAmb * (0.45 + 1.1 * aB.y) * (0.7 + 0.6 * lit) + uSunCol * lit * top + uFire * uFireK * (hot * 1.6 + 2.0 * exp(-dist * 0.085) * (0.6 + 0.4 * aB.y));
+        vA = smoothstep(0.0, 0.06, age) * (0.45 + 0.45 * aB.z) * uK;
       }`,
     fragmentShader: /* glsl */ `varying vec3 vCol; varying float vA;
       void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c); float a = smoothstep(0.5, 0.1, d); a *= a * vA; if (a < 0.004) discard; gl_FragColor = vec4(vCol * (1.0 - 0.35 * d), a); }`,
@@ -315,13 +316,13 @@ export function makeLunarDust(n, { tEmit0, tLand, seed = 23, altAt }) {
         gl_Position = projectionMatrix * mv;
         bool bloom = aO.z > 0.5;
         float fade = bloom ? exp(-age * 2.4) : exp(-age * 2.6) * (1.0 - smoothstep(uLand + 0.04, uLand + 0.4, uTime));
-        vA = fade * smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(9.0, 20.0, r)) * (bloom ? 0.34 : 0.7);
+        vA = fade * smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(9.0, 20.0, r)) * (bloom ? 0.2 : 0.26);
         vL = 0.55 + 0.45 * max(dot(normalize(vec3(cos(aP.x), 0.3, sin(aP.x))), normalize(uSun)), 0.0);
         gl_PointSize = aO.y * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z) * (bloom ? 1.0 + age * 1.6 : 1.0);
       }`,
     fragmentShader: /* glsl */ `uniform float uOpacity; varying float vA; varying float vL;
       void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a * vA * uOpacity; if (a < 0.003) discard;
-        gl_FragColor = vec4(vec3(0.93, 0.9, 0.85) * vL, a); }`,
+        gl_FragColor = vec4(vec3(0.8, 0.77, 0.72) * vL, a); }`,
   });
   const p = new THREE.Points(g, m); p.frustumCulled = false; p.userData.u = u;
   return p;
@@ -331,16 +332,18 @@ export function makeLunarDust(n, { tEmit0, tLand, seed = 23, altAt }) {
 // The Moon (moonshot's crater shader) + an M3-style false-colour water/hydroxyl overlay at high latitudes,
 // painted in by a pushbroom scan line (uScan: −1 → 1 along the object's x axis).
 const MOON_WATER_FRAG = MOON_FRAG
+  .replace('(c1.y + c2.y * 0.6 + c3.y * 0.3) * 0.18', '(c1.y * 0.12 + c2.y * 0.5 + c3.y * 0.3) * 0.18')
   .replace('uniform float uBump, uGain;', 'uniform float uBump, uGain, uWater, uScan, uTime;')
   .replace('gl_FragColor = vec4(col * uGain, 1.0);', `
   float lat = abs(p.y);
-  float pol = smoothstep(0.74, 0.93, lat + 0.05 * snoise(p * 5.0));
-  float patchy = smoothstep(0.05, 0.6, snoise(p * 9.0) * 0.5 + snoise(p * 23.0) * 0.3 + (0.2 - h * 3.0) * 0.3 + pol * 0.25);
-  float scan = smoothstep(uScan + 0.04, uScan - 0.02, p.x);
+  float pol = smoothstep(0.8, 0.9, lat + 0.06 * snoise(p * 5.0));
+  float patchy = smoothstep(-0.3, 0.3, snoise(p * 8.0) * 0.5 + snoise(p * 21.0) * 0.3 + snoise(p * 47.0) * 0.15 + pol * 0.25);
+  float scan = 1.0 - smoothstep(uScan - 0.02, uScan + 0.04, p.x);
   float edge = exp(-pow((p.x - uScan) / 0.015, 2.0)) * step(0.5, lat);
   float w = pol * patchy * scan * uWater;
   vec3 blue = vec3(0.08, 0.42, 1.0);
-  col = mix(col, col * 0.4 + blue * 0.42 * (0.25 + 0.75 * body), w * 0.95);
+  float lum = dot(col, vec3(0.3, 0.5, 0.2));
+  col = mix(col, vec3(0.03, 0.3, 1.0) * (lum * 1.5 + 0.03 * body), w);
   col += vec3(0.4, 0.75, 1.0) * edge * uWater * 0.35 * (0.3 + body) * smoothstep(0.7, 0.85, lat);
   gl_FragColor = vec4(col * uGain, 1.0);`);
 export function moonWaterMesh(radius, sun, segs = 128) {
@@ -369,12 +372,12 @@ float craters(vec3 p){
 float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * snoise(p); p = p * 2.07 + 13.1; a *= 0.5; } return s; }
 void main(){
   vec3 p = normalize(vL);
-  float dark = smoothstep(0.05, 0.45, fbm(p * 1.6 + vec3(2.0, 0.5, 1.0)) + 0.25 * snoise(p * 6.0));
+  float dark = smoothstep(0.0, 0.5, fbm(p * 1.6 + vec3(2.0, 0.5, 1.0)) + 0.3 * snoise(p * 6.0) + 0.15 * snoise(p * 17.0));
   float bright = smoothstep(0.1, 0.6, fbm(p * 2.3 + vec3(7.0, 1.0, 3.0)));
   // canyon scar: a long trough along the equator over one hemisphere
   float lon = atan(p.z, p.x);
   float canyon = exp(-pow((p.y + 0.12 + 0.05 * sin(lon * 3.0)) / 0.025, 2.0)) * smoothstep(0.2, 0.6, sin(lon - 0.4)) * (0.6 + 0.4 * snoise(p * 20.0));
-  float h = craters(p * 4.0) * 0.5 + craters(p * 11.0 + 2.0) * 0.12 + fbm(p * 7.0) * 0.03 - canyon * 0.2;
+  float h = craters(p * 4.0) * 0.5 + craters(p * 11.0 + 2.0) * 0.22 + fbm(p * 7.0) * 0.03 - canyon * 0.2;
   vec3 rust = vec3(0.66, 0.24, 0.085), ochre = vec3(0.8, 0.42, 0.19), umber = vec3(0.28, 0.11, 0.05);
   vec3 alb = mix(rust, ochre, bright * 0.7);
   alb = mix(alb, umber, dark * 0.8);
@@ -403,7 +406,7 @@ void main(){ vec3 N = normalize(vN), V = normalize(cameraPosition - vW); float f
   float day = smoothstep(-0.25, 0.45, dot(N, normalize(uSun))); gl_FragColor = vec4(uColor * uI * day, f * day); }`;
 export function marsMesh(radius, sun, segs = 128) {
   const g = new THREE.Group();
-  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.25 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: MARS_FRAG });
+  const mat = new THREE.ShaderMaterial({ uniforms: { uSun: { value: sun }, uBump: { value: radius * 0.14 }, uGain: { value: 1 } }, vertexShader: PLANET_VERT, fragmentShader: MARS_FRAG });
   const body = new THREE.Mesh(new THREE.SphereGeometry(radius, segs, Math.round(segs * 0.7)), mat);
   const haze = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.018, 96, 64), new THREE.ShaderMaterial({
     uniforms: { uSun: { value: sun }, uColor: { value: new THREE.Color('#ff9a6a') }, uI: { value: 0.7 } },
@@ -565,7 +568,7 @@ export function buildAryabhata(M) {
     else cells.push(poly(0.86, 0.025, 0.36));
   }
   const add = (geos, mat) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-  add(shell, M.alu); add(cells, M.cells); add(caps, M.silver);
+  add(shell, M.alu); add(cells, M.cells); add(caps, M.dark);
   // a few small whip antennas round the base and a short mast on top
   const ant = [];
   for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; ant.push(rod(V3(Math.cos(a) * 0.3, -0.62, Math.sin(a) * 0.3), V3(Math.cos(a) * 0.62, -0.95, Math.sin(a) * 0.62), 0.006, 4)); }
@@ -712,7 +715,8 @@ export function buildVikram(M) {
   ], M.gold);
   add([box(0.85, 0.02, 0.94, [0.575, 0.01, 0]), box(0.02, BT, 0.94, [0.16, BT / 2, 0]), box(0.85, 0.02, 0.94, [0.575, BT - 0.01, 0])], M.bay);
   // top deck: silver foil, a radiator, instrument boxes, a small dish on a mast
-  add([box(2.02, 0.04, 2.02, [0, BH + 0.02, 0]), box(0.5, 0.18, 0.4, [-0.5, BH + 0.13, 0.5]), box(0.36, 0.26, 0.3, [0.45, BH + 0.17, -0.55]), cyl(0.12, 0.12, 0.2, 12, [0.55, BH + 0.14, 0.55])], M.silver);
+  add([box(2.02, 0.04, 2.02, [0, BH + 0.02, 0]), box(0.5, 0.18, 0.4, [-0.5, BH + 0.13, 0.5]), box(0.36, 0.26, 0.3, [0.45, BH + 0.17, -0.55])], M.silver);
+  add([cyl(0.12, 0.12, 0.2, 12, [0.55, BH + 0.14, 0.55])], M.dish);
   add([box(0.9, 0.05, 0.7, [-0.4, BH + 0.065, -0.45])], M.dish);
   add([cyl(0.03, 0.03, 0.35, 8, [-0.6, BH + 0.2, -0.65])], M.alu);
   const dsh = new THREE.Mesh(dishGeometry(0.22, 0.06), M.dish); dsh.position.set(-0.6, BH + 0.38, -0.65); dsh.rotation.set(0.4, 0, 0.5); g.add(dsh);
@@ -758,4 +762,38 @@ export function buildPragyan(M) {
   }
   add(W, M.wheel); add(links, M.alu);
   return { group: g, gauge: 0.34 };
+}
+
+// ------------------------------------------------------------------ lunar south-polar terrain (CPU heightfield, metres)
+// Craters smaller than the local mesh spacing fade out with distance, so the far field and the horizon stay smooth.
+export function southPoleField(seed = 31, { RM = 520 } = {}) {
+  const r = rng(seed), craters = [];
+  let tries = 0;
+  while (craters.length < 190 && tries++ < 6000) {
+    const R = 1.0 + Math.pow(r(), 3.0) * 24;
+    const x = (r() - 0.5) * 300, z = (r() - 0.5) * 300;
+    if (Math.hypot(x, z) < 9 + R * 1.6) continue;                    // the landing site
+    if (Math.abs(x + 3) < 4 + R * 1.4 && z > 0 && z < 40) continue;  // the camera's ground
+    craters.push({ x, z, R, d: R * (0.2 + r() * 0.14) });
+  }
+  [[16, -14, 6], [-22, -8, 9], [30, 6, 12], [6, -34, 14], [-40, -38, 22], [46, -40, 26], [9, 16, 2.2], [-12, -16, 3.5]].forEach(([x, z, R]) => craters.push({ x, z, R, d: R * 0.3 }));
+  const nz = (x, z) => Math.sin(x * 0.051 + Math.sin(z * 0.037) * 1.7) * Math.cos(z * 0.043 - Math.sin(x * 0.029) * 1.3);
+  const profile = (q) => (q < 1 ? q * q - 1 : 0) * 0.85 + Math.exp(-(((q - 1) / 0.26) ** 2)) * 0.32 + (q > 1 ? 0.1 * Math.exp(-(q - 1) * 2.2) : 0);
+  const height = (x, z) => {
+    const d = Math.hypot(x, z), minR = 0.6 + d * 0.035;
+    let h = nz(x, z) * 2.2 + nz(x * 2.7 + 11, z * 2.7 - 5) * 0.5 + nz(x * 9 + 3, z * 9) * 0.07;
+    for (let i = 0; i < craters.length; i++) {
+      const c = craters[i], dx = x - c.x, dz = z - c.z, d2 = dx * dx + dz * dz, lim = c.R * 2.4;
+      if (d2 > lim * lim) continue;
+      const k = Math.min(1, Math.max(0, (c.R - minR) / minR));
+      if (k <= 0) continue;
+      h += c.d * profile(Math.sqrt(d2) / c.R) * k;
+    }
+    return h;
+  };
+  const h0 = height(0, 0);
+  return (x, z) => {
+    const d = Math.hypot(x, z), flat = Math.exp(-((d / 8) ** 2));
+    return height(x, z) * (1 - flat * 0.85) + h0 * flat * 0.85 - h0 - (d * d) / (2 * RM);
+  };
 }
