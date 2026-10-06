@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, TAU } from '../../lib/math.js';
+import { fbm2 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { GLSL_NOISE } from '../../lib/noise.js';
 import { PLANET_VERT, MOON_FRAG, mliTexture, crinkleTexture } from '../moonshot-assets.js';
@@ -102,6 +103,7 @@ export function treadTexture() {
 export function isroMaterials(env = null) {
   const crinkle = crinkleTexture(7, 256);
   const mli = mliTexture(256, 23); mli.repeat.set(2, 2);
+  const mliBig = mli.clone(); mliBig.repeat.set(0.75, 0.75); mliBig.needsUpdate = true;
   const cells = cellTexture();
   const std = (o) => { const m = new THREE.MeshStandardMaterial(o); if (env) m.envMap = env; return m; };
   return {
@@ -110,7 +112,7 @@ export function isroMaterials(env = null) {
     alu: std({ color: '#b9bcc1', roughness: 0.38, metalness: 0.7, envMapIntensity: 0.7 }),
     dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#dba84c', metalness: 0.35, roughness: 0.45, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 0.8 }),
+    gold: std({ color: '#dba84c', map: mliBig, metalness: 0.4, roughness: 0.42, bumpMap: crinkle, bumpScale: 0.8, envMapIntensity: 0.85 }),
     goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
     silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
     cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
@@ -336,14 +338,15 @@ const MOON_WATER_FRAG = MOON_FRAG
   .replace('uniform float uBump, uGain;', 'uniform float uBump, uGain, uWater, uScan, uTime;')
   .replace('gl_FragColor = vec4(col * uGain, 1.0);', `
   float lat = abs(p.y);
-  float pol = smoothstep(0.8, 0.9, lat + 0.06 * snoise(p * 5.0));
+  float pol = smoothstep(0.78, 0.9, lat + 0.06 * snoise(p * 5.0));
   float patchy = smoothstep(-0.3, 0.3, snoise(p * 8.0) * 0.5 + snoise(p * 21.0) * 0.3 + snoise(p * 47.0) * 0.15 + pol * 0.25);
   float scan = 1.0 - smoothstep(uScan - 0.02, uScan + 0.04, p.x);
   float edge = exp(-pow((p.x - uScan) / 0.015, 2.0)) * step(0.5, lat);
   float w = pol * patchy * scan * uWater;
   vec3 blue = vec3(0.08, 0.42, 1.0);
   float lum = dot(col, vec3(0.3, 0.5, 0.2));
-  col = mix(col, vec3(0.03, 0.3, 1.0) * (lum * 1.5 + 0.03 * body), w);
+  col *= vec3(1.12, 1.0, 0.8);                       // neutral grey under the film's cool grade
+  col = mix(col, vec3(0.0, 0.32, 1.0) * (lum * 2.1 + 0.04 * body), w);
   col += vec3(0.4, 0.75, 1.0) * edge * uWater * 0.35 * (0.3 + body) * smoothstep(0.7, 0.85, lat);
   gl_FragColor = vec4(col * uGain, 1.0);`);
 export function moonWaterMesh(radius, sun, segs = 128) {
@@ -777,11 +780,10 @@ export function southPoleField(seed = 31, { RM = 520 } = {}) {
     craters.push({ x, z, R, d: R * (0.2 + r() * 0.14) });
   }
   [[16, -14, 6], [-22, -8, 9], [30, 6, 12], [6, -34, 14], [-40, -38, 22], [46, -40, 26], [9, 16, 2.2], [-12, -16, 3.5]].forEach(([x, z, R]) => craters.push({ x, z, R, d: R * 0.3 }));
-  const nz = (x, z) => Math.sin(x * 0.051 + Math.sin(z * 0.037) * 1.7) * Math.cos(z * 0.043 - Math.sin(x * 0.029) * 1.3);
   const profile = (q) => (q < 1 ? q * q - 1 : 0) * 0.85 + Math.exp(-(((q - 1) / 0.26) ** 2)) * 0.32 + (q > 1 ? 0.1 * Math.exp(-(q - 1) * 2.2) : 0);
   const height = (x, z) => {
     const d = Math.hypot(x, z), minR = 0.6 + d * 0.035;
-    let h = nz(x, z) * 2.2 + nz(x * 2.7 + 11, z * 2.7 - 5) * 0.5 + nz(x * 9 + 3, z * 9) * 0.07;
+    let h = fbm2(x * 0.011 + 3.3, z * 0.011 - 1.7, 4) * 2.6 + fbm2(x * 0.06 + 5, z * 0.06, 3) * 0.35;
     for (let i = 0; i < craters.length; i++) {
       const c = craters[i], dx = x - c.x, dz = z - c.z, d2 = dx * dx + dz * dz, lim = c.R * 2.4;
       if (d2 > lim * lim) continue;

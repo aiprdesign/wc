@@ -465,16 +465,24 @@ export function create(ctx, segment) {
   };
 
   // ------------------------------------------------------------------------------------------- camera path
-  const camKeys = [
-    [-0.4, V3(-1.5, 0.62, 3.75)], [0.0, V3(-1.3, 0.62, 3.6)], [tEd - 0.1, V3(-0.75, 0.42, 3.5)], [tEd + 0.45, V3(-0.12, -0.24, 3.4)],
-    [tWh - 0.05, V3(0.0, -0.14, 3.45)], [tWh + 0.5, V3(0.2, 1.0, 4.85)], [tCh, V3(0.42, 1.08, 4.95)], [tSM - 0.12, V3(1.2, 1.25, 4.85)],
-    [tSM + 0.4, V3(3.3, 3.4, 10.2)], [tRep + 0.3, V3(5.0, 6.0, 13.6)], [DUR + 0.5, V3(5.6, 6.6, 14.8)],
+  // [t, camera position, look-at point]; the look is splined as a direction from the camera (no overshoot
+  // when the target leaps from the wheel to the far road)
+  const SHOT = [
+    [-0.4, V3(-1.5, 0.62, 3.75), V3(-1.02, 1.12, -0.36)],
+    [0.0, V3(-1.3, 0.62, 3.6), V3(-0.95, 1.12, -0.33)],
+    [tEd - 0.1, V3(-0.75, 0.42, 3.5), V3(-0.82, 0.8, -0.2)],
+    [tEd + 0.45, V3(-0.12, -0.24, 3.4), V3(-0.6, -0.56, 0)],
+    [tWh - 0.05, V3(0.0, -0.14, 3.45), V3(-0.35, -0.3, 0.1)],
+    [tWh + 0.22, V3(0.1, 0.5, 4.2), V3(0.0, 1.05, 1.1)],
+    [tWh + 0.5, V3(0.2, 1.0, 4.85), W.clone()],
+    [tCh, V3(0.42, 1.08, 4.95), W.clone()],
+    [tSM - 0.14, V3(1.2, 1.25, 4.85), W.clone().add(V3(0.5, -0.1, 0))],
+    [tSM + 0.4, V3(3.3, 3.4, 10.2), V3(-4, -3.2, -40)],
+    [tRep + 0.3, V3(5.0, 6.0, 13.6), V3(-7, -6.2, -80)],
+    [DUR + 0.5, V3(5.6, 6.6, 14.8), V3(-8, -6.2, -88)],
   ];
-  const lookKeys = [
-    [-0.4, V3(-1.02, 1.12, -0.36)], [0.0, V3(-0.95, 1.12, -0.33)], [tEd - 0.1, V3(-0.82, 0.8, -0.2)], [tEd + 0.45, V3(-0.6, -0.56, 0)],
-    [tWh - 0.05, V3(-0.35, -0.3, 0.1)], [tWh + 0.5, W.clone()], [tCh, W.clone()], [tSM - 0.12, W.clone().add(V3(0.5, -0.1, 0))],
-    [tSM + 0.4, V3(-4, -3.2, -40)], [tRep + 0.3, V3(-7, -6.2, -80)], [DUR + 0.5, V3(-8, -6.2, -88)],
-  ];
+  const camKeys = SHOT.map(([t, p]) => [t, p]);
+  const dirKeys = SHOT.map(([t, p, l]) => [t, l.clone().sub(p).normalize()]);
   const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmp = new THREE.Vector3();
   const dof = { focus: 5, range: 1.5, amount: 0.35 };
   const bloom = { strength: 0.7 };
@@ -486,10 +494,10 @@ export function create(ctx, segment) {
   function update(t, info) {
     // --------------------------------------------------------------- camera
     spline(camKeys, t, camPos);
-    spline(lookKeys, t, camLook);
+    spline(dirKeys, t, camLook).normalize();
     camPos.x += Math.sin(t * 0.8) * 0.02; camPos.y += Math.sin(t * 1.1 + 1) * 0.012;
     camera.position.copy(camPos);
-    camera.lookAt(camLook);
+    camera.lookAt(camLook.add(camPos));
     camera.fov = 35 - 13 * envelope(t, tEd - 0.05, tWh + 0.5, 0.5, 0.45) + 2 * ramp(t, tSM - 0.1, tRep + 0.3);
     camera.updateProjectionMatrix();
 
@@ -542,7 +550,7 @@ export function create(ctx, segment) {
 
     // --------------------------------------------------------------- the charkha
     const ckIn = ramp(t, tCh - 0.06, tCh + 0.26, ease.inOutSine), ckFr = ramp(t, tCh + 0.06, tCh + 0.42, ease.inOutSine);
-    const ckOut = ramp(t, tSM - 0.06, tSM + 0.2, ease.inOutSine);
+    const ckOut = ramp(t, tSM - 0.16, tSM + 0.1, ease.inOutSine);
     setDis(ckWheelU, ckIn, ckOut); setDis(ckFrameU, ckFr, ckOut);
     charkha.visible = ckIn > 0 && ckOut < 1;
     ckWheel.rotation.z = -ang;

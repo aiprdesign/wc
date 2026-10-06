@@ -514,8 +514,8 @@ export function create(ctx, segment) {
   scene.add(dust);
 
   // ------------------------------------------------------------------------------------- labels
-  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: 1.8, dy: -2.0, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
-  ruinLabel.position.set(-21, 1.6, 6);
+  const ruinLabel = new Callout('NALANDA MAHAVIHARA · BIHAR', { dx: 2.4, dy: 1.5, size: 0.42, color: LABEL, sub: 'THE RUINS TODAY · UNESCO WORLD HERITAGE 2016', intensity: 1.4 });
+  ruinLabel.position.set(-21, 1.2, 9);
   const vihLabel = new Callout('VIHARA · MONASTERY', { dx: -4, dy: 5, size: 1.0, color: LABEL, sub: 'STUDENT CELLS ROUND A COURTYARD', intensity: 1.5 });
   vihLabel.position.set(-19.5, VH + 1.2, -19.5);
   const temLabel = new Callout('CHAITYA · TEMPLE', { dx: 4, dy: 4.5, size: 1.0, color: LABEL, sub: 'STEPPED BRICK · CORNER TOWERS', intensity: 1.5 });
