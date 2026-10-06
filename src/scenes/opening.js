@@ -665,9 +665,9 @@ export function create(ctx, segment) {
         cz + Math.sin(t * 97) * shS * 0.6,
       );
       camera.position.copy(camPos);
-      const lookZ = t < tL ? cz - 10 : Math.min(cz - 4, Z_TITLE);
+      // (the aim hands back from the title to the road ahead over half a second: a hard switch at 7.0 snapped the view)
+      const lookZ = t < tL ? cz - 10 : lerp(Math.min(cz - 4, Z_TITLE), cz - 10, ramp(t, 6.6, 7.3, ease.inOutSine));
       look.set(orbit * 0.6, lift - 0.05 * orbit, lookZ);
-      if (t > 7.0) look.z = cz - 10;
       camera.up.set(Math.sin(t * 0.4) * 0.03 * early - 0.06 * ramp(t, lf, 8) + Math.sin(t * 61) * sh * 0.12, 1, 0).normalize();
       camera.lookAt(look);
       const camD = Math.max(0.5, camPos.z);
