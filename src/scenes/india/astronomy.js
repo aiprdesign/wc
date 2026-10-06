@@ -213,8 +213,8 @@ export function create(ctx, segment) {
                    + vec3(0.016, 0.01, 0.026) * exp(-b * b / 0.15) * n1 + vec3(0.012, 0.004, 0.006) * pow(n2, 3.0);
         // dawn over Jaipur: zenith blue, rose band, a hot gold horizon under the sun
         float h = d.y, cs = max(dot(d, uSun), 0.0), az = pow(cs, 2.0);
-        vec3 zen = vec3(0.03, 0.09, 0.3), mid = vec3(0.55, 0.32, 0.36), hor = vec3(1.45, 0.6, 0.22);
-        vec3 c = mix(mid * (0.7 + 0.5 * az), zen, smoothstep(0.03, 0.55, h));
+        vec3 zen = vec3(0.02, 0.075, 0.3), mid = vec3(0.55, 0.3, 0.32), hor = vec3(1.45, 0.6, 0.22);
+        vec3 c = mix(mid * (0.7 + 0.5 * az), zen, smoothstep(0.02, 0.4, h));
         c = mix(c, mix(vec3(0.85, 0.42, 0.42), hor, smoothstep(0.0, 0.6, cs)) * (0.5 + 1.1 * az), 1.0 - smoothstep(-0.02, 0.16 + 0.3 * az, h));
         c += vec3(1.5, 0.8, 0.38) * pow(cs, 14.0) * 0.45 + vec3(3.0, 2.2, 1.3) * pow(cs, 900.0) * 2.0;
         c *= 0.9 + 0.12 * n1;
@@ -414,7 +414,7 @@ export function create(ctx, segment) {
   sine.add(chords);
   const chordDot = glowSprite({ color: '#fff0d0', intensity: 2.6, scale: 0.13 });
   sine.add(chordDot);
-  const jyaCallout = new Callout('JYA · HALF-CHORD', { dx: -0.62, dy: 0.42, size: 0.062, color: '#ffe6bf', sub: 'R SIN θ', intensity: 1.4 });
+  const jyaCallout = new Callout('JYA · HALF-CHORD', { dx: -0.95, dy: -0.48, size: 0.062, color: '#ffe6bf', sub: 'R SIN θ', intensity: 1.4 });
   jyaCallout.position.set(Math.cos(60 * DEG) * R, Math.sin(60 * DEG) * R * 0.55, 0.002);
   sine.add(jyaCallout);
   const etym = new TextPlane('JYA → JIBA → SINUS → SINE', { font: FONTS.mono, height: 0.058, letterSpacing: 0.22, color: '#fff0d6', intensity: 1.3, align: 'left' });
@@ -565,8 +565,33 @@ export function create(ctx, segment) {
   const eastMesh = new THREE.Mesh(mergeGeometries(P.east), eastMat);
   const wallMesh = new THREE.Mesh(wallGeo, wallMat);
   for (const m of [stoneMesh, westMesh, eastMesh, wallMesh]) { m.castShadow = m.receiveShadow = true; jaipur.add(m); }
+  const smallCopies = [];
   const wire = revealLines(mergeGeometries([stoneGeo, wallGeo]), { order: 'y', mode: 'edges', threshold: 28, color: GOLD, headColor: '#fff3d6', intensity: 0.3, head: 0.05 });
   jaipur.add(wire);
+
+  // more of the observatory beyond: a small Samrat (the same instrument at a quarter scale) and two Rama
+  // Yantras (open cylinders with a central pillar)
+  for (const [x, z, k, ry] of [[52, -34, 0.24, 0], [-38, -58, 0.18, 0]]) {
+    for (const src of [stoneMesh, westMesh, eastMesh, wallMesh]) {
+      const m = new THREE.Mesh(src.geometry, src.material);
+      m.scale.setScalar(k); m.position.set(x, 0, z); m.rotation.y = ry;
+      m.castShadow = m.receiveShadow = true;
+      jaipur.add(m); smallCopies.push(m);
+    }
+  }
+  {
+    const parts = [];
+    for (const [x, z] of [[-58, -26], [-70, -8]]) {
+      const ring = new THREE.CylinderGeometry(6.5, 6.5, 4.2, 40, 1, true); ring.translate(x, 2.1, z); parts.push(prep(ring));
+      const ring2 = new THREE.CylinderGeometry(6.0, 6.0, 4.2, 40, 1, true); ring2.translate(x, 2.1, z); parts.push(prep(ring2));
+      const cap = new THREE.RingGeometry(6.0, 6.5, 40); cap.rotateX(-Math.PI / 2); cap.translate(x, 4.2, z); parts.push(prep(cap));
+      const post = new THREE.CylinderGeometry(0.3, 0.35, 4.6, 12); post.translate(x, 2.3, z); parts.push(prep(post));
+      for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU; const pl = new THREE.BoxGeometry(0.7, 4.2, 0.7); pl.translate(x + Math.cos(a) * 6.25, 2.1, z + Math.sin(a) * 6.25); parts.push(prep(pl)); }
+    }
+    const rama = new THREE.Mesh(mergeGeometries(parts), wallMat);
+    rama.castShadow = rama.receiveShadow = true;
+    jaipur.add(rama); smallCopies.push(rama);
+  }
 
   // the courtyard and the plain
   const paveTex = (() => {
@@ -577,10 +602,10 @@ export function create(ctx, segment) {
     g.strokeStyle = 'rgba(70,45,30,0.55)'; g.lineWidth = 2;
     for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(0, i * 64); g.lineTo(N, i * 64); g.stroke(); }
     for (let j = 0; j < 8; j++) for (let i = 0; i <= 4; i++) { const x = i * 128 + (j % 2) * 64; g.beginPath(); g.moveTo(x, j * 64); g.lineTo(x, j * 64 + 64); g.stroke(); }
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(18, 22); t.anisotropy = 8;
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(70, 70); t.anisotropy = 8;
     return t;
   })();
-  const court = new THREE.Mesh(new THREE.BoxGeometry(76, 0.4, 92), new THREE.MeshStandardMaterial({ map: paveTex, color: '#c9a585', roughness: 0.9 }));
+  const court = new THREE.Mesh(new THREE.BoxGeometry(300, 0.4, 300), new THREE.MeshStandardMaterial({ map: paveTex, color: '#c9a585', roughness: 0.9 }));
   court.position.set(0, -0.2, 2);
   court.receiveShadow = true;
   jaipur.add(court);
@@ -609,27 +634,6 @@ export function create(ctx, segment) {
   jaipur.add(timeLabel);
   const yantraCallout = new Callout('SAMRAT YANTRA · JAIPUR · 1734', { dx: 3.0, dy: 4.2, size: 0.6, color: '#fff0d8', sub: 'ACCURATE TO ABOUT 2 SECONDS', intensity: 1.5 });
   jaipur.add(yantraCallout);
-  // sunbeams through the gnomon's arches (sheared prisms along the sun's direction, re-aimed each frame)
-  const shaftU = { uI: { value: 0 }, uColor: { value: new THREE.Color('#ffc58a') } };
-  const shafts = ARCHES.map(([zc, top]) => {
-    const hw = zc > 10 ? 1.25 : 1.5, sh = new THREE.Shape();
-    sh.moveTo(-hw, 0.6); sh.lineTo(hw, 0.6); sh.lineTo(hw, top - hw); sh.absarc(0, top - hw, hw, 0, Math.PI, false); sh.closePath();
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false, curveSegments: 8 });
-    g.rotateY(Math.PI / 2);                   // extrude along +x, the arch in the (−z, y) plane
-    g.scale(1, 1, -1);
-    const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
-      uniforms: shaftU,
-      vertexShader: 'varying float vA; varying vec3 vN, vV; void main(){ vA = position.x; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }',
-      fragmentShader: `uniform float uI; uniform vec3 uColor; varying float vA; varying vec3 vN, vV;
-        void main(){ float f = pow(abs(dot(normalize(vN), normalize(vV))), 1.4); float along = pow(max(1.0 - vA, 0.0), 1.6) * smoothstep(0.0, 0.03, vA);
-          gl_FragColor = vec4(uColor * uI * f * along, 1.0); }`,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    }));
-    m.matrixAutoUpdate = false; m.frustumCulled = false;
-    m.userData.z = zc;
-    jaipur.add(m);
-    return m;
-  });
   const dust = new Dust({ count: lite ? 700 : 1800, size: [70, 26, 60], center: [-6, 10, 8], particleSize: 0.09, color: '#ffe0b0', opacity: 0.5 });
   jaipur.add(dust);
 
@@ -650,10 +654,10 @@ export function create(ctx, segment) {
   // at φ = 90° − Ha, where the scale reads 12 + Ha / 15 hours
   const Q_UP = V(0, Math.cos(LAT), Math.sin(LAT));   // the celestial equator's highest point (south)
   const sunDir = (Ha, out) => out.copy(Q_UP).multiplyScalar(Math.cos(Ha)).add(V(-Math.sin(Ha), 0, 0)).normalize();
-  const hourAngle = (t) => lerp(56, 81, ramp(t, tShadow - 0.1, dur + 0.25, (x) => ease.inOutSine(x) * 0.75 + x * 0.25)) * DEG;
+  const hourAngle = (t) => lerp(34, 68, ramp(t, tShadow - 0.1, dur + 0.25, (x) => ease.inOutSine(x) * 0.75 + x * 0.25)) * DEG;
 
   // =========================================================================== flash + flares
-  const flash = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff1dc').multiplyScalar(2.5), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
+  const flash = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe9cc').multiplyScalar(1.0), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.AdditiveBlending }));
   flash.position.z = -0.2; flash.renderOrder = 100;
   camera.add(flash);
   const hud = ctx.makeHUD();
@@ -674,7 +678,17 @@ export function create(ctx, segment) {
     hud.scene.add(s);
     return s;
   });
-  const streak = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color('#9fc4ff'), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
+  const specTex = (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 32; const g = c.getContext('2d');
+    for (let x = 0; x < 512; x++) {
+      const u = x / 511, col = new THREE.Color().setHSL(0.0 + u * 0.78, 1, 0.6), a = Math.sin(Math.PI * u) ** 1.5;
+      const gr = g.createLinearGradient(0, 0, 0, 32);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, `rgba(${col.r * 255 | 0},${col.g * 255 | 0},${col.b * 255 | 0},${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x, 0, 1, 32);
+    }
+    return new THREE.CanvasTexture(c);
+  })();
+  const streak = new THREE.Sprite(new THREE.SpriteMaterial({ map: specTex, color: new THREE.Color('#ffffff'), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   const leak = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color('#ffb070'), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, toneMapped: false }));
   hud.scene.add(streak, leak);
 
@@ -690,8 +704,8 @@ export function create(ctx, segment) {
   const SINE_POS = Gw.clone().add(V(CC.x + 0.8, CC.y + 0.1, 4.1)), SINE_TGT = Gw.clone().add(V(CC.x + 0.8, CC.y + 0.12, 0));
   // Jaipur camera: a crane from the south-west (the whole instrument against the dawn) round and up
   // over the west quadrant, looking down on the graduated band where the shadow runs
-  const jPos = new THREE.CatmullRomCurve3([V(-30, 6, 82), V(-17, 9, 66), V(-2, 13, 52), V(10, 17, 40)], false, 'centripetal');
-  const jTgt = new THREE.CatmullRomCurve3([V(2, 15.5, -2), V(4, 13.5, -1), V(8, 10.5, 0), V(11, 8, 1)], false, 'centripetal');
+  const jPos = new THREE.CatmullRomCurve3([V(-30, 6, 82), V(-17, 9, 66), V(-7, 15, 54), V(-3, 22, 43)], false, 'centripetal');
+  const jTgt = new THREE.CatmullRomCurve3([V(2, 15.5, -2), V(4, 13.5, -1), V(7, 10.5, 0), V(9.5, 7.5, 1)], false, 'centripetal');
   const jaipurCam = (t, pos, tgt) => {
     const u = ramp(t, tCut, dur + 0.35, (x) => ease.outSine(x) * 0.45 + ease.inOutSine(x) * 0.55);
     jPos.getPoint(u, pos); jTgt.getPoint(u, tgt);
@@ -727,7 +741,7 @@ export function create(ctx, segment) {
       sunObj.copy(sunE).applyQuaternion(qa.invert());
       earthMat.uniforms.uTime.value = T;
       earthMat.uniforms.uCloudOff.value = t * 0.01;
-      const dim = 1 - 0.72 * toDiag;
+      const dim = (1 - 0.72 * toDiag) * (1 - 0.6 * toSine);
       earthMat.uniforms.uBright.value = dim * lerp(0.75, 1, ramp(t, -0.4, 0.6));
       atmoMat.uniforms.uAtmo.value = 1.3 * dim;
       const axP = ramp(t, tAry - 0.15, tAry + 0.45, ease.outCubic), axO = 1 - ramp(t, tPi - 0.1, tPi + 0.25);
@@ -838,8 +852,8 @@ export function create(ctx, segment) {
       starU.uOpacity.value = lerp(0.9, 0.15, ramp(t, tCut, dur));
       const elev = Math.asin(sunV.y);
       sun.position.copy(sun.target.position).addScaledVector(sunV, 120);
-      sun.color.setRGB(1.0, lerp(0.62, 0.84, sat(elev / (40 * DEG))), lerp(0.36, 0.66, sat(elev / (40 * DEG))));
-      sun.intensity = lerp(4.2, 5.0, sat(elev / (40 * DEG)));
+      sun.color.setRGB(1.0, lerp(0.6, 0.78, sat(elev / (50 * DEG))), lerp(0.34, 0.55, sat(elev / (50 * DEG))));
+      sun.intensity = 4.6 + 0.6 * ramp(t, tShadow, dur);
       hemi.intensity = 0.55; keyN.intensity = 0; fillN.intensity = 0;
       scene.environmentIntensity = 0.2;
       scene.fog.density = 0.0008;
@@ -852,6 +866,7 @@ export function create(ctx, segment) {
       const build = lerp(-2, H + 6, ramp(t, tCut + 0.2, tShadow - 0.05, ease.inOutSine));
       westMat.userData.build.uBuild.value = build;
       stoneMesh.visible = westMesh.visible = eastMesh.visible = wallMesh.visible = build > -1.5;
+      for (const m of smallCopies) m.visible = build > -1.5;
 
       // the shadow edge on the east quadrant: φ = 90° − H (the edge and the quadrant share the axis)
       const phi = Math.PI / 2 - Ha;
@@ -874,23 +889,18 @@ export function create(ctx, segment) {
       const yc = ramp(t, tShadow + 0.05, tShadow + 0.6);
       yantraCallout.reveal(yc, 1 - ramp(t, dur - 0.08, dur + 0.3)); yantraCallout.visible = yc > 0;
 
-      // the beams: from the west face, through the openings, on along −sun
-      const sI = 0.05 + 0.12 * ramp(t, tShadow, dur + 0.2);
-      shaftU.uI.value = sI * ramp(t, tCut + 0.6, tShadow - 0.1);
-      tmpA.copy(sunV).multiplyScalar(-34);
-      for (const m of shafts) { m.matrix.makeBasis(tmpA, V(0, 1, 0), V(0, 0, 1)).setPosition(-W2, 0, m.userData.z); m.visible = shaftU.uI.value > 0.002; }
       dust.tick(t, info); dust.u.opacity = 0.55;
 
       dof.focus = lerp(camera.position.distanceTo(tmpB.set(0, 10, 0)), camera.position.distanceTo(arcPt(1, phi, tmpA)), ramp(t, tShadow - 0.3, tShadow + 0.4));
       dof.range = 14; dof.amount = 0.25;
       bloom.strength = 0.7 + 0.15 * ramp(t, tShadow, dur);
       out.exposure = lerp(1.25, 1.0, ramp(t, tCut, tCut + 0.4));
-      out.harmony = lerp(0.8, 0.45, ramp(t, tShadow, dur));
+      out.harmony = lerp(0.4, 0.25, ramp(t, tShadow, dur));
     }
 
     // ------------------------------------------------------------------ the cut: a flare of light
-    const fl = Math.max(envelope(t, tCut - 0.14, tCut + 0.22, 0.13, 0.2, ease.inQuad), 0);
-    flash.material.opacity = fl * 0.85; flash.visible = fl > 0.003;
+    const fl = envelope(t, tCut - 0.1, tCut + 0.12, 0.09, 0.11, ease.inQuad);
+    flash.material.opacity = fl * 0.6; flash.visible = fl > 0.003;
 
     // ------------------------------------------------------------------ lens flares from the low sun (HUD)
     const fOn = isNight ? 0 : ramp(t, tCut + 0.1, tCut + 0.6);
@@ -901,20 +911,24 @@ export function create(ctx, segment) {
     if (ndc.z < -0.05) { nx = (ndc.x / -ndc.z) * fy / ctx.aspect; ny = (ndc.y / -ndc.z) * fy; }
     else { const l = Math.hypot(ndc.x, ndc.y) || 1; nx = (ndc.x / l) * 4; ny = (ndc.y / l) * 4; }
     nx = clamp(nx, -4, 4); ny = clamp(ny, -4, 4);
-    const sx = nx * ctx.aspect, sy = ny * top;
-    const near = Math.exp(-Math.max(0, Math.abs(sx) - ctx.aspect) * 0.35) * Math.exp(-Math.max(0, Math.abs(sy) - top) * 0.8);
-    const boost = 1 + 1.4 * ramp(t, tShadow + 0.2, dur);
+    let sx = nx * ctx.aspect, sy = ny * top;
+    const over = Math.max(Math.abs(sx) / ctx.aspect, Math.abs(sy) / top);
+    if (over > 1.12) { sx *= 1.12 / over; sy *= 1.12 / over; }      // an off-screen sun flares in from the frame edge on its side
+    const near = 1;
+    const endK = ramp(t, tShadow + 0.1, dur, ease.inQuad);
+    const boost = 0.35 + 2.2 * endK;
     ghosts.forEach((g, i) => {
       const k = g.userData.k;
-      g.position.set(sx + (-sx) * k * 1.0, sy + (-sy) * k * 1.0, 0);
+      const kk = k * (1 + 0.12 * (t - tShadow));
+      g.position.set(sx - sx * kk, sy - sy * kk, 0);
       g.scale.setScalar(g.userData.size * (1 + 0.3 * Math.sin(T * 0.7 + i)));
-      g.material.opacity = fOn * near * 0.13 * boost;
+      g.material.opacity = fOn * near * 0.1 * boost;
       g.visible = g.material.opacity > 0.002;
     });
     leak.position.set(clamp(sx, -ctx.aspect - 0.2, ctx.aspect + 0.2), clamp(sy, -top - 0.2, top + 0.2), 0);
     leak.scale.setScalar(1.7); leak.material.opacity = fOn * near * 0.16 * boost; leak.visible = leak.material.opacity > 0.002;
-    streak.position.set(clamp(sx, -ctx.aspect - 0.4, ctx.aspect + 0.4), sy, 0);
-    streak.scale.set(4.5, 0.05, 1); streak.material.opacity = fOn * near * 0.4 * boost; streak.visible = streak.material.opacity > 0.002;
+    streak.position.set(sx * 0.35, sy, 0);
+    streak.scale.set(5.2, 0.07, 1); streak.material.opacity = fOn * near * 0.3 * boost; streak.visible = streak.material.opacity > 0.002;
   }
 
   const out = {

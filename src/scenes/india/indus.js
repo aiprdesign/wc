@@ -60,6 +60,11 @@ function skyMaterial() {
         c += uSunCol * pow(az, 5.0) * (1.0 - smoothstep(-0.05, 0.4, h)) * 0.85;   // the warm band under the sun
         c += vec3(0.55, 0.32, 0.38) * pow(1.0 - az, 3.0) * (1.0 - smoothstep(0.0, 0.25, h)) * 0.25; // rose opposite
         c += uSunCol * (pow(sd, 900.0) * 60.0 + pow(sd, 60.0) * 1.2 + pow(sd, 8.0) * 0.35);
+        // the Kirthar hills, faint and blue with distance, along the western horizon
+        float az0 = atan(d.z, d.x);
+        float ridge = 0.012 + 0.010 * sin(az0 * 9.0 + 1.3) * sin(az0 * 3.0) + 0.006 * sin(az0 * 23.0) + 0.003 * sin(az0 * 61.0);
+        float west = smoothstep(0.1, -0.5, d.x);
+        if (h < ridge * west && h > -0.01) c = mix(c, mix(uHor, uZen, 0.35) * 0.9, 0.55 * west);
         if (h < 0.0) c = mix(c, uHor * 0.85, smoothstep(0.0, -0.08, h));
         gl_FragColor = vec4(c * uK, 1.0);
       }`,
@@ -95,10 +100,11 @@ function waterMaterial({ scale = 0.08, deep = [0.05, 0.12, 0.13], body = [0.0, 0
         vec3 sky = mix(uHor, uZen, smoothstep(0.0, 0.5, R.y));
         float rs = max(dot(R, uSun), 0.0);
         vec3 col = mix(uDeep, sky, fr) + uSunCol * (pow(rs, 260.0) * 30.0 + pow(rs, 24.0) * 0.35);
-        float c1 = sin(q.x * 7.0 + sin(q.y * 5.0 + uTime * 1.3) * 1.4 + uTime * 0.9);
-        float c2 = sin(q.y * 6.0 + sin(q.x * 4.0 - uTime * 1.1) * 1.6 - uTime * 0.7);
-        float c = pow(1.0 - abs(c1 * c2), 5.0);
-        col += uBody * (0.75 + uCaustic * c * 1.6);
+        vec2 qw = q + (vec2(n2(q * 1.7), n2(q * 1.9 + 5.0)) - 0.5) * 1.2;
+        float c1 = sin(qw.x * 7.0 + sin(qw.y * 5.0 + uTime * 1.3) * 1.4 + uTime * 0.9);
+        float c2 = sin(qw.y * 6.0 + sin(qw.x * 4.0 - uTime * 1.1) * 1.6 - uTime * 0.7);
+        float c = pow(1.0 - abs(c1 * c2), 7.0);
+        col += uBody * (0.8 + uCaustic * c * 1.1);
         float d = length(vW - cameraPosition);
         col = mix(col, uFogC, 1.0 - exp(-uFogD * uFogD * d * d));
         gl_FragColor = vec4(col * uK, 1.0);
@@ -129,14 +135,14 @@ export function create(ctx, segment) {
   const roofMat = riseMaterial(new THREE.MeshStandardMaterial({ map: plasterTexture(), color: '#d0c9bd', roughness: 0.96 }), U, 'roof');
   roofMat.map.repeat.set(0.3, 0.3);
   const bitMat = riseMaterial(new THREE.MeshStandardMaterial({ map: brick.map, bumpMap: brick.bump, bumpScale: 1.2, color: '#4b3a30', roughness: 0.42 }), U, 'bit');
-  const voidMat = riseMaterial(new THREE.MeshStandardMaterial({ color: '#140d09', roughness: 1 }), U, 'void');
+  const voidMat = riseMaterial(new THREE.MeshStandardMaterial({ color: '#2b1d14', roughness: 0.95 }), U, 'void');
   const depthMat = riseDepth(U);
 
   // ------------------------------------------------------------------------------------- the city
   const walls = new Acc(), roof = new Acc(), bit = new Acc(), voids = new Acc();
   const r = rng(1931);
   const fronts = [];                                         // houses fronting the drain street → house drains
-  const riseDelay = (x, z) => T_DUST + 0.05 + 0.62 * sat(Math.hypot(x + 70, z * 0.8) / 280) + 0.08 * Math.sin(z * 0.07 + x * 0.03) ** 2;
+  const riseDelay = (x, z) => T_DUST + 0.6 * sat(Math.hypot(x - 70, (z + 10) * 0.9) / 190) + 0.06 * Math.sin(z * 0.07 + x * 0.03) ** 2;
 
   function house([x0, x1, z0, z1], baseY, delay, { tall = 1 } = {}) {
     const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
@@ -191,7 +197,7 @@ export function create(ctx, segment) {
   // citadel mound: a battered brick platform with bastions, its top open over the Great Bath's pool
   const CB = { x0: -128, x1: -12, z0: -84, z1: 84 }, BAT = 3;
   {
-    const blk = [-70, 0, T_DUST - 0.02, CIT_Y + 1], j = NOJIT;
+    const blk = [-70, 0, T_DUST - 0.36, CIT_Y + 1], j = NOJIT;
     const b0 = [CB.x0, CB.z0], b1 = [CB.x1, CB.z1], t0 = [CB.x0 + BAT, CB.z0 + BAT], t1 = [CB.x1 - BAT, CB.z1 - BAT];
     const P = (x, y, z) => V(x, y, z);
     walls.quad(P(b1[0], 0, b1[1]), P(b1[0], 0, b0[1]), P(t1[0], CIT_Y, t0[1]), P(t1[0], CIT_Y, t1[1]), blk, j);   // east
@@ -200,13 +206,13 @@ export function create(ctx, segment) {
     walls.quad(P(b1[0], 0, b0[1]), P(b0[0], 0, b0[1]), P(t0[0], CIT_Y, t0[1]), P(t1[0], CIT_Y, t0[1]), blk, j);   // north
     const top = (xa, xb, za, zb) => roof.quad(P(xa, CIT_Y, zb), P(xb, CIT_Y, zb), P(xb, CIT_Y, za), P(xa, CIT_Y, za), blk, j);
     top(t0[0], t1[0], t0[1], POOL.z0); top(t0[0], t1[0], POOL.z1, t1[1]); top(t0[0], POOL.x0, POOL.z0, POOL.z1); top(POOL.x1, t1[0], POOL.z0, POOL.z1);
-    for (const z of [-64, -30, 30, 64]) walls.box(CB.x1 - 6, CB.x1 + 2.5, 0, CIT_Y + 2.2, z - 4, z + 4, [CB.x1, z, T_DUST + 0.05, CIT_Y + 3], j, { top: roof });
-    for (const x of [-100, -60]) walls.box(x - 4, x + 4, 0, CIT_Y + 2.2, CB.z1 - 6, CB.z1 + 2.5, [x, CB.z1, T_DUST + 0.05, CIT_Y + 3], j, { top: roof });
+    for (const z of [-64, -30, 30, 64]) walls.box(CB.x1 - 6, CB.x1 + 2.5, 0, CIT_Y + 2.2, z - 4, z + 4, [CB.x1, z, T_DUST - 0.2, CIT_Y + 3], j, { top: roof });
+    for (const x of [-100, -60]) walls.box(x - 4, x + 4, 0, CIT_Y + 2.2, CB.z1 - 6, CB.z1 + 2.5, [x, CB.z1, T_DUST - 0.2, CIT_Y + 3], j, { top: roof });
   }
 
   // the Great Bath complex on the citadel
   {
-    const d = T_DUST + 0.18, blk = [-40, 0, d, CIT_Y + 7], j = [0, 0, 0];
+    const d = T_DUST - 0.08, blk = [-40, 0, d, CIT_Y + 7], j = [0, 0, 0];
     const D = { x0: -49, x1: -31, z0: -15.5, z1: 15.5 };                       // open court round the pool
     const C = { x0: D.x0 - 3.2, x1: D.x1 + 3.2, z0: D.z0 - 3.2, z1: D.z1 + 3.2 }; // covered walk (colonnade)
     const O = { x0: -58, x1: -22, z0: -29, z1: 29 };                           // outer ring of rooms
@@ -253,7 +259,7 @@ export function create(ctx, segment) {
     subdivide(-121, -62, -77, 77, r, cl);
     subdivide(-58, -19, -77, -33, r, cl);
     subdivide(-58, -19, 33, 77, r, cl);
-    for (const lot of cl) house(lot, CIT_Y, T_DUST + 0.12 + r() * 0.15, { tall: 1.15 });
+    for (const lot of cl) house(lot, CIT_Y, T_DUST - 0.15 + r() * 0.2, { tall: 1.15 });
   }
 
   const cityMeshes = [];
@@ -470,7 +476,7 @@ export function create(ctx, segment) {
   // weights in a row on a baked-brick sill: ratios 1, 2, 4 … 64, then decimal multiples 160, 320.
   // Chert is ~2.6 g/cm³ and the 16-unit weight ≈ 13.7 g, so the unit cube is ≈ 0.69 cm and side ∝ ∛ratio.
   const closeBrick = brickTextures({ size: 1024, seed: 8, tile: 0.56, dust: 0.55 });
-  const sillMat = new THREE.MeshStandardMaterial({ map: closeBrick.map, bumpMap: closeBrick.bump, bumpScale: 3, color: '#cdbdaa', roughness: 0.92 });
+  const sillMat = new THREE.MeshStandardMaterial({ map: closeBrick.map, bumpMap: closeBrick.bump, bumpScale: 3, color: '#ead8c4', roughness: 0.92 });
   sillMat.userData.noAntiTile = true;
   closeBrick.map.repeat.set(8 / 0.56, 3 / 0.56); closeBrick.map.offset.set(0.1, 0.0357);
   closeBrick.bump.repeat.copy(closeBrick.map.repeat); closeBrick.bump.offset.copy(closeBrick.map.offset);
@@ -485,7 +491,7 @@ export function create(ctx, segment) {
   shop.add(sill, back);
   const RATIOS = [1, 2, 4, 8, 16, 32, 64, 160, 320];
   const S1 = 0.0069, GAP = 0.011;
-  const tints = [[150, 142, 128], [132, 128, 120], [158, 146, 122], [122, 114, 104]];
+  const tints = [[178, 170, 154], [160, 156, 148], [186, 172, 146], [150, 142, 130]];
   const chertMats = tints.map((tn, i) => new THREE.MeshStandardMaterial({ map: chertTexture({ seed: 21 + i, tint: tn }), roughness: 0.34 }));
   const weights = [];
   let wx = -0.135;
@@ -598,8 +604,8 @@ export function create(ctx, segment) {
     [1.85, V(130, 70, 84), V(48, 0, -6)],
     [2.3, V(96, 4.8, -1.8), V(80, -0.8, 1.4)],
     [2.8, V(42, 4.4, -1.8), V(27, -0.8, 1.4)],
-    [3.25, V(-12, 29, 19), V(-39, 8.8, 0)],
-    [3.8, V(-24, 20.5, 12), V(-40, 9.4, 0.4)],
+    [3.25, V(-14, 26, 21), V(-39, 8.8, 0)],
+    [3.8, V(-27, 17.5, 16), V(-40.5, 9.2, -0.6)],
   ];
   const SHOP_KEYS = [
     [T_WT - 0.1, V(-0.115, 0.07, 0.12), V(-0.075, 0.0, 0.0)],
@@ -696,11 +702,11 @@ export function create(ctx, segment) {
       const k = ramp(t, 1.85, 2.35);
       const cx = lerp(30, camLook.x, k), cz = lerp(0, camLook.z, k);
       setSun(cx, 0, cz, lerp(175, 42, k), 500, lerp(0.15, 0.03, k));
-      sun.intensity = 3.3; fill.intensity = 0.38; bounce.intensity = 0;
+      sun.intensity = 3.7; fill.intensity = 0.38; bounce.intensity = 0;
       scene.environmentIntensity = 0.25;
     } else {
       setSun(0.04, 0, 0.02, 0.26, 3, 0.0004);
-      sun.intensity = 2.4; fill.intensity = 0.4; bounce.intensity = 0.03;
+      sun.intensity = 3.0; fill.intensity = 0.4; bounce.intensity = 0.03;
       scene.environmentIntensity = 0.22;
     }
 
@@ -727,7 +733,7 @@ export function create(ctx, segment) {
       dof.focus = camera.position.distanceTo(camLook); dof.range = 0.06; dof.amount = 0.6;
     }
     bloom.strength = 0.6 + 0.25 * envelope(t, T_GRID - 0.1, T_GRID + 0.9, 0.2, 0.5);
-    api.exposure = 1.0 + 0.35 * (1 - ramp(t, T_WT, T_WT + 0.18)) * (t >= T_WT ? 1 : 0);
+    api.exposure = (inShop ? 1.0 : 1.12) + 0.35 * (1 - ramp(t, T_WT, T_WT + 0.18)) * (t >= T_WT ? 1 : 0);
   }
 
   api.arSubject = (t) => (t >= T_WT ? { centre: V(0.03, 0.01, 0.02), radius: 0.2 }

@@ -369,7 +369,7 @@ export function create(ctx, segment) {
             float rr = length(vFL.xz), ri = furOut(vFL.y) - 0.13;
             float gl = smoothstep(ri + 0.06, ri - 0.005, rr) * smoothstep(1.3, 0.12, vFL.y);
             totalEmissiveRadiance += hotCol(gl * uHeat * 0.72) * gl;
-            ${mode === 'front' || mode === 'cap' || mode === 'lip' ? 'totalEmissiveRadiance += vec3(1.0, 0.5, 0.18) * 3.0 * (1.0 - smoothstep(0.0, 0.022, abs(vFL.y - uCutY))) * step(-0.01, vFL.z);' : ''}
+            ${mode === 'front' || mode === 'cap' || mode === 'lip' ? 'totalEmissiveRadiance += vec3(1.0, 0.5, 0.18) * 1.2 * (1.0 - smoothstep(0.0, 0.015, abs(vFL.y - uCutY))) * step(-0.01, vFL.z);' : ''}
           }`);
     };
     m.customProgramCacheKey = () => 'mfur-' + mode;
@@ -405,11 +405,11 @@ export function create(ctx, segment) {
 
   // the charge: a bed of glowing charcoal, sealed crucibles standing in it
   const coalMat = hotMaterial({ origin: OA, scale: 22, crack: 1, heat: 1 });
-  const coalBed = new THREE.Mesh(lumps(520, (r) => {
+  const coalBed = new THREE.Mesh(lumps(1100, (r) => {
     const a = r() * TAU, rr = Math.sqrt(r()) * 0.47, y = 0.1 + r() * 0.36;
     if (rr > furIn(y) - 0.04) return null;
     return V(Math.cos(a) * rr, y, Math.sin(a) * rr);
-  }, 7, 0.028, 0.055), coalMat);
+  }, 7, 0.016, 0.034), coalMat);
   groupA.add(coalBed);
   const CRU_OUT = [[0, 0], [0.05, 0], [0.066, 0.012], [0.072, 0.05], [0.074, 0.19], [0.079, 0.2], [0.081, 0.212], [0.07, 0.232], [0.045, 0.248], [0.02, 0.254], [0, 0.256]];
   const CRU_IN = [[0, 0.214], [0.026, 0.212], [0.05, 0.205], [0.06, 0.19], [0.058, 0.06], [0.054, 0.035], [0.04, 0.023], [0, 0.022]];
@@ -417,12 +417,12 @@ export function create(ctx, segment) {
   const crucibleMat = hotMaterial({ origin: OA, scale: 40, crack: 0.25, heat: 1.02 });
   {
     const parts = [], r = rng(23);
-    const spots = [[-0.3, -0.12], [-0.13, -0.3], [0.1, -0.31], [0.29, -0.14], [-0.32, 0.12], [0.31, 0.1], [-0.16, 0.25], [0.16, 0.26], [0.0, -0.18], [-0.19, -0.1], [0.19, -0.1]];
-    for (const [x, z] of spots) { const g = cru.full.clone(); g.rotateY(r() * TAU); g.rotateZ((r() - 0.5) * 0.12); g.translate(x, 0.3 + r() * 0.02, z); g.deleteAttribute('uv'); parts.push(withSeed(g, r())); }
+    const spots = [[-0.33, -0.14], [-0.15, -0.33], [0.12, -0.34], [0.32, -0.16], [-0.32, 0.14], [0.31, 0.12], [-0.16, 0.28], [0.16, 0.28], [0.0, -0.21], [-0.22, -0.11], [0.22, -0.11]];
+    for (const [x, z] of spots) { const g = cru.full.clone(); g.scale(1.25, 1.25, 1.25); g.rotateY(r() * TAU); g.rotateZ((r() - 0.5) * 0.12); g.translate(x, 0.3 + r() * 0.02, z); g.deleteAttribute('uv'); parts.push(withSeed(g, r())); }
     groupA.add(new THREE.Mesh(mergeGeometries(parts), crucibleMat));
   }
   // the hero crucible at the cut plane, in section: its own glow, contents that melt into a button
-  const hero = new THREE.Group(); hero.position.set(0, 0.3, 0); groupA.add(hero);
+  const hero = new THREE.Group(); hero.position.set(0, 0.3, 0); hero.scale.setScalar(1.25); groupA.add(hero);
   const heroShell = hotMaterial({ origin: OA, scale: 40, crack: 0.3, heat: 0.95 });
   const heroCut = hotMaterial({ origin: OA, scale: 60, crack: 0.15, heat: 0.75 });
   hero.add(new THREE.Mesh(withSeed(cru.back.clone(), 0.6), heroShell), new THREE.Mesh(withSeed(cru.front.clone(), 0.6), heroShell), new THREE.Mesh(withSeed(cru.cap.clone(), 0.4), heroCut));
@@ -514,7 +514,7 @@ export function create(ctx, segment) {
   groupA.add(smokeHaze);
 
   // callout on the cutaway
-  const calloutA = new Callout('SEALED CLAY CRUCIBLE', { dx: 0.17, dy: 0.1, size: 0.016, color: '#ffe2c0', sub: 'IRON WITH CHARCOAL / PLANT MATTER, MELTED INTO STEEL', intensity: 1.3 });
+  const calloutA = new Callout('SEALED CLAY CRUCIBLE', { dx: 0.2, dy: -0.04, size: 0.019, color: '#ffe2c0', sub: 'IRON WITH CHARCOAL / PLANT MATTER, MELTED INTO STEEL', intensity: 1.3 });
   groupA.add(calloutA);
 
   // =========================================================================================================
@@ -571,7 +571,7 @@ export function create(ctx, segment) {
         float wk = mix(0.55, wz, uEtch);
         diffuseColor.rgb *= mix(0.26, 1.12, wk);`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor * 1.7, roughnessFactor * 0.55, wk);`)
+        roughnessFactor = mix(0.36, 0.1, wk);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         {
           // a softbox strip overhead, swept along the blade: its mirror image in the polished steel
@@ -582,7 +582,7 @@ export function create(ctx, segment) {
           if (R.y > 0.04) {
             vec3 hp = vWp + R * ((uPlaneY - vWp.y) / R.y);
             float d = hp.x - uSweepX;
-            hit = exp(-d * d / (0.09 * 0.09)) * 0.35 + exp(-d * d / (0.022 * 0.022));
+            hit = exp(-d * d / (0.06 * 0.06)) * 0.3 + exp(-d * d / (0.016 * 0.016));
           }
           totalEmissiveRadiance += diffuseColor.rgb * hit * uSweepI * mix(0.25, 1.0, wk);
         }`);
@@ -730,12 +730,12 @@ export function create(ctx, segment) {
   }
   // sky dome: hazy Delhi daylight
   const sky = new THREE.Mesh(new THREE.SphereGeometry(180, 32, 16), new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: V(-0.45, 0.62, 0.64).normalize() } },
+    uniforms: { uSun: { value: V(-15, 10, 1).normalize() } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: /* glsl */ `uniform vec3 uSun; varying vec3 vP;
       void main(){
         float h = max(vP.y, -0.05);
-        vec3 zen = vec3(0.12, 0.26, 0.6), hor = vec3(0.72, 0.68, 0.6);
+        vec3 zen = vec3(0.13, 0.3, 0.68), hor = vec3(0.66, 0.7, 0.74);
         vec3 c = mix(hor, zen, pow(smoothstep(-0.02, 0.75, h), 0.55));
         float s = max(0.0, dot(vP, uSun));
         c += vec3(1.0, 0.85, 0.6) * (pow(s, 8.0) * 0.5 + pow(s, 300.0) * 6.0);
@@ -872,11 +872,11 @@ export function create(ctx, segment) {
   }
   const fireGlowD = glowSprite({ color: '#ff8a3c', intensity: 0.8, scale: 3.2 }); fireGlowD.position.set(0, 1.6, -0.6); groupD.add(fireGlowD);
   const burstGlow = glowSprite({ color: '#ffd8a8', intensity: 2.5, scale: 1 }); burstGlow.position.set(0, 1.9, 0.3); groupD.add(burstGlow);
-  const calloutD1 = new Callout('ZAWAR, RAJASTHAN · ZINC BY DISTILLATION', { dx: -0.4, dy: 0.3, size: 0.085, color: '#ffe6c8', sub: 'c. 9TH — 14TH C. AD · IN EUROPE, PATENTED ONLY IN 1738', intensity: 1.3 });
-  const calloutD2 = new Callout('ZINC BOILS AT 907 °C', { dx: 0.5, dy: -0.3, size: 0.075, color: '#ffe6c8', sub: 'THE VAPOUR IS DRAWN DOWN AND CONDENSES IN THE COOL CHAMBER', intensity: 1.3 });
+  const calloutD1 = new Callout('ZAWAR, RAJASTHAN · ZINC BY DISTILLATION', { dx: 0.3, dy: 0.22, size: 0.066, color: '#ffe6c8', sub: 'c. 9TH — 14TH C. AD · EUROPE: 1738', intensity: 1.3 });
+  const calloutD2 = new Callout('ZINC BOILS AT 907 °C', { dx: -0.55, dy: -0.2, size: 0.07, color: '#ffe6c8', sub: 'VAPOUR CONDENSES IN THE COOL CHAMBER', intensity: 1.3 });
   groupD.add(calloutD1, calloutD2);
-  calloutD1.position.set(-1.2, 2.3, 0.05);
-  calloutD2.position.set(-0.76, 0.85, 0.05);
+  calloutD1.position.set(1.62, 2.3, 0.05);
+  calloutD2.position.set(-1.16, 0.85, 0.05);
 
   // =========================================================================================================
   // embers & sparks (all sets, one draw)
@@ -898,12 +898,12 @@ export function create(ctx, segment) {
     const warp = keys.map((k, i) => [k[0], i / (keys.length - 1)]);
     return (t, out) => curve.getPoint(clamp(timeWarp(t, warp), 0, 1), out);
   }
-  const camA = makePath([[-0.1, V(2.0, 1.4, 4.4)], [0.7, V(1.4, 1.2, 3.5)], [tC, V(0.75, 0.88, 2.3)], [tC + 0.45, V(0.3, 0.62, 1.42)], [tW + 0.05, V(0.12, 0.54, 1.08)]]);
-  const tgtA = makePath([[-0.1, V(0, 0.98, 0)], [0.7, V(0, 0.88, 0)], [tC, V(0, 0.6, 0)], [tC + 0.45, V(0, 0.46, 0)], [tW + 0.05, V(0, 0.44, 0)]]);
+  const camA = makePath([[-0.1, V(2.0, 1.4, 4.4)], [0.7, V(1.45, 1.25, 3.5)], [tC, V(0.8, 1.12, 2.4)], [tC + 0.45, V(0.38, 1.02, 1.78)], [tW + 0.05, V(0.16, 0.96, 1.48)]]);
+  const tgtA = makePath([[-0.1, V(0, 0.98, 0)], [0.7, V(0, 0.92, 0)], [tC, V(0, 0.78, 0)], [tC + 0.45, V(0, 0.7, 0)], [tW + 0.05, V(0, 0.66, 0)]]);
   const camB = makePath([[tW, V(0.1, 0.12, 0.085)], [tP, V(0.43, 0.115, 0.1)]]);
   const tgtB = makePath([[tW, V(0.17, 0.0, 0.01)], [tP, V(0.52, 0.0, 0.025)]]);
-  const camD = makePath([[tZ, V(1.4, 1.45, 5.6)], [tZ + 0.45, V(0.85, 1.5, 5.0)], [dur + 0.05, V(0.3, 1.6, 4.1)]]);
-  const tgtD = makePath([[tZ, V(0.2, 1.62, -0.5)], [tZ + 0.45, V(0.1, 1.62, -0.5)], [dur + 0.05, V(0, 1.6, -0.6)]]);
+  const camD = makePath([[tZ, V(0.75, 1.45, 5.7)], [tZ + 0.45, V(0.45, 1.5, 5.25)], [dur + 0.05, V(0.12, 1.6, 4.7)]]);
+  const tgtD = makePath([[tZ, V(0.1, 1.62, -0.5)], [tZ + 0.45, V(0.05, 1.62, -0.5)], [dur + 0.05, V(0, 1.62, -0.6)]]);
 
   const cp = V(0, 0, 0), ct = V(0, 0, 0), tmp = V(0, 0, 0);
   const dof = { focus: 4, range: 1.5, amount: 0.4 };
@@ -930,8 +930,8 @@ export function create(ctx, segment) {
       coalMat.uniforms.uHeat.value = lerp(0.92, 0.6, open) * roar;
       crucibleMat.uniforms.uHeat.value = lerp(0.88, 0.8, open) + 0.1 * ramp(t, tC - 0.3, tC + 0.1);
       furU.uHeat.value = roar * lerp(1, 0.6, open);
-      flames.forEach((f, i) => { f.material.uniforms.uTime.value = T + i * 0.37; f.material.uniforms.uI.value = (0.7 + 0.45 * beat) * roar * (i === 2 ? 1.2 : 0.85); f.scale.set(1, 0.85 + 0.35 * roar + 0.15 * beat, 1); });
-      heatGlow.material.opacity = 0.55 + 0.35 * roar; heatGlow.scale.setScalar(2.4 + 0.5 * beat);
+      flames.forEach((f, i) => { f.material.uniforms.uTime.value = T + i * 0.37; f.material.uniforms.uI.value = (0.7 + 0.45 * beat) * roar * (i === 2 ? 1.2 : 0.85) * (1 - 0.65 * open); f.scale.set(1, 0.85 + 0.35 * roar + 0.15 * beat, 1); });
+      heatGlow.material.opacity = (0.55 + 0.35 * roar) * (1 - 0.75 * open); heatGlow.scale.setScalar(2.4 + 0.5 * beat);
       mouthGlow.material.opacity = 0.7 * (1 - ramp(t, tC, tC + 0.3));
       // bellows: compress on the beat, refill between, the two bags alternating
       for (const b of bellows) {
@@ -967,10 +967,10 @@ export function create(ctx, segment) {
       // camera: slow push on the roaring furnace, then in to the section as it opens
       camA(t, cp); tgtA(t, ct);
       cp.x += Math.sin(t * 1.3) * 0.012; cp.y += Math.sin(t * 1.7 + 1) * 0.008;
-      camera.fov = lerp(36, 30, ramp(t, tC - 0.2, tW));
-      calloutA.position.set(0.05, 0.3 + 0.14, 0.012);
+      camera.fov = lerp(36, 31, ramp(t, tC - 0.2, tW));
+      calloutA.position.set(0.07, 0.3 + 0.2, 0.012);
       calloutA.reveal(ramp(t, tC + 0.1, tC + 0.45), 1 - ramp(t, tW - 0.06, tW));
-      dof.focus = cp.distanceTo(ct); dof.range = lerp(1.6, 0.35, ramp(t, tC, tW)); dof.amount = 0.45;
+      dof.focus = lerp(cp.distanceTo(ct), Math.hypot(cp.x, cp.y - 0.45, cp.z), ramp(t, tC, tC + 0.3)); dof.range = lerp(1.6, 0.5, ramp(t, tC, tW)); dof.amount = 0.45;
       bloom.strength = 0.72 + 0.12 * beat;
       api.exposure = lerp(1.0, 0.85, open);
     }
@@ -979,20 +979,20 @@ export function create(ctx, segment) {
     if (shot === 1) {
       const u = (t - tW) / (tP - tW);
       bladeU.uEtch.value = ramp(t, tW - 0.05, tW + 0.38, ease.inOutSine);
-      bladeU.uSweepX.value = OB.x + lerp(0.0, 0.85, ease.inOutSine(sat(u)));
+      bladeU.uSweepX.value = OB.x + lerp(0.12, 0.62, sat(u));
       bladeU.uSweepI.value = 2.2;
       bladeU.uPlaneY.value = 0.45;
       spot.position.set(OB.x + 0.3, 0.9, -0.35); spot.target.position.set(OB.x + 0.35, 0, 0.02); spot.intensity = 2.2; spot.angle = 0.35; spot.penumbra = 0.9; spot.color.set('#ffe9d2');
       key.color.set('#ffb070'); key.intensity = 1.6; key.position.set(OB.x + 0.6, 0.6, -1.2); key.target.position.set(OB.x + 0.35, 0, 0); setKeyShadow(0.7, 0.1, 4);
       fire.intensity = 0; fill.position.set(OB.x + 0.4, 0.25, -0.8); fill.intensity = 0.25; fill.color.set('#ff8a40');
       hemi.intensity = 0.05;
-      scene.environmentIntensity = 0.55;
+      scene.environmentIntensity = 0.22;
       scene.fog.density = 0.0;
       camB(t, cp); tgtB(t, ct); cp.add(OB); ct.add(OB);
       camera.fov = 30;
       calloutB.position.set(0.15, 0.004, bladeC(0.18) + 0.008);
       calloutB.reveal(ramp(t, tW + 0.08, tW + 0.4), 1 - ramp(t, tP - 0.05, tP));
-      dof.focus = cp.distanceTo(ct); dof.range = 0.05; dof.amount = 0.75;
+      dof.focus = cp.distanceTo(ct); dof.range = 0.12; dof.amount = 0.5;
       bloom.strength = 0.65;
       api.exposure = 1.05;
     }
@@ -1004,7 +1004,7 @@ export function create(ctx, segment) {
       cp.set(OC.x + Math.sin(a) * R, lerp(1.2, 1.55, u), Math.cos(a) * R);
       ct.set(OC.x, 4.7, 0);
       camera.fov = 37;
-      key.color.set('#ffe9cc'); key.intensity = 4.2; key.position.set(OC.x - 9, 13, 10); key.target.position.set(OC.x, 0, -3); setKeyShadow(16, 1, 60);
+      key.color.set('#ffe2bf'); key.intensity = 4.6; key.position.set(OC.x - 15, 10, -2); key.target.position.set(OC.x, 0, -3); setKeyShadow(18, 1, 70);
       hemi.intensity = 0.5; hemi.color.set('#a8c2e6'); hemi.groundColor.set('#7a6048');
       fire.intensity = 0; fill.intensity = 0; spot.intensity = 0;
       scene.environmentIntensity = 0.45;
