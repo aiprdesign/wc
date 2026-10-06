@@ -151,8 +151,9 @@ const LATIN = [
 // Manuscript / notebook page with handwritten Latin lines and geometric constructions.
 // kind: 'geometry' | 'astronomy' | 'architecture' | 'text'
 // ink: CSS colour. transparent: draw only ink (for glowing overlays) instead of on parchment.
-export function manuscriptTexture({ w = 1024, h = 1024, seed = 1, kind = 'geometry', ink = 'rgba(58,36,18,0.9)', transparent = false } = {}) {
-  return cached(`ms${w}${h}${seed}${kind}${ink}${transparent}`, () => {
+// phrases: the titles the handwriting is made of (Latin by default)
+export function manuscriptTexture({ w = 1024, h = 1024, seed = 1, kind = 'geometry', ink = 'rgba(58,36,18,0.9)', transparent = false, phrases = LATIN } = {}) {
+  return cached(`ms${w}${h}${seed}${kind}${ink}${transparent}${phrases === LATIN ? '' : phrases.join('|')}`, () => {
     const r = rng(seed * 97 + 5);
     const c = canvas(w, h);
     const ctx = c.getContext('2d');
@@ -201,7 +202,7 @@ export function manuscriptTexture({ w = 1024, h = 1024, seed = 1, kind = 'geomet
       const y = top + i * S * 0.042;
       if (y > h * 0.94) break;
       let txt = '';
-      while (txt.length < 46) txt += LATIN[Math.floor(r() * LATIN.length)] + ' · ';
+      while (txt.length < 46) txt += phrases[Math.floor(r() * phrases.length)] + ' · ';
       ctx.save(); ctx.translate(w * 0.08, y); ctx.rotate((r() - 0.5) * 0.01);
       ctx.fillText(txt, 0, 0); ctx.restore();
     }

@@ -464,8 +464,9 @@ export function create(ctx, segment) {
   // 3. MANUSCRIPT LAYERS (2.5D planes at staggered depths along the flight path)
   const layers = [];
   const kinds = ['geometry', 'astronomy', 'architecture', 'text'];
-  const parchTex = kinds.map((kind, i) => manuscriptTexture({ w: 768, h: 1024, seed: 3 + i, kind }));
-  const inkTex = kinds.map((kind, i) => manuscriptTexture({ w: 768, h: 1024, seed: 11 + i, kind, ink: 'rgba(255,222,170,1)', transparent: true }));
+  const phrases = FILM.opening?.manuscript;   // the film's own book titles (Latin by default)
+  const parchTex = kinds.map((kind, i) => manuscriptTexture({ w: 768, h: 1024, seed: 3 + i, kind, ...(phrases ? { phrases } : {}) }));
+  const inkTex = kinds.map((kind, i) => manuscriptTexture({ w: 768, h: 1024, seed: 11 + i, kind, ink: 'rgba(255,222,170,1)', transparent: true, ...(phrases ? { phrases } : {}) }));
   const pageGeo = (() => {
     const g = new THREE.PlaneGeometry(1.5, 2, 16, 4);
     const p = g.attributes.position;

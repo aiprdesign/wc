@@ -184,9 +184,13 @@ export default {
     line1: 'ACHIEVEMENTS OF', line2: 'INDIAN CIVILIZATION', subtitle: 'Five thousand years of ideas',
     icons: ['stupa', 'zero', 'pslv', 'moon'], temple: 'nagara',
     labels: { ratio: '√2 = 577 / 408', module: 'SULBA · I', title: 'Sulba Sutra' },
+    // the handwriting on the drifting manuscripts: titles of Indian works (transliterated)
+    manuscript: ['Aryabhatiya', 'Ashtadhyayi', 'Sulba Sutra', 'Brahmasphutasiddhanta', 'Sushruta Samhita', 'Charaka Samhita',
+      'Lilavati', 'Tirukkural', 'Natya Shastra', 'Surya Siddhanta', 'Yoga Sutra', 'Ganita', 'Shunya', 'Siddhanta Shiromani'],
   },
   finale: {
     story1: 'From the Indus to the Moon,', story2: 'five thousand years of curiosity, craft and discovery.',
     title2: 'OF INDIAN CIVILIZATION', world: 'Shared with the whole world',
+    spin: -0.75,   // the Earth turned so the subcontinent faces the camera, lit, as the story lines play
   },
 };
