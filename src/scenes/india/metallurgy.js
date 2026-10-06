@@ -516,7 +516,7 @@ export function create(ctx, segment) {
   });
 
   // the workshop: earth floor, curved mud wall, timber posts and roof beams, a heap of charcoal, spare crucibles
-  const earth = new THREE.MeshStandardMaterial({ color: '#4a3526', roughness: 0.95, bumpMap: surfaceTexture('cast', 512, 13), bumpScale: 2 });
+  const earth = new THREE.MeshStandardMaterial({ color: '#6a4c36', roughness: 0.95, bumpMap: surfaceTexture('cast', 512, 13), bumpScale: 2 });
   earth.map = surfaceTexture('cast', 512, 13); earth.map.repeat.set(10, 10); earth.bumpMap.repeat.set(10, 10);
   const floorA = new THREE.Mesh(new THREE.CircleGeometry(14, 48).rotateX(-Math.PI / 2), earth); floorA.receiveShadow = true; groupA.add(floorA);
   const mud = new THREE.MeshStandardMaterial({ color: '#7a5a40', roughness: 0.95, side: THREE.BackSide, bumpMap: surfaceTexture('cast', 512, 19), bumpScale: 3 });
@@ -625,7 +625,7 @@ export function create(ctx, segment) {
   const brassB = new THREE.MeshStandardMaterial({ color: '#8a6a3c', metalness: 1, roughness: 0.65 });
   groupB.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.016, 0.11).translate(-0.012, 0.004, 0.0), brassB));
   groupB.add(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.11, 16).rotateZ(Math.PI / 2).translate(-0.08, 0.008, 0.0), new THREE.MeshStandardMaterial({ color: '#1b1410', roughness: 0.6 })));
-  const cloth = new THREE.MeshPhysicalMaterial({ color: '#120c09', roughness: 0.9, sheen: 0.6, sheenRoughness: 0.5, sheenColor: new THREE.Color('#4a2614'), bumpMap: surfaceTexture('cast', 512, 61), bumpScale: 0.6 });
+  const cloth = new THREE.MeshPhysicalMaterial({ color: '#2a1c14', roughness: 0.9, sheen: 0.6, sheenRoughness: 0.5, sheenColor: new THREE.Color('#4a2614'), bumpMap: surfaceTexture('cast', 512, 61), bumpScale: 0.6 });
   cloth.bumpMap.repeat.set(30, 30);
   const clothM = new THREE.Mesh(new THREE.PlaneGeometry(6, 6, 1, 1).rotateX(-Math.PI / 2), cloth); clothM.receiveShadow = true; groupB.add(clothM);
   const bokeh = [];
@@ -808,7 +808,7 @@ export function create(ctx, segment) {
     m.receiveShadow = true; groupD.add(m);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#2a2019', roughness: 0.95, bumpMap: surfaceTexture('cast', 512, 77), bumpScale: 2 }));
     ground.material.bumpMap.repeat.set(12, 12); groupD.add(ground);
-    const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(30, 14).translate(0, 7, -4), new THREE.MeshStandardMaterial({ color: '#1a130e', roughness: 1 }));
+    const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(30, 14).translate(0, 7, -4), new THREE.MeshStandardMaterial({ color: '#3a2a20', roughness: 1, bumpMap: surfaceTexture('cast', 512, 79), bumpScale: 3 }));
     groupD.add(backdrop);
   }
   const RX = [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2];
@@ -919,11 +919,11 @@ export function create(ctx, segment) {
   }
   const fireGlowD = glowSprite({ color: '#ff8a3c', intensity: 0.8, scale: 3.2 }); fireGlowD.position.set(0, 1.6, -0.6); groupD.add(fireGlowD);
   const burstGlow = glowSprite({ color: '#ffd8a8', intensity: 2.5, scale: 1 }); burstGlow.position.set(0, 1.9, 0.3); groupD.add(burstGlow);
-  const calloutD1 = new Callout('ZAWAR, RAJASTHAN · ZINC BY DISTILLATION', { dx: 0.15, dy: 0.22, size: 0.055, color: '#ffe6c8', sub: 'c. 9TH — 14TH C. AD · EUROPE: 1738', intensity: 1.3 });
-  const calloutD2 = new Callout('ZINC BOILS AT 907 °C', { dx: -0.55, dy: -0.2, size: 0.07, color: '#ffe6c8', sub: 'VAPOUR CONDENSES IN THE COOL CHAMBER', intensity: 1.3 });
+  const calloutD1 = new Callout('ZAWAR, RAJASTHAN · ZINC BY DISTILLATION', { dx: -0.1, dy: 0.22, size: 0.046, color: '#ffe6c8', sub: 'c. 9TH — 14TH C. AD · EUROPE: 1738', intensity: 1.3 });
+  const calloutD2 = new Callout('ZINC BOILS AT 907 °C', { dx: 0.45, dy: -0.2, size: 0.062, color: '#ffe6c8', sub: 'VAPOUR CONDENSES IN THE COOL CHAMBER', intensity: 1.3 });
   backCallout(calloutD1, { alpha: 0.45 }); backCallout(calloutD2, { alpha: 0.45 }); groupD.add(calloutD1, calloutD2);
-  calloutD1.position.set(1.62, 2.3, 0.05);
-  calloutD2.position.set(-1.16, 0.85, 0.05);
+  calloutD1.position.set(-1.62, 2.3, 0.05);
+  calloutD2.position.set(1.24, 0.85, 0.05);
 
   // =========================================================================================================
   // embers & sparks (all sets, one draw)
@@ -1036,12 +1036,13 @@ export function create(ctx, segment) {
       spot.position.set(OB.x + 0.35, 0.7, 0.9); spot.target.position.set(OB.x + 0.35, 0, 0.02); spot.intensity = 2.2; spot.angle = 0.35; spot.penumbra = 0.9; spot.color.set('#ffe9d2');
       key.color.set('#ffb070'); key.intensity = 0.6; key.position.set(OB.x + 1.6, 0.35, -0.1); key.target.position.set(OB.x + 0.35, 0, 0); setKeyShadow(0.7, 0.1, 4);
       fire.intensity = 0; fill.position.set(OB.x + 0.4, 0.25, -0.8); fill.intensity = 0.25; fill.color.set('#ff8a40');
-      hemi.intensity = 0.05;
+      hemi.intensity = 0.18; hemi.color.set('#8a7a6a'); hemi.groundColor.set('#3a2a20');
       scene.environmentIntensity = 0.22;
       scene.fog.density = 0.0;
       camB(t, cp); tgtB(t, ct); cp.add(OB); ct.add(OB);
       camera.fov = 30;
-      calloutB.position.set(0.25, 0.008, bladeC(0.305) + 0.004);
+      // (the read-out rides along the blade with the lens, so it holds its place in frame through the dolly)
+      { const bx = ct.x - OB.x - 0.035; calloutB.position.set(bx, 0.008, bladeC(bx / BL) + 0.004); }
       calloutB.reveal(ramp(t, tW + 0.03, tW + 0.3), 1 - ramp(t, tP - 0.04, tP));
       dof.focus = cp.distanceTo(ct); dof.range = 0.12; dof.amount = 0.5;
       bloom.strength = 0.65;
@@ -1093,9 +1094,9 @@ export function create(ctx, segment) {
       burstGlow.material.opacity = burst; burstGlow.scale.setScalar(0.5 + 6 * burst * burst);
       fire.position.set(OD.x, 1.6, -0.3); fire.intensity = (5 + 10 * burst) * fl; fire.color.set('#ff8a3a');
       fill.position.set(OD.x + 0.3, 0.55, 1.4); fill.intensity = 1.6; fill.color.set('#9fb8e0');
-      spot.position.set(OD.x + 2.5, 3.2, 4.5); spot.target.position.set(OD.x, 1.0, 0); spot.intensity = 26; spot.angle = 0.45; spot.penumbra = 0.9; spot.color.set('#ffd7aa');
+      spot.position.set(OD.x + 2.5, 3.2, 4.5); spot.target.position.set(OD.x, 1.0, 0); spot.intensity = 26; spot.angle = 0.75; spot.penumbra = 0.9; spot.color.set('#ffd7aa');
       key.color.set('#8aa0c8'); key.intensity = 0.3; key.position.set(OD.x - 3, 6, 4); key.target.position.set(OD.x, 1, -0.5); setKeyShadow(3.5, 0.5, 20);
-      hemi.intensity = 0.05;
+      hemi.intensity = 0.18; hemi.color.set('#8a7a6a'); hemi.groundColor.set('#3a2a20');
       scene.environmentIntensity = 0.22;
       scene.fog.color.set(0x070504); scene.fog.density = 0.02;
       camD(t, cp); tgtD(t, ct); cp.add(OD); ct.add(OD);

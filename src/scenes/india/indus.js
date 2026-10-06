@@ -588,7 +588,7 @@ export function create(ctx, segment) {
   function label(parent, text, sub, at, a, b, { dx = 0.55, dy = 0.32, color = '#ffe6bf', k = 1 } = {}) {
     const c = new Callout(text, { dx, dy, size: 0.07, color, sub, intensity: 1.55 });
     c.position.copy(at); c.userData.win = [a, b]; c.userData.k = k;
-    c.traverse((o) => { if (o.material) { o.material.depthTest = false; o.material.depthWrite = false; o.renderOrder = 20; } });   // labels read over the set
+    c.traverse((o) => { if (o.material) { o.material.depthTest = false; o.material.depthWrite = o.isMesh && !!o.material.uniforms?.uMap; o.renderOrder = 20; } });   // labels read over the set (text keeps its depth for the lens)
     parent.add(c); labels.push(c);
     return c;
   }
@@ -601,11 +601,10 @@ export function create(ctx, segment) {
   label(drains, 'BAKED BRICK · 1 : 2 : 4', 'THICK : WIDE : LONG', V(39, 1.1, ST_HW), T_DRAIN + 0.42, T_BATH, { dx: 0.4, dy: 0.25 });
   label(city, 'GREAT BATH', 'c. 12 × 7 m · 2.4 m DEEP', V(POOL.x1 + 0.4, DECK_Y + 0.2, POOL.z0 - 0.4), T_BATH + 0.15, T_WT + 0.05, { dx: 0.45, dy: 0.42 });
   label(city, 'BITUMEN SEAL', 'WATERTIGHT BRICK LINING', V(POOL.x0 + 0.05, DECK_Y - 0.9, 2.5), T_BATH + 0.35, T_WT + 0.05, { dx: -0.45, dy: 0.12 });
-  const wL = label(shop, 'CHERT CUBE WEIGHTS', 'RATIOS 1 · 2 · 4 · 8 · 16 · 32 · 64', V(weights[2].x, weights[2].s + 0.001, weights[2].z), T_WT + 0.12, dur + 1, { dx: 0.4, dy: 0.42 });
-  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.3, dy: 0.1 });
-  label(shop, 'UNIT 16 ≈ 13.7 g', null, V(weights[4].x, weights[4].s, weights[4].z), T_WT + 0.3, dur + 1, { dx: -0.3, dy: 0.5 });
+  label(shop, 'CHERT CUBE WEIGHTS', 'RATIOS 1 · 2 · 4 · 8 · 16 · 32 · 64', V(weights[1].x, weights[1].s + 0.001, weights[1].z), T_WT + 0.12, dur + 1, { dx: 0.22, dy: 0.52 });
+  label(shop, 'THEN DECIMAL', '160 · 320 …', V(weights[7].x, weights[7].s, weights[7].z), T_WT + 0.5, dur + 1, { dx: 0.3, dy: 0.17 });
+  label(shop, 'UNIT 16 ≈ 13.7 g', null, V(weights[4].x, weights[4].s, weights[4].z), T_WT + 0.3, dur + 1, { dx: 0.2, dy: 0.26 });
   label(shop, 'STEATITE SEAL', 'SCRIPT STILL UNDECIPHERED', V(seal.position.x - 0.012, 0.009, seal.position.z), T_WT + 0.7, dur + 1, { dx: -0.42, dy: -0.08 });
-  void wL;
   // the pool's dimensions, drawn flat on the deck
   const dimG = new THREE.Group();
   const dLong = new Dimension(V(0, 0, 0), V(12, 0, 0), '≈ 12 m', { size: 0.75, tick: 0.5, color: '#ffe6bf', intensity: 1.8 });
@@ -751,7 +750,7 @@ export function create(ctx, segment) {
       const fd = camera.position.distanceTo(camLook);
       dof.focus = fd; dof.range = Math.max(8, fd * 0.9); dof.amount = 0.12 + 0.1 * ramp(t, 2.9, 3.4);
     } else {
-      dof.focus = camera.position.distanceTo(camLook); dof.range = 0.06; dof.amount = 0.6;
+      dof.focus = camera.position.distanceTo(camLook); dof.range = 0.16; dof.amount = 0.45;
     }
     bloom.strength = 0.6 + 0.25 * envelope(t, T_GRID - 0.1, T_GRID + 0.9, 0.2, 0.5);
     api.exposure = (inShop ? 1.0 : 1.12) + 0.35 * (1 - ramp(t, T_WT, T_WT + 0.18)) * (t >= T_WT ? 1 : 0);

@@ -81,7 +81,7 @@ function bellGeometry(lite) {
     const amp = 0.02 * (1 - 0.55 * u) * (1 - sat((u - 0.86) / 0.14));
     if (Math.abs(phi) < hw) {
       const q = phi / hw;
-      r += amp * Math.sqrt(1 - q * q) + 0.0035 * Math.exp(-(phi / 0.035) ** 2) * (1 - u);
+      r += amp * Math.sqrt(1 - q * q) + 0.0035 * Math.exp(-((phi / 0.035) ** 2)) * (1 - u);
       r += 0.013 * Math.pow(sat(1 - u / 0.07), 2) * Math.sqrt(1 - q * q);   // the tip turns out
     }
     return r;
