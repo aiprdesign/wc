@@ -65,7 +65,7 @@ const GLSL_MAIN = /* glsl */ `
   float sRough = 1.0;
   float sBig = sFbm(sP * 0.11);
   float sMid = sNoise(sP * 0.8 + 11.0);
-  vec3 sCol = mix(sLin(vec3(0.80, 0.69, 0.55)), sLin(vec3(0.64, 0.61, 0.56)), smoothstep(0.32, 0.72, sBig * 0.75 + sMid * 0.25));
+  vec3 sCol = mix(sLin(vec3(0.75, 0.62, 0.47)), sLin(vec3(0.61, 0.56, 0.49)), smoothstep(0.32, 0.72, sBig * 0.75 + sMid * 0.25));
   float sWearK = 1.0, sLichK = 1.0;
   float sPx = max(length(fwidth(sP)), 1e-4);          // metres per pixel
 #if defined(S_DOME) || defined(S_PAVE) || defined(S_ASHLAR)
@@ -110,16 +110,17 @@ const GLSL_MAIN = /* glsl */ `
     float jw = 0.018;
     float joint = 1.0 - smoothstep(jw, jw + max(0.025, sPx * 1.2), min(du, dv));
     // per-block tone: buff, grey, a few pale (restored) and dark (blackened) stones
-    vec3 cb = mix(sLin(vec3(0.76, 0.67, 0.55)), sLin(vec3(0.62, 0.60, 0.56)), r1);
+    vec3 cb = mix(sLin(vec3(0.72, 0.61, 0.48)), sLin(vec3(0.58, 0.54, 0.48)), r1);
     cb *= 0.84 + 0.3 * sHash(vec3(bi * 1.7, kc * 0.3, 1.0));
-    cb = mix(cb, sLin(vec3(0.84, 0.77, 0.66)), step(0.93, r2) * 0.6);
+    cb = mix(cb, sLin(vec3(0.79, 0.69, 0.56)), step(0.93, r2) * 0.6);
     cb = mix(cb, sLin(vec3(0.40, 0.38, 0.34)), step(r2, 0.06) * 0.6);
     sCol = mix(sCol, cb, 0.5 * aa + 0.2);
   #ifdef S_DOME
     sCol *= 1.0 - joint * (0.32 * aa + 0.06);
     // the anda weathers dark: black lichen in broad patches and long streaks washed down from the top
-    float dk = smoothstep(0.5, 0.75, sFbm(sP * 0.18 + 3.0) * 0.7 + sNoise(vec3(sP.x * 0.9, sP.y * 0.12, sP.z * 0.9)) * 0.3);
-    sCol = mix(sCol, sLin(vec3(0.33, 0.31, 0.28)), 0.6 * dk);
+    float dk = smoothstep(0.52, 0.78, sFbm(sP * 0.32 + 3.0) * 0.45 + sNoise(vec3(sP.x * 1.4, sP.y * 0.1, sP.z * 1.4)) * 0.55);
+    sCol = mix(sCol, sLin(vec3(0.38, 0.34, 0.29)), 0.45 * dk);
+    sCol *= 0.9 + 0.1 * smoothstep(${S.DH.toFixed(2)}, ${(S.DH + 4).toFixed(2)}, sP.y);   // damp, darker springing
     sLichK = 0.6;
   #else
     sCol *= 1.0 - joint * (0.5 * aa + 0.1);
@@ -638,14 +639,19 @@ export function lionGeo(q = 1) {      // seated lion (the Ashokan type): foreleg
   s.ell([0, 0.5, -0.04], [0.18, 0.3, 0.2], [-0.35, 0, 0]);            // body rising
   s.ell([0, 0.62, 0.12], [0.19, 0.24, 0.16]);                         // chest
   s.ell([0, 0.8, 0.1], [0.25, 0.26, 0.22]);                           // mane
-  const nt = q >= 0.8 ? 12 : 8;
-  for (let i = 0; i < nt; i++) { const a = i / nt * Math.PI * 2; s.ell([Math.cos(a) * 0.2, 0.8 + Math.sin(a) * 0.21, 0.2], [0.07, 0.08, 0.07], [0, 0, a], 6); }   // ruff of tufts
-  s.ell([0, 0.82, 0.28], [0.13, 0.14, 0.12]);                         // face
-  s.ell([0, 0.76, 0.39], [0.08, 0.065, 0.07], null, 8);               // muzzle
-  s.ell([0, 0.69, 0.36], [0.06, 0.03, 0.05], null, 6);                // open jaw
+  // the mane: locks spread over the crown, cheeks and shoulders (the face left clear)
+  const locks = q >= 0.8 ? [[0.95, [-1.2, -0.4, 0.4, 1.2]], [0.35, [-1.5, -0.95, 0.95, 1.5]], [-0.25, [-1.6, -0.9, 0.9, 1.6]], [0.5, [-2.3, 2.3, 3.14]]]
+    : [[0.9, [-0.8, 0.8]], [0.2, [-1.3, 1.3]], [-0.3, [-1.5, 1.5]]];
+  for (const [el, azs] of locks) for (const az of azs) {
+    const d = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+    s.ell([d[0] * 0.24, 0.8 + d[1] * 0.25, 0.1 + d[2] * 0.21], [0.075, 0.09, 0.075], [-el * 0.6, az, 0], 6);
+  }
+  s.ell([0, 0.81, 0.26], [0.13, 0.14, 0.12]);                         // face
+  s.ell([0, 0.76, 0.36], [0.085, 0.07, 0.07], null, 8);               // muzzle
+  s.ell([0, 0.69, 0.33], [0.065, 0.03, 0.05], null, 6);               // open jaw
   for (const x of [-1, 1]) {
     s.ball([x * 0.1, 0.97, 0.24], 0.04, 6);                           // ears
-    s.ball([x * 0.05, 0.86, 0.38], 0.022, 5);                         // eyes
+    s.ball([x * 0.05, 0.86, 0.36], 0.022, 5);                         // eyes
     s.cap([x * 0.1, 0.05, 0.25], [x * 0.1, 0.55, 0.16], 0.055, 6);    // forelegs
     s.ell([x * 0.1, 0.035, 0.29], [0.065, 0.035, 0.085], null, 6);    // fore paws
     s.ell([x * 0.17, 0.05, 0.0], [0.06, 0.05, 0.11], null, 6);        // hind paws

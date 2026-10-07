@@ -49,13 +49,10 @@ export function rod(a, b, r, seg = 6, r1 = r) {
 // streamlined strut (elliptic section, long axis along the flow +X)
 export function strut(a, b, w, d, seg = 8) {
   const g = new THREE.CylinderGeometry(1, 1, a.distanceTo(b), seg, 1); g.scale(d, 1, w);
-  const dir = _v.copy(b).sub(a).normalize();
-  _q.setFromUnitVectors(UP, dir);
-  // keep the long axis of the section along X as well as the strut allows
-  const q2 = new THREE.Quaternion();
-  const xAfter = V3(1, 0, 0).applyQuaternion(_q), want = V3(1, 0, 0).addScaledVector(dir, -dir.x).normalize();
-  if (want.lengthSq() > 1e-6) { const ang = Math.atan2(V3().crossVectors(xAfter, want).dot(dir), xAfter.dot(want)); q2.setFromAxisAngle(dir, ang); }
-  _m.compose(_s.copy(a).lerp(b, 0.5), q2.multiply(_q), V3(1, 1, 1));
+  const Y = b.clone().sub(a).normalize();
+  let X = V3(1, 0, 0).addScaledVector(Y, -Y.x); if (X.lengthSq() < 1e-4) X = V3(0, 0, 1).addScaledVector(Y, -Y.z); X.normalize();
+  const Z = V3().crossVectors(X, Y);
+  _m.makeBasis(X, Y, Z).setPosition(a.clone().lerp(b, 0.5));
   return g.applyMatrix4(_m);
 }
 // tube along a curve with a radius function r(u)
@@ -123,20 +120,25 @@ export function wingGeo(stations, { n = 12, plane = 'h', t = 0.12, cam = 0.02, c
     ? V3(s.x - u * s.c, s.y + v * s.c, s.z) : V3(s.x - u * s.c, s.y, s.z + v * s.c))));
   const m = loops[0].length, ns = loops.length, pos = [], uv = [], idx = [];
   loops.forEach((L, j) => L.forEach((p, i) => { pos.push(p.x, p.y, p.z); uv.push(i / m, j / (ns - 1)); }));
+  // skin winding: the triangle normal is S × T (S: station direction, T: loop tangent = −X on the upper side)
+  const f = stations[0], l = stations[ns - 1], S = V3(l.x - f.x, l.y - f.y, l.z - f.z);
+  const nrm = V3().crossVectors(S, V3(-1, 0, 0)), flip = (plane === 'h' ? nrm.y : nrm.z) < 0;
   for (let j = 0; j < ns - 1; j++) for (let i = 0; i < m; i++) {
     const a = j * m + i, b = j * m + ((i + 1) % m), c = (j + 1) * m + i, d = (j + 1) * m + ((i + 1) % m);
-    idx.push(a, c, b, b, c, d);
+    if (flip) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d);
   }
   if (cap) for (const j of [0, ns - 1]) {
-    const L = loops[j], base = pos.length / 3, cx = L.reduce((s, p) => s.add(p), V3()).multiplyScalar(1 / m);
+    const L = loops[j], base = pos.length / 3, cx = L.reduce((s2, p) => s2.add(p), V3()).multiplyScalar(1 / m);
     pos.push(cx.x, cx.y, cx.z); uv.push(0.5, j / (ns - 1));
-    for (let i = 0; i < m; i++) idx.push(j * m + i, base, j * m + ((i + 1) % m));
+    // fan normal (Newell) vs the wanted direction (−S at the first station, +S at the last)
+    const nw = V3(); for (let i = 0; i < m; i++) { const p = L[i], q = L[(i + 1) % m]; nw.x += (p.y - q.y) * (p.z + q.z); nw.y += (p.z - q.z) * (p.x + q.x); nw.z += (p.x - q.x) * (p.y + q.y); }
+    // Newell gives the normal of the loop traversed i → i+1; the fan (p_i, C, p_i+1) faces the opposite way
+    const want = j === 0 ? -1 : 1, rev = -nw.dot(S) * want < 0;
+    for (let i = 0; i < m; i++) { const A = j * m + i, B = j * m + ((i + 1) % m); if (rev) idx.push(A, B, base); else idx.push(A, base, B); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
-  // outward = away from the mean chord line
-  const mid = stations[Math.floor(ns / 2)];
-  return flipIfInward(g, (p, nn) => (plane === 'h' ? nn.y * (p.y - mid.y) : nn.z * (p.z - mid.z)) + 0.0 * nn.x);
+  return g;
 }
 // thin flat plate with an outline shape (fins, tail surfaces, feathers) extruded with a soft bevel
 export function plate(pts, depth, bevel = 0.01) {
@@ -570,12 +572,14 @@ export function buildVimana(M) {
   for (const [x, z] of posts) gold.push(bake(pillar.clone(), [x, PY, z]));
   // cusped arch valances between the pillars (vermilion field, gold frame)
   const archPanel = (w) => {
-    const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(w / 2, 0.42); s.lineTo(-w / 2, 0.42); s.closePath();
-    const hole = new THREE.Path(); const n = 5;
-    hole.moveTo(-w / 2 + 0.04, 0);
-    for (let i = 0; i < n; i++) { const a0 = -w / 2 + 0.04 + i * (w - 0.08) / n, a1 = a0 + (w - 0.08) / n, cx = (a0 + a1) / 2, hh = 0.12 + 0.18 * Math.sin(Math.PI * (i + 0.5) / n); hole.quadraticCurveTo(cx, hh + 0.12, a1, hh * 0.9 + (i === n - 1 ? -hh * 0.9 : 0.02)); }
-    hole.lineTo(w / 2 - 0.04, 0); hole.closePath();
-    s.holes.push(hole);
+    // a valance whose lower edge is a cusped (multifoil) arch
+    const s = new THREE.Shape(); s.moveTo(-w / 2, 0.42); s.lineTo(w / 2, 0.42); s.lineTo(w / 2, 0);
+    const K = 7, P = (k) => { const u = k / K; return [(w / 2) * (1 - 2 * u), 0.3 * Math.pow(Math.sin(Math.PI * u), 0.7)]; };
+    for (let k = 0; k < K; k++) {
+      const [x0, y0] = P(k), [x1, y1] = P(k + 1), mx = (x0 + x1) / 2, my = (y0 + y1) / 2, l = Math.hypot(mx, my + 0.05) || 1;
+      s.quadraticCurveTo(mx + mx / l * 0.05, my + (my + 0.05) / l * 0.05, x1, y1);
+    }
+    s.closePath();
     return new THREE.ExtrudeGeometry(s, { depth: 0.04, bevelEnabled: false, curveSegments: 6 });
   };
   for (const z of [PZ, -PZ]) for (const x of [-0.6, 0.6]) verm.push(bake(archPanel(1.1), [x, PY + PH - 0.44, z - 0.02]));
@@ -588,7 +592,7 @@ export function buildVimana(M) {
   const EY = PY + PH;
   gold.push(box(2.62, 0.12, 1.5, [0, EY + 0.06, 0]));
   lapis.push(box(2.56, 0.1, 1.44, [0, EY + 0.17, 0]));
-  { const ch = lathe([[1.0, 0], [0.82, 0.14]], 4); ch.rotateY(Math.PI / 4); ch.scale(1.95, 1, 1.18); gold.push(bake(ch, [0, EY + 0.22, 0])); }
+  { const ch = lathe([[1.0, 0], [0.82, 0.14]], 4); ch.rotateY(Math.PI / 4); ch.scale(2.15, 1, 1.38); verm.push(bake(ch, [0, EY + 0.22, 0])); }
   for (let i = 0; i < 18; i++) for (const z of [0.64, -0.64]) gold.push(bake(new THREE.ConeGeometry(0.05, 0.14, 4), [-1.2 + i * 2.4 / 17, EY + 0.44, z]));
   for (let i = 0; i < 8; i++) for (const x of [1.2, -1.2]) gold.push(bake(new THREE.ConeGeometry(0.05, 0.14, 4), [x, EY + 0.44, -0.64 + i * 1.28 / 7]));
   gold.push(box(2.46, 0.06, 1.34, [0, EY + 0.37, 0]));
@@ -651,7 +655,12 @@ export function buildVimana(M) {
   const flags = [];
   const flagAt = (x, y, z, len, h, col) => {
     const geo = new THREE.PlaneGeometry(len, h, 16, 2); geo.translate(len / 2, -h / 2, 0);
-    const p = geo.attributes.position; for (let i = 0; i < p.count; i++) { const u = p.getX(i) / len; p.setY(i, (p.getY(i) + h / 2) * (1 - 0.75 * u) - h / 2 * (1 - 0.75 * u)); if (u > 0.9 && Math.abs(p.getY(i)) < 1e-3) p.setX(i, len * 0.85); }
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i) / len, yy = p.getY(i);
+      if (Math.abs(yy + h / 2) < 1e-4 && u > 0.99) p.setX(i, len * 0.82);      // swallow tail notch
+      p.setY(i, yy * (1 - 0.7 * u));
+    }
     geo.userData.base = Float32Array.from(p.array);
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col, roughness: 0.7, side: THREE.DoubleSide }));
     m.position.set(x, y, z); g.add(m); flags.push(m); return m;
@@ -808,8 +817,7 @@ export function buildPussMoth(M) {
   }
   dark.push(rod(V3(-4.4, 0.22, 0), V3(-4.7, -0.12, 0), 0.025, 5));
   // tail: the de Havilland curved fin and rudder, tailplane and elevators
-  const fin = []; for (let i = 0; i <= 16; i++) { const a = i / 16 * Math.PI * 0.75; fin.push([-4.35 - Math.sin(a) * 0.55 - (i > 8 ? (i - 8) * 0.02 : 0), 0.35 + (1 - Math.cos(a)) * 0.6]); }
-  body.push(bake(plate([[-3.8, 0.38], [-4.15, 0.62], ...fin, [-4.98, 1.15], [-5.1, 0.6], [-4.98, 0.3]], 0.05, 0.012), [0, 0, 0], [0, 0, 0]));
+  body.push(plate([[-3.9, 0.42], [-4.3, 0.75], [-4.55, 1.05], [-4.72, 1.25], [-4.88, 1.33], [-5.02, 1.3], [-5.1, 1.15], [-5.12, 0.8], [-5.08, 0.4], [-4.98, 0.15], [-4.6, 0.25]], 0.05, 0.012));
   const tp = (s) => plate([[0, 0], [0.15 * s, 1.55], [-0.35, 1.7], [-0.8, 1.6], [-0.9, 0.25], [-0.85, 0]].map(([x, z]) => [x, z]), 0.05, 0.012);
   for (const s of [1, -1]) wingS.push(bake(tp(1), [-4.15, 0.32, 0], [s * Math.PI / 2, 0, 0]));
   // cockpit and cabin glazing: windscreen, three side windows each side, roof light
@@ -870,6 +878,7 @@ export function buildMarut(M) {
   for (const sd of [1, -1]) skin.push(wingGeo(tst.map((w) => ({ ...w, z: sd * w.z })), { n: 10, t: 0.06, cam: 0 }));
   // twin jet pipes
   for (const s of [1, -1]) { dark.push(bake(lathe([[0.36, 0], [0.34, 0.5], [0.31, 0.62]], 20, true), [-7.75, 0.0, s * 0.42], [0, 0, Math.PI / 2])); dark.push(bake(new THREE.CircleGeometry(0.3, 20), [-7.6, 0.0, s * 0.42], [0, -Math.PI / 2, 0])); }
+  dark.push(bake(new THREE.CircleGeometry(1, 24), [-7.89, 0.0, 0], [0, -Math.PI / 2, 0], [0.84, 0.52, 1]));
   // pitot on the nose, under-wing tanks
   dark.push(rod(V3(7.85, 0.0, 0), V3(8.6, 0.0, 0), 0.025, 5));
   for (const s of [1, -1]) skin.push(bake(lathe([[0.001, 0], [0.18, 0.5], [0.24, 1.2], [0.22, 2.2], [0.001, 2.9]], 14), [1.6, -0.6, s * 2.3], [0, 0, -Math.PI / 2]));
@@ -912,7 +921,7 @@ export function buildTejas(M) {
   dark.push(bake(new THREE.CircleGeometry(0.4, 20), [-6.95, 0.04, 0], [0, -Math.PI / 2, 0]));
   dark.push(rod(V3(6.55, 0.08, 0), V3(7.3, 0.08, 0), 0.02, 5));
   add(g, skin, M.tejas); add(g, dome, M.radome); add(g, dark, M.darkMetal); add(g, glass, M.canopy);
-  for (const s of [1, -1]) roundel(M, g, [-3.4, -0.08, s * 2.6], [-Math.PI / 2, 0, 0], 0.36);
+  for (const s of [1, -1]) roundel(M, g, [-3.4, -0.03, s * 2.6], [-Math.PI / 2, 0, 0], 0.36);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return { group: g, nozzle: V3(-7.2, 0.04, 0), tips: [V3(-4.9, -0.12, 4.1), V3(-4.9, -0.12, -4.1)] };
 }

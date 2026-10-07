@@ -312,6 +312,7 @@ export class Kit {
     n.applyMatrix4(mm);
     (this.P.L[key] ??= []).push(n);
     this.tris += cnt / 3;
+    if (this.stats) this.stats[this.sec] = (this.stats[this.sec] ?? 0) + cnt / 3;
     return n;
   }
   box(key, x0, x1, y0, y1, z0, z1, o = {}) { return this.put(key, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), { ...o, pos: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2] }); }

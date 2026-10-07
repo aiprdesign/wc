@@ -54,8 +54,12 @@ function unit(K, o) {
   K.put(mat, extrude(uFrameShape(W, H, wo, spring, riseO, n), 0.22));
   const inner = extrude(uFrameShape(W, H, w, spring, rise, n), T - 0.22); inner.translate(0, 0, -0.22);
   K.put(mat, inner, { ao: (x, y, z) => 1 - 0.28 * sst(0.2, T, -z) });
-  // the recess: half-domed, darkening towards the back and up into the hood
   const sp = spring, D2 = D;
+  if (K.cheap) {
+    K.put(mat, new THREE.ShapeGeometry(archPanelShape(w, sp, rise, n, 0)).translate(0, 0, -T), { ao: 0.6 });
+    return;
+  }
+  // the recess: half-domed, darkening towards the back and up into the hood
   K.at(0, 0.03, -T, 0, () => K.put(mat, nicheShell(w, sp - 0.03, rise, D2, { back, n }), {
     ao: (x, y, z) => Math.max(0.42, 1 - 0.34 * (-z / D2) - 0.2 * sst(sp, sp + rise, y) - 0.08 * (1 - sst(0, 1.5, y))),
   }));
@@ -176,6 +180,7 @@ function pishtaq(K) {
     for (let i = 0; i < nh; i++) holes.push({ x: -PW + (i + 0.5) * (2 * PW / nh), w: 1.05, y0: 29.65, spring: 0.75, rise: 0.55 });
     K.put(MW, extrude(arcadeShape(-PW + 0.05, PW - 0.05, 29.4, PT - Y0 - 0.3, holes, 8), 0.15));
     K.box(MW, -PW - 0.2, PW + 0.2, PT - Y0 - 0.3, PT - Y0, -depth - 0.1, 0.22);
+    if (K.cheap) { K.put(MW, new THREE.ShapeGeometry(archPanelShape(w, spring, rise, n, 0)).translate(0, 0, -depth), { ao: 0.55 }); return; }
     // the iwan: faceted half-dome over three walls — the doorway on the back, niches on the canted walls
     const hw = w / 2, back = 0.5, D = 3.6;
     K.at(0, 0, -depth, 0, () => {
@@ -245,8 +250,8 @@ function wallTop(K, cx, z, w) {
 // Domed kiosk: base, eight columns with arches, sloping chajja, drum, lotus dome and gilded finial.
 // R = radius of the ring of columns; mat / domeMat for red-sandstone variants.
 const DOME_CTRL = [[12.0, 0], [12.6, 0.8], [13.5, 2.6], [14.1, 4.9], [14.25, 7.4], [14.05, 10.0], [13.3, 12.8], [11.9, 15.6], [9.9, 18.3], [7.5, 20.7], [5.1, 22.6], [3.0, 24.0], [1.5, 25.0], [0.6, 25.8], [0, 26.3]];
-function chhatri(K, x, y, z, R, { base = true, mat = MW, domeMat = MW } = {}) {
-  const lite = K.lite, s8 = 8;
+function chhatri(K, x, y, z, R, { base = true, mat = MW, domeMat = MW, low = false } = {}) {
+  const lite = K.lite || low, s8 = 8;
   K.at(x, y, z, 0, () => {
     let yb = 0;
     if (base) {
@@ -255,6 +260,11 @@ function chhatri(K, x, y, z, R, { base = true, mat = MW, domeMat = MW } = {}) {
     } else K.put(mat, latheFlat([[R * 1.3, 0], [R * 1.3, R * 0.1], [0, R * 0.1]], s8));
     if (!base) yb = R * 0.1;
     const hC = R * 0.95;
+    if (low) {
+      // distant kiosk: eight square posts under a lintel ring
+      for (let k = 0; k < 8; k++) { const a = Math.PI / 8 + k * Math.PI / 4; K.box(mat, Math.sin(a) * R - R * 0.09, Math.sin(a) * R + R * 0.09, yb, yb + hC + R * 0.22, Math.cos(a) * R - R * 0.09, Math.cos(a) * R + R * 0.09); }
+      K.put(mat, latheFlat([[R * 1.06, yb + hC], [R * 1.06, yb + hC + R * 0.22], [R * 0.85, yb + hC + R * 0.22], [R * 0.85, yb + hC]], 8));
+    } else {
     // columns at the corners of the octagon
     for (let k = 0; k < 8; k++) {
       const a = Math.PI / 8 + k * Math.PI / 4, cx = Math.sin(a) * R, cz = Math.cos(a) * R;
@@ -267,7 +277,8 @@ function chhatri(K, x, y, z, R, { base = true, mat = MW, domeMat = MW } = {}) {
     for (let k = 0; k < 8; k++) {
       const a = (k + 1) * Math.PI / 4;
       const ow = side - R * 0.17;
-      K.put(mat, extrude(uFrameShape(side * 1.04, hC + R * 0.22, ow, hC * 0.6, ow * 0.55, lite ? 6 : 10), R * 0.1).translate(0, yb, R * 0.05), { pos: [Math.sin(a) * dS, 0, Math.cos(a) * dS], ry: a });
+      K.put(mat, extrude(uFrameShape(side * 1.04, hC + R * 0.22, ow, hC * 0.6, ow * 0.55, low ? 4 : lite ? 6 : 10), R * 0.1).translate(0, yb, R * 0.05), { pos: [Math.sin(a) * dS, 0, Math.cos(a) * dS], ry: a });
+    }
     }
     // chajja: a thin sloping eave on brackets, then the drum
     const yc = yb + hC + R * 0.22;
@@ -280,8 +291,8 @@ function chhatri(K, x, y, z, R, { base = true, mat = MW, domeMat = MW } = {}) {
     K.put(mat, latheFlat([[R * 0.98, yd], [R * 0.98, yd + R * 0.22], [R * 1.04, yd + R * 0.26], [R * 1.04, yd + R * 0.32], [R * 0.9, yd + R * 0.34]], s8));
     // the dome (the great dome's profile, scaled), lotus crown and finial
     const ds = (R * 0.9) / 12, y2 = yd + R * 0.34;
-    const prof = smoothProfile(DOME_CTRL, lite ? 14 : 22).map(([r, yy]) => [r * ds, y2 + yy * ds * 0.78]);
-    K.put(domeMat, lathe(prof, lite ? 16 : 28));
+    const prof = smoothProfile(DOME_CTRL, low ? 10 : lite ? 14 : 22).map(([r, yy]) => [r * ds, y2 + yy * ds * 0.78]);
+    K.put(domeMat, lathe(prof, low ? 12 : lite ? 16 : 28));
     const yt = y2 + 26.3 * ds * 0.78;
     K.put(domeMat, lathe([[R * 0.3, yt - R * 0.12], [R * 0.36, yt - R * 0.06], [R * 0.26, yt + R * 0.04], [R * 0.1, yt + R * 0.1]], lite ? 8 : 12));
     K.put('tajGold', lathe([[R * 0.09, 0], [R * 0.15, R * 0.07], [R * 0.08, R * 0.14], [R * 0.12, R * 0.2], [R * 0.05, R * 0.28], [R * 0.035, R * 0.44], [0, R * 0.46]], 8), { pos: [0, yt + R * 0.08, 0] });
@@ -316,15 +327,16 @@ function domeAndDrum(K) {
     }
     return [r, top, 0, 1];
   };
-  const NP = 16, nt = lite ? 4 : 7, ns = lite ? 5 : 9;
+  const NP = 16, nt = lite ? 4 : 8, ns = lite ? 5 : 10;
   for (let p = 0; p < NP; p++) {
     const phi = (p / NP) * Math.PI * 2, P = [], I = [];
     for (let j = 0; j <= ns; j++) {
-      const s = j / ns, half = (Math.PI / NP) * 0.97 * Math.pow(Math.sin(Math.PI * (0.2 + 0.8 * s)), 0.55);
+      const s = j / ns, half = (Math.PI / NP) * 0.99 * Math.pow(Math.sin(Math.PI * (0.22 + 0.78 * s)), 0.5);
       for (let i = 0; i <= nt; i++) {
         const t = (i / nt) * 2 - 1;
-        const [r, y, nr, ny] = rAt(1.1 + s * 5.1);
-        const h = 0.05 + 0.24 * (1 - t * t) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, s * 1.2))) + 0.05 * Math.exp(-t * t * 40);
+        const [r, y, nr, ny] = rAt(1.2 + s * 5.6);
+        // a cushion-like petal with a raised rim and a midrib, its tip lifting a little off the dome
+        const h = 0.08 + 0.4 * (1 - t * t) * (0.45 + 0.55 * Math.sin(Math.PI * Math.min(1, s * 1.15))) + 0.08 * Math.exp(-t * t * 30) + 0.1 * Math.exp(-Math.pow((Math.abs(t) - 0.85) * 7, 2)) + 0.22 * s * s;
         const rr = r + nr * h, yy = y + ny * h, a = phi + t * half;
         P.push(Math.sin(a) * rr, yy, Math.cos(a) * rr);
       }
@@ -337,7 +349,10 @@ function domeAndDrum(K) {
     const out = [Math.sin(phi) * nr0, ny0, Math.cos(phi) * nr0];
     if (cn[0] * out[0] + cn[1] * out[1] + cn[2] * out[2] < 0) for (let k = 0; k < I.length; k += 3) { const t = I[k + 1]; I[k + 1] = I[k + 2]; I[k + 2] = t; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals();
-    K.put(MW, g);
+    const AO = new Float32Array(P.length / 3); for (let j = 0; j <= ns; j++) for (let i = 0; i <= nt; i++) { const t = (i / nt) * 2 - 1; AO[j * (nt + 1) + i] = 1 - 0.3 * Math.pow(Math.abs(t), 3); }
+    g.setAttribute('ao', new THREE.BufferAttribute(AO, 1));
+    const gn = g.toNonIndexed(), aoA = gn.attributes.ao;
+    let vi = 0; K.put(MW, gn, { ao: () => aoA.getX(vi++) });
   }
   // collar, the lotus bud and the gilded finial: kalasha bulbs, a rod and the crescent
   K.put(MW, lathe([[1.75, top - 0.75], [1.95, top - 0.45], [1.7, top - 0.15], [1.25, top + 0.1], [0.95, top + 0.35], [1.05, top + 0.55], [0.85, top + 0.7]], lite ? 16 : 32));
@@ -360,8 +375,8 @@ function balcony(K, y, rS, rail) {
   }
   if (!rail) return;
   const hr = 1.0, rr = rO - 0.12;
-  K.put('tajBalus', new THREE.CylinderGeometry(rr, rr, hr, seg + 16, 1, true), { pos: [0, y + 0.32 + hr / 2, 0], uv1: 'own', uvs: [Math.round(2 * Math.PI * rr / 0.9), 1] });
-  K.put(MW, new THREE.TorusGeometry(rr, 0.09, 5, seg + 8).rotateX(Math.PI / 2), { pos: [0, y + 0.32 + hr + 0.03, 0] });
+  K.put('tajBalus', new THREE.CylinderGeometry(rr, rr, hr, K.lite ? 20 : 48, 1, true), { pos: [0, y + 0.32 + hr / 2, 0], uv1: 'own', uvs: [Math.round(2 * Math.PI * rr / 0.9), 1] });
+  K.put(MW, new THREE.TorusGeometry(rr, 0.09, K.lite ? 4 : 5, K.lite ? 16 : 40).rotateX(Math.PI / 2), { pos: [0, y + 0.32 + hr + 0.03, 0] });
   if (!K.lite) for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; K.put(MW, new THREE.BoxGeometry(0.16, hr, 0.16), { pos: [Math.sin(a) * rr, y + 0.32 + hr / 2, Math.cos(a) * rr], ry: a }); }
 }
 function minaret(K, mx, mz) {
@@ -382,7 +397,7 @@ function minaret(K, mx, mz) {
     balcony(K, 33.8, 2.3, true);
     // the stub between the last stage and the top gallery, then the crowning chhatri
     K.put(MW, new THREE.CylinderGeometry(2.3, 2.3, 1.4, seg, 1, true), { pos: [0, 33.1, 0] });
-    chhatri(K, 0, 34.12, 0, 1.95, { base: false });
+    chhatri(K, 0, 34.12, 0, 1.95, { base: false, low: K.lite });
   });
 }
 
@@ -392,7 +407,7 @@ function plinth(K) {
   K.box(MW, -H + 0.6, H - 0.6, 0, Y0, -H, H - 0.6);
   K.put(MW, ringMould([[H, H], [H, -H], [-H, -H], [-H, H]], [[0.32, 0], [0.32, 0.3], [0.18, 0.42], [0.06, 0.56], [0, 0.65]]));
   K.put(MW, ringMould([[H, H], [H, -H], [-H, -H], [-H, H]], [[0, 5.72], [0.08, 5.82], [0.08, 5.98], [0.26, 6.12], [0.4, 6.38], [0.4, Y0], [-0.62, Y0]]));
-  const N = 25, w = 2.45, sp = 2.55, ri = 1.45, y0 = 1.0;
+  const N = lite ? 15 : 25, w = 2.45, sp = 2.55, ri = 1.45, y0 = 1.0;
   // three faces carry the arcade (the north one is never seen); each niche in a stepped frame
   for (const [ry, len, cz] of [[0, 2 * H, 0], [Math.PI / 2, 2 * H - 0.6, 0.3], [-Math.PI / 2, 2 * H - 0.6, -0.3]]) {
     K.at(0, 0, 0, ry, () => {
@@ -402,8 +417,9 @@ function plinth(K) {
       const ow = w + 0.36;
       const holesO = xs.map((x) => ({ x, w: ow, y0: y0 - 0.18, spring: sp + 0.18, rise: ri + 0.2 }));
       const holesI = xs.map((x) => ({ x, w, y0, spring: sp, rise: ri }));
-      K.put(MW, extrude(arcadeShape(x0, x1, 0.65, 5.72, holesO, lite ? 6 : 10), 0.14).translate(0, 0, H));
-      K.put(MW, extrude(arcadeShape(x0, x1, 0.65, 5.72, holesI, lite ? 6 : 10), 0.46).translate(0, 0, H - 0.14), { ao: (x, y, z) => 1 - 0.25 * sst(H - 0.2, H - 0.6, z) });
+      if (!lite) K.put(MW, extrude(arcadeShape(x0, x1, 0.65, 5.72, holesO, 10), 0.14).translate(0, 0, H));
+      const tI = lite ? 0.6 : 0.46;
+      K.put(MW, extrude(arcadeShape(x0, x1, 0.65, 5.72, holesI, lite ? 6 : 10), tI).translate(0, 0, H - 0.6 + tI), { ao: (x, y, z) => 1 - 0.25 * sst(H - 0.2, H - 0.6, z) });
       for (const x of xs) {
         if (lite) K.put(MW, new THREE.ShapeGeometry(archPanelShape(w, sp, ri, 6, y0)).translate(x, 0, H - 0.6), { ao: 0.62 });
         else K.at(x, y0, H - 0.6, 0, () => K.put(MW, nicheShell(w, sp, ri, 0.5, { back: 0.5, n: 8 }), { ao: (xx, y, z) => Math.max(0.5, 0.92 - 0.5 * (-z) - 0.12 * sst(sp, sp + ri, y)) }));
@@ -422,6 +438,7 @@ function mosque(K, cx, ry) {
     K.put(MW, ringMould([[29.5, 12.5], [29.5, -12.5], [-29.5, -12.5], [-29.5, 12.5]], [[0, 2.7], [0.15, 2.8], [0.15, 3.0], [-0.3, 3.0]]));
     K.box(R, -26.5, 26.5, 3, 15.4, -10.5, 4.3);
     for (const sx of [-1, 1]) K.box(R, sx * 26.5 - 0.3, sx * 26.5 + 0.3, 3, 15.4, 4.3, 8.0);
+    K.sec = 'm_pish';
     // central pishtaq: stepped frame, deep half-domed iwan, white-marble outlines, parapet with kanguras
     K.at(0, 3, 8.6, 0, () => {
       const w = 8.6, sp = 7.4, ri = 4.6, top = 15.6;
@@ -444,6 +461,7 @@ function mosque(K, cx, ry) {
         K.put('tajGold', new THREE.ConeGeometry(0.05, 0.6, 5), { pos: [sx * 7.5, top + 3.2, 0] });
       }
     });
+    K.sec = 'm_bays';
     // two arched bays on each side under a chhajja and a kangura parapet
     for (const sx of [-1, 1]) for (const bx of [12.25, 21.75]) {
       K.at(sx * bx, 3, 7.4 + 0.6, 0, () => unit(K, { W: 9.5, H: 12.4, w: 5.8, spring: 6.0, rise: 3.3, T: 0.6, step: 0.25, D: 1.8, back: 0.5, mat: R, line: MW, door: true, lw: 0.12, bi: 0.4 }));
@@ -456,6 +474,7 @@ function mosque(K, cx, ry) {
       }
     });
     K.box(R, -26.8, 26.8, 15.1, 15.4, -10.8, 8.0);
+    K.sec = 'm_domes';
     // three marble domes on red drums
     for (const [dx, r] of [[0, 5.0], [-14.5, 3.7], [14.5, 3.7]]) {
       K.put(R, new THREE.CylinderGeometry(r, r, 2.6, lite ? 16 : 32, 1, true), { pos: [dx, 15.4 + 1.3, -1.2] });
@@ -466,11 +485,12 @@ function mosque(K, cx, ry) {
       K.put(MW, lathe([[r * 0.16, yt - r * 0.06], [r * 0.2, yt], [r * 0.12, yt + r * 0.08], [r * 0.05, yt + r * 0.12]], 10), { pos: [dx, 0, -1.2] });
       K.put('tajGold', lathe([[r * 0.06, 0], [r * 0.1, r * 0.08], [r * 0.05, r * 0.16], [r * 0.08, r * 0.24], [r * 0.03, r * 0.36], [r * 0.02, r * 0.62], [0, r * 0.65]], 8), { pos: [dx, yt + r * 0.1, -1.2] });
     }
+    K.sec = 'm_towers';
     // octagonal corner towers with chhatris
     for (const [tx, tz] of [[-27.2, 7.6], [27.2, 7.6], [-27.2, -10.6], [27.2, -10.6]]) {
       K.put(R, latheFlat([[1.6, 3], [1.6, 3.6], [1.35, 3.8], [1.25, 15.6], [1.5, 15.8], [1.5, 16.2], [1.3, 16.4]], 8), { pos: [tx, 0, tz] });
       for (const y of [7.0, 11.2]) K.put(MW, latheFlat([[1.27, y], [1.38, y + 0.08], [1.38, y + 0.2], [1.27, y + 0.28]], 8), { pos: [tx, 0, tz] });
-      chhatri(K, tx, 16.4, tz, 1.2, { base: false, mat: R });
+      chhatri(K, tx, 16.4, tz, 1.2, { base: false, mat: R, low: true });
     }
   });
 }
@@ -484,7 +504,9 @@ function merlon(w, h) {
 export function buildTaj(P, M, { lite = false } = {}) {
   if (M) makeTajMaterials(M, lite);
   const K = new Kit(P, lite);
+  K.stats = {}; K.sec = 'plinth';
   plinth(K);
+  K.sec = 'core';
   // the mausoleum's core (hidden behind the facades) and the roof terrace over it
   const oct = (h, c) => new THREE.Shape([[-h + c, -h], [h - c, -h], [h, -h + c], [h, h - c], [h - c, h], [-h + c, h], [-h, h - c], [-h, -h + c]].map(([a, b]) => new THREE.Vector2(a, b)));
   const d = 7.3, core = new THREE.ExtrudeGeometry(oct(HS - d, CH - d * (2 - Math.SQRT2)), { depth: WT - Y0, bevelEnabled: false });
@@ -493,11 +515,15 @@ export function buildTaj(P, M, { lite = false } = {}) {
   const roof = new THREE.ExtrudeGeometry(oct(HS - 0.72, CH - 0.72 * (2 - Math.SQRT2)), { depth: 0.8, bevelEnabled: false });
   roof.rotateX(-Math.PI / 2); roof.translate(0, WT - 0.8, 0);
   K.put(MW, roof);
-  for (let q = 0; q < 4; q++) facade(K, q);
-  domeAndDrum(K);
+  for (let q = 0; q < 4; q++) { K.sec = 'facade' + q; K.cheap = lite && q !== 0; facade(K, q); }
+  K.cheap = false;
+  K.sec = 'dome'; domeAndDrum(K);
+  K.sec = 'chhatris';
   for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) chhatri(K, x * 17.6, WT, z * 17.6, 3.3);
+  K.sec = 'minarets';
   for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) minaret(K, x * 43.5, z * 43.5);
+  K.sec = 'mosques';
   for (const sx of [-1, 1]) mosque(K, sx * 98, -sx * Math.PI / 2);
-  buildTaj.tris = K.tris;
+  buildTaj.tris = K.tris; buildTaj.stats = K.stats;
   return K.tris;
 }

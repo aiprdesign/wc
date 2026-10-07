@@ -208,7 +208,7 @@ function torana(P, q, D, F) {
     }
     // shalabhanjika brackets at the outer corners, front (and back) — leaning out under the overhang
     for (const fz of D.shala) {
-      put(P, STONE, sx * fz > 0 ? F.shalaR : F.shalaL, { x: x + sx * 0.42, y: CAP0 - 0.12, z: fz * 0.16, ry: fz > 0 ? sx * 0.45 : Math.PI - sx * 0.45, rz: -sx * fz * 0.36, s: 1.08 });
+      put(P, STONE, sx * fz > 0 ? F.shalaR : F.shalaL, { x: x + sx * 0.42, y: CAP0 - 0.12, z: fz * 0.16, ry: fz > 0 ? sx * 0.45 : Math.PI - sx * 0.45, rz: -sx * fz * 0.36, s: [1.35, 1.08, 1.35] });
       // and its bracket block on the capital
       P.add(STONE, chamferBox(0.3, 0.16, 0.3, 0.02), x + sx * 0.46, CAP0 - 0.15, fz * 0.16);
     }
@@ -229,7 +229,7 @@ function torana(P, q, D, F) {
     }
     for (const sx of [-1, 1]) {
       const cy = yc + bow(VX) - 0.02;
-      P.add(STONE, new THREE.CylinderGeometry(VRAD, VRAD, AD + 0.02, D.lite ? 14 : 28).rotateX(Math.PI / 2), sx * VX, cy, 0);
+      P.add(STONE, new THREE.CylinderGeometry(VRAD, VRAD, AD + 0.02, D.lite ? 20 : 32).rotateX(Math.PI / 2), sx * VX, cy, 0);
       for (const fz of [1, -1]) put(P, STONE, sx * fz > 0 ? F.spiralR : F.spiralL, { x: sx * VX, y: cy, z: fz * (AD / 2 + 0.01), ry: fz > 0 ? 0 : Math.PI });
     }
   });
