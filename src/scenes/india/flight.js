@@ -20,6 +20,7 @@ import { glowSprite } from '../../lib/materials.js';
 import { Callout } from '../../lib/hud.js';
 import { plume, plumeMat } from './isro-assets.js';
 import * as A from './flight-assets.js';
+import * as X from './flight-allahabad.js';
 
 const V3 = A.V3;
 
@@ -36,6 +37,11 @@ export function create(ctx, segment) {
   scene.fog = new THREE.Fog(0xffffff, 1e5, 2e5);
   const camera = new THREE.PerspectiveCamera(30, ctx.aspect, 0.1, 5000);
   const M = A.flightMaterials();
+  const SM = X.setMaterials();
+  // the 1911 biplane: doped linen that glows between its ribs against the light, varnished spruce, steel wire
+  M.fabric = new THREE.MeshStandardMaterial({ color: '#d4c6a6', map: X.linenSurface(), emissive: '#f0bc72', emissiveMap: X.linenTranslucency(), emissiveIntensity: 0, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
+  M.spruce = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: X.spruceTexture(), roughness: 0.4, metalness: 0, clearcoat: 0.9, clearcoatRoughness: 0.16 });
+  M.steel = new THREE.MeshStandardMaterial({ color: '#c9ccd0', metalness: 1, roughness: 0.2, envMapIntensity: 1.6 });
 
   // ---------------------------------------------------------------- one constant set of lights, re-aimed per shot
   const key = new THREE.DirectionalLight('#ffffff', 3);
@@ -56,9 +62,9 @@ export function create(ctx, segment) {
   const pSky = A.makePaintedSky(); scene.add(pSky);
   const SKU = A.skyUniforms();
   const rSky = A.makeRealSky(SKU); scene.add(rSky);
-  const setSky = (zen, hor, haze, sun, sunDir, { space = 0, cloud = 1, gain = 1 } = {}) => {
+  const setSky = (zen, hor, haze, sun, sunDir, { space = 0, cloud = 1, gain = 1, cum = 0, cumS = 0.62 } = {}) => {
     SKU.uZen.value.set(zen); SKU.uHor.value.set(hor); SKU.uHaze.value.set(haze); SKU.uSunCol.value.set(sun); SKU.uSun.value.copy(sunDir);
-    SKU.uSpace.value = space; SKU.uCloud.value = cloud; SKU.uGain.value = gain;
+    SKU.uSpace.value = space; SKU.uCloud.value = cloud; SKU.uGain.value = gain; SKU.uCum.value = cum; SKU.uCumS.value = cumS;
   };
 
   const worlds = [];
@@ -69,10 +75,19 @@ export function create(ctx, segment) {
   const vim = A.buildVimana(M); w1.add(vim.group);
   vim.group.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // (the heading word must not fall in its shadow)
   const cloudTex = A.paintedCloudAtlas(11);
-  const cardMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, color: new THREE.Color(0.92, 0.9, 0.86) });
+  const cardMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, color: new THREE.Color(0.92, 0.9, 0.86), vertexColors: true });
   const cards = [];
+  const cardGeo = (cell, w) => {
+    const g = A.paintedCloudGeo(cell, w), n = g.attributes.position.count, col = new Float32Array(n * 3);
+    const warm = (R() - 0.5) * 0.1, l = 0.94 + R() * 0.1;
+    for (let i = 0; i < n; i++) { const y = g.attributes.position.getY(i) / w + 0.5; col.set([l * (1 + warm) * (0.94 + 0.06 * y), l * (0.95 + 0.05 * y), l * (1 - warm) * (0.9 + 0.1 * y)], i * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    if (R() < 0.5) g.scale(-1, 1, 1);
+    g.scale(1, 0.82 + R() * 0.3, 1);
+    return g;
+  };
   const addCard = (x, y, z, w, speed) => {
-    const m = new THREE.Mesh(A.paintedCloudGeo(Math.floor(R() * 4), w), cardMat);
+    const m = new THREE.Mesh(cardGeo(Math.floor(R() * 4), w), cardMat);
     m.position.set(x, y, z); m.userData = { x, y, z, speed, bob: R() * TAU }; m.renderOrder = -5 - Math.round(-z); w1.add(m); cards.push(m);
   };
   for (let i = 0; i < 9; i++) addCard(-8 + i * 1.8 + R() * 0.8, -0.9 - R() * 0.9, -2.8 + R() * 5.2, 3.6 + R() * 2.2, 0.25);          // the bed the vimana rides on
@@ -90,7 +105,7 @@ export function create(ctx, segment) {
   const wipeMat = cardMat.clone(); wipeMat.depthTest = false;
   const wipeCards = [];
   for (let row = 0; row < 5; row++) for (let i = 0; i < 5; i++) {
-    const w = 2.6 + R() * 0.6, m = new THREE.Mesh(A.paintedCloudGeo((row + i) % 4, w), wipeMat);
+    const w = 2.6 + R() * 0.6, m = new THREE.Mesh(cardGeo((row + i) % 4, w), wipeMat);
     m.userData = { x: -2.3 + i * 1.15 + (R() - 0.5) * 0.3 + (row % 2) * 0.5, y: [-0.55, 0.2, 0.9, -1.35, 1.6][row], z: -3.0 - row * 0.12 - R() * 0.1, d: (row % 3) * 0.06 + R() * 0.05 };
     m.renderOrder = 900 + row; wipe.add(m); wipeCards.push(m);
   }
@@ -104,45 +119,131 @@ export function create(ctx, segment) {
   const w2 = mk();
   const SUN2 = V3(0.55, 0.3, -0.78).normalize();
   {
-    const gt = A.groundTexture('earth', 7); gt.repeat.set(500, 500);
-    const ground = A.variedGround(3000, 160, gt, '#ffffff', '#a89470', '#7f8a58', 0.02, 5);
-    ground.receiveShadow = true; w2.add(ground);
-    const bank = new THREE.Mesh(new THREE.PlaneGeometry(4000, 16), new THREE.MeshStandardMaterial({ color: '#cdb994', roughness: 0.9 }));
-    bank.rotation.x = -Math.PI / 2; bank.position.set(0, 0.03, -72); w2.add(bank);
-    const river = A.makeWater(SKU, 4000, 1140, { body: '#3a4a3c', silt: '#6f6040', fadeFar: 1300 }); river.position.set(0, 0.06, -80 - 570); w2.add(river);
+    w2.add(X.groundMesh('field', 3600, lite ? 8 : 24));
+    const river = A.makeWater(SKU, 4000, 1140, { body: '#2e4a46', silt: '#6a6248', fadeFar: 1300, glitter: 1 }); river.position.set(0, 0.06, -80 - 570); w2.add(river);
     // the far bank: a low line of trees at Naini, hazed by distance
-    const tg = new THREE.IcosahedronGeometry(1, 1), far = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#4a5a38', roughness: 1 }), 140);
-    const mtx = new THREE.Matrix4();
-    for (let i = 0; i < 140; i++) { const s = 7 + R() * 9; mtx.compose(V3(-1700 + i * 25 + R() * 12, s * 0.5, -1225 - R() * 40), new THREE.Quaternion(), V3(s * 1.4, s * (0.8 + R() * 0.4), s)); far.setMatrixAt(i, mtx); }
+    const tg = new THREE.IcosahedronGeometry(1, 1), far = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1 }), 160);
+    const mtx = new THREE.Matrix4(), fc = new THREE.Color();
+    for (let i = 0; i < 160; i++) { const s = 6 + R() * 10; mtx.compose(V3(-1900 + i * 25 + R() * 14, s * 0.45, -1228 - R() * 60), new THREE.Quaternion(), V3(s * (1.1 + R() * 0.8), s * (0.7 + R() * 0.5), s)); far.setMatrixAt(i, mtx); far.setColorAt(i, fc.set(['#3e5232', '#4a5c36', '#56603a', '#3a4a30'][i % 4])); }
     w2.add(far);
-    const farLand = new THREE.Mesh(new THREE.PlaneGeometry(4000, 400), new THREE.MeshStandardMaterial({ color: '#8a7a58', roughness: 1 }));
-    farLand.rotation.x = -Math.PI / 2; farLand.position.set(0, 0.1, -1420); w2.add(farLand);
   }
-  // exhibition: shamianas, bell tents, two white pavilions, flags, shade trees — along both sides of the open field
+  // ---- the exhibition: Indo-Saracenic halls, a grandstand, striped shamianas, bell tents, bunting, shade trees
+  const occupied = [];   // [x, z, r] — keep trees out of the buildings
   {
-    const roofs = [], vals = [], poles = [], bells = [], walls = [], arches = [], crowns = [], trunks = [];
-    for (const [x, z, w, d, ry] of [[-44, -16, 11, 7, 0.1], [-40, -40, 9, 7, -0.05], [-62, -28, 12, 8, 0.2], [37, -20, 10, 7, -0.1], [52, -42, 12, 8, 0.05], [64, -12, 9, 6, 0.3], [-30, -60, 8, 6, 0], [28, -58, 9, 6, 0]]) {
-      const s = A.shamianaGeo(w, d, 3.2);
-      for (const [list, geo] of [[roofs, s.roof], [vals, s.val], [poles, s.poles]]) list.push(A.bake(geo, [x, 0, z], [0, ry, 0]));
+    const meshOf = (geo, mat, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; w2.add(m); return m; };
+    const place = (geo, p, ry) => A.bake(geo, p, [0, ry, 0]);
+    const stone = [], recess = [], dome = [], gilt = [], flagsA = [], flagsB = [], buntLines = [];
+    for (const [x, z, w, d, h, ry, wings] of [[-50, -64, 30, 12, 8, 0.18, 1], [98, -60, 34, 13, 9, -0.42, 1]]) {
+      const H = X.hallGeo(w, d, h, { wings });
+      stone.push(place(H.stone, [x, 0, z], ry)); recess.push(place(H.recess, [x, 0, z], ry)); dome.push(place(H.dome, [x, 0, z], ry)); gilt.push(place(H.gilt, [x, 0, z], ry));
+      const top = V3(x, H.top, z);
+      flagsA.push(A.bake(X.pennantGeo(3.2, 1.5, x, false), [x, H.top + 0.2, z], [0, 0.5, 0]));
+      // strings of bunting from the finial down to the corner towers
+      for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+        const c = V3(sx * (w / 2 + 0.2), 8 + h - 5, sz * (d / 2 + 0.2)).applyAxisAngle(V3(0, 1, 0), ry).add(V3(x, 0, z)); c.y = 0.88 + h + 2.2 + 3.2;
+        buntLines.push([top.clone().setY(H.top - 1.2), c, 0.9]);
+      }
+      occupied.push([x, z, w * 0.75]);
     }
-    for (let i = 0; i < 16; i++) { const sx = i % 2 ? 1 : -1; bells.push(A.bake(A.bellTentGeo(2 + R() * 0.7, 4.2 + R() * 0.8), [sx * (30 + R() * 55), 0, -4 - R() * 58])); }
-    for (const [x, z, w, d, h, ry] of [[-82, -52, 26, 11, 7, 0.25], [86, -46, 30, 11, 8, -0.3]]) { const p = A.pavilionGeo(w, d, h); walls.push(A.bake(p.wall, [x, 0, z], [0, ry, 0])); arches.push(A.bake(p.arch, [x, 0, z], [0, ry, 0])); }
-    for (const [x, z, h] of [[-50, 4, 9], [-36, 8, 8], [44, 2, 10], [70, -30, 9], [-96, -20, 11], [100, -8, 10], [-24, -70, 7], [22, -70, 8], [-120, -60, 12], [120, -64, 12]]) { const tr = A.treeGeo(Math.floor(R() * 99), h); crowns.push(A.bake(tr.crown, [x, 0, z])); trunks.push(A.bake(tr.trunk, [x, 0, z])); }
-    const add = (geos, mat) => { const m = new THREE.Mesh(A.merge(geos), mat); m.castShadow = true; m.receiveShadow = true; w2.add(m); return m; };
-    add(roofs, M.tentStripe); add(vals, M.tentStripe); add(poles, M.pole); add(bells, M.tent); add(walls, M.plaster); add(arches, M.arch); add(crowns, M.foliage); add(trunks, M.trunk);
-    // pennants on tall poles round the field
-    const fl = [], fp = [];
-    for (let i = 0; i < 14; i++) { const x = (i % 2 ? 1 : -1) * (26 + (i >> 1) * 6), z = -2 - (i >> 1) * 8; fp.push(A.cyl(0.05, 0.06, 8, 5, [x, 4, z])); fl.push(A.bake(A.plate([[0, 0], [1.6, -0.35], [0, -0.7]], 0.01, 0), [x, 7.9, z], [0, 0.4, 0])); }
-    add(fp, M.pole); add(fl, M.flag);
-  }
-  // the crowd: lines along both sides of the field, a knot by the camera, people on the river bank
-  {
-    const spots = [];
-    for (let i = 0; i < 260; i++) { const sx = i % 2 ? 1 : -1; spots.push([sx * (20 + R() * 6), -56 + R() * 58]); }
-    for (let i = 0; i < 60; i++) spots.push([-22 + R() * 44, -64 - R() * 5]);
-    w2.add(A.buildCrowd(M, spots, 4));
+    meshOf(A.merge(stone), SM.stone); meshOf(A.merge(recess), SM.recess, false); meshOf(A.merge(dome), SM.dome); meshOf(A.merge(gilt), SM.gilt);
+    // grandstand on the right, angled toward the field, its tiers full of spectators
+    const GS = X.grandstandGeo(26, 6), gsP = V3(46, 0, -50), gsR = -0.8;
+    meshOf(place(GS.wood, [gsP.x, 0, gsP.z], gsR), SM.timber); meshOf(place(GS.roof, [gsP.x, 0, gsP.z], gsR), SM.stripes[0]);
+    occupied.push([gsP.x, gsP.z, 20]);
+    const gsSpots = [];
+    const RG = rng(77);
+    for (const [y, zz] of GS.seats) for (let x = -12.6; x <= 12.6; x += 0.56) {
+      if (RG() > (lite ? 0.16 : 0.72)) continue;
+      const p = V3(x + (RG() - 0.5) * 0.15, 0, zz - 0.15).applyAxisAngle(V3(0, 1, 0), gsR).add(gsP);
+      gsSpots.push([p.x, p.z, 0.95, true, y]);
+    }
+    for (let i = 0; i < 9; i++) flagsB.push(A.bake(X.pennantGeo(1.6, 0.7, i, true), V3(-12 + i * 3, 6.9, 0.6).applyAxisAngle(V3(0, 1, 0), gsR).add(gsP).toArray(), [0, gsR + 0.4, 0]));
+    // shamianas (four colourways), bell tents
+    const roofs = [[], [], [], []], vals = [[], [], [], []], poles = [], bells = [];
+    [[-44, -16, 11, 7, 0.1], [-40, -40, 9, 7, -0.05], [-62, -28, 12, 8, 0.2], [37, -20, 10, 7, -0.1], [62, -30, 12, 8, 0.05], [64, -12, 9, 6, 0.3], [-30, -54, 8, 6, 0], [-72, -48, 9, 6, 0.4]].forEach(([x, z, w, d, ry], k) => {
+      const sh = A.shamianaGeo(w, d, 3.2);
+      roofs[k % 4].push(A.bake(sh.roof, [x, 0, z], [0, ry, 0])); vals[(k + 1) % 4].push(A.bake(sh.val, [x, 0, z], [0, ry, 0])); poles.push(A.bake(sh.poles, [x, 0, z], [0, ry, 0]));
+      const top = V3(x, 3.2 + 1.6, z);
+      for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) buntLines.push([top, V3(sx * w / 2, 3.65, sz * d / 2).applyAxisAngle(V3(0, 1, 0), ry).add(V3(x, 0, z)), 0.35]);
+      flagsB.push(A.bake(X.pennantGeo(1.1, 0.5, k * 3, true), [x, 4.75, z], [0, 0.4 + k, 0]));
+      occupied.push([x, z, Math.max(w, d) * 0.7]);
+    });
+    for (let k = 0; k < 4; k++) { if (roofs[k].length) meshOf(A.merge(roofs[k]), SM.stripes[k]); if (vals[k].length) meshOf(A.merge(vals[k]), SM.stripes[k]); }
+    meshOf(A.merge(poles), SM.timber);
+    for (let i = 0; i < 16; i++) {
+      const sx = i % 2 ? 1 : -1, x = sx * (32 + R() * 50), z = -4 - R() * 56, r = 2 + R() * 0.7, h = 4.2 + R() * 0.8;
+      if (occupied.some(([ox, oz, or]) => Math.hypot(x - ox, z - oz) < or + 3)) continue;
+      bells.push(A.bake(A.bellTentGeo(r, h), [x, 0, z])); poles.push(A.cyl(0.04, 0.04, 1.2, 4, [x, h + 0.5, z]));
+      flagsA.push(A.bake(X.pennantGeo(0.8, 0.4, i, false), [x, h + 1.05, z], [0, R() * 3, 0]));
+      occupied.push([x, z, r + 1]);
+    }
+    meshOf(A.merge(bells), SM.canvas);
+    // rope barrier and tall bunting poles along both sides of the field
+    const posts = [], ropes = [], bpoles = [];
+    for (const sx of [-1, 1]) {
+      const X0 = sx * 18.6;
+      for (let z = 6; z >= -58; z -= 3) { posts.push(A.cyl(0.05, 0.06, 0.95, 5, [X0, 0.47, z])); if (z > -58) ropes.push(...[0, 1, 2].map((k) => A.rod(V3(X0, 0.88 - 0.1 * Math.sin(Math.PI * k / 3), z - k), V3(X0, 0.88 - 0.1 * Math.sin(Math.PI * (k + 1) / 3), z - k - 1), 0.015, 3))); }
+      let prev = null;
+      for (let z = 6; z >= -58; z -= 8) {
+        const top = V3(sx * 18.9, 7.6, z);
+        bpoles.push(A.cyl(0.06, 0.08, 7.8, 6, [top.x, 3.9, z]), A.bake(new THREE.SphereGeometry(0.1, 6, 4), [top.x, 7.85, z]));
+        flagsA.push(A.bake(X.pennantGeo(1.8, 0.8, z, true), [top.x, 7.8, z], [0, sx > 0 ? Math.PI + 0.3 : 0.3, 0]));
+        if (prev) buntLines.push([prev, top.clone().setY(7.2), 0.75]);
+        prev = top.clone().setY(7.2);
+      }
+    }
+    buntLines.push([V3(-18.9, 7.2, -58), V3(18.9, 7.2, -58), 1.6], [V3(-18.9, 7.2, 6), V3(-30, 6.0, 14), 0.6], [V3(18.9, 7.2, 6), V3(30, 6.0, 14), 0.6]);
+    meshOf(A.merge([...posts, ...bpoles]), SM.timber, false); meshOf(A.merge(ropes), SM.rope, false);
+    meshOf(X.buntingGeo(buntLines, 5), SM.bunting, false); meshOf(X.cordGeo(buntLines), SM.recess, false);
+    meshOf(A.merge(flagsA), M.flag, false);
+    const saffron = new THREE.MeshStandardMaterial({ color: '#e8962a', roughness: 0.8, side: THREE.DoubleSide });
+    meshOf(A.merge(flagsB), saffron, false);
+    // shade trees round the grounds and along the bank (kept clear of the field, the halls and the camera)
+    const crowns = [], trunks = [], RT = rng(404);
+    let placed = 0;
+    for (let tries = 0; tries < 900 && placed < (lite ? 16 : 40); tries++) {
+      const x = -170 + RT() * 340, z = -78 + RT() * 120;
+      if (Math.abs(x) < 33 && z > -70) continue;
+      if (Math.abs(x) < 26) continue;                                  // keep the view down to the river open
+      if (Math.hypot(x + 10, z - 10) < 22) continue;
+      if (occupied.some(([ox, oz, or]) => Math.hypot(x - ox, z - oz) < or + 4)) continue;
+      const h = 8 + RT() * 7, T = X.shadeTree(placed * 13 + 5, h, lite ? 6 : 9);
+      crowns.push(A.bake(T.crown, [x, 0, z], [0, RT() * TAU, 0])); trunks.push(A.bake(T.trunk, [x, 0, z]));
+      occupied.push([x, z, h * 0.35]); placed++;
+    }
+    meshOf(A.merge(crowns), SM.leaf); meshOf(A.merge(trunks), SM.bark);
+    // country boats on the river
+    const hulls = [], sails = [], RB = rng(88);
+    for (let i = 0; i < (lite ? 5 : 10); i++) {
+      const b = X.boatGeos(i + 1, 7 + RB() * 5), p = [-80 + RB() * 340, 0.05, -110 - RB() * 380], ry = RB() * TAU;
+      hulls.push(A.bake(b.hull, p, [0, ry, 0])); if (b.sail) sails.push(A.bake(b.sail, p, [0, ry, 0]));
+    }
+    meshOf(A.merge(hulls), SM.boat, false); if (sails.length) meshOf(A.merge(sails), SM.sail, false);
+    // ---- the crowd: rows along the rope, knots round the shamianas, the grandstand, people on the bank
+    const RC = rng(1911), spots = [...gsSpots];
+    const keep = lite ? 0.2 : 1;
+    for (const sx of [-1, 1]) for (let row = 0; row < 6; row++) {
+      const pr = [0.95, 0.9, 0.78, 0.6, 0.4, 0.22][row] * keep;
+      for (let z = 6; z > -58; z -= 0.52) {
+        const gap = Math.sin(z * 0.21 + sx * 1.7) > 0.86;               // the odd gap in the line
+        if (gap || RC() > pr) continue;
+        spots.push([sx * (19.25 + row * 0.6 + (RC() - 0.5) * 0.3), z + (RC() - 0.5) * 0.3, 1]);
+      }
+    }
+    for (const [x, z, r] of occupied) {
+      if (r > 12 || r < 3) continue;
+      const nn = Math.round(10 * keep);
+      for (let i = 0; i < nn; i++) { const a = RC() * TAU, rr = r * (0.4 + RC() * 0.9); spots.push([x + Math.cos(a) * rr, z + Math.sin(a) * rr, 1]); }
+    }
+    for (let i = 0; i < 90 * keep; i++) spots.push([-26 + RC() * 52, -64 - RC() * 9, 1]);
+    for (let i = 0; i < 70 * keep; i++) { const x = (RC() < 0.5 ? -1 : 1) * (28 + RC() * 40), z = -4 - RC() * 56; spots.push([x, z, 1]); }
+    const facing = (x, z) => (Math.abs(x) < 34 && z > -60 ? (x < 0 ? Math.PI / 2 : -Math.PI / 2) : z < -60 ? Math.PI : Math.atan2(-x, -z - 20));
+    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] !== true), { seed: 4, facing }));
+    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] === true), { seed: 5, facing: () => gsR, parasols: 0 }));
   }
   const som = A.buildSommer(M); w2.add(som.group);
+  som.disc.material = new THREE.MeshBasicMaterial({ map: X.propDiscTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  if (som.prop) som.prop.visible = false;                         // at speed the blades read only as the blurred disc
   const somAt = (t, out) => {
     const tau = t - tA, lift = Math.max(0, tau - 0.32);
     out.set(-16 + 15 * tau + 3 * tau * tau, 2.6 * lift * lift + 1.1 * lift, -4 - 2.2 * tau * tau);
@@ -151,25 +252,28 @@ export function create(ctx, segment) {
 
   // ================================================================ 3 · JUHU, BOMBAY, 15 OCTOBER 1932 (sea toward −Z)
   const w3 = mk();
+  let sandU = null;
   const SUN3 = V3(0.55, 0.62, -0.25).normalize();
   {
-    const st = A.groundTexture('sand', 9); st.repeat.set(400, 400);
-    const sand = A.variedGround(3000, 120, st, '#ffffff', '#b8a07a', '#9a8460', 0.015, 2);
-    sand.receiveShadow = true; w3.add(sand);
-    for (const [z, w, op] of [[-8.5, 3, 0.3], [-11, 2.5, 0.6], [-15.2, 6, 1]]) {
-      const wet = new THREE.Mesh(new THREE.PlaneGeometry(4000, w), new THREE.MeshStandardMaterial({ color: '#7c6748', roughness: 0.3, metalness: 0.05, map: st, envMapIntensity: 1.2, transparent: op < 1, opacity: op, depthWrite: op >= 1 }));
-      wet.rotation.x = -Math.PI / 2; wet.position.set(0, 0.015 + op * 0.01, z); wet.receiveShadow = true; w3.add(wet);
-    }
+    const sand = X.groundMesh('sand', 3600, lite ? 8 : 24); w3.add(sand); sandU = sand.material.userData.U;
     const sea = A.makeWater(SKU, 4000, 2400, { body: '#14485a', silt: '#2f6a68', waveK: 1.6, fadeFar: 1800 }); sea.position.set(0, 0.05, -18 - 1200); w3.add(sea);
     const palms = [], fronds = [];
     for (let i = 0; i < 30; i++) { const p = A.palmGeos(i * 7 + 3, 8 + R() * 5); const x = -150 + i * 10 + R() * 6, z = 24 + R() * 40; palms.push(A.bake(p.trunk, [x, 0, z])); fronds.push(A.bake(p.fronds, [x, 0, z])); }
     const pm = new THREE.Mesh(A.merge(palms), M.trunk), fm = new THREE.Mesh(A.merge(fronds), M.palmFrond);
     for (const m of [pm, fm]) { m.castShadow = true; m.receiveShadow = true; w3.add(m); }
+    // Koli fishing boats drawn up on the sand below the palms, with their masts
+    const RB = rng(1932), bh = [], bs = [];
+    for (let i = 0; i < (lite ? 4 : 8); i++) {
+      const b = X.boatGeos(i + 20, 7 + RB() * 4), p = [-150 + i * 17 + RB() * 8, -0.25, 9 + RB() * 9], ry = Math.PI / 2 + (RB() - 0.5) * 0.6;
+      bh.push(A.bake(b.hull, p, [0, ry, 0.06 * (RB() - 0.5)])); // (sails furled on the beach: hulls and masts only)
+    }
+    for (const [geo, mat] of [[bh, SM.boat], [bs, SM.sail]]) if (geo.length) { const m = new THREE.Mesh(A.merge(geo), mat); m.castShadow = true; m.receiveShadow = true; w3.add(m); }
     const spots = []; for (let i = 0; i < 22; i++) spots.push([10 + R() * 14, 3 + R() * 6]);
-    w3.add(A.buildCrowd(M, spots, 9));
+    for (let i = 0; i < (lite ? 6 : 16); i++) spots.push([-140 + R() * 120, 8 + R() * 10]);
+    w3.add(X.buildCrowd2(SM, spots, { seed: 9, facing: () => Math.PI, parasols: 0.25 }));
   }
   const foam = [];
-  for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(4000, 0.7 + i * 0.3), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.97, 1.0).multiplyScalar(1.1 - i * 0.25), transparent: true, opacity: 0.75 - i * 0.2, depthWrite: false })); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.07, -18.5 - i * 4); w3.add(f); foam.push(f); }
+  for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1.2 + i * 0.5), X.foamMaterial(i === 0 ? 0.9 : 1.0 - i * 0.22)); f.rotation.x = -Math.PI / 2; f.position.set(0, i === 0 ? 0.02 : 0.07, i === 0 ? -16.6 : -18.6 - (i - 1) * 4); w3.add(f); foam.push(f); }
   const puss = A.buildPussMoth(M); w3.add(puss.group);
   const pussAt = (t, out) => { const tau = t - tT; return out.set(-42 + 38 * tau, 1.75 + 3.6 - 1.4 * tau, 0); };
 
@@ -287,22 +391,26 @@ export function create(ctx, segment) {
     somAt(t, somPos); som.group.position.copy(somPos);
     const vx = 15 + 6 * tau, vy = tau > 0.32 ? 5.2 * (tau - 0.32) + 1.1 : 0;
     som.group.rotation.set(0, 0.12 * tau, Math.atan2(vy, vx) * 0.9 + (tau > 0.25 && tau < 0.4 ? 0.02 : 0));
-    som.rotor.rotation.x = -T * 70; som.disc.material.opacity = 0.22;
+    som.rotor.rotation.x = -T * 70; som.disc.rotation.z = -T * 23; som.disc.material.opacity = 0.9;
     const k = ease.inOutSine(sat(tau / (tT - tA)));
     camPos.set(lerp(-13, -3, k), lerp(1.3, 4.8, ease.inQuad(k)), lerp(9, 12, k));
     look.copy(somPos).add(tmp.set(2.6 - 0.6 * k, 2.4 - 0.6 * k, 0));
     camera.position.copy(camPos); camera.lookAt(look);
     camera.fov = 32;
     rSky.visible = true;
-    setSky('#3466ae', '#cdbb9c', '#d8c6a8', '#ffcf90', SUN2, { cloud: 1, gain: 0.95 });
-    setKey(SUN2, '#ffdcac', 3.6, somPos, 14, 120);
-    setRim(V3(-0.6, 0.4, 0.7).normalize(), '#9ab8e0', 0.6, somPos);
-    setHemi('#b8c8e0', '#6a5640', 0.7);
-    setFog('#d8c4a4', 150, 2600);
-    scene.environmentIntensity = 0.7;
+    // a clear, warm February morning: deep blue overhead, pale gold-blue at the horizon, fair-weather cumulus
+    setSky('#2878c0', '#b0d0e4', '#dedcd2', '#fff0e2', SUN2, { cloud: 0.5, gain: 0.94, cum: 0.6 });
+    setKey(SUN2, '#ffe0b4', 3.9, somPos, 14, 120);
+    setRim(V3(-0.6, 0.4, 0.7).normalize(), '#9ab8e0', 0.7, somPos);
+    setHemi('#a6c0e4', '#6e5c3e', 0.72);
+    setFog('#c3d0dc', 420, 5200);
+    scene.environmentIntensity = 0.75;
+    // the linen glows between its ribs when the camera looks toward the sun through the wings
+    tmp.copy(look).sub(camPos).normalize();
+    M.fabric.emissiveIntensity = 0.05 + 0.3 * Math.pow(sat(tmp.dot(SUN2) * 0.9 + 0.25), 1.5);
     pin(callSom, tmp.copy(somPos).add(tmp2.set(0.6, 3.2, 0)), ramp(t, tA + 0.62, tA + 0.85), envelope(t, tA + 0.6, tT - 0.06, 0.04, 0.1));
     pin(callNaini, tmp.set(160, 10, -1220), ramp(t, tA + 0.75, tA + 1.0), envelope(t, tA + 0.73, tT - 0.03, 0.04, 0.06));
-    return ret(camPos.distanceTo(somPos), 0, 1.08);
+    return ret(camPos.distanceTo(somPos), 0, 1.02, 0.45);
   }
 
   function shotJuhu(t, T) {
@@ -318,9 +426,11 @@ export function create(ctx, segment) {
     camPos.x += Math.sin(T * 61) * sh; camPos.y += Math.sin(T * 47 + 1) * sh;
     camera.position.copy(camPos); camera.lookAt(look);
     camera.fov = 34;
-    for (let i = 0; i < foam.length; i++) foam[i].position.z = -18.5 - i * 4 + Math.sin(T * 0.9 + i * 1.3) * 0.6;
+    const tide = Math.sin(T * 0.9) * 0.6;
+    for (let i = 0; i < foam.length; i++) { foam[i].position.z = (i === 0 ? -16.6 + tide : -18.6 - (i - 1) * 4 + Math.sin(T * 0.9 + i * 1.3) * 0.6); foam[i].material.uniforms.uTime.value = T; }
+    sandU.uTide.value = tide;
     rSky.visible = true;
-    setSky('#2a6aac', '#9cc0e0', '#b9d0e0', '#fff0d8', SUN3, { cloud: 0.8, gain: 0.95 });
+    setSky('#1c70b8', '#a2cce6', '#c8d8e4', '#fff0d8', SUN3, { cloud: 0.8, gain: 0.97, cum: 0.72, cumS: 0.4 });
     setKey(SUN3, '#fff4e2', 3.0, pussPos, 12, 120);
     setRim(V3(-0.7, 0.4, 0.3).normalize(), '#bcd8f0', 1.2, pussPos);
     setHemi('#bcd4ee', '#a08a68', 0.8);
@@ -341,7 +451,7 @@ export function create(ctx, segment) {
       deck.S[i] = c.s; deck.A[i] = c.a; deck.Rot[i] = c.rot + t * 0.05;
       tmp.set(x - camPos.x, c.y - camPos.y, c.z - camPos.z).normalize();
       const fwd = Math.pow(Math.max(0, tmp.dot(SUN)), 12) * 0.8, lit = c.top * c.top, dark = 1 - 0.55 * space;
-      deck.C[i * 3] = (0.2 + lit * 0.8 + fwd * 1.1) * dark; deck.C[i * 3 + 1] = (0.25 + lit * 0.74 + fwd * 0.9) * dark; deck.C[i * 3 + 2] = (0.34 + lit * 0.68 + fwd * 0.62) * dark;
+      deck.C[i * 3] = (0.3 + lit * 0.72 + fwd * 1.1) * dark; deck.C[i * 3 + 1] = (0.34 + lit * 0.67 + fwd * 0.9) * dark; deck.C[i * 3 + 2] = (0.43 + lit * 0.6 + fwd * 0.62) * dark;
     }
   }
 
@@ -475,6 +585,8 @@ export function create(ctx, segment) {
 
       api.exposure = r.exposure * (1 + 0.1 * envelope(t, tT - 0.05, tT + 0.12, 0.04, 0.1) + 0.12 * envelope(t, tM - 0.04, tM + 0.08, 0.03, 0.06) + 0.12 * envelope(t, tJ - 0.04, tJ + 0.08, 0.03, 0.06));
       api.bloom.strength = r.bloom;
+      // the real-sky shots keep a little more of their true blue through the grade's colour harmony
+      api.harmony = shot === 1 || shot === 2 ? 0.6 : 1;
       api.dof.focus = r.focus; api.dof.range = 4; api.dof.amount = r.amt;
 
       // ---- captions

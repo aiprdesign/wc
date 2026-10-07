@@ -197,14 +197,17 @@ void main(){
   gl_FragColor = vec4(vColor * t.rgb, a);
 }`;
 export function puffTexture(seed = 1) {
-  const S = 128, c = mkCanvas(S), g = c.getContext('2d');
+  const S = 192, c = mkCanvas(S), g = c.getContext('2d');
   const img = g.createImageData(S, S), d = img.data;
+  const R = rng(seed * 13 + 1), lobes = [];
+  for (let k = 0; k < 7; k++) { const a = R() * TAU, rr = R() * 0.22; lobes.push([Math.cos(a) * rr, Math.sin(a) * rr * 0.8 - 0.04, 0.16 + R() * 0.14]); }
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
     const u = x / S - 0.5, v = y / S - 0.5, r = Math.hypot(u, v) * 2;
-    const n = fbm2(u * 4 + seed * 7.1, v * 4 - seed * 3.3, 5) * 0.5 + 0.5;
-    const a = sat((1 - r) * 1.4 + (n - 0.55) * 1.6) * smoothstep(1.0, 0.7, r);
+    const n = fbm2(u * 4 + seed * 7.1, v * 4 - seed * 3.3, 5) * 0.5 + 0.5, nf = fbm2(u * 11 - seed, v * 11 + seed * 2.1, 3) * 0.5 + 0.5;
+    let lob = 0; for (const [lx, ly, lr] of lobes) lob = Math.max(lob, 1 - Math.hypot(u - lx, v - ly) / lr);
+    const a = sat((1 - r) * 1.2 + (n - 0.55) * 1.4 + lob * 0.9 + (nf - 0.5) * 0.5) * smoothstep(1.0, 0.7, r);
     const i = (y * S + x) * 4;
-    const shade = 0.75 + 0.25 * (0.5 - v) + (n - 0.5) * 0.3;
+    const shade = 0.7 + 0.3 * (0.5 - v) + (n - 0.5) * 0.25 + lob * 0.12 + (nf - 0.5) * 0.18;
     d[i] = d[i + 1] = d[i + 2] = Math.round(sat(shade) * 255); d[i + 3] = Math.round(Math.pow(a, 1.3) * 255);
   }
   g.putImageData(img, 0, 0);
@@ -237,7 +240,9 @@ export class SoftPoints extends THREE.Points {
 // ------------------------------------------------------------------ the real sky (shared by the dome and the water)
 const SKY_FN = /* glsl */ `
 uniform vec3 uSun, uZen, uHor, uHaze, uSunCol;
-uniform float uSpace, uCloud, uTime, uGain;
+uniform float uSpace, uCloud, uTime, uGain, uCum, uCumS;
+// fair-weather cumulus on a plane overhead: billowed density, lit toward the sun by a one-tap self-shadow
+float cumN(vec2 q){ return snoise(vec3(q * 0.9, 11.0)) * 0.55 + snoise(vec3(q * 2.1, 13.0)) * 0.27 + snoise(vec3(q * 4.7, 17.0)) * 0.13 + snoise(vec3(q * 10.3, 19.0)) * 0.05; }
 vec3 skyCol(vec3 d){
   vec3 L = normalize(uSun);
   float e = d.y;
@@ -260,13 +265,30 @@ vec3 skyCol(vec3 d){
     c = mix(c, cc, cov * 0.85);
   }
   c += uSunCol * pow(s, 1800.0) * 30.0;
+  if (uCum > 0.0 && e > 0.004) {
+    vec2 q = d.xz / (e + 0.035) * uCumS + vec2(uTime * 0.03, 0.0) + vec2(3.0, 1.0);
+    float n = cumN(q), thr = 0.5 - 0.32 * uCum;
+    float dens = smoothstep(thr, thr + 0.28, n);
+    if (dens > 0.0) {
+      vec2 ls = normalize(L.xz + 1e-5) * 0.22;
+      float n2 = cumN(q + ls);
+      float lit = clamp(0.62 + (n - n2) * 2.4, 0.0, 1.0);
+      float core = smoothstep(thr + 0.15, thr + 0.6, n);
+      vec3 shadeC = mix(uZen, vec3(0.62, 0.66, 0.74), 0.7) * 0.85;
+      vec3 litC = vec3(0.9, 0.89, 0.86) + uSunCol * 0.14;
+      vec3 cc = mix(shadeC, litC, lit * (1.0 - 0.35 * core));
+      cc += uSunCol * pow(s, 10.0) * (1.0 - core) * 0.9;                  // silver lining toward the sun
+      cc = mix(cc, uHaze * 1.05, exp(-e * 9.0) * 0.75);                     // distant clouds sink into the haze
+      c = mix(c, cc, dens * smoothstep(0.004, 0.06, e) * (1.0 - 0.6 * uSpace));
+    }
+  }
   return c * uGain;
 }`;
 export function skyUniforms() {
   return {
     uSun: { value: V3(0.3, 0.4, -0.8).normalize() }, uZen: { value: new THREE.Color() }, uHor: { value: new THREE.Color() },
     uHaze: { value: new THREE.Color() }, uSunCol: { value: new THREE.Color() }, uSpace: { value: 0 }, uCloud: { value: 1 },
-    uTime: { value: 0 }, uGain: { value: 1 },
+    uTime: { value: 0 }, uGain: { value: 1 }, uCum: { value: 0 }, uCumS: { value: 0.62 },
   };
 }
 export function makeRealSky(u) {
@@ -281,12 +303,12 @@ export function makeRealSky(u) {
   return mesh;
 }
 // river / sea: a wavy mirror of the same sky, silt or blue water underneath, hazed with distance
-export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK = 1, fadeFar = 900 } = {}) {
-  const uu = { ...u, uBody: { value: new THREE.Color(body) }, uSilt: { value: new THREE.Color(silt) }, uWave: { value: waveK }, uFar: { value: fadeFar } };
+export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK = 1, fadeFar = 900, glitter = 1 } = {}) {
+  const uu = { ...u, uBody: { value: new THREE.Color(body) }, uSilt: { value: new THREE.Color(silt) }, uWave: { value: waveK }, uFar: { value: fadeFar }, uGlit: { value: glitter } };
   const m = new THREE.ShaderMaterial({
     uniforms: uu, fog: false,
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `${GLSL_NOISE}\n${SKY_FN}\nuniform vec3 uBody, uSilt; uniform float uWave, uFar; varying vec3 vW;
+    fragmentShader: `${GLSL_NOISE}\n${SKY_FN}\nuniform vec3 uBody, uSilt; uniform float uWave, uFar, uGlit; varying vec3 vW;
       void main(){
         vec3 v = vW - cameraPosition; float dist = length(v); vec3 d = v / dist;
         vec2 p = vW.xz;
@@ -299,6 +321,12 @@ export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK =
         float silt = smoothstep(-0.3, 0.6, snoise(vec3(p * 0.004, 3.0)));
         vec3 bodyC = mix(uBody, uSilt, silt) * (0.5 + 0.5 * max(dot(vec3(0.0, 1.0, 0.0), normalize(uSun)), 0.0)) * uGain;
         vec3 col = mix(bodyC, skyCol(r), fr);
+        // sun glitter: facets of the small chop catch the sun (a sparkling path toward it)
+        vec2 g2 = vec2(snoise(vec3(p * 1.3 + vec2(uTime * 0.9, 0.0), 11.0)), snoise(vec3(p * 1.5 - vec2(0.0, uTime * 0.8), 13.0)));
+        g2 += 0.6 * vec2(snoise(vec3(p * 4.1, uTime * 2.0)), snoise(vec3(p * 3.7, uTime * 2.0 + 5.0)));
+        vec3 n2 = normalize(vec3(g2.x * 0.2, 1.0, g2.y * 0.2));
+        float gl = pow(max(dot(reflect(d, n2), normalize(uSun)), 0.0), 700.0);
+        col += uSunCol * gl * 26.0 * uGlit * uGain * exp(-dist * 0.0012);
         col = mix(col, skyCol(vec3(d.x, 0.003, d.z)), smoothstep(uFar * 0.25, uFar, dist));
         gl_FragColor = vec4(col, 1.0);
       }`,
@@ -321,17 +349,23 @@ export function makePaintedSky() {
         vec3 parch = vec3(0.80, 0.62, 0.36), warm = vec3(0.86, 0.52, 0.22), lapis = vec3(0.02, 0.07, 0.36);
         float wob = 0.035 * snoise(vec3(d.x * 3.0, d.z * 3.0, 1.0)) + 0.012 * snoise(vec3(d.xz * 14.0, 2.0));
         // a band of lapis across the top of the page, parchment-gold below, warm glow toward the painted sun
-        float band = smoothstep(0.40, 0.45, e + wob * 0.5);
+        float band = smoothstep(0.30, 0.34, e + wob * 0.22);
         vec3 c = mix(parch, warm, smoothstep(0.25, -0.05, e) * 0.35);
         float s = max(dot(d, normalize(uSun)), 0.0);
         c += vec3(0.9, 0.55, 0.15) * pow(s, 5.0) * 0.5;
         // thin gold horizontal streaks (the gold-washed skies of the miniatures)
         float st = snoise(vec3(d.x * 2.0, e * 46.0, d.z * 2.0));
-        c = mix(c, vec3(1.15, 0.78, 0.3), smoothstep(0.55, 0.75, st) * smoothstep(0.32, 0.12, e) * 0.35);
+        c = mix(c, vec3(1.15, 0.78, 0.3), smoothstep(0.5, 0.75, st) * smoothstep(0.3, 0.08, e) * 0.45);
+        // the painter's washes: broad, uneven layers of colour, warmer and cooler, with a pale glow low down
+        float wash = snoise(vec3(d.x * 4.0, e * 9.0, d.z * 4.0)) * 0.6 + snoise(vec3(d * 11.0 + 5.0)) * 0.4;
+        c *= 0.9 + 0.12 * wash;
+        c = mix(c, vec3(0.93, 0.8, 0.58), smoothstep(0.12, -0.05, e) * 0.35);
+        c = mix(c, c * vec3(0.9, 0.96, 1.05), smoothstep(0.1, 0.3, e) * 0.4);
         vec3 top = lapis * (0.8 + 0.4 * snoise(vec3(d.xz * 5.0, 7.0)));
         top += vec3(0.9, 0.62, 0.2) * smoothstep(0.97, 1.0, snoise(vec3(d * 40.0))) * 1.5;   // gold-leaf stars
         c = mix(c, top, band);
-        c = mix(c, vec3(1.2, 0.85, 0.35), (1.0 - smoothstep(0.0, 0.006, abs(e + wob * 0.5 - 0.425))) * 0.9);   // the gold rule along the band
+        c = mix(c, vec3(1.2, 0.85, 0.35), (1.0 - smoothstep(0.0, 0.006, abs(e + wob * 0.22 - 0.32))) * 0.9);   // the gold rule along the band
+        c = mix(c, vec3(0.35, 0.18, 0.06), (1.0 - smoothstep(0.0, 0.0025, abs(e + wob * 0.22 - 0.311))) * 0.6);  // its ink edge
         // paper grain and age
         float gr = snoise(vec3(d * 380.0)) * 0.5 + snoise(vec3(d * 90.0)) * 0.5;
         c *= 0.93 + 0.07 * gr;
@@ -768,9 +802,11 @@ export function buildSommer(M) {
   for (const s of [1, -1]) wood.push(rod(V3(EX + 0.6, YL, s * 0.35), V3(EX + 0.05, EYc, s * 0.12), 0.025, 5), rod(V3(EX + 0.6, YU, s * 0.35), V3(EX + 0.05, EYc, s * 0.12), 0.025, 5));
   eng.push(cyl(0.06, 0.06, 0.5, 10, [EX + 0.25, EYc, 0], [0, 0, Math.PI / 2]));
   add(g, wood, M.spruce); add(g, fab, M.fabric); add(g, brass, M.brass); add(g, rub, M.rubber); add(g, bag, M.canvasBag); add(g, dark, M.darkMetal); add(g, cloth, M.cloth); add(g, skin, M.skin); add(g, leather, M.leather); add(g, eng, M.engine);
-  const wireGeo = new THREE.BufferGeometry().setFromPoints(wires); const wl = new THREE.LineSegments(wireGeo, M.wire); g.add(wl);
+  if (M.steel) { const wr = []; for (let i = 0; i < wires.length; i += 2) wr.push(rod(wires[i], wires[i + 1], 0.0065, 4)); add(g, wr, M.steel); }
+  else { const wireGeo = new THREE.BufferGeometry().setFromPoints(wires); const wl = new THREE.LineSegments(wireGeo, M.wire); g.add(wl); }
   // rotary engine + pusher propeller (turn together about X)
   const rot = new THREE.Group(); rot.position.set(EX, EYc, 0); g.add(rot);
+  let propMesh = null;
   {
     const re = [], rf = [];
     re.push(cyl(0.17, 0.17, 0.18, 20, [0, 0, 0], [0, 0, Math.PI / 2]));
@@ -784,13 +820,13 @@ export function buildSommer(M) {
     const pr = [];
     for (const s of [0, Math.PI]) pr.push(bake(bladeGeo(1.25, 0.2, 0.12, 0.5, 0.04), [-0.22, 0, 0], [s, 0, 0]));
     pr.push(cyl(0.08, 0.08, 0.12, 12, [-0.22, 0, 0], [0, 0, Math.PI / 2]));
-    rot.add(new THREE.Mesh(merge(pr), M.prop));
+    propMesh = new THREE.Mesh(merge(pr), M.prop); rot.add(propMesh);
   }
   const disc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5a3a20').multiplyScalar(0.5), transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
   disc.position.set(EX - 0.22, EYc, 0); disc.rotation.y = Math.PI / 2; g.add(disc);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   disc.castShadow = false;
-  return { group: g, rotor: rot, disc, bags: V3(0.45, YL + 0.3, 0.48) };
+  return { group: g, rotor: rot, disc, prop: propMesh, bags: V3(0.45, YL + 0.3, 0.48) };
 }
 function add(g, geos, mat) { if (!geos.length) return null; const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; }
 
