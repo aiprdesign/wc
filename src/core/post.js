@@ -373,7 +373,9 @@ export const FinalShader = {
       return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); }
     vec3 hsv2rgb(vec3 c){ vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0); vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); }
     float hueD(float a, float b){ float d = abs(a - b); return min(d, 1.0 - d); }
-    float hueToward(float h, float target, float k){ float d = target - h; d -= floor(d + 0.5); return fract(h + d * k); }
+    // (the pull fades out for hues far round the wheel: near the opposite hue the signed distance wraps from
+    // +0.5 to −0.5, so a full-strength pull there split a blue sky into a hard teal / purple band)
+    float hueStep(float h, float target){ float d = target - h; d -= floor(d + 0.5); return d * (1.0 - smoothstep(0.3, 0.48, abs(d))); }
     vec3 harmony(vec3 col, float w){
       const float ACCENT = 0.118, BRONZE = 0.075, STEEL = 0.585;
       vec3 hsv = rgb2hsv(col);
@@ -384,8 +386,12 @@ export const FinalShader = {
       float kAcc = 1.0 - smoothstep(0.035, 0.09, hueD(hsv.x, ACCENT));
       float keep = max(kSec, kAcc);
       float sec = warm > 0.5 ? BRONZE : STEEL;
-      float target = hueD(hsv.x, ACCENT) < hueD(hsv.x, sec) ? ACCENT : sec;
-      hsv.x = hueToward(hsv.x, target, 0.45 * (1.0 - keep));
+      // pulled toward both targets, weighted by nearness (a hard choice of the nearer one drew a seam where
+      // the two are equally far, e.g. across a sky or a lawn)
+      float dA = hueD(hsv.x, ACCENT), dS = hueD(hsv.x, sec);
+      float wA = 1.0 / (dA * dA + 1e-3), wS = 1.0 / (dS * dS + 1e-3);
+      float shift = (wA * hueStep(hsv.x, ACCENT) + wS * hueStep(hsv.x, sec)) / (wA + wS);
+      hsv.x = fract(hsv.x + shift * 0.45 * (1.0 - keep));
       hsv.y *= mix(0.32, 1.0, keep);                                // off-palette hues recede
       hsv.y *= mix(0.45, 1.0, smoothstep(0.04, 0.3, hsv.z));        // dominant: neutral charcoal darks
       hsv.y = min(1.0, hsv.y * (1.0 + 0.18 * kAcc));                // the accent carries the colour
