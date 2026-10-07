@@ -129,7 +129,7 @@ export function create(ctx, segment) {
     // grass tufts and shrubs (instanced), kept off the launcher, the bicycle and the camera's ground
     const clear1 = (x, z, r0) => Math.hypot(x, z) > r0 && Math.hypot(x + 3.4, z - 3.2) > 1.2 && Math.hypot(x + 8.3, z - 16.4) > 9;
     const tuft = A.grassTuftGeometry(3, 7);
-    w1.add(scatter(tuft, vegM, lite ? 1600 : 4200, (r) => { const x = (r() - 0.5) * 150, z = -35 + Math.pow(r(), 1.3) * 95; if (!clear1(x, z, 3.2) || fbm2(x * 0.035 + 4, z * 0.035, 3) < -0.25) return null; return [x, z, 0.35 + r() * 0.45, r() * TAU]; }, { seed: 11, shadow: false, tintK: 0.3 }));
+    w1.add(scatter(tuft, vegM, lite ? 1000 : 4200, (r) => { const x = (r() - 0.5) * 150, z = -35 + Math.pow(r(), 1.3) * 95; if (!clear1(x, z, 3.2) || fbm2(x * 0.035 + 4, z * 0.035, 3) < -0.25) return null; return [x, z, 0.35 + r() * 0.45, r() * TAU]; }, { seed: 11, shadow: false, tintK: 0.3 }));
     const shrub = A.shrubGeometry(5, lite ? 1 : 2);
     w1.add(scatter(shrub, vegM, lite ? 90 : 240, (r) => { const x = (r() - 0.5) * 200, z = -33 + Math.pow(r(), 1.2) * 120; if (!clear1(x, z, 7) || Math.hypot(x + 8.3, z - 16.4) < 16) return null; return [x, z, 0.3 + Math.pow(r(), 2) * 0.8, r() * TAU, 0.7 + r() * 0.5]; }, { seed: 12, tintK: 0.25 }));
   }
