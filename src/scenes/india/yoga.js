@@ -28,6 +28,7 @@ import { progressLine, segmentsLine, circlePoints } from '../../lib/lines.js';
 import { Callout } from '../../lib/hud.js';
 import { glowSprite } from '../../lib/materials.js';
 import * as AS from './yoga-assets.js';
+import * as NK from './nature-kit.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffcf85', IVORY = '#ffe9c8', AIR = '#bfe6ff', WARM = '#ffb866';
@@ -174,12 +175,12 @@ export function create(ctx, segment) {
   sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
 
   // ---------------------------------------------------------------- the river
-  const waterU = { ...skyU, uFogCol: { value: new THREE.Color() }, uFogD: { value: 0.004 }, uGlitter: { value: 0 }, uWave: { value: 0 }, uWaveR: { value: 0 } };
+  const waterU = { ...skyU, uFogCol: { value: new THREE.Color() }, uFogD: { value: 0.004 }, uGlitter: { value: 0 }, uWave: { value: 0 }, uWaveR: { value: 0 }, uBankCol: { value: new THREE.Color(0.03, 0.05, 0.03) }, uBodyK: { value: 0 } };
   const water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400, 1, 1), new THREE.ShaderMaterial({
     uniforms: waterU, fog: false,
     vertexShader: /* glsl */ `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: /* glsl */ `${GLSL_NOISE}\n${SKY_GLSL}
-      uniform vec3 uFogCol; uniform float uFogD, uGlitter, uTime, uWave, uWaveR; varying vec3 vW;
+      uniform vec3 uFogCol, uBankCol; uniform float uFogD, uGlitter, uTime, uWave, uWaveR, uBodyK; varying vec3 vW;
       float rip(vec2 p){ return snoise(vec3(p * vec2(0.9, 2.6), uTime * 0.35)) * 0.45 + snoise(vec3(p * vec2(2.6, 6.0) + 7.0, uTime * 0.6)) * 0.3 + snoise(vec3(p * vec2(7.0, 12.0), uTime)) * 0.15; }
       void main(){
         vec3 V = normalize(vW - cameraPosition);
@@ -192,8 +193,17 @@ export function create(ctx, segment) {
         vec3 N = normalize(vec3(-(nx - n0) / e * amp, 1.0, -(nz - n0) / e * amp));
         vec3 R = reflect(V, N); R.y = abs(R.y) + 0.002;
         vec3 refl = skyCol(normalize(R));
+        // the far bank's tree line, mirrored: a dark green band just under the horizon, broken where the
+        // low sandbank faces the sunrise
+        { vec3 Rn = normalize(R); float az = atan(Rn.x, -Rn.z);
+          float gap = smoothstep(0.17, 0.3, abs(az + 0.105));
+          float bh = (0.004 + gap * (0.022 + 0.012 * snoise(vec3(az * 30.0, 1.0, 0.0)) + 0.006 * snoise(vec3(az * 90.0, 3.0, 0.0))));
+          refl = mix(refl, uBankCol, (1.0 - smoothstep(bh * 0.7, bh, Rn.y)) * 0.85); }
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(-V, N), 0.0), 5.0);
-        vec3 col = mix(vec3(0.02, 0.026, 0.022), refl, fres);
+        // the Ganga's body: blue-green, catching the dawn light where the water is seen from above
+        vec3 body = vec3(0.03, 0.085, 0.08) * (0.75 + 0.5 * uBodyK) + vec3(0.04, 0.06, 0.03) * uGlitter * 0.25;
+        body *= 0.85 + 0.3 * snoise(vec3(vW.xz * 0.05, 4.0));
+        vec3 col = mix(body, refl, fres);
         float s = max(dot(normalize(R), uSunDir), 0.0);
         float pw = mix(1400.0, 60.0, clamp(dist / 160.0, 0.0, 1.0));
         col += uSunCol * (pow(s, pw) * 26.0 + pow(s, 40.0) * 0.28) * uGlitter;
@@ -219,6 +229,29 @@ export function create(ctx, segment) {
     const bank = new THREE.Mesh(g, bankMat); bank.userData.bankMat = bankMat; scene.add(bank);
     var bankM = bankMat;   // eslint-disable-line no-var
   }
+
+  // trees on the far bank (beyond the sandbank that faces the sunrise) and on the terrace above the ghats:
+  // peepal, neem, mango, banyan and a few palms, lit through by the low sun (nature-kit); the far ones take a
+  // scene-controlled haze instead of the dense dawn fog, so the tree line reads as the mist allows
+  const leafSun = { dir: new THREE.Vector3(0, 0.05, -1), color: new THREE.Color(1.6, 0.9, 0.45) };
+  const bankHaze = { color: new THREE.Color(), k: { value: 0.4 } };
+  const farTrees = (() => {
+    const items = [], r = rng(77);
+    for (let i = 0; i < (lite ? 150 : 300); i++) {
+      const a = (r() - 0.5) * 2.3;
+      if (Math.abs(a + 0.105) < 0.2 + 0.08 * r()) continue;             // the low sandbank under the sun
+      const d = 505 + r() * 40, x = Math.sin(a) * d, z = -Math.cos(a) * d + 40, q = r();
+      const kind = q < 0.3 ? 'peepal' : q < 0.55 ? 'neem' : q < 0.75 ? 'mango' : q < 0.88 ? 'banyan' : 'palm';
+      items.push({ kind, x, y: -0.6, z, s: 1.3 + r() * 0.7, lite: true, tint: 0.85 + r() * 0.3 });
+    }
+    return NK.plantForest(items, { sun: leafSun, lite: true, variants: 2, seed: 21, wind: 0.4, haze: bankHaze, castShadow: false, receiveShadow: false });
+  })();
+  scene.add(farTrees.group);
+  const ghatTrees = NK.plantForest([
+    { kind: 'peepal', x: -8.5, y: AS.GHAT.terraceY - 0.1, z: 12.6, s: 0.85 }, { kind: 'neem', x: 12.5, y: AS.GHAT.terraceY - 0.1, z: 12.2, s: 0.8 },
+    { kind: 'banyan', x: -27, y: AS.GHAT.terraceY - 0.1, z: 12.0, s: 0.75 }, { kind: 'peepal', x: 30, y: AS.GHAT.terraceY - 0.1, z: 12.4, s: 0.8 },
+  ], { sun: leafSun, lite, variants: 2, seed: 3, wind: 0.6 });
+  scene.add(ghatTrees.group);
 
   // ---------------------------------------------------------------- the ghats
   const stoneTex = AS.stoneTexture(5);
@@ -579,6 +612,10 @@ export function create(ctx, segment) {
       waterU.uGlitter.value = 0.2 + 0.6 * crest + flash * 0.5;
       const wv = t - tEx; waterU.uWave.value = wv > 0 ? Math.exp(-wv * 2.6) * sat(wv * 8) : 0; waterU.uWaveR.value = 0.9 + Math.max(0, wv) * 3.2;
       bankM.color.setRGB(0.15, 0.1, 0.1).lerp(scene.fog.color, 0.35 + 0.5 * mist);
+      bankHaze.color.copy(skyU.uHor.value).multiplyScalar(0.55).lerp(scene.fog.color, mist); bankHaze.k.value = 0.3 + 0.6 * mist;
+      waterU.uBankCol.value.setRGB(0.025, 0.05, 0.03).lerp(bankHaze.color, bankHaze.k.value * 0.8); waterU.uBodyK.value = dawn;
+      leafSun.dir.copy(sunDir); leafSun.color.copy(skyU.uSunCol.value).multiplyScalar(1.2 + 1.6 * crest);
+      farTrees.update(t); ghatTrees.update(t);
       mistU.uTime.value = t; mistU.uCol.value.copy(skyU.uHor.value).multiplyScalar(0.7).lerp(scene.fog.color, mist); mistU.uOp.value = 0.3 + 0.5 * mist;
       key.position.copy(S_BASE).addScaledVector(sunDir, 40); key.position.y = Math.max(key.position.y, 2.5);
       key.target.position.set(0, 0.8, -1);
