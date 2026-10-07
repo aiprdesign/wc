@@ -67,8 +67,8 @@ function vimana(F) {
     const s = 13.9 - 0.7 * i, b = Math.max(1.5, s * 0.3), pr = 0.6;
     const T = stepped(s, s, [[0, b, pr]]);
     F.add('recess', ring(T, [[0, 0], [0, 1.85]]), 0, y, 0);
-    prastara(F.sub(0, y + 1.85, 0), T, 1.15, { kudu: lite ? 0 : (i < 7 ? 2.3 : 2.8), kuduR: 0.24, over: 0.42, edgeMin: 1.2 });
-    if (i < NT - 1) hara(F.sub(0, y + TIER_H, 0), s, s, { w: 1.95 - 0.03 * i, bh: { L: b, p: pr } });
+    prastara(F.sub(0, y + 1.85, 0), T, 1.15, { kudu: lite ? 0 : (i < 7 ? 2.3 : 2.8), kuduR: 0.24, over: 0.42, edgeMin: 1.2, mini: true });
+    if (i < NT - 1) hara(F.coarse(i >= 8).sub(0, y + TIER_H, 0), s, s, { w: 1.95 - 0.03 * i, bh: { L: b, p: pr } });
     y += TIER_H;
   }
   // the platform with its four pairs of Nandis
@@ -76,8 +76,8 @@ function vimana(F) {
   F.add('stone', ring(rect(6.1), [[0, 0], [0.22, 0.1], [0.22, 0.48], [0, 0.6]]), 0, yt, 0);
   F.add('stone', cap(rect(6.1), yt + 0.6));
   for (const [cx, cz] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) {
-    nandi(F.sub(cx * 5.15, yt + 0.6, cz * 3.55, cz > 0 ? 0 : PI), 'stone', 0.82);
-    nandi(F.sub(cx * 3.55, yt + 0.6, cz * 5.15, cx > 0 ? PI / 2 : -PI / 2), 'stone', 0.82);
+    nandi(F.coarse().sub(cx * 5.15, yt + 0.6, cz * 3.55, cz > 0 ? 0 : PI), 'stone', 0.82);
+    nandi(F.coarse().sub(cx * 3.55, yt + 0.6, cz * 5.15, cx > 0 ? PI / 2 : -PI / 2), 'stone', 0.82);
   }
   // the griva: octagonal neck with mouldings, niches and figures on the eight faces
   const yg = yt + 0.6;
@@ -152,7 +152,7 @@ function cloister(F) {
   F.box('stone', x0, x1, 0, 1.0, z0, z1 + 0.6);                    // plinth
   F.box('recess', x0, x1, 1.0, 6.0, z0, z0 + 1.2);                 // back wall
   F.box('shade', x0 + 0.5, x1 - 0.5, 1.0, 5.6, z0 + 1.2, z0 + 1.25);
-  const step = F.lite ? 6.8 : 3.4;
+  const step = F.lite ? 8.8 : 4.4;
   for (let x = x0 + 1.7; x < x1 - 1; x += step) pillar(F, x, z1 - 0.2, 1.0, 5.4, 0.55, { brackets: 2 });
   F.add('stone', ring(rect(55, 2.0), [[0, 0], [0.3, 0.06], [0.42, 0.25], [0.3, 0.45], [0.05, 0.55], [0.05, 0.9], [0, 0.9]]), 0, 5.4, -56);
   F.add('stone', cap(rect(55, 2.0), 6.3, 0.0));

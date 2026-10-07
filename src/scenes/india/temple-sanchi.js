@@ -52,7 +52,9 @@ const MEDHI_RAIL = { w: 0.22, oct: false, h: 1.28, bars: [[0.36, 0.24], [0.66, 0
 const HARMIKA_RAIL = { w: 0.21, oct: false, h: 1.34, bars: [[0.4, 0.27], [0.72, 0.27], [1.04, 0.27]], bw: 0.09, cope: [1.3, 1.64, 0.3], sp: 0.5 };
 const STAIR_RAIL = { w: 0.2, oct: false, h: 1.06, bars: [[0.3, 0.2], [0.56, 0.2], [0.82, 0.2]], bw: 0.08, cope: [1.0, 1.24, 0.26], sp: 0.62 };
 
+let LITE = false;    // set per build: coarser railings
 function postGeo(R, h) {
+  if (LITE && !R.oct) { const g = new THREE.BoxGeometry(R.w, h, R.w * 1.15); g.translate(0, h / 2, 0); return g; }
   if (R.oct) { const r = R.w / 2 / Math.cos(Math.PI / 8); const g = new THREE.CylinderGeometry(r, r, h, 8, 1, true); g.rotateY(Math.PI / 8); g.translate(0, h / 2, 0); return g; }
   const g = chamferBox(R.w, h, R.w * 1.15, 0.025); g.translate(0, h / 2, 0); return g;
 }
@@ -72,7 +74,7 @@ function railArc(P, Rr, a0, a1, y0, R, { segLen = 0.5, endPosts = true } = {}) {
   const L = Math.abs(a1 - a0) * Rr, segs = Math.max(2, Math.ceil(L / segLen));
   const n = Math.max(1, Math.round(L / R.sp)), post = postGeo(R, R.h);
   for (let i = endPosts ? 0 : 1; i <= (endPosts ? n : n - 1); i++) { const a = a0 + (a1 - a0) * i / n; P.add(STONE, post, Math.cos(a) * Rr, y0, Math.sin(a) * Rr, -a - Math.PI / 2); }
-  const profs = [...R.bars.map(([yc, hh]) => [lensProfile(R.bw, hh, 10), yc]), [copingProfile(R.cope[2], R.cope[1] - R.cope[0], 8), R.cope[0]]];
+  const profs = [...R.bars.map(([yc, hh]) => [lensProfile(R.bw, hh, LITE ? 6 : 10), yc]), [copingProfile(R.cope[2], R.cope[1] - R.cope[0], LITE ? 4 : 8), R.cope[0]]];
   for (const [pr, yy] of profs) {
     P.add(STONE, ringSweep(pr, Rr, a0, a1, y0 + yy, segs));
     for (const [a, sg] of [[a0, -1], [a1, 1]]) {
@@ -87,7 +89,7 @@ function railLine(P, A, B, R, { startPost = true, endPost = true } = {}) {
   const ry = Math.atan2(-d.z, d.x), across = V3(-d.z, 0, d.x).normalize().negate();
   const post = postGeo(R, R.h);
   for (let i = startPost ? 0 : 1; i <= (endPost ? n : n - 1); i++) { const p = A.clone().addScaledVector(d, i / n); P.add(STONE, post, p.x, p.y, p.z, ry); }
-  const profs = [...R.bars.map(([yc, hh]) => [lensProfile(R.bw, hh, 10), yc]), [copingProfile(R.cope[2], R.cope[1] - R.cope[0], 8), R.cope[0]]];
+  const profs = [...R.bars.map(([yc, hh]) => [lensProfile(R.bw, hh, LITE ? 6 : 10), yc]), [copingProfile(R.cope[2], R.cope[1] - R.cope[0], LITE ? 4 : 8), R.cope[0]]];
   const dir = d.clone().normalize();
   for (const [pr, yy] of profs) {
     const a = A.clone().add(V3(0, yy, 0)), b = B.clone().add(V3(0, yy, 0));
@@ -185,7 +187,7 @@ function buildHarmika(P, lite) {
 // ------------------------------------------------------------------------------------------- torana
 // One gateway in its own frame (x across, y up, z outward, centred on its pillars' line). `q`: 0 S, 1 E,
 // 2 N, 3 W (capital type); `hi`: full detail.
-function torana(P, q, hi, lite, F) {
+function torana(P, q, D, F) {
   const { PX, PW, PLINTH, SHAFT, CAP0, CAP1, A, AH, AD, LB, VX, VRAD } = G;
   for (const sx of [-1, 1]) {
     const x = sx * PX;
@@ -205,14 +207,14 @@ function torana(P, q, hi, lite, F) {
       else put(P, STONE, g, { x: x + ox * 0.24, y: CAP0, z: fz * 0.2, ry, s: [0.95, 1.03, 0.95] });
     }
     // shalabhanjika brackets at the outer corners, front (and back) — leaning out under the overhang
-    for (const fz of hi ? [1, -1] : [1]) {
+    for (const fz of D.shala) {
       put(P, STONE, sx * fz > 0 ? F.shalaR : F.shalaL, { x: x + sx * 0.42, y: CAP0 - 0.12, z: fz * 0.16, ry: fz > 0 ? sx * 0.45 : Math.PI - sx * 0.45, rz: -sx * fz * 0.36, s: 1.08 });
       // and its bracket block on the capital
       P.add(STONE, chamferBox(0.3, 0.16, 0.3, 0.02), x + sx * 0.46, CAP0 - 0.15, fz * 0.16);
     }
   }
   // architraves: bowed beams, carved faces, spiral volutes overhanging the pillars
-  const segX = lite ? 8 : 20;
+  const segX = D.lite ? 8 : 20;
   A.forEach((yc, k) => {
     const g = new THREE.BoxGeometry(2 * LB, AH, AD, segX, 1, 1), p = g.attributes.position;
     for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + bow(p.getX(i)));
@@ -227,7 +229,7 @@ function torana(P, q, hi, lite, F) {
     }
     for (const sx of [-1, 1]) {
       const cy = yc + bow(VX) - 0.02;
-      P.add(STONE, new THREE.CylinderGeometry(VRAD, VRAD, AD + 0.02, lite ? 14 : 28).rotateX(Math.PI / 2), sx * VX, cy, 0);
+      P.add(STONE, new THREE.CylinderGeometry(VRAD, VRAD, AD + 0.02, D.lite ? 14 : 28).rotateX(Math.PI / 2), sx * VX, cy, 0);
       for (const fz of [1, -1]) put(P, STONE, sx * fz > 0 ? F.spiralR : F.spiralL, { x: sx * VX, y: cy, z: fz * (AD / 2 + 0.01), ry: fz > 0 ? 0 : Math.PI });
     }
   });
@@ -238,13 +240,13 @@ function torana(P, q, hi, lite, F) {
       P.add(RELIEF, chamferBox(0.72, h + 0.02, 0.5, 0.02), sx * PX, (y0 + y1) / 2 + bow(PX), 0);
       // riders: an elephant on the lower tier, a horse on the upper, facing out towards the ends
       const g = k === 0 ? F.elephantR : F.horseR;
-      put(P, STONE, g, { x: sx * 2.6, y: y0 + bow(2.6) - 0.01, z: 0, ry: sx * Math.PI / 2, s: k === 0 ? 0.5 : 0.58 });
+      if (D.riders) put(P, STONE, g, { x: sx * 2.6, y: y0 + bow(2.6) - 0.01, z: 0, ry: sx * Math.PI / 2, s: k === 0 ? 0.5 : 0.58 });
     }
-    const nb = hi ? 3 : 3;
-    for (let i = 0; i < nb; i++) {
-      const x = (i - (nb - 1) / 2) * 0.82, yb = y0 + bow(x);
+    for (let i = 0; i < 3; i++) {
+      const x = (i - 1) * 0.82, yb = y0 + bow(x);
       P.add(STONE, chamferBox(0.2, h, 0.2, 0.02), x, yb + h / 2 + 0.005, 0);
-      if (hi || !lite) for (const fz of [1, -1]) put(P, STONE, F.yakshi, { x, y: yb + 0.03, z: fz * 0.1, ry: fz > 0 ? 0 : Math.PI, s: [0.55, 0.55, 0.5] });
+      for (const fz of D.balu) put(P, STONE, D.Fb.yakshi, { x, y: yb + 0.03, z: fz * 0.1, ry: fz > 0 ? 0 : Math.PI, s: [0.55, 0.55, 0.5] });
+      if (!D.balu.length) for (const fz of [1, -1]) P.add(STONE, chamferBox(0.14, 0.4, 0.06, 0.02), x, yb + 0.3, fz * 0.11);   // (lite) a carved boss
     }
   }
   // crown on the top architrave
@@ -254,20 +256,37 @@ function torana(P, q, hi, lite, F) {
     put(P, STONE, F.triratna, { x: sx * PX, y: top + bow(PX) - 0.02, z: 0, s: 1.05 });
     put(P, STONE, sx > 0 ? F.yakshaR : F.yakshaL, { x: sx * 0.9, y: top + bow(0.9) - 0.01, z: 0, s: 0.92 });
     const endG = q === 0 ? F.lion : F.elephant;
-    put(P, STONE, endG, { x: sx * 2.6, y: top + bow(2.6) - 0.01, z: 0, ry: sx * Math.PI / 2, s: q === 0 ? 0.5 : 0.48 });
+    if (D.ends) put(P, STONE, endG, { x: sx * 2.6, y: top + bow(2.6) - 0.01, z: 0, ry: sx * Math.PI / 2, s: q === 0 ? 0.5 : 0.48 });
   }
 }
 
-function figures(q, lite) {
-  return {
+const FIG = new Map();
+function figures(q) {
+  if (!FIG.has(q)) FIG.set(q, {
     lion: lionGeo(q), elephant: elephantGeo(q), dwarf: dwarfGeo(q),
     elephantR: elephantGeo(q, { rider: true }), horseR: horseGeo(q),
     shalaR: shalabhanjikaGeo(q, 1), shalaL: shalabhanjikaGeo(q, -1),
     yakshi: humanGeo(q, { female: true, arm: 0 }),
     yakshaR: humanGeo(q, { arm: 1, sx: -1 }), yakshaL: humanGeo(q, { arm: 1, sx: 1 }),
     triratna: triratnaGeo(q), chakra: chakraGeo(q), spiralR: spiralGeo(G.VRAD * 0.92, q, 1), spiralL: spiralGeo(G.VRAD * 0.92, q, -1),
-    lite,
-  };
+  });
+  return FIG.get(q);
+}
+// per gateway (S, E, N, W): figure resolution, which faces carry the corner brackets and baluster figures
+function gateDetail(q, lite) {
+  const B = [1, -1], F1 = [1];
+  if (lite) return [
+    { q: 0.45, shala: F1, balu: [], riders: true, ends: true },
+    { q: 0.3, shala: [], balu: [], riders: true, ends: true },
+    { q: 0.3, shala: [], balu: [], riders: false, ends: false },
+    { q: 0.3, shala: [], balu: [], riders: true, ends: true },
+  ][q];
+  return [
+    { q: 1, bq: 0.6, shala: B, balu: B, riders: true, ends: true },
+    { q: 0.6, bq: 0.45, shala: B, balu: F1, riders: true, ends: true },
+    { q: 0.5, bq: 0.45, shala: F1, balu: F1, riders: true, ends: true },
+    { q: 0.6, bq: 0.45, shala: B, balu: F1, riders: true, ends: true },
+  ][q];
 }
 
 // ------------------------------------------------------------------------------------------- vedika
@@ -288,6 +307,7 @@ function buildVedika(P, lite) {
 // ------------------------------------------------------------------------------------------- assembly
 export function buildStupa(P, M, { lite = false } = {}) {
   sanchiMaterials(M, { lite });
+  LITE = lite;
   buildMound(P, lite);
   buildStairs(P, lite);
   buildHarmika(P, lite);
@@ -295,12 +315,11 @@ export function buildStupa(P, M, { lite = false } = {}) {
   // the ground processional path, paved, and the forecourts of the gateways
   P.add(PAVE, new THREE.RingGeometry(S.DR + 0.55, S.VR + 0.5, lite ? 72 : 160, 1).rotateX(-Math.PI / 2), 0, 0.04, 0);
   // gateways: the south (camera side) in full detail; E, W, N a little lighter
-  const Fhi = figures(lite ? 0.45 : 1, lite), Flo = lite ? Fhi : figures(0.6, lite);
   for (let q = 0; q < 4; q++) {
     const T = { L: {}, add(k, g, x = 0, y = 0, z = 0, ry = 0) { const n = g.index ? g.toNonIndexed() : g.clone(); if (ry) n.rotateY(ry); n.translate(x, y, z); (this.L[k] ??= []).push(n); return n; } };
     T.box = (k, x0, x1, y0, y1, z0, z1) => T.add(k, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-    const hi = q === 0 && !lite;
-    torana(T, q, hi || (!lite && q !== 2), lite, q === 0 ? Fhi : Flo);
+    const D = gateDetail(q, lite); D.lite = lite; D.Fb = figures(D.bq ?? D.q);
+    torana(T, q, D, figures(D.q));
     // forecourt slab
     T.add(PAVE, new THREE.BoxGeometry(2 * 3.4, 0.06, G.RT + 1.2 - (S.VR - 0.4)), 0, 0.03, (G.RT + 1.2 + S.VR - 0.4) / 2 - G.RT);
     for (const [k, list] of Object.entries(T.L)) for (const g of list) { g.translate(0, 0, G.RT); g.rotateY(q * Math.PI / 2); P.add(k, g); }

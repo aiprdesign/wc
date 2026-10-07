@@ -77,6 +77,7 @@ const GLSL_MAIN = /* glsl */ `
     float Rk;
     if (sP.y < ${S.DH.toFixed(3)} - 0.02 && abs(sN.y) < 0.6) { s = sP.y; ch = 0.36; Rk = ${S.DR.toFixed(3)}; B = vec3(0.0, 1.0, 0.0); }
     else { s = ${S.RD.toFixed(3)} * (atan(sP.y - (${S.YC.toFixed(3)}), r) - ${S.A0.toFixed(5)}); ch = 0.42;
+      s += 0.09 * (sNoise(vec3(sP.x * 0.35, 0.0, sP.z * 0.35)) - 0.5) + 0.05 * (sNoise(sP * 1.3) - 0.5);    // old courses wander
       Rk = ${S.RD.toFixed(3)} * cos(${S.A0.toFixed(5)} + (floor(s / ch) + 0.5) * ch / ${S.RD.toFixed(3)}); }
     float kc = floor(s / ch);
     n = max(floor(6.2831853 * max(Rk, 0.3) / 0.92), 3.0);
@@ -113,8 +114,16 @@ const GLSL_MAIN = /* glsl */ `
     cb *= 0.84 + 0.3 * sHash(vec3(bi * 1.7, kc * 0.3, 1.0));
     cb = mix(cb, sLin(vec3(0.84, 0.77, 0.66)), step(0.93, r2) * 0.6);
     cb = mix(cb, sLin(vec3(0.40, 0.38, 0.34)), step(r2, 0.06) * 0.6);
-    sCol = mix(sCol, cb, 0.55 * aa + 0.2);
-    sCol *= 1.0 - joint * (0.55 * aa + 0.1);
+    sCol = mix(sCol, cb, 0.5 * aa + 0.2);
+  #ifdef S_DOME
+    sCol *= 1.0 - joint * (0.32 * aa + 0.06);
+    // the anda weathers dark: black lichen in broad patches and long streaks washed down from the top
+    float dk = smoothstep(0.5, 0.75, sFbm(sP * 0.18 + 3.0) * 0.7 + sNoise(vec3(sP.x * 0.9, sP.y * 0.12, sP.z * 0.9)) * 0.3);
+    sCol = mix(sCol, sLin(vec3(0.33, 0.31, 0.28)), 0.6 * dk);
+    sLichK = 0.6;
+  #else
+    sCol *= 1.0 - joint * (0.5 * aa + 0.1);
+  #endif
     // stone pillows (rounded arrises) and a slight tilt per stone: the coursing catches the low sun
     vec2 hx = sPillow(du, 0.07), hy = sPillow(dv, 0.06);
     float A = 0.03;
@@ -182,8 +191,8 @@ const GLSL_MAIN = /* glsl */ `
       vec3 Bv = vec3(0.0, 1.0, 0.0);
       sNW = normalize(T * nts.x + Bv * nts.y + sN * max(nts.z, 0.2));
       float h = tx.w;
-      sCol *= mix(0.55, 1.1, smoothstep(0.12, 0.8, h));       // carved recesses hold shadow and grime
-      sCol = mix(sCol, sCol * 1.18, smoothstep(0.6, 0.95, h) * 0.7);   // raised forms worn pale
+      sCol *= mix(0.68, 1.04, smoothstep(0.12, 0.8, h));       // carved recesses hold shadow and grime
+      sCol = mix(sCol, sCol * 1.12, smoothstep(0.6, 0.95, h) * 0.6);   // raised forms worn pale
       sRough *= mix(1.05, 0.92, h);
     }
   }
@@ -565,34 +574,34 @@ export function lineSweep(profile, A, B, segs = 1) {
 // Simplified sculpture in the round from spheres, capsules and tubes; q scales the segment counts.
 export class Sculpt {
   constructor(q = 1, sx = 1) { this.q = q; this.sx = sx; this.list = []; }
-  seg(n) { return Math.max(4, Math.round(n * this.q)); }
+  seg(n, min = 4) { return Math.max(min, Math.round(n * this.q)); }
   v(p) { return new THREE.Vector3(p[0] * this.sx, p[1], p[2]); }
   push(g) { this.list.push(clean(g)); return this; }
   ell(c, r, rot = null, seg = 10) {
-    const g = new THREE.SphereGeometry(1, this.seg(seg), this.seg(seg * 0.7));
+    const g = new THREE.SphereGeometry(1, this.seg(seg, 5), this.seg(seg * 0.7, 3));
     g.scale(r[0], r[1], r[2]); if (rot) g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1] * this.sx, rot[2] * this.sx)));
     const p = this.v(c); g.translate(p.x, p.y, p.z); return this.push(g);
   }
   ball(c, r, seg = 10) { return this.ell(c, [r, r, r], null, seg); }
   cap(a, b, r, seg = 8) {
     const A = this.v(a), B = this.v(b), d = new THREE.Vector3().subVectors(B, A), L = d.length();
-    const g = new THREE.CapsuleGeometry(r, Math.max(L, 1e-3), this.seg(3), this.seg(seg));
+    const g = new THREE.CapsuleGeometry(r, Math.max(L, 1e-3), this.seg(3, 1), this.seg(seg, 4));
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, d.normalize()));
     g.translate((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2); return this.push(g);
   }
   cyl(a, b, r0, r1, seg = 8) {
     const A = this.v(a), B = this.v(b), d = new THREE.Vector3().subVectors(B, A), L = d.length();
-    const g = new THREE.CylinderGeometry(r1, r0, L, this.seg(seg));
+    const g = new THREE.CylinderGeometry(r1, r0, L, this.seg(seg, 4), 1, this.q < 0.5);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, d.normalize()));
     g.translate((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2); return this.push(g);
   }
   tube(pts, r, seg = 16, rad = 6) {
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => this.v(p)));
-    return this.push(new THREE.TubeGeometry(curve, this.seg(seg), r, this.seg(rad), false));
+    return this.push(new THREE.TubeGeometry(curve, this.seg(seg, 3), r, this.seg(rad, 3), false));
   }
   box(c, s, e = 0.02) { const g = chamferBox(s[0], s[1], s[2], e); const p = this.v(c); g.translate(p.x, p.y, p.z); return this.push(g); }
   torus(c, R, r, rot = [0, 0, 0], seg = 20, arc = Math.PI * 2) {
-    const g = new THREE.TorusGeometry(R, r, this.seg(6), this.seg(seg), arc);
+    const g = new THREE.TorusGeometry(R, r, this.seg(6, 3), this.seg(seg, 6), arc);
     g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0], rot[1] * this.sx, rot[2] * this.sx)));
     const p = this.v(c); g.translate(p.x, p.y, p.z); return this.push(g);
   }
@@ -623,20 +632,25 @@ export function elephantGeo(q = 1, { rider = true } = {}) {
   }
   return s.geometry();
 }
-export function lionGeo(q = 1) {
+export function lionGeo(q = 1) {      // seated lion (the Ashokan type): forelegs straight, chest high, heavy mane
   const s = new Sculpt(q);
-  s.ell([0, 0.5, -0.08], [0.2, 0.22, 0.42]);
-  s.ell([0, 0.7, 0.24], [0.27, 0.32, 0.26]);                          // mane / chest
-  s.ell([0, 0.86, 0.42], [0.16, 0.16, 0.15]);                         // head
-  s.ell([0, 0.8, 0.56], [0.09, 0.08, 0.08]);                          // muzzle
+  s.ell([0, 0.27, -0.2], [0.21, 0.25, 0.25]);                         // haunches
+  s.ell([0, 0.5, -0.04], [0.18, 0.3, 0.2], [-0.35, 0, 0]);            // body rising
+  s.ell([0, 0.62, 0.12], [0.19, 0.24, 0.16]);                         // chest
+  s.ell([0, 0.8, 0.1], [0.25, 0.26, 0.22]);                           // mane
+  const nt = q >= 0.8 ? 12 : 8;
+  for (let i = 0; i < nt; i++) { const a = i / nt * Math.PI * 2; s.ell([Math.cos(a) * 0.2, 0.8 + Math.sin(a) * 0.21, 0.2], [0.07, 0.08, 0.07], [0, 0, a], 6); }   // ruff of tufts
+  s.ell([0, 0.82, 0.28], [0.13, 0.14, 0.12]);                         // face
+  s.ell([0, 0.76, 0.39], [0.08, 0.065, 0.07], null, 8);               // muzzle
+  s.ell([0, 0.69, 0.36], [0.06, 0.03, 0.05], null, 6);                // open jaw
   for (const x of [-1, 1]) {
-    s.ball([x * 0.1, 0.99, 0.4], 0.045, 6);                           // ears
-    s.cap([x * 0.12, 0.06, 0.36], [x * 0.12, 0.52, 0.28], 0.065, 6);  // forelegs
-    s.ell([x * 0.12, 0.45, -0.33], [0.1, 0.17, 0.15]);                // haunch
-    s.cap([x * 0.12, 0.06, -0.3], [x * 0.12, 0.38, -0.36], 0.055, 6);
-    s.ell([x * 0.12, 0.04, 0.42], [0.07, 0.04, 0.09], null, 6);       // paws
+    s.ball([x * 0.1, 0.97, 0.24], 0.04, 6);                           // ears
+    s.ball([x * 0.05, 0.86, 0.38], 0.022, 5);                         // eyes
+    s.cap([x * 0.1, 0.05, 0.25], [x * 0.1, 0.55, 0.16], 0.055, 6);    // forelegs
+    s.ell([x * 0.1, 0.035, 0.29], [0.065, 0.035, 0.085], null, 6);    // fore paws
+    s.ell([x * 0.17, 0.05, 0.0], [0.06, 0.05, 0.11], null, 6);        // hind paws
   }
-  s.tube([[0, 0.55, -0.48], [0, 0.4, -0.62], [0, 0.55, -0.72], [0, 0.72, -0.66]], 0.025, 8, 4);
+  s.tube([[0.18, 0.08, -0.38], [0.24, 0.05, -0.1], [0.24, 0.08, 0.06]], 0.025, 6, 4);
   return s.geometry();
 }
 export function dwarfGeo(q = 1) {      // pot-bellied yaksha (gana), arms raised to carry the load

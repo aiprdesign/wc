@@ -122,6 +122,7 @@ export class Frame {
     this.c = Math.cos(ry); this.s = Math.sin(ry);
   }
   pt(x, z) { return [this.x + x * this.c + z * this.s, this.z - x * this.s + z * this.c]; }
+  coarse(on = true) { return new Frame(this.P, this.k, { x: this.x, y: this.y, z: this.z, ry: this.ry, lite: this.lite || on }); }
   sub(x = 0, y = 0, z = 0, ry = 0) { const [wx, wz] = this.pt(x, z); return new Frame(this.P, this.k, { x: wx, y: this.y + y, z: wz, ry: this.ry + ry, lite: this.lite }); }
   add(role, g, x = 0, y = 0, z = 0, ry = 0) { const [wx, wz] = this.pt(x, z); return this.P.add(this.k[role] ?? role, g, wx, this.y + y, wz, this.ry + ry); }
   box(role, x0, x1, y0, y1, z0, z1) {
@@ -242,7 +243,7 @@ export function adhishthana(F, plan, h, { script = false, blocks = true, top = t
   }
 }
 // prastara (entablature) of height h round a plan: beam, frieze, kapota with kudus, vyalamala. Returns its top.
-export function prastara(F, plan, h, { over = 0.32 * h, kudu = 2.2, kuduR = 0.2 * h, frieze = true, top = true, edgeMin = 1.6 } = {}) {
+export function prastara(F, plan, h, { over = 0.32 * h, kudu = 2.2, kuduR = 0.2 * h, frieze = true, top = true, edgeMin = 1.6, mini = false } = {}) {
   const o = over;
   F.add('stone', ring(plan, [[0, 0], [0.04 * h, 0.01 * h], [0.04 * h, 0.17 * h], [0.0, 0.18 * h]]));               // uttira
   F.add(frieze ? 'frieze' : 'recess', ring(plan, [[0.0, 0.18 * h], [0.0, 0.36 * h]]));                                     // valabhi
@@ -255,7 +256,7 @@ export function prastara(F, plan, h, { over = 0.32 * h, kudu = 2.2, kuduR = 0.2 
     const n = Math.max(1, Math.floor(e.len / kudu)), ry = Math.atan2(e.n[0], e.n[1]);
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n, x = e.a[0] + (e.b[0] - e.a[0]) * t, z = e.a[1] + (e.b[1] - e.a[1]) * t;
-      kudu1(F.sub(x, 0, z, ry), 0, 0.38 * h, o * 0.99, kuduR);
+      kudu1(F.sub(x, 0, z, ry), 0, 0.38 * h, o * 0.99, kuduR, { mini, face: !mini });
     }
   }
   return h;
