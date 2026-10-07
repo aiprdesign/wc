@@ -372,10 +372,13 @@ export function create(ctx, segment) {
     [-0.25, V(-46, 3.4, 60), V(2, 9.5, 0)],
     [T_ST, V(-24, 4.6, 62), V(5, 10, 0)],
     [T_ST + 0.45, V(30, 36, 62), V(KAI.x - 30, 10, KAI.z)],
-    [T_KA + 0.05, V(KAI.x - 34, 76, KAI.z + 96), V(KAI.x - 8, 12, KAI.z - 62)],
-    [T_KA + 0.6, V(KAI.x + 24, 72, KAI.z + 98), V(KAI.x + 2, 10, KAI.z - 54)],
-    [T_BR + 0.05, V(184, 6, 94), V(TOWER.x + 4, 38, TOWER.z)],
-    [T_BR + 0.4, V(204, 6, 104), V(TOWER.x + 40, 34, TOWER.z + 24)],
+    // Kailasa: high over the cut at first, then a lower, closer pass across the west front, so the elephant
+    // plinth, the mandapa roof, the shikhara and the flag pillars read as the rock falls away
+    [T_KA + 0.05, V(KAI.x - 30, 68, KAI.z + 84), V(KAI.x - 6, 29, KAI.z - 40)],
+    [T_KA + 0.6, V(KAI.x + 20, 42, KAI.z + 60), V(KAI.x + 15, 24, KAI.z - 16)],
+    // Thanjavur: closer, from the north-east, so the sunlit east face of the vimana fills the frame
+    [T_BR + 0.05, V(196, 6, 70), V(TOWER.x + 2, 42, TOWER.z)],
+    [T_BR + 0.4, V(220, 6, 76), V(TOWER.x + 30, 39, TOWER.z + 22)],
     [T_TJ + 0.05, V(258, 7, TAJ.z), V(TAJ.x, 30, TAJ.z)],
     [dur + 0.3, V(298, 6.6, TAJ.z), V(TAJ.x, 31, TAJ.z)],
   ];

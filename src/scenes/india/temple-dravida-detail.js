@@ -122,6 +122,7 @@ export class Frame {
     this.c = Math.cos(ry); this.s = Math.sin(ry);
   }
   pt(x, z) { return [this.x + x * this.c + z * this.s, this.z - x * this.s + z * this.c]; }
+  remap(k) { const f = new Frame(this.P, { ...this.k, ...k }, { x: this.x, y: this.y, z: this.z, ry: this.ry, lite: this.lite }); return f; }
   coarse(on = true) { return new Frame(this.P, this.k, { x: this.x, y: this.y, z: this.z, ry: this.ry, lite: this.lite || on }); }
   sub(x = 0, y = 0, z = 0, ry = 0) { const [wx, wz] = this.pt(x, z); return new Frame(this.P, this.k, { x: wx, y: this.y + y, z: wz, ry: this.ry + ry, lite: this.lite }); }
   add(role, g, x = 0, y = 0, z = 0, ry = 0) { const [wx, wz] = this.pt(x, z); return this.P.add(this.k[role] ?? role, g, wx, this.y + y, wz, this.ry + ry); }
@@ -480,33 +481,58 @@ export function shikhara(F, { shape = 'oct', r = 5, h = 5.4, nasika = 0.3, crown
 
 // ------------------------------------------------------------------------------------------- animals
 const sph = (r, ws, hs) => new THREE.SphereGeometry(r, ws, hs);
-// elephant facing +z (s = 1: c. 3 m to the back); relief = only the forepart, emerging from a wall at z = 0
-export function elephant(F, role, s = 1, { relief = false, trunkDown = true } = {}) {
+// a tapering tube along a curve (trunks, tails): radius r0 at the root to r1 at the tip
+export function taperTube(pts, r0, r1, tub = 10, rad = 7) {
+  const curve = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  const g = new THREE.TubeGeometry(curve, tub, 1, rad), p = g.attributes.position, c = new THREE.Vector3();
+  for (let j = 0; j <= tub; j++) {
+    curve.getPointAt(j / tub, c); const r = r0 + (r1 - r0) * j / tub;
+    for (let k = 0; k <= rad; k++) { const i = j * (rad + 1) + k; p.setXYZ(i, c.x + (p.getX(i) - c.x) * r, c.y + (p.getY(i) - c.y) * r, c.z + (p.getZ(i) - c.z) * r); }
+  }
+  return g;
+}
+// elephant facing +z (s = 1: c. 3 m to the back). relief = only the rounded forepart, emerging from a wall at
+// z = 0, as on the Kailasa plinth. pose: 0 trunk hanging and curling out, 1 curled up to the brow, 2 raised (as if
+// lifting or pouring), 3 swung to the side; turn: the head turned a little; caparison: the neck chain and bells
+export function elephant(F, role, s = 1, { relief = false, trunkDown = true, pose = trunkDown ? 0 : 2, turn = 0, caparison = true, pedestal = true } = {}) {
   const L = F.lite, q = (n) => Math.max(4, Math.round(n * (L ? 0.55 : 1)));
-  const add = (g, x, y, z) => F.add(role, g.scale(s, s, s), x * s, y * s, z * s);
+  const add = (g, x, y, z, Fr = F) => Fr.add(role, g.scale(s, s, s), x * s, y * s, z * s);
   if (relief) {
-    add(sph(1, q(12), q(8)).scale(1.05, 1.0, 0.75), 0, 2.15, -0.15);                                         // shoulders
-    for (const lx of [-0.5, 0.5]) add(new THREE.CylinderGeometry(0.32, 0.36, 1.55, q(8)), lx, 0.78, 0.35);
+    add(sph(1, q(14), q(9)).scale(1.08, 1.0, 0.72), 0, 2.15, -0.2);                                          // shoulders and chest
+    for (const lx of [-0.52, 0.52]) {
+      add(new THREE.CylinderGeometry(0.31, 0.37, 1.5, q(9)), lx, 0.8, 0.3);
+      if (!L) add(new THREE.CylinderGeometry(0.4, 0.42, 0.14, q(9)), lx, 0.07, 0.32);                              // foot pads
+    }
   } else {
-    add(sph(1, q(14), q(10)).scale(1.0, 1.02, 1.5), 0, 2.15, 0);
+    add(sph(1, q(16), q(11)).scale(1.0, 1.02, 1.5), 0, 2.15, 0);
     for (const [lx, lz] of [[-0.52, 0.85], [0.52, 0.85], [-0.52, -0.85], [0.52, -0.85]]) {
       add(new THREE.CylinderGeometry(0.33, 0.37, 1.6, q(8)), lx, 0.8, lz);
       if (!L) add(new THREE.CylinderGeometry(0.4, 0.4, 0.12, q(8)), lx, 0.06, lz);
     }
-    add(new THREE.CylinderGeometry(0.04, 0.06, 1.1, 4).rotateX(0.25), 0, 1.75, -1.5);                          // tail
+    add(taperTube([[0, 2.5, -1.45], [0, 1.9, -1.62], [0, 1.25, -1.6]], 0.07, 0.04, 5, 4), 0, 0, 0);            // tail
   }
-  add(sph(0.76, q(12), q(9)).scale(1, 1.08, 0.95), 0, 2.72, relief ? 0.95 : 1.55);                             // head
-  if (!L) for (const sx of [-1, 1]) add(sph(0.34, 7, 5), sx * 0.28, 3.25, relief ? 1.05 : 1.65);              // the twin domes of the brow
-  for (const sx of [-1, 1]) add(sph(0.78, q(9), q(7)).scale(0.14, 1.0, 0.82).rotateY(sx * 0.35), sx * 0.78, 2.66, relief ? 0.75 : 1.32);   // ears
-  const z0 = relief ? 1.6 : 2.2;
-  const pts = trunkDown ? [[0, 2.45, z0], [0, 1.75, z0 + 0.32], [0, 0.95, z0 + 0.28], [0, 0.42, z0 + 0.5]] : [[0, 2.45, z0], [0, 1.9, z0 + 0.45], [0, 1.6, z0 + 0.95], [0, 2.0, z0 + 1.2]];
-  add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))), L ? 6 : 10, 0.21, q(7)), 0, 0, 0);
-  for (const sx of [-1, 1]) add(new THREE.ConeGeometry(0.09, 0.85, 5).rotateX(PI / 2 + 0.7), sx * 0.3, 2.05, z0 + 0.12);   // tusks
-  if (!relief) add(new THREE.BoxGeometry(2.3, 0.5, 3.5), 0, 0.25, 0);                                                 // pedestal of uncut rock
+  const H = F.sub(0, 0, 0, turn), zh = relief ? 0.92 : 1.55;
+  add(sph(0.76, q(13), q(9)).scale(1, 1.08, 0.95), 0, 2.72, zh, H);                                            // head
+  if (!L) for (const sx of [-1, 1]) add(sph(0.34, 7, 5), sx * 0.28, 3.25, zh + 0.1, H);                       // the twin domes of the brow
+  for (const sx of [-1, 1]) add(sph(0.8, q(10), q(7)).scale(0.13, 1.0, 0.85).rotateY(sx * 0.4), sx * 0.8, 2.62, zh - 0.22, H);   // ears
+  if (!L && caparison) {
+    add(new THREE.BoxGeometry(0.5, 0.42, 0.1).rotateX(-0.35), 0, 3.0, zh + 0.66, H);                          // brow ornament
+    add(new THREE.TorusGeometry(0.72, 0.06, 4, 14).rotateX(PI / 2 - 0.5), 0, 2.15, zh - 0.25, H);              // neck chain
+    for (const sx of [-1, 1]) add(sph(0.11, 5, 4), sx * 0.55, 1.8, zh + 0.2, H);                              // bells
+  }
+  const z0 = zh + 0.62;
+  const P = [[[0, 2.45, z0], [0, 1.75, z0 + 0.32], [0, 0.95, z0 + 0.28], [0, 0.42, z0 + 0.52]],
+    [[0, 2.4, z0], [0, 1.7, z0 + 0.38], [0, 1.45, z0 + 0.85], [0, 1.9, z0 + 1.05], [0, 2.25, z0 + 0.8]],
+    [[0, 2.5, z0], [0, 2.1, z0 + 0.5], [0, 2.6, z0 + 0.95], [0, 3.35, z0 + 1.0], [0, 3.8, z0 + 0.8]],
+    [[0, 2.45, z0], [0.25, 1.8, z0 + 0.35], [0.55, 1.15, z0 + 0.32], [0.85, 0.75, z0 + 0.5]]][pose % 4];
+  add(taperTube(P, 0.26, 0.11, L ? 6 : 12, q(8)), 0, 0, 0, H);                                                  // trunk
+  for (const sx of [-1, 1]) add(new THREE.ConeGeometry(0.09, 0.85, 5).rotateX(PI / 2 + 0.7), sx * 0.3, 2.05, z0 + 0.1, H);   // tusks
+  if (!relief && pedestal) add(new THREE.BoxGeometry(2.3, 0.5, 3.5), 0, 0.25, 0);                                           // pedestal of uncut rock
 }
 // lion / yali seated on its haunches, facing +z (s = 1: c. 1.7 m high)
-export function lion(F, role, s = 1, { relief = false } = {}) {
+export function lion(F, role, s = 1, { relief = false, vyala = false } = {}) {
   const L = F.lite, add = (g, x, y, z) => F.add(role, g.scale(s, s, s), x * s, y * s, z * s);
+  if (vyala) for (const sx of [-1, 1]) add(new THREE.ConeGeometry(0.06, 0.4, 4).rotateZ(-sx * 0.4).rotateX(-0.3), sx * 0.16, 1.92, relief ? 0.42 : 0.5);   // the horns of a vyala
   if (!relief) add(sph(0.5, L ? 6 : 9, L ? 4 : 6).scale(1, 0.85, 1.2), 0, 0.45, -0.25);                    // haunches
   add(sph(0.42, L ? 6 : 9, L ? 4 : 7).scale(1, 1.35, 0.9), 0, 0.95, relief ? 0.05 : 0.15);                   // chest
   for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.1, 0.12, 0.85, L ? 4 : 6), sx * 0.2, 0.42, relief ? 0.35 : 0.45);   // forelegs
