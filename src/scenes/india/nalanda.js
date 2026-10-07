@@ -115,8 +115,12 @@ export function create(ctx, segment) {
   const groundMat = groundMaterial(GU);
 
   // ------------------------------------------------------------------------------------- builders
+  // geometry is gathered per area (each monastery, each temple, the library, the site) and per material:
+  // one mesh per pair, so the frustum (and AR's vitrine) can skip a whole monument, and a monument out of
+  // the shot can be switched off
   const accs = new Map();
-  const acc = (mat) => { if (!accs.has(mat)) accs.set(mat, []); return accs.get(mat); };
+  let zone = 'site';
+  const acc = (mat) => { const k = zone; if (!accs.has(k)) accs.set(k, new Map()); const z = accs.get(k); if (!z.has(mat)) z.set(mat, []); return z.get(mat); };
   const box = (mat, x0, x1, y0, y1, z0, z1) => {
     const g = new THREE.BoxGeometry(Math.abs(x1 - x0), Math.abs(y1 - y0), Math.abs(z1 - z0));
     g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
@@ -533,22 +537,31 @@ export function create(ctx, segment) {
 
   // the scholars' groups in the hero courtyard (the last one on the raised platform)
   const GROUPS = [V(-3.6, 0.1, -6.6), V(4.6, 0.1, -7.6), V(-2.6, 0.1, 3.6), V(3.6, 0.1, 7.4), V(8.1, 1.0, 0.0)];
+  zone = 'v0';
   for (const g of GROUPS.slice(0, 4)) box(vihMat, g.x - 0.6, g.x + 0.6, 0.1, 0.35, g.z - 0.6, g.z + 0.6);
-  for (const x of VIH_X) vihara(x, 0, x === 0);
-  for (const x of TEM_X) temple(x, TEM_Z);
-  library();
+  for (const x of VIH_X) { zone = 'v' + x; vihara(x, 0, x === 0); }
+  for (const x of TEM_X) { zone = 't' + x; temple(x, TEM_Z); }
+  zone = 'lib'; library();
   // the avenue: a paved processional way with kerbs
+  zone = 'site';
   box(vihMat, -170, 170, 0, 0.12, AVE.z0, AVE.z1);
   box(vihMat, -170, 170, 0, 0.3, AVE.z1, AVE.z1 + 0.6); box(vihMat, -170, 170, 0, 0.3, AVE.z0 - 0.6, AVE.z0);
 
-  const meshes = [];
-  for (const [mat, list] of accs) {
-    const m = new THREE.Mesh(mergeGeometries(list), mat);
-    m.castShadow = mat === vihMat || mat === temMat || mat === libMat || mat === facadeMat; m.receiveShadow = true;
-    if (mat.userData.depth) m.customDepthMaterial = mat.userData.depth;
-    m.frustumCulled = false;
-    scene.add(m); meshes.push(m);
+  const zones = {};
+  for (const [z, byMat] of accs) {
+    const grp = zones[z] = new THREE.Group();
+    scene.add(grp);
+    for (const [mat, list] of byMat) {
+      const m = new THREE.Mesh(mergeGeometries(list), mat);
+      m.castShadow = mat === vihMat || mat === temMat || mat === libMat || mat === facadeMat; m.receiveShadow = true;
+      if (mat.userData.depth) m.customDepthMaterial = mat.userData.depth;
+      m.geometry.computeBoundingSphere();
+      grp.add(m);
+    }
   }
+  // out of the shot from the scholars' courtyard to the library (behind the camera or wide of its frame,
+  // at every delivery aspect): the western monasteries and temples
+  const offInCourt = ['v-110', 'v-55', 't-82.5', 't-27.5'].map((z) => zones[z]);
   // ruin dressing: brickbats and low rubble heaps at the feet of the walls, grass tufts; each one clears as
   // the build front reaches it. Sampled near the walls of the monasteries (denser where the camera looks).
   const rd = rng(1206);
@@ -651,7 +664,7 @@ export function create(ctx, segment) {
       items.push({ kind, x, y: -0.1, z, s: 0.85 + rf() * 0.4, lite: true, tint: 0.85 + rf() * 0.3 });
       void d;
     }
-    return NK.plantForest(items, { sun: leafSun, lite, variants: 3, seed: 9, wind: 0.7 });
+    return NK.plantForest(items, { sun: leafSun, lite, variants: 3, seed: 9, wind: 0.7, castShadow: false });   // (groves round the site: receive only)
   })();
   scene.add(forest.group);
 
@@ -703,7 +716,8 @@ export function create(ctx, segment) {
     const i = 4 + Math.floor(rm() * 28);
     walkers.push({ p: V(tx - 2 + rm() * 4, (i + 1) * 11 / 36, TEM_Z + 12 + (36 - i) * 0.44 - 0.2), d: V(0, 0, 0), v: 0, c: Math.floor(rm() * 5) });
   }
-  const mkInst = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); return m; };
+  // (figures a few texels wide in a shadow map that spans the campus: they receive but do not cast)
+  const mkInst = (geo, mat, n) => { const m = new THREE.InstancedMesh(geo, mat, n); m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); return m; };
   const seatRobe = mkInst(MG.seatRobe, robeMat, seated.length), seatHead = mkInst(MG.seatHead, headMat, seated.length);
   const walkRobe = mkInst(MG.standRobe, robeMat, walkers.length), walkHead = mkInst(MG.standHead, headMat, walkers.length);
   const tmpC = new THREE.Color();
@@ -1038,7 +1052,8 @@ export function create(ctx, segment) {
     const mapK = ramp(Math.log(r), Math.log(600), Math.log(6000));
     map.group.visible = mapK > 0;
     GU.uMapMix.value = ramp(Math.log(r), Math.log(400), Math.log(5000));
-    forest.group.visible = t < tSch + 0.35; forest.update(t);   // (once the camera is down in the dusk courtyard the groves are out of sight)
+    forest.group.visible = t < tSch + 0.35; forest.update(t);
+    for (const g of offInCourt) g.visible = !(t > tSch + 0.1 && t < T_ZOOM);   // (once the camera is down in the dusk courtyard the groves are out of sight)
     GU.uMapK.value = 1;
     MU.uMap.value = mapK;
     MU.uR.value = lerp(0.0, 75, ramp(t, 3.5, 4.25, ease.inOutSine));

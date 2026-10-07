@@ -244,7 +244,7 @@ export function create(ctx, segment) {
   const loomWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#d4b49a', roughness: 0.5 });
   const shadowAll = (o) => o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
   const dyeFace = new THREE.MeshPhysicalMaterial({ color: '#6a1208', roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.35 });
-  const court = buildCourtyard(scene, { lite, cottonMat, wood, woodDark });
+  const court = buildCourtyard(scene, { lite, cottonMat, wood, woodDark, shadowLight: key });
 
   // ---------------------------------------------------------------- cotton plants and the hero boll
   const lobeGeos = [0, 1, 2, 3].map((k) => AS.lobeGeometry(k * 3.1 + 1));
@@ -267,8 +267,9 @@ export function create(ctx, segment) {
     pose(open);
     return { g, pose, bracts };
   }
+  const plantsRoot = new THREE.Group(); scene.add(plantsRoot);
   function makePlant(base, h, seed, bolls = 3, flower = false, exactTop = null) {
-    const pr = rng(seed), plant = new THREE.Group(); plant.position.copy(base); scene.add(plant);
+    const pr = rng(seed), plant = new THREE.Group(); plant.position.copy(base); plantsRoot.add(plant);
     const top = exactTop ?? V3((pr() - 0.5) * 0.06, h, (pr() - 0.5) * 0.06);
     const stemCurve = new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(0.02, h * 0.35, -0.01), V3(-0.01, h * 0.7, 0.01), top]);
     plant.add(new THREE.Mesh(AS.varTube(stemCurve, lite ? 12 : 24, lite ? 4 : 6, (u) => 0.009 - 0.005 * u), stemMat));
@@ -302,6 +303,24 @@ export function create(ctx, segment) {
   heroBoll.g.position.copy(BOLL); heroBoll.g.rotation.y = 0.4;
   shadowAll(heroBoll.g);
   for (const [x, z, h, s, n] of [[-2.32, 1.55, 0.62, 31, 3], [-2.1, 2.95, 0.5, 32, 3], [-2.85, 2.35, 0.7, 33, 4], [-2.65, 0.65, 0.66, 34, 3], [-1.25, 3.2, 0.42, 35, 2], [-3.2, 1.2, 0.74, 36, 4], [-1.95, 0.2, 0.55, 37, 3]]) makePlant(V3(x, 0, z), h, s, n, s % 2 === 0);
+  // the plants never move: every stem, leaf, bract, bur and petal is recoloured into one vertex-coloured
+  // material and baked with the open lobes into two meshes (instead of ~150 small ones and their shadows)
+  {
+    const plantMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, side: THREE.DoubleSide });
+    plantMat.userData.detail = { albedo: 0.18, rough: 0.35, bump: 0.0004, grime: 0.12 };
+    plantsRoot.traverse((o) => {
+      if (!o.isMesh || o.material === lobeMat) return;
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.color) {
+        const c = o.material.color, n = g.attributes.position.count, a = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+      }
+      o.geometry = g; o.material = plantMat;
+    });
+    AS.bakeStatic(plantsRoot, { cell: 50, cast: (c, r, o) => o.material !== lobeMat });   // (the white lobes: too small to shade)
+  }
 
   // fibres: a halo of loose fibre on the open lobes, and the stream that twists into the thread
   const lobeWorld = (k, o = 1) => { const a = (k * Math.PI) / 2 - 0.4, r = lerp(0.006, 0.021, o); return V3(BOLL.x + Math.cos(a) * r, BOLL.y + lerp(-0.008, 0.01, o), BOLL.z + Math.sin(a) * r); };
@@ -462,6 +481,8 @@ export function create(ctx, segment) {
   const ringMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
   const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.07, 0.09, 40).rotateX(-Math.PI / 2), ringMat, pieces.length);
   rings.frustumCulled = false; rings.setColorAt(0, new THREE.Color(0, 0, 0)); scene.add(rings);
+  // the loom corner: once the camera has turned to the sunrise (tY + 0.3) all of it is behind the camera
+  const bench = [loom, ...shafts, reed, swords, warp, shuttle, weft, cloth, plantsRoot, heroBoll.g];
 
   // ---------------------------------------------------------------- the westward route on the courtyard floor
   const mapG = new THREE.Group(); scene.add(mapG);
@@ -711,6 +732,8 @@ export function create(ctx, segment) {
       }
       blocks.instanceMatrix.needsUpdate = true; reliefs.instanceMatrix.needsUpdate = true; knobs.instanceMatrix.needsUpdate = true;
       { const on = t > PRINT0 - 0.09 && t < PRINT0 + 0.4; for (const m of [blocks, reliefs, knobs]) { m.count = on ? 16 : 0; m.visible = on; } }
+      const atLoom = t < tY + 0.32;
+      for (const o of bench) o.visible = atLoom && (o !== shuttle || shutOut < 0.999) && (o !== weft || inPick);
       clothU.uIndigo.value = t < tC + 0.2 ? -9 : lerp(-1.65, 1.75, ramp(t, tC + 0.25, tC + 0.66, ease.inOutSine));
 
       // -------- chess: the board draws, the pieces rise, then change as the light passes west
@@ -744,7 +767,8 @@ export function create(ctx, segment) {
         rings.setMatrixAt(k, m4.compose(p4.set(p.x, CLOTH_Y + 0.006, p.z), q4.identity(), s4.setScalar(0.8 + age * 0.9)));
         rings.setColorAt(k, col.setRGB(1.0, 0.7, 0.35).multiplyScalar(fl * 1.6));
       }
-      for (const m of inst) { m.instanceMatrix.needsUpdate = true; m.count = m.userData.on ? m.userData.n : 0; m.visible = m.userData.on; }   // hidden eras cost nothing
+      for (const m of inst) { m.instanceMatrix.needsUpdate = true; m.count = m.userData.on ? m.userData.n : 0; m.visible = m.userData.on && atLoom; }   // hidden eras cost nothing
+      rings.visible = atLoom;
       rings.instanceMatrix.needsUpdate = true; if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
 
       // -------- the route west

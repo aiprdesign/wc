@@ -377,9 +377,19 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
 
   const vegMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
   vegMat.userData.noBatch = true;
-  const veg = new THREE.Mesh(mergeGeometries(parts), vegMat);
-  veg.frustumCulled = false;
-  group.add(veg);
+  // merged by area (≈ 200 m tiles), so the camera's frustum — and AR's vitrine — skip the parts out of view
+  const tiles = new Map(), bb = new THREE.Box3(), cc = new THREE.Vector3();
+  for (const g of parts) {
+    bb.setFromBufferAttribute(g.attributes.position).getCenter(cc);
+    const k = `${Math.floor(cc.x / 200)}:${Math.floor(cc.z / 200)}`;
+    if (!tiles.has(k)) tiles.set(k, []);
+    tiles.get(k).push(g);
+  }
+  for (const list of tiles.values()) {
+    const veg = new THREE.Mesh(mergeGeometries(list), vegMat);
+    veg.geometry.computeBoundingSphere();
+    group.add(veg);
+  }
 
   // long soft dawn shadows on the ground (cast away from the low sun)
   const shTex = (() => {

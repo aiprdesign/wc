@@ -297,3 +297,36 @@ body.buffering .buffering { display: inline-flex; }
 .buf-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: buf-pulse 1s ease-in-out infinite; }
 @keyframes buf-pulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
 @media (prefers-reduced-motion: reduce) { .buf-dot { animation: none; } }
+
+/* explore: game pad (core/explore-pad.js) — WALK / ORBIT switch; on touch screens a joystick and buttons */
+.xpad { position: fixed; inset: 0; pointer-events: none; z-index: 22; display: none; font-family: inherit; }
+.xpad-on .xpad { display: block; }
+.xpad button { pointer-events: auto; font: inherit; color: var(--ink); cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: none; user-select: none; -webkit-user-select: none; }
+.xpad-mode { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 62px); left: 50%; transform: translateX(-50%); display: flex; pointer-events: auto; border: 1px solid rgba(226, 195, 138, 0.35); border-radius: 999px; overflow: hidden; background: rgba(10, 10, 10, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.xpad-mode button { padding: 7px 16px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; background: none; border: 0; }
+.xpad-mode button[aria-pressed="true"] { background: rgba(226, 195, 138, 0.18); color: var(--gold); }
+.xpad-stick, .xpad-btns { display: none; }
+.xpad-on.xpad-walk.xpad-touch .xpad-stick, .xpad-on.xpad-walk.xpad-touch .xpad-btns { display: block; }
+.xpad-stick { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); width: 132px; height: 132px; border-radius: 50%; pointer-events: auto; touch-action: none; background: radial-gradient(circle, rgba(226, 195, 138, 0.08) 0 55%, rgba(226, 195, 138, 0.16) 56% 58%, rgba(10, 10, 10, 0.35) 59%); border: 1px solid rgba(226, 195, 138, 0.35); }
+.xpad-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(255, 236, 196, 0.55), rgba(226, 195, 138, 0.28) 60%, rgba(120, 90, 40, 0.35)); border: 1px solid rgba(226, 195, 138, 0.6); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); pointer-events: none; }
+.xpad-btns { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); width: 168px; height: 150px; }
+.xpad-b { position: absolute; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: rgba(10, 10, 10, 0.5); border: 1px solid rgba(226, 195, 138, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.xpad-b svg { width: 24px; height: 24px; fill: var(--gold); }
+.xpad-b.down, .xpad-b:active, .xpad-b[aria-pressed="true"] { background: rgba(226, 195, 138, 0.25); border-color: var(--gold); }
+.xpad-jump { right: 0; bottom: 0; width: 70px; height: 70px; }
+.xpad-jump svg { width: 30px; height: 30px; }
+.xpad-run { right: 84px; bottom: 0; }
+.xpad-fly { right: 8px; bottom: 82px; }
+.xpad-home { right: 84px; bottom: 82px; width: 44px; height: 44px; }
+.xpad-up, .xpad-down { display: none; right: 140px; }
+.xpad-flying .xpad-up, .xpad-flying .xpad-down { display: grid; }
+.xpad-up { bottom: 82px; } .xpad-down { bottom: 18px; }
+.xpad-flying .xpad-jump { opacity: 0.35; }
+.xpad-on.xpad-walk .explore-hint .orbit-only { display: none; }
+.xpad-on:not(.xpad-walk) .explore-hint .walk-only { display: none; }
+.xpad-touch.xpad-on .explore-hint { display: none; }
+.xpad-mode .xpad-exit { padding: 7px 13px; border-left: 1px solid rgba(226, 195, 138, 0.25); color: var(--gold); }
+/* walking on a touch screen: the player bar steps aside (the ✕ leaves explore) and the pad drops to the corners */
+.xpad-on.xpad-walk.xpad-touch .controls { opacity: 0 !important; pointer-events: none !important; }
+.xpad-on.xpad-walk.xpad-touch .xpad-stick, .xpad-on.xpad-walk.xpad-touch .xpad-btns { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+@media (max-height: 430px) { .xpad-mode { top: calc(env(safe-area-inset-top, 0px) + 10px); } }

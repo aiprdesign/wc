@@ -217,7 +217,7 @@ export function create(ctx, segment) {
   const capital = new THREE.Group();
   scene.add(capital);
   for (const g of [geos.bell, geos.neck, geos.reliefs, geos.lions]) {
-    const m = new THREE.Mesh(g, stone); m.castShadow = m.receiveShadow = true; capital.add(m);
+    const m = new THREE.Mesh(g, stone); m.castShadow = g !== geos.reliefs; m.receiveShadow = true; capital.add(m);   // (the low relief on the drum shades too little to cast)
   }
   // the shaft carries the inscription band (incised into the stone itself): glyphs ignite one by one, then
   // hold a warm glow down in the cut

@@ -18,6 +18,7 @@
 //   yogaDay       50.5  the figure's light flies out onto a globe turning into dawn, practice points lighting
 //                       as the sunrise line crosses them · 21 JUNE · UNESCO 2016 — on into the dissolve.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES, OUTPUT_ASPECT, FILM_ASPECT } from '../../timeline.js';
 import { sat, lerp, ease, ramp, envelope, timeWarp, rng, TAU } from '../../lib/math.js';
 import { pulse } from '../../lib/rhythm.js';
@@ -89,6 +90,30 @@ function flowPoints(curve, n, { color = AIR, intensity = 2, size = 0.008, speed 
   });
   const p = new THREE.Points(g, m); p.frustumCulled = false; p.renderOrder = 4;
   return p;
+}
+
+// soft additive glows as one point cloud (the look of lib/materials glowSprite: a radial falloff at
+// world size uSize), so a row of lamps is one draw call instead of one sprite each. `body` is GLSL that
+// sets vec3 p (world position) and vec3 vCol (colour × intensity; 0 hides the point) from the attributes.
+function glowPoints(attrs, body, uniforms, size) {
+  const g = new THREE.BufferGeometry(), n = attrs.position.length / 3;
+  for (const [k, v] of Object.entries(attrs)) g.setAttribute(k, new THREE.Float32BufferAttribute(v, v.length / n));
+  const decl = Object.entries(attrs).filter(([k]) => k !== 'position').map(([k, v]) => `attribute ${['float', 'vec2', 'vec3', 'vec4'][v.length / n - 1]} ${k};`).join(' ');
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uViewport: { value: 800 }, uSize: { value: size }, ...uniforms },
+    vertexShader: /* glsl */ `${decl} uniform float uTime, uViewport, uSize; ${Object.keys(uniforms).map((k) => `uniform float ${k};`).join(' ')} varying vec3 vCol;
+      void main(){ vec3 p = position; ${body}
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        gl_PointSize = uSize * uViewport * 0.5 * projectionMatrix[1][1] / max(0.05, -mv.z);
+        if (max(vCol.r, max(vCol.g, vCol.b)) < 0.004) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }`,
+    fragmentShader: /* glsl */ `varying vec3 vCol;
+      void main(){ float d = length(gl_PointCoord - 0.5) * 2.0;
+        float a = d < 0.15 ? mix(1.0, 0.6, d / 0.15) : d < 0.4 ? mix(0.6, 0.12, (d - 0.15) / 0.25) : mix(0.12, 0.0, clamp((d - 0.4) / 0.6, 0.0, 1.0));
+        if (a < 0.003) discard; gl_FragColor = vec4(vCol, a); }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false;
+  return pts;
 }
 
 // holographic shell (fresnel + scanlines + a travelling scan band), additive
@@ -253,13 +278,13 @@ export function create(ctx, segment) {
   const ghatTrees = NK.plantForest([
     { kind: 'peepal', x: -8.5, y: AS.GHAT.terraceY - 0.1, z: 12.6, s: 0.85 }, { kind: 'neem', x: 12.5, y: AS.GHAT.terraceY - 0.1, z: 12.2, s: 0.8 },
     { kind: 'banyan', x: -27, y: AS.GHAT.terraceY - 0.1, z: 12.0, s: 0.75 }, { kind: 'peepal', x: 30, y: AS.GHAT.terraceY - 0.1, z: 12.4, s: 0.8 },
-  ], { sun: leafSun, lite, variants: 2, seed: 3, wind: 0.6 });
+  ], { sun: leafSun, lite, variants: 2, seed: 3, wind: 0.6, castShadow: false });   // (up on the terrace, outside the key's shadow box)
   scene.add(ghatTrees.group);
 
   // ---------------------------------------------------------------- the ghats
   const stoneTex = AS.stoneTexture(5);
   const stoneMat = new THREE.MeshStandardMaterial({ map: stoneTex, vertexColors: true, roughness: 0.9, color: '#c9a488' });
-  const steps = new THREE.Mesh(AS.ghatGeometry(), stoneMat); steps.receiveShadow = true; steps.castShadow = true; scene.add(steps);
+  const steps = new THREE.Mesh(AS.ghatGeometry(), stoneMat); steps.receiveShadow = true; steps.castShadow = false; scene.add(steps);   // (lit from the river at a graze: the flights face the sun and shade nothing)
   const plinthMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85, color: '#c49a7c' });
   const plinth = new THREE.Mesh(AS.plinthGeometry(1.7, S_BASE.y), plinthMat); plinth.position.set(S_BASE.x, 0, S_BASE.z);
   plinth.receiveShadow = true; plinth.castShadow = true; scene.add(plinth);
@@ -300,12 +325,10 @@ export function create(ctx, segment) {
     const b = new THREE.Mesh(boatG, boatMat); b.position.set(x, -0.18, z); b.rotation.y = ry; scene.add(b); return { b, x, z };
   });
   // floating lamps (diyas) drifting downstream
-  const DIYA_N = 46, diyas = [];
-  for (let i = 0; i < DIYA_N; i++) {
-    const s = glowSprite({ color: '#ffb35a', intensity: 1.2, scale: 0.35 }); s.material.fog = false;
-    diyas.push({ s, x: (R() - 0.5) * 50, z: -4.4 - R() * 22, v: 0.08 + R() * 0.12, ph: R() * TAU });
-    scene.add(s);
-  }
+  const DIYA_N = 46, dA = { position: [], aV: [], aPh: [] };
+  for (let i = 0; i < DIYA_N; i++) { dA.position.push((R() - 0.5) * 50, 0.06, -4.4 - R() * 22); dA.aV.push(0.08 + R() * 0.12); dA.aPh.push(R() * TAU); }
+  const diyas = glowPoints(dA, 'p.x += aV * uTime; vCol = vec3(1.0, 0.68, 0.32) * 1.3 * (0.8 + 0.2 * sin(uTime * 9.0 + aPh) * sin(uTime * 5.3 + aPh * 2.0)) * (1.0 - 0.4 * uMist);', { uMist: { value: 0 } }, 0.35);
+  scene.add(diyas);
 
   // mist over the water: layered soft sheets, lit towards the sun
   const mistU = { uTime: { value: 0 }, uCol: { value: new THREE.Color() }, uOp: { value: 0.5 } };
@@ -343,7 +366,9 @@ export function create(ctx, segment) {
   const floorPts = [];
   for (let i = 0; i <= 80; i++) { const x = -9.4 + (18.8 * i) / 80; floorPts.push(V3(x, AS.GHAT.landingY + 0.012, 1.3 - 1.9 * Math.pow(x / 8.6, 2) - 0.02)); }
   const floorLine = progressLine(floorPts, { color: GOLD, headColor: '#fff2d0', intensity: 1.6, head: 0.05 }); floorLine.material.fog = false; scene.add(floorLine);
-  const footDots = rowPos.map((p) => { const s = glowSprite({ color: '#ffc070', intensity: 1, scale: 0.4 }); s.position.copy(p).add(V3(0, 0.03, 0)); s.material.fog = false; scene.add(s); return s; });
+  const footDots = glowPoints({ position: rowPos.flatMap((p) => [p.x, p.y + 0.03, p.z]), aT: rowPos.map((_, i) => rowT(i)) },
+    'float g = uTime > aT - 0.05 ? 0.5 + 1.6 * exp(-(uTime - aT) * 5.0) : 0.0; vCol = vec3(1.0, 0.72, 0.4) * g * (1.0 - 0.7 * uMist);', { uMist: { value: 0 } }, 0.4);
+  scene.add(footDots);
 
   // ---------------------------------------------------------------- the seated figure (solid → hologram)
   const sGroup = new THREE.Group(); sGroup.position.copy(S_BASE); sGroup.rotation.y = Math.PI; scene.add(sGroup);
@@ -536,15 +561,33 @@ export function create(ctx, segment) {
   const callNadi = mkCall('NADI SHODHANA', 'ALTERNATE-NOSTRIL BREATHING', -0.52, 0.2, '#d8eeff');
   // the breath gauge: 4 counts in, 4 held, 8 out
   const gaugeLab = centerText('INHALE 4 · HOLD 4 · EXHALE 8', BOT, { weight: 500, height: 0.042 });
-  const CELL_W = 0.052 * UI, CELL_G = 0.012 * UI, cells = [];
+  // the sixteen cells (frames and fills) are one mesh: per-cell fill levels arrive as a uniform array
+  const CELL_W = 0.052 * UI, CELL_G = 0.012 * UI;
   const cellCols = [...Array(16)].map((_, i) => new THREE.Color(i < 4 ? AIR : i < 8 ? '#ffffff' : WARM));
-  for (let i = 0; i < 16; i++) {
-    const x = (i - 7.5) * (CELL_W + CELL_G) + (i >= 4 ? CELL_G : 0) + (i >= 8 ? CELL_G : 0) - CELL_G;
-    const frame = new THREE.Mesh(new THREE.PlaneGeometry(CELL_W, 0.022 * UI), new THREE.MeshBasicMaterial({ color: new THREE.Color(IVORY).multiplyScalar(0.35), transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
-    const fillM = new THREE.Mesh(new THREE.PlaneGeometry(CELL_W, 0.022 * UI), new THREE.MeshBasicMaterial({ color: cellCols[i].clone().multiplyScalar(2.2), transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
-    frame.position.set(x, BOT - 0.065 * UI, 0); fillM.position.copy(frame.position); fillM.position.z = 0.01;
-    hud.scene.add(frame, fillM); cells.push({ frame, fill: fillM });
-  }
+  const gauge = (() => {
+    const parts = [];
+    for (let i = 0; i < 16; i++) {
+      const x = (i - 7.5) * (CELL_W + CELL_G) + (i >= 4 ? CELL_G : 0) + (i >= 8 ? CELL_G : 0) - CELL_G;
+      for (const fill of [0, 1]) {
+        const g = new THREE.PlaneGeometry(CELL_W, 0.022 * UI).translate(x, BOT - 0.065 * UI, fill * 0.01), n = g.attributes.position.count;
+        const c = fill ? cellCols[i] : new THREE.Color(IVORY).multiplyScalar(0.35);
+        g.setAttribute('aCell', new THREE.Float32BufferAttribute(new Array(n).fill(0).flatMap(() => [i, fill]), 2));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(new Array(n).fill(0).flatMap(() => [c.r, c.g, c.b]), 3));
+        g.deleteAttribute('uv'); g.deleteAttribute('normal'); parts.push(g);
+      }
+    }
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uF: { value: new Array(16).fill(0) }, uFrame: { value: 0 }, uOut: { value: 0 } },
+      vertexShader: /* glsl */ `attribute vec2 aCell; attribute vec3 color; uniform float uF[16]; uniform float uFrame, uOut; varying vec3 vC; varying float vA;
+        void main(){ float f = uF[int(aCell.x + 0.5)];
+          vC = aCell.y > 0.5 ? color * (1.4 + (f > 0.0 && f < 1.0 ? 1.5 : 0.0)) : color; vA = aCell.y > 0.5 ? f * uOut : uFrame;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `varying vec3 vC; varying float vA; void main(){ if (vA < 0.002) discard; gl_FragColor = vec4(vC, vA); }`,
+      transparent: true, depthWrite: false,
+    });
+    return new THREE.Mesh(mergeGeometries(parts), m);
+  })();
+  hud.scene.add(gauge);
   const stepY = BOT + 0.15 * UI;
   const nadiSteps = [['IN · LEFT', AIR, -0.42], ['HOLD', '#ffffff', 0], ['OUT · RIGHT', WARM, 0.42]].map(([s, c, x]) => centerText(s, stepY, { height: 0.034, color: c, intensity: 1.0, x: x * UI }));
   const limbTitle = centerText("PATANJALI'S EIGHT LIMBS (ASHTANGA)", stepY + 0.03 * UI, { weight: 500, height: 0.042, color: GOLD });
@@ -626,11 +669,7 @@ export function create(ctx, segment) {
       key.color.setRGB(1.0, 0.6 + 0.1 * dawn, 0.36 + 0.1 * dawn);
       hemi.intensity = 0.45 + 0.2 * dawn;
       dust.tick(t, info); dust.u.opacity = 0.35 * (1 - mist);
-      for (const d of diyas) {
-        d.s.position.set(d.x + d.v * t, 0.06, d.z);
-        const k = 0.8 + 0.2 * Math.sin(t * 9 + d.ph) * Math.sin(t * 5.3 + d.ph * 2);
-        d.s.material.color.setRGB(1.0, 0.68, 0.32).multiplyScalar(1.3 * k * (1 - 0.4 * mist));
-      }
+      for (const pts of [diyas, footDots]) { const u = pts.material.uniforms; u.uTime.value = t; u.uMist.value = mist; u.uViewport.value = info?.height ?? 800; }
       boats.forEach((b, i) => { b.b.position.x = b.x + t * 0.25 * (i % 2 ? -1 : 1); b.b.position.y = -0.18 + 0.02 * Math.sin(t * 1.2 + i); b.b.rotation.z = 0.02 * Math.sin(t * 0.9 + i * 2); });
       sunV.copy(sunDir).transformDirection(camera.matrixWorldInverse);
       figMatI.userData.U.uSunV.value.copy(sunV); figMatS.userData.U.uSunV.value.copy(sunV);
@@ -655,7 +694,7 @@ export function create(ctx, segment) {
       }
       for (const kind of AS.BONES) { inst[kind].instanceMatrix.needsUpdate = true; inst[kind].geometry.attributes.aGlow.needsUpdate = true; }
       floorLine.progress = ramp(t, tSur - 0.12, rowT(11) + 0.05, ease.linear); floorLine.opacity = 0.85 * (1 - 0.7 * mist);
-      footDots.forEach((d, i) => { const ti = rowT(i); const g = t > ti - 0.05 ? 0.5 + 1.6 * Math.exp(-(t - ti) * 5) : 0; d.material.opacity = 1; d.material.color.setRGB(1.0, 0.72, 0.4).multiplyScalar(g * (1 - 0.7 * mist)); d.visible = g > 0.01; });
+      footDots.visible = t > rowT(0) - 0.05;
 
       // -------- the seated figure: gold-rimmed silhouette → hologram → light
       const holo = ramp(t, tPra - 0.12, tPra + 0.25), gone = ramp(t, tDay - 0.08, tDay + 0.3, ease.inOutSine);
@@ -728,12 +767,7 @@ export function create(ctx, segment) {
       show(gaugeLab, tPra + 0.05, tPra + 0.3, gOut);
       const counts = t < tPra ? 0 : t < tNadi ? 4 * (t - tPra) / (tNadi - tPra) : t < tEx ? 4 + 4 * (t - tNadi) / (tEx - tNadi) : 8 + 8 * sat((t - tEx) / (tDay - tEx));
       const gp0 = ramp(t, tPra, tPra + 0.25);
-      cells.forEach((c, i) => {
-        c.frame.material.opacity = gp0 * gOut * 0.7; c.frame.visible = c.frame.material.opacity > 0.002;
-        const f = sat(counts - i);
-        c.fill.material.opacity = f * gOut; c.fill.visible = f * gOut > 0.002;
-        c.fill.material.color.copy(cellCols[i]).multiplyScalar(1.4 + (f > 0 && f < 1 ? 1.5 : 0));
-      });
+      { const u = gauge.material.uniforms; u.uFrame.value = gp0 * gOut * 0.7; u.uOut.value = gOut; for (let i = 0; i < 16; i++) u.uF.value[i] = sat(counts - i); gauge.visible = gp0 * gOut > 0.002 || counts > 0 && gOut > 0.002; }
       const nIn = ramp(t, tNadi + 0.08, tNadi + 0.3), nOut = 1 - ramp(t, tLimb - 0.15, tLimb);
       const act = [envelope(t, tPra, tNadi + 0.05, 0.05, 0.1) + (t > tNadi && t < tEx ? 0.0 : 0), envelope(t, tNadi, tEx + 0.02, 0.05, 0.05), envelope(t, tEx, tLimb + 0.2, 0.05, 0.1)];
       nadiSteps.forEach((l, i) => { l.reveal = 1; l.opacity = nIn * nOut * (0.4 + 0.6 * Math.max(act[i], i === 0 ? 0.5 * ramp(t, tNadi, tNadi + 0.2) * (1 - ramp(t, tNadi + 0.2, tNadi + 0.4)) : 0)); l.intensity = 0.8 + 1.1 * act[i]; });

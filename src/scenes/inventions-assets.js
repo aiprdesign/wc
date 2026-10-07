@@ -141,6 +141,10 @@ export function galleryMaterials(env, lite = false) {
   M.glassClear = std({ color: '#e8eef2', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.14, envMapIntensity: 1.3, side: THREE.DoubleSide, depthWrite: false });
   M.quartz = std({ color: '#f2f4f6', metalness: 0, roughness: 0.08, transparent: true, opacity: 0.28, envMapIntensity: 1.2, depthWrite: false });
   M.liquid = std({ color: '#e7e2d8', metalness: 0, roughness: 0.3, transparent: true, opacity: 0.55, depthWrite: false });
+  M.liquidOpaque = std({ color: '#d9d4c9', metalness: 0, roughness: 0.35 });
+  M.acrylicSolid = std({ color: '#d6e4ec', metalness: 0, roughness: 0.04, transparent: true, opacity: 0.22, envMapIntensity: 1.4, depthWrite: false });
+  M.phoneBack = std({ color: '#1f262e', metalness: 0.3, roughness: 0.16, envMapIntensity: 1.1 });
+  M.filmStrip = std({ color: '#2a1f17', metalness: 0, roughness: 0.25, side: THREE.DoubleSide });
   M.black.color.set('#040405');
   return M;
 }

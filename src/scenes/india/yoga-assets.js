@@ -144,11 +144,12 @@ export function segMatrix(seg, out, scale = 1, origin = null, rotY = 0) {
   return out;
 }
 
+// profile resolution of the limbs (lite: a coarser profile and caps; the silhouette stays round)
+const LIMB = { n: 18, cap: 6 };
 // smooth tapered limb along +y: profile knots [y, r] (y in metres), radii smoothed, round end caps
-function limb(knots, { seg = 14, sx = 1, sz = 1, n = 18 } = {}) {
+function limb(knots, { seg = 14, sx = 1, sz = 1, n = LIMB.n, cap = LIMB.cap } = {}) {
   const pts = [];
   const y0 = knots[0][0], y1 = knots[knots.length - 1][0], r0 = knots[0][1], r1 = knots[knots.length - 1][1];
-  const cap = 6;
   for (let i = 0; i <= cap; i++) { const a = -Math.PI / 2 + (i / cap) * (Math.PI / 2); pts.push(new THREE.Vector2(Math.cos(a) * r0, y0 + Math.sin(a) * r0)); }
   const curve = new THREE.SplineCurve(knots.map(([y, r]) => new THREE.Vector2(r, y)));
   for (let i = 1; i < n; i++) { const p = curve.getPoint(i / n); pts.push(new THREE.Vector2(p.x, p.y)); }
@@ -163,8 +164,9 @@ const ellG = (rx, ry, rz, x = 0, y = 0, z = 0, seg = 18) => new THREE.SphereGeom
 
 // one geometry per bone kind, authored along +y from the joint (local x = forward / up of the segment, z lateral)
 export function boneGeometries(lite = false) {
-  const s = lite ? 10 : 16, R = RIG;
-  return {
+  const s = lite ? 8 : 16, R = RIG;
+  LIMB.n = lite ? 8 : 18; LIMB.cap = lite ? 3 : 6;
+  const out = {
     pelvis: ellG(0.105, 0.1, 0.155, 0.0, 0.02, 0, s),
     lumbar: limb([[0.02, 0.12], [0.1, 0.112], [0.2, 0.118]], { seg: s, sx: 0.78, sz: 1.08 }),
     thorax: merge([
@@ -175,11 +177,13 @@ export function boneGeometries(lite = false) {
     head: merge([ellG(0.1, 0.118, 0.084, 0.012, R.headOff, 0, s + 4), ellG(0.05, 0.045, 0.06, 0.035, 0.03, 0, s)]),   // skull + jaw
     upperArm: limb([[0, 0.05], [0.07, 0.046], [0.2, 0.038], [R.upperArm, 0.034]], { seg: s }),
     forearm: limb([[0, 0.035], [0.07, 0.036], [0.18, 0.028], [R.forearm, 0.023]], { seg: s }),
-    hand: limb([[0.0, 0.024], [0.06, 0.03], [0.12, 0.026], [R.hand - 0.02, 0.016]], { seg: s, sx: 0.55, sz: 1 }),
+    hand: limb([[0.0, 0.024], [0.06, 0.03], [0.12, 0.026], [R.hand - 0.02, 0.016]], { seg: lite ? 6 : s, sx: 0.55, sz: 1 }),
     thigh: limb([[0, 0.078], [0.08, 0.08], [0.25, 0.064], [0.38, 0.05], [R.thigh, 0.048]], { seg: s }),
     shin: limb([[0, 0.049], [0.09, 0.053], [0.2, 0.046], [0.34, 0.033], [R.shin, 0.031]], { seg: s }),
-    foot: limb([[-0.06, 0.034], [0.0, 0.038], [0.09, 0.04], [0.16, 0.03], [R.foot, 0.022]], { seg: s, sx: 0.6, sz: 1.15 }),
+    foot: limb([[-0.06, 0.034], [0.0, 0.038], [0.09, 0.04], [0.16, 0.03], [R.foot, 0.022]], { seg: lite ? 6 : s, sx: 0.6, sz: 1.15 }),
   };
+  LIMB.n = 18; LIMB.cap = 6;
+  return out;
 }
 
 // ============================================================================================ seated figure

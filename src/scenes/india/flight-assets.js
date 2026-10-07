@@ -572,8 +572,8 @@ export function flightMaterials() {
     arch: new THREE.MeshStandardMaterial({ color: '#3a2a20', roughness: 0.9 }),
     pole: new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.8 }),
     foliage: new THREE.MeshStandardMaterial({ color: '#3f5a26', roughness: 0.9, vertexColors: true }),
-    trunk: new THREE.MeshStandardMaterial({ color: '#4c3a2a', roughness: 0.9 }),
-    palmFrond: new THREE.MeshStandardMaterial({ color: '#2e6222', roughness: 0.8, side: THREE.DoubleSide }),
+    trunk: new THREE.MeshStandardMaterial({ color: '#4c3a2a', roughness: 0.9, ...trunkMaps(), normalScale: new THREE.Vector2(0.9, 0.9) }),
+    palmFrond: new THREE.MeshStandardMaterial({ color: '#2e6222', roughness: 1, side: THREE.DoubleSide, ...frondMaps(), normalScale: new THREE.Vector2(0.7, 0.7) }),
     flag: new THREE.MeshStandardMaterial({ color: '#c8361e', roughness: 0.8, side: THREE.DoubleSide }),
     crowdBody: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }),
     crowdHead: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }),
@@ -814,10 +814,78 @@ export function treeGeo(seed = 1, h = 7) {
   return { crown: merge(crown), trunk: merge([cyl(h * 0.03, h * 0.05, h * 0.65, 7, [0, h * 0.32, 0])]) };
 }
 // coconut palm with separate trunk / frond geometry (for colour)
+// ------------------------------------------------------------------ coconut palm maps (close-up detail without triangles)
+// height canvas (red channel) → tangent-space normal map
+function heightNormal(c, k = 3) {
+  const w = c.width, h = c.height, src = c.getContext('2d').getImageData(0, 0, w, h).data;
+  const o = mkCanvas(w, h), og = o.getContext('2d'), im = og.createImageData(w, h), d = im.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const xa = (x - 1 + w) % w, xb = (x + 1) % w, ya = (y - 1 + h) % h, yb = (y + 1) % h;
+    const dx = (src[(y * w + xb) * 4] - src[(y * w + xa) * 4]) * (k / 255), dy = (src[(yb * w + x) * 4] - src[(ya * w + x) * 4]) * (k / 255);
+    const l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4;
+    d[i] = (-dx / l * 0.5 + 0.5) * 255; d[i + 1] = (dy / l * 0.5 + 0.5) * 255; d[i + 2] = (0.5 / l + 0.5) * 255; d[i + 3] = 255;
+  }
+  og.putImageData(im, 0, 0);
+  return toTexture(o, { srgb: false });
+}
+// one leaflet (u: rachis → tip, v: across): folded along a pale midrib, fine parallel veins, a waxy sheen that
+// dulls toward the torn, sun-dried tip, edges a touch yellower. Albedo stays near white (the material's green
+// tints it), so the same map serves every palm.
+let FROND = null;
+export function frondMaps() {
+  if (FROND) return FROND;
+  const W = 256, H = 64, R = rng(1932);
+  const ac = mkCanvas(W, H), a = ac.getContext('2d'), hc = mkCanvas(W, H), hg = hc.getContext('2d'), rc = mkCanvas(W, H), ro = rc.getContext('2d');
+  const ai = a.createImageData(W, H), hi = hg.createImageData(W, H), ri = ro.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = x / W, v = y / H, across = Math.abs(v - 0.5) * 2;
+    const vein = Math.pow(0.5 + 0.5 * Math.cos(across * Math.PI * 9), 6) * (1 - across * 0.4);
+    const mid = Math.exp(-Math.pow((v - 0.5) / 0.035, 2));
+    const dry = smoothstep(0.78, 1.0, u + 0.05 * Math.sin(v * 21 + u * 7)), edge = smoothstep(0.75, 1.0, across);
+    const n = fbm2(u * 6, v * 3, 3) * 0.5 + (R() - 0.5) * 0.06;
+    let r = 0.86 + 0.1 * n - 0.05 * vein, g = 0.9 + 0.08 * n - 0.04 * vein, b = 0.78 + 0.06 * n;
+    r += 0.12 * mid + 0.22 * dry + 0.08 * edge; g += 0.1 * mid + 0.06 * dry + 0.05 * edge; b += 0.04 * mid - 0.2 * dry;
+    const i = (y * W + x) * 4;
+    ai.data[i] = Math.min(255, r * 235); ai.data[i + 1] = Math.min(255, g * 235); ai.data[i + 2] = Math.max(0, Math.min(255, b * 235)); ai.data[i + 3] = 255;
+    const ht = 0.62 - 0.3 * across + 0.22 * mid + 0.06 * vein + 0.04 * n;
+    hi.data[i] = hi.data[i + 1] = hi.data[i + 2] = Math.max(0, Math.min(255, ht * 255)); hi.data[i + 3] = 255;
+    const rr = 0.42 + 0.35 * dry + 0.12 * edge + 0.08 * n - 0.08 * mid;
+    ri.data[i] = ri.data[i + 1] = ri.data[i + 2] = Math.max(0, Math.min(255, rr * 255)); ri.data[i + 3] = 255;
+  }
+  a.putImageData(ai, 0, 0); hg.putImageData(hi, 0, 0); ro.putImageData(ri, 0, 0);
+  FROND = { map: toTexture(ac), normalMap: heightNormal(hc, 5), roughnessMap: toTexture(rc, { srgb: false }) };
+  return FROND;
+}
+// the trunk: ring scars of fallen fronds every few centimetres, fibrous vertical cracks, grey-brown weathering
+let TRUNK = null;
+export function trunkMaps() {
+  if (TRUNK) return TRUNK;
+  const W = 128, H = 512, R = rng(17);
+  const ac = mkCanvas(W, H), a = ac.getContext('2d'), hc = mkCanvas(W, H), hg = hc.getContext('2d');
+  const ai = a.createImageData(W, H), hi = hg.createImageData(W, H);
+  const rings = []; for (let y = 0; y < H;) { rings.push(y); y += 10 + R() * 9; }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let dr = 1e9; for (const ry of rings) dr = Math.min(dr, Math.abs(y - ry - 2 * Math.sin(x / W * TAU * 2 + ry)));
+    const ring = Math.exp(-dr * dr / 3), crack = Math.pow(Math.max(0, fbm2(x * 0.35, y * 0.02, 2)), 2) * 3;
+    const n = fbm2(x * 0.05, y * 0.01, 3);
+    const l = 0.78 + 0.18 * n - 0.32 * ring - 0.25 * Math.min(1, crack);
+    const i = (y * W + x) * 4;
+    ai.data[i] = Math.max(0, Math.min(255, l * 238)); ai.data[i + 1] = Math.max(0, Math.min(255, l * 228)); ai.data[i + 2] = Math.max(0, Math.min(255, l * 212)); ai.data[i + 3] = 255;
+    const ht = 0.6 - 0.35 * ring - 0.2 * Math.min(1, crack) + 0.05 * n;
+    hi.data[i] = hi.data[i + 1] = hi.data[i + 2] = Math.max(0, Math.min(255, ht * 255)); hi.data[i + 3] = 255;
+  }
+  a.putImageData(ai, 0, 0); hg.putImageData(hi, 0, 0);
+  const map = toTexture(ac), normalMap = heightNormal(hc, 4);
+  for (const t of [map, normalMap]) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  TRUNK = { map, normalMap };
+  return TRUNK;
+}
 export function palmGeos(seed = 1, h = 9) {
   const R = rng(seed);
   const lean = (R() - 0.5) * 0.5 + 0.2, dir = R() * TAU, lx = Math.cos(dir) * lean * h * 0.35, lz = Math.sin(dir) * lean * h * 0.35, top = V3(lx, h, lz);
   const trunk = tubeAlong(new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(lx * 0.15, h * 0.35, lz * 0.15), V3(lx * 0.55, h * 0.72, lz * 0.55), top]), (u) => 0.26 * (1 - 0.35 * u) * (1 + 0.06 * Math.sin(u * 160)) + (u < 0.06 ? (0.06 - u) * 2.5 : 0), 24, 7);
+  { const tuv = new Float32Array(25 * 8 * 2); for (let i = 0; i <= 24; i++) for (let j = 0; j <= 7; j++) tuv.set([j / 7, (i / 24) * h / 1.4], (i * 8 + j) * 2); trunk.setAttribute('uv', new THREE.BufferAttribute(tuv, 2)); }
+  const uvs = [];
   const pos = [], NF = 18 + Math.floor(R() * 5), tmp = V3(), side = V3();
   for (let f = 0; f < NF; f++) {
     const a = (f / NF) * TAU + R() * 0.3, el = 0.75 - R() * 0.9, L = 4.0 + R() * 1.5;
@@ -829,9 +897,10 @@ export function palmGeos(seed = 1, h = 9) {
         const tip = p.clone().addScaledVector(side, sd * ll * 0.9).addScaledVector(tan, ll * 0.5); tip.y -= ll * 0.45;
         const b = p.clone().addScaledVector(tan, 0.2), tb = tip.clone().addScaledVector(tan, 0.1);
         pos.push(p.x, p.y, p.z, b.x, b.y, b.z, tip.x, tip.y, tip.z, b.x, b.y, b.z, tb.x, tb.y, tb.z, tip.x, tip.y, tip.z);
+        uvs.push(0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0);
       }
     }
   }
-  const fr = new THREE.BufferGeometry(); fr.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fr.computeVertexNormals();
+  const fr = new THREE.BufferGeometry(); fr.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fr.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); fr.computeVertexNormals();
   return { trunk, fronds: fr };
 }

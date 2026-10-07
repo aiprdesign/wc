@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { rng, lerp, TAU } from '../../lib/math.js';
 import { GLSL_NOISE } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
+import { surfaceDetailTexture } from '../../lib/surface.js';
 import { V3, bake, lathe, rod, tubeAlong } from './flight-assets.js';
 
 const fl = (x) => { const s = String(+(+x).toPrecision(7)); return /[.e]/.test(s) ? s : s + '.0'; };
@@ -34,12 +35,17 @@ float skAA(float d, float w, float fw){ return 1.0 - smoothstep(w, w + fw, d); }
 //        heat: [xFrom, xTo, amount], lines: [{ a: 'x', at, b: 'z', lo, hi, w, depth }],
 //        decals: { rnd: [[x, y, z, R, axis, sign, tol]], flash: { x0, y0, y1, w, sk }, text: [{ U, V, u0, v0, w, h, sign, axis }] },
 //        tex: Texture (for text decals) }
+// lite (phones, AR, VR headsets): rivets stay (a few ALU ops; they are what a close look finds); the 3D-noise
+// weathering and paint chips come from two fetches of the film's shared 256² detail map (lib/surface.js) instead
+// of five simplex noises, projected along the part's dominant axis and stretched along the flow for streaks.
 export function skin(mat, cfg = {}, lite = false) {
-  const P = cfg.panel, Rv = !lite && cfg.rivet, N = cfg.noise, C = !lite && cfg.chip, F = cfg.fab, S = cfg.stringer, H = cfg.heat, D = cfg.decals ?? {};
+  const P = cfg.panel, Rv = cfg.rivet, N = cfg.noise, C = cfg.chip, F = cfg.fab, S = cfg.stringer, H = cfg.heat, D = cfg.decals ?? {};
+  const DET = lite && (N || C);
   let b = `float skH = 0.0, skRo = 1.0, skChip = 0.0, decM = 0.0; vec3 skC = vec3(1.0), decC = vec3(0.0);
   {
   vec3 p = vSkP; vec3 n = normalize(vSkN); vec3 an = abs(n); float fw = max(length(fwidth(vSkP)), 1e-5);
   vec3 q = p; float L = 0.0, reg = 1.0; vec3 cid = vec3(0.0);
+  ${DET ? 'vec2 skPU = an.x > an.y && an.x > an.z ? p.yz : (an.y > an.z ? p.zx : p.xy); float skFl = an.y > an.z ? p.z : p.y;' : ''}
   `;
   if (cfg.shear) { const [a, c, k] = cfg.shear; b += `q.${a} += abs(p.${c}) * ${fl(k)};\n`; }
   if (P?.region) { const [lo, hi] = P.region; b += `reg = smoothstep(${fl(lo - 0.015)}, ${fl(lo + 0.015)}, p.x) * (1.0 - smoothstep(${fl(hi - 0.015)}, ${fl(hi + 0.015)}, p.x));\n`; }
@@ -81,6 +87,15 @@ export function skin(mat, cfg = {}, lite = false) {
       { float h1 = skHash(cid + 0.37), h2 = skHash(cid + 5.1);
         skC *= 1.0 + ${fl(P.tint ?? 0.04)} * (h1 - 0.5) * 2.0 * reg; skRo *= 1.0 + ${fl(P.rough ?? 0.12)} * (h2 - 0.5) * 2.0 * reg; }\n`;
   }
+  if (N && lite) {
+    const s = N.scale ?? 1.2;
+    b += `{ vec4 d1 = texture2D(skDet, skPU * ${fl(s * 0.45)} + vec2(0.37, 0.11));
+      vec4 d2 = texture2D(skDet, vec2(p.x * ${fl(s * 0.1)}, skFl * ${fl(s * 1.6)}) + vec2(0.13, 0.71));
+      float n1 = (d1.g - 0.5) * 1.5 + (d1.r - 0.5) * 0.5;
+      float st = (d2.g - 0.5) * 2.2;
+      skRo *= 1.0 + ${fl(N.rough ?? 0.15)} * n1 + ${fl(N.streak ?? 0.12)} * st;
+      skC *= 1.0 - ${fl(N.grime ?? 0.06)} * smoothstep(0.1, 0.9, st) - ${fl((N.grime ?? 0.06) * 0.5)} * n1; }\n`;
+  }
   if (N && !lite) {
     const s = N.scale ?? 1.2;
     b += `{ float n1 = snoise(p * ${fl(s)}) * 0.6 + snoise(p * ${fl(s * 3.7)}) * 0.4;
@@ -88,7 +103,12 @@ export function skin(mat, cfg = {}, lite = false) {
       skRo *= 1.0 + ${fl(N.rough ?? 0.15)} * n1 + ${fl(N.streak ?? 0.12)} * st;
       skC *= 1.0 - ${fl(N.grime ?? 0.06)} * smoothstep(0.1, 0.9, st) - ${fl((N.grime ?? 0.06) * 0.5)} * n1; }\n`;
   }
-  if (C) {
+  if (C && lite) {
+    const s = C.scale ?? 7;
+    b += `{ float cn = (texture2D(skDet, skPU * ${fl(s * 0.06)} + vec2(0.71, 0.29)).r - 0.5) * 2.4;
+      skChip = smoothstep(${fl(1 - (C.amt ?? 0.3))}, ${fl(1 - (C.amt ?? 0.3) + 0.05)}, cn + L * 0.5) * (1.0 - smoothstep(0.004, 0.03, fw));
+      skH -= 0.00025 * skChip; }\n`;
+  } else if (C) {
     const s = C.scale ?? 7;
     b += `{ float cn = snoise(p * ${fl(s)}) * 0.6 + snoise(p * ${fl(s * 3.3)}) * 0.4;
       skChip = smoothstep(${fl(1 - (C.amt ?? 0.3))}, ${fl(1 - (C.amt ?? 0.3) + 0.05)}, cn + L * 0.5) * (1.0 - smoothstep(0.004, 0.03, fw));
@@ -149,9 +169,10 @@ export function skin(mat, cfg = {}, lite = false) {
   const tex = cfg.tex;
   mat.onBeforeCompile = (sh) => {
     if (tex) sh.uniforms.skTex = { value: tex };
+    if (DET) sh.uniforms.skDet = { value: surfaceDetailTexture() };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSkP; varying vec3 vSkN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkP = position; vSkN = objectNormal;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${GLSL_NOISE}\n${SK_PARS}\n${tex ? 'uniform sampler2D skTex;' : ''}`)
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${GLSL_NOISE}\n${SK_PARS}\n${tex ? 'uniform sampler2D skTex;' : ''}${DET ? 'uniform sampler2D skDet;' : ''}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${b}
         diffuseColor.rgb *= skC; diffuseColor.rgb = mix(diffuseColor.rgb, decC, decM); ${C ? `diffuseColor.rgb = mix(diffuseColor.rgb, ${chipCol}, skChip);` : ''}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>

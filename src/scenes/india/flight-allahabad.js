@@ -4,6 +4,7 @@
 // stylised figures (turbans, saris, sola topis, parasols — no faces), shade trees and country boats on the river.
 // Everything is built once; flight.js only sets a few uniforms per frame (pure functions of t).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, lerp, TAU } from '../../lib/math.js';
 import { fbm2, GLSL_NOISE } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
@@ -466,7 +467,9 @@ export function boatGeos(seed = 1, L = 9) {
 // spots: [x, z, scale?, seated?]; facing: optional function (x, z) → yaw. Five kinds of figure — men in kurta and
 // turban, women in saris with the pallu over the head, British men in dark suits and sola topis, ladies in pale
 // dresses and wide hats, and khaki police in red pagris — each body and headwear instanced with per-instance colour.
-export function buildCrowd2(SM, spots, { seed = 4, facing = null, parasols = 0.07 } = {}) {
+// lite (phones, AR, VR): the whole crowd is baked into ONE vertex-coloured mesh (one draw instead of a dozen,
+// the same figures, colours and seeds) and it casts no shadow — a distant crowd only receives.
+export function buildCrowd2(SM, spots, { seed = 4, facing = null, parasols = 0.07, lite = false } = {}) {
   const R = rng(seed), n = spots.length;
   const man = lathe([[0.12, 0], [0.17, 0.75], [0.2, 1.05], [0.24, 1.2], [0.07, 1.35], [0.05, 1.42]], 6);
   const woman = lathe([[0.27, 0], [0.22, 0.4], [0.16, 1.0], [0.2, 1.17], [0.06, 1.32], [0.05, 1.38]], 6);
@@ -497,8 +500,19 @@ export function buildCrowd2(SM, spots, { seed = 4, facing = null, parasols = 0.0
   });
   const grp = new THREE.Group(), c = new THREE.Color();
   const skinTones = ['#8a5a3a', '#a06a44', '#6e4a30', '#b47c52', '#7a5034'];
+  const baked = [];
   const inst = (geo, mat, list, colFn) => {
     if (!list.length) return;
+    if (lite) {
+      const src = geo.index ? geo.toNonIndexed() : geo, n = src.attributes.position.count;
+      list.forEach((M, i) => {
+        c.set(colFn(i));
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', src.attributes.position.clone()); g.setAttribute('normal', src.attributes.normal.clone()); g.applyMatrix4(M);
+        const col = new Float32Array(n * 3); for (let k = 0; k < n; k++) col.set([c.r, c.g, c.b], k * 3);
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3)); baked.push(g);
+      });
+      return;
+    }
     const m = new THREE.InstancedMesh(geo, mat, list.length);
     list.forEach((M, i) => { m.setMatrixAt(i, M); m.setColorAt(i, c.set(colFn(i))); });
     m.castShadow = true; m.receiveShadow = true; m.userData.noBatch = true; grp.add(m);
@@ -511,5 +525,9 @@ export function buildCrowd2(SM, spots, { seed = 4, facing = null, parasols = 0.0
   const brit = new Set(); per[2].concat(per[3]).forEach((M) => brit.add(M));
   inst(head, SM.skin, heads, (i) => (brit.has(heads[i]) ? '#d8a888' : skinTones[Math.floor(R() * skinTones.length)]));
   inst(parasol, SM.parasol, par, () => ['#1a1716', '#1a1716', '#f2ece0', '#c8302a', '#2a3a6a', '#e8b030'][Math.floor(R() * 6)]);
+  if (lite && baked.length) {
+    SM.crowd ??= new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, vertexColors: true, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(mergeGeometries(baked), SM.crowd); m.receiveShadow = true; grp.add(m);
+  }
   return grp;
 }

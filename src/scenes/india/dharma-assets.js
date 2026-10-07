@@ -70,9 +70,9 @@ export const CAP = {
 
 // inverted lotus bell: 20 hanging petals with a central rib, turned out at the tips
 function bellGeometry(lite) {
-  const N = 20, NA = lite ? 160 : 240;
+  const N = 20, NA = lite ? 120 : 240;
   const ys = [];
-  for (let j = 0; j <= (lite ? 40 : 60); j++) { const u = j / (lite ? 40 : 60); ys.push(CAP.bellTop * Math.pow(u, 1.25)); }
+  for (let j = 0; j <= (lite ? 28 : 60); j++) { const u = j / (lite ? 28 : 60); ys.push(CAP.bellTop * Math.pow(u, 1.25)); }
   const g = revolveGrid(ys, NA, (a, y) => {
     const u = y / CAP.bellTop;
     let r = 0.262 + 0.148 * Math.pow(1 - u, 1.7);
@@ -113,7 +113,7 @@ function neckGeometry(lite) {
   }
   const lathe = (pts, seg = 128) => { const g = new THREE.LatheGeometry(pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]).map(([r, y]) => new THREE.Vector2(r, y)), seg); g.computeVertexNormals(); return prep(g); };
   parts.push(lathe([[0.2, 0.6], [0.262, 0.6], [0.262, 0.6], [0.262, 0.64], [0.25, 0.645], [0.25, 0.69], [0.25, 0.69], [0.4, 0.69], [0.4, 0.69], [0.438, 0.693], [0.44, 0.708], [0.43, 0.712], [0.43, 0.712],
-    [0.43, 0.97], [0.43, 0.97], [0.44, 0.972], [0.442, 0.985], [0.43, 0.99], [0.43, 0.99], [0.03, 0.99]], 160));
+    [0.43, 0.97], [0.43, 0.97], [0.44, 0.972], [0.442, 0.985], [0.43, 0.99], [0.43, 0.99], [0.03, 0.99]], lite ? 96 : 160));
   const cap = new THREE.CircleGeometry(0.035, 12); cap.rotateX(-Math.PI / 2); cap.translate(0, 0.99, 0); parts.push(prep(cap));
   return mergeGeometries(parts);
 }
@@ -245,12 +245,12 @@ export function capitalGeometries(lite) {
   const animals = kinds.map(([kind, slot, dir]) => {
     const prims = animalPrims(kind).map((p) => (dir > 0 ? p : p.type === 'ell'
       ? { ...p, c: [-p.c[0], p.c[1], p.c[2]], ang: -(p.ang ?? 0) } : { ...p, a: [-p.a[0], p.a[1], p.a[2]], b: [-p.b[0], p.b[1], p.b[2]] }));
-    const n = prep(meshBody(sdfBody(prims), [-0.175, -0.014, -0.012], [0.175, 0.205, 0.05], lite ? 0.0075 : 0.0058));
+    const n = prep(meshBody(sdfBody(prims), [-0.175, -0.014, -0.012], [0.175, 0.205, 0.05], lite ? 0.0088 : 0.0058));
     n.scale(1.1, 1.1, 1.0); n.translate(0, CAP.abacusY0 + 0.03, 0);
     // (the animals walk sunwise round the drum: each faces away from the wheel at the front lion's feet)
     return bendOnDrum(n, R, slot * Math.PI / 4);
   });
-  const lion = meshBody(sdfBody(lionPrims()), [-0.235, 0.0, -0.17], [0.235, 0.96, 0.46], lite ? 0.017 : 0.0125);
+  const lion = meshBody(sdfBody(lionPrims()), [-0.235, 0.0, -0.17], [0.235, 0.96, 0.46], lite ? 0.021 : 0.0125);
   const lions = [0, 1, 2, 3].map((k) => { const g = lion.clone(); g.rotateY(k * Math.PI / 2); g.translate(0, CAP.abacusY1 - 0.004, 0); return g; });
   return {
     bell: bellGeometry(lite),

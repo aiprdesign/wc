@@ -422,3 +422,62 @@ export function figureMask(f, { x0 = -0.6, x1 = 0.6, y0 = -0.04, y1 = 1.06, W = 
   t.userData = { w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   return t;
 }
+
+// ------------------------------------------------------------------------------------------------ static baking
+// Merges the static meshes under `root` into one mesh per (material, shadow flags, attribute layout,
+// spatial cell), in root space: a whole set costs a few draw calls instead of hundreds, while big sets
+// stay split by area (so a viewer's frustum — or AR's vitrine — can still skip what is out of reach).
+// `keep(o)` leaves a mesh (and everything under it) alone; `cast(center, radius, o)` decides whether a
+// former caster still casts (e.g. only inside the shadow camera's box). Returns the new meshes.
+export function bakeStatic(root, { cell = 6, keep = () => false, cast = () => true } = {}) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), M = new THREE.Matrix4(), sph = new THREE.Sphere();
+  const groups = new Map(), victims = [];
+  const sig = (g) => Object.keys(g.attributes).sort().map((k) => `${k}${g.attributes[k].itemSize}`).join(',') + (g.index ? 'i' : 'n');
+  const walk = (o) => {
+    if (o !== root && keep(o)) return;
+    if (o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !o.children.length && o.visible && !Array.isArray(o.material) && o.material && !o.material.transparent
+      && o.geometry?.attributes?.position && !o.geometry.morphAttributes?.position && o.onBeforeRender === THREE.Object3D.prototype.onBeforeRender) {
+      M.multiplyMatrices(inv, o.matrixWorld);
+      const g = o.geometry;
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      sph.copy(g.boundingSphere).applyMatrix4(M);
+      const castIt = o.castShadow && cast(sph.center, sph.radius, o);
+      const key = [o.material.uuid, castIt, o.receiveShadow, o.renderOrder, sig(g), Math.floor(sph.center.x / cell), Math.floor(sph.center.z / cell)].join('|');
+      if (!groups.has(key)) groups.set(key, { mat: o.material, cast: castIt, recv: o.receiveShadow, ro: o.renderOrder, fc: true, list: [] });
+      const G = groups.get(key);
+      const ng = g.clone(); ng.applyMatrix4(M);
+      if (M.determinant() < 0 && ng.index) { const ix = ng.index.array; for (let i = 0; i + 2 < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } }
+      for (const k of Object.keys(ng.morphAttributes)) delete ng.morphAttributes[k];
+      ng.clearGroups();
+      G.list.push(ng); G.fc = G.fc && o.frustumCulled;
+      victims.push(o);
+      return;
+    }
+    for (const c of [...o.children]) walk(c);
+  };
+  walk(root);
+  const out = [];
+  for (const G of groups.values()) {
+    let geo = G.list.length === 1 ? G.list[0] : mergeGeometries(G.list, false);
+    if (!geo) continue;
+    if (G.list.length > 1) G.list.forEach((g) => g.dispose());
+    geo.computeBoundingSphere(); geo.computeBoundingBox();
+    const m = new THREE.Mesh(geo, G.mat);
+    m.castShadow = G.cast; m.receiveShadow = G.recv; m.renderOrder = G.ro; m.frustumCulled = G.fc;
+    root.add(m); out.push(m);
+  }
+  for (const o of victims) o.parent?.remove(o);
+  // groups emptied by the bake go too
+  const prune = (o) => { for (const c of [...o.children]) prune(c); if (o !== root && o.type === 'Group' && !o.children.length && !o.userData.keepGroup && !keep(o)) o.parent?.remove(o); };
+  prune(root);
+  return out;
+}
+
+// Is a sphere (centre, radius, world space) inside a directional light's shadow box? (decides casters)
+export function inShadowBox(light, centre, radius) {
+  const c = light.shadow.camera, cam = new THREE.OrthographicCamera(c.left, c.right, c.top, c.bottom, c.near, c.far);
+  cam.position.copy(light.position); cam.lookAt(light.target.position); cam.updateMatrixWorld(true);
+  const v = centre.clone().applyMatrix4(cam.matrixWorldInverse);
+  return v.x + radius > c.left && v.x - radius < c.right && v.y + radius > c.bottom && v.y - radius < c.top && -v.z + radius > c.near && -v.z - radius < c.far;
+}

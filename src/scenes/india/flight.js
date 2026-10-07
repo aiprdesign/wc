@@ -13,6 +13,7 @@
 //   tejas    57.1  Tejas pulls up into the vertical on afterburner, punches through a cloud layer and climbs into the
 //                  darkening blue; the camera rises after it for the 'zoom' into ISRO.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CUES, FILM_ASPECT, OUTPUT_ASPECT } from '../../timeline.js';
 import { sat, lerp, ease, ramp, envelope, rng, TAU } from '../../lib/math.js';
 import { TextPlane, FONTS } from '../../lib/text.js';
@@ -24,6 +25,24 @@ import * as X from './flight-allahabad.js';
 import * as C from './flight-craft.js';
 
 const V3 = A.V3;
+
+// Many drifting cloud cards in ONE draw call (they were one mesh each: ~60 draws for the dream and the wipe).
+// The cards are concatenated in the order the renderer drew them (renderOrder, then far → near), so the
+// see-through layering is unchanged; every frame each card's quad is re-placed at its own offset (pure in t).
+function cardBatch(cards, mat, renderOrder) {
+  const list = cards.slice().sort((a, b) => a.ro - b.ro || a.z - b.z);
+  const g = mergeGeometries(list.map((c) => c.geo.index ? c.geo.toNonIndexed() : c.geo));
+  const base = g.attributes.position.array.slice(), ranges = [];
+  let o = 0; for (const c of list) { const n = c.geo.index ? c.geo.index.count : c.geo.attributes.position.count; ranges.push([o, n]); o += n; }
+  g.attributes.position.setUsage(THREE.DynamicDrawUsage);
+  const mesh = new THREE.Mesh(g, mat); mesh.renderOrder = renderOrder; mesh.frustumCulled = false;
+  // place(i, x, y, z): card i (in the caller's order) at offset (x, y, z); commit() uploads
+  const slot = new Map(list.map((c, k) => [c, k]));
+  const P = g.attributes.position.array;
+  mesh.place = (c, x, y, z) => { const [a, n] = ranges[slot.get(c)]; for (let v = a; v < a + n; v++) { P[v * 3] = base[v * 3] + x; P[v * 3 + 1] = base[v * 3 + 1] + y; P[v * 3 + 2] = base[v * 3 + 2] + z; } };
+  mesh.commit = () => { g.attributes.position.needsUpdate = true; };
+  return mesh;
+}
 
 export function create(ctx, segment) {
   const cue = (n) => CUES[n] - segment.start;
@@ -89,28 +108,34 @@ export function create(ctx, segment) {
     return g;
   };
   const addCard = (x, y, z, w, speed) => {
-    const m = new THREE.Mesh(cardGeo(Math.floor(R() * 4), w), cardMat);
-    m.position.set(x, y, z); m.userData = { x, y, z, speed, bob: R() * TAU }; m.renderOrder = -5 - Math.round(-z); w1.add(m); cards.push(m);
+    cards.push({ geo: cardGeo(Math.floor(R() * 4), w), x, y, z, speed, bob: R() * TAU, ro: -5 - Math.round(-z) });
   };
   for (let i = 0; i < 9; i++) addCard(-8 + i * 1.8 + R() * 0.8, -0.9 - R() * 0.9, -2.8 + R() * 5.2, 3.6 + R() * 2.2, 0.25);          // the bed the vimana rides on
   for (let i = 0; i < 22; i++) addCard(-30 + R() * 64, -7 + R() * 13, -14 - R() * 34, 7 + R() * 9, 0.12);                           // far banks
   for (let i = 0; i < 6; i++) addCard(-7 + i * 3 + R(), -3.9 + R() * 1.3, 4.5 + R() * 3.5, 2.8 + R() * 1.4, 0.6);                    // foreground, drifting fast (parallax)
+  // two batches: the banks behind the vimana, and the foreground cards drawn over its see-through parts
+  const cardsBack = cardBatch(cards.filter((c) => c.ro < 0), cardMat, -30), cardsFront = cardBatch(cards.filter((c) => c.ro >= 0), cardMat, 2);
+  w1.add(cardsBack, cardsFront);
   const sunCard = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshBasicMaterial({ map: A.paintedSunTexture(), transparent: true, depthWrite: false, fog: false, color: new THREE.Color(1.5, 1.3, 1.0) }));
   sunCard.position.set(-17, 8.5, -38); sunCard.renderOrder = -60; w1.add(sunCard);
   // a few painted birds (cranes) in a loose skein, as the miniatures draw them
   const birdG = A.merge([A.plate([[0, 0], [0.5, 0.18], [0.9, 0.1], [0.5, 0.06], [0.05, -0.02], [-0.5, 0.06], [-0.9, 0.1], [-0.5, 0.18]], 0.01, 0)]);
   const birds = [];
-  for (let i = 0; i < 7; i++) { const b = new THREE.Mesh(birdG, new THREE.MeshBasicMaterial({ color: '#2a1608', fog: false, side: THREE.DoubleSide })); b.userData = { x: -12 + i * 1.3 + R(), y: 6.2 + Math.abs(i - 3) * 0.5 + R() * 0.3, z: -16, ph: R() * TAU }; b.scale.setScalar(0.55); w1.add(b); birds.push(b); }
+  for (let i = 0; i < 7; i++) birds.push({ x: -12 + i * 1.3 + R(), y: 6.2 + Math.abs(i - 3) * 0.5 + R() * 0.3, z: -16, ph: R() * TAU });
+  const birdIM = new THREE.InstancedMesh(birdG, new THREE.MeshBasicMaterial({ color: '#2a1608', fog: false, side: THREE.DoubleSide }), birds.length);
+  birdIM.frustumCulled = false; w1.add(birdIM);
+  const _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(), _bs = V3(), _bp = V3();
 
   // the wipe: painted clouds rise over the lens and become real cloud, which parts over Allahabad (camera-attached)
   const wipe = new THREE.Group(); scene.add(wipe);
   const wipeMat = cardMat.clone(); wipeMat.depthTest = false;
   const wipeCards = [];
   for (let row = 0; row < 5; row++) for (let i = 0; i < 5; i++) {
-    const w = 2.6 + R() * 0.6, m = new THREE.Mesh(cardGeo((row + i) % 4, w), wipeMat);
-    m.userData = { x: -2.3 + i * 1.15 + (R() - 0.5) * 0.3 + (row % 2) * 0.5, y: [-0.55, 0.2, 0.9, -1.35, 1.6][row], z: -3.0 - row * 0.12 - R() * 0.1, d: (row % 3) * 0.06 + R() * 0.05 };
-    m.renderOrder = 900 + row; wipe.add(m); wipeCards.push(m);
+    const w = 2.6 + R() * 0.6, geo = cardGeo((row + i) % 4, w);
+    const u = { x: -2.3 + i * 1.15 + (R() - 0.5) * 0.3 + (row % 2) * 0.5, y: [-0.55, 0.2, 0.9, -1.35, 1.6][row], z: -3.0 - row * 0.12 - R() * 0.1, d: (row % 3) * 0.06 + R() * 0.05 };
+    wipeCards.push({ geo, ro: 900 + row, ...u });
   }
+  const wipeBatch = cardBatch(wipeCards, wipeMat, 900); wipe.add(wipeBatch);
   const puffTex = A.puffTexture(7);
   const WP = 110, wipePuffs = new A.SoftPoints(WP, { map: puffTex, near: 0.2 });
   wipePuffs.material.depthTest = false; wipePuffs.renderOrder = 950;
@@ -132,7 +157,8 @@ export function create(ctx, segment) {
   // ---- the exhibition: Indo-Saracenic halls, a grandstand, striped shamianas, bell tents, bunting, shade trees
   const occupied = [];   // [x, z, r] — keep trees out of the buildings
   {
-    const meshOf = (geo, mat, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; w2.add(m); return m; };
+    // (lite — phones, AR, VR: the set receives the biplane's shadow but casts none; only the aircraft cast)
+    const meshOf = (geo, mat, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast && !lite; m.receiveShadow = true; w2.add(m); return m; };
     const place = (geo, p, ry) => A.bake(geo, p, [0, ry, 0]);
     const stone = [], recess = [], dome = [], gilt = [], flagsA = [], flagsB = [], buntLines = [];
     for (const [x, z, w, d, h, ry, wings] of [[-50, -64, 30, 12, 8, 0.18, 1], [98, -60, 34, 13, 9, -0.42, 1]]) {
@@ -233,7 +259,7 @@ export function create(ctx, segment) {
         q.setFromEuler(new THREE.Euler(0, RS() * TAU, 0)); mtx.compose(V3(x, -0.15 * s, z), q, V3(s * (1 + RS() * 0.6), s * (0.6 + RS() * 0.5), s * (1 + RS() * 0.6)));
         im.setMatrixAt(i, mtx); im.setColorAt(i, c.set(greens[Math.floor(RS() * greens.length)]).multiplyScalar(0.8 + RS() * 0.35));
       });
-      im.castShadow = true; im.receiveShadow = true; w2.add(im);
+      im.castShadow = !lite; im.receiveShadow = true; w2.add(im);
     }
     // country boats on the river
     const hulls = [], sails = [], RB = rng(88);
@@ -261,8 +287,8 @@ export function create(ctx, segment) {
     for (let i = 0; i < 90 * keep; i++) spots.push([-26 + RC() * 52, -64 - RC() * 9, 1]);
     for (let i = 0; i < 70 * keep; i++) { const x = (RC() < 0.5 ? -1 : 1) * (28 + RC() * 40), z = -4 - RC() * 56; spots.push([x, z, 1]); }
     const facing = (x, z) => (Math.abs(x) < 34 && z > -60 ? (x < 0 ? Math.PI / 2 : -Math.PI / 2) : z < -60 ? Math.PI : Math.atan2(-x, -z - 20));
-    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] !== true), { seed: 4, facing }));
-    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] === true), { seed: 5, facing: () => gsR, parasols: 0 }));
+    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] !== true), { seed: 4, facing, lite }));
+    w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] === true), { seed: 5, facing: () => gsR, parasols: 0, lite }));
   }
   const som = C.buildSommer(M); w2.add(som.group);
   som.disc.material = new THREE.MeshBasicMaterial({ map: X.propDiscTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false });
@@ -283,7 +309,7 @@ export function create(ctx, segment) {
     const palms = [], fronds = [];
     for (let i = 0; i < 30; i++) { const p = A.palmGeos(i * 7 + 3, 8 + R() * 5); const x = -150 + i * 10 + R() * 6, z = 24 + R() * 40; palms.push(A.bake(p.trunk, [x, 0, z])); fronds.push(A.bake(p.fronds, [x, 0, z])); }
     const pm = new THREE.Mesh(A.merge(palms), M.trunk), fm = new THREE.Mesh(A.merge(fronds), M.palmFrond);
-    for (const m of [pm, fm]) { m.castShadow = true; m.receiveShadow = true; w3.add(m); }
+    for (const m of [pm, fm]) { m.castShadow = !lite; m.receiveShadow = true; w3.add(m); }
     // beach scrub under the palms (instanced)
     {
       const RS = rng(1015), N = lite ? 70 : 240;
@@ -295,7 +321,7 @@ export function create(ctx, segment) {
         q.setFromEuler(new THREE.Euler(0, RS() * TAU, 0)); mtx.compose(V3(x, -0.1 * s, z), q, V3(s * (1.2 + RS() * 0.6), s * (0.5 + RS() * 0.4), s * (1.2 + RS() * 0.6)));
         im.setMatrixAt(i, mtx); im.setColorAt(i, c.set(greens[i % 4]).multiplyScalar(0.8 + RS() * 0.3));
       }
-      im.castShadow = true; im.receiveShadow = true; w3.add(im);
+      im.castShadow = !lite; im.receiveShadow = true; w3.add(im);
     }
     // Koli fishing boats drawn up on the sand below the palms, with their masts
     const RB = rng(1932), bh = [], bs = [];
@@ -303,10 +329,10 @@ export function create(ctx, segment) {
       const b = X.boatGeos(i + 20, 7 + RB() * 4), p = [-150 + i * 17 + RB() * 8, -0.25, 9 + RB() * 9], ry = Math.PI / 2 + (RB() - 0.5) * 0.6;
       bh.push(A.bake(b.hull, p, [0, ry, 0.06 * (RB() - 0.5)])); // (sails furled on the beach: hulls and masts only)
     }
-    for (const [geo, mat] of [[bh, SM.boat], [bs, SM.sail]]) if (geo.length) { const m = new THREE.Mesh(A.merge(geo), mat); m.castShadow = true; m.receiveShadow = true; w3.add(m); }
+    for (const [geo, mat] of [[bh, SM.boat], [bs, SM.sail]]) if (geo.length) { const m = new THREE.Mesh(A.merge(geo), mat); m.castShadow = !lite; m.receiveShadow = true; w3.add(m); }
     const spots = []; for (let i = 0; i < 22; i++) spots.push([10 + R() * 14, 3 + R() * 6]);
     for (let i = 0; i < (lite ? 6 : 16); i++) spots.push([-140 + R() * 120, 8 + R() * 10]);
-    w3.add(X.buildCrowd2(SM, spots, { seed: 9, facing: () => Math.PI, parasols: 0.25 }));
+    w3.add(X.buildCrowd2(SM, spots, { seed: 9, facing: () => Math.PI, parasols: 0.25, lite }));
   }
   const foam = [];
   for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1.2 + i * 0.5), X.foamMaterial(i === 0 ? 0.9 : 1.0 - i * 0.22)); f.rotation.x = -Math.PI / 2; f.position.set(0, i === 0 ? 0.02 : 0.07, i === 0 ? -16.6 : -18.6 - (i - 1) * 4); w3.add(f); foam.push(f); }
@@ -405,8 +431,10 @@ export function create(ctx, segment) {
     vim.group.position.copy(vimPos);
     vim.group.rotation.set(0.025 * Math.sin(t * 1.6 + 1), -0.62 + 0.12 * k, 0.03 * Math.sin(t * 1.7));
     A.waveFlags(vim.flags, T, 0.7);
-    for (const c of cards) { const u = c.userData; c.position.set(u.x + u.speed * (t + 0.3), u.y + 0.06 * Math.sin(t * 1.3 + u.bob), u.z); }
-    for (const b of birds) { const u = b.userData; b.position.set(u.x + t * 1.2, u.y + 0.08 * Math.sin(t * 5 + u.ph), u.z); b.scale.y = 0.55 * (0.6 + 0.4 * Math.sin(t * 9 + u.ph)); }
+    for (const c of cards) (c.ro < 0 ? cardsBack : cardsFront).place(c, c.x + c.speed * (t + 0.3), c.y + 0.06 * Math.sin(t * 1.3 + c.bob), c.z);
+    cardsBack.commit(); cardsFront.commit();
+    birds.forEach((u, i) => { birdIM.setMatrixAt(i, _bm.compose(_bp.set(u.x + t * 1.2, u.y + 0.08 * Math.sin(t * 5 + u.ph), u.z), _bq, _bs.set(0.55, 0.55 * (0.6 + 0.4 * Math.sin(t * 9 + u.ph)), 0.55))); });
+    birdIM.instanceMatrix.needsUpdate = true;
     // dreamlike: a slow push and drift, then the camera rises into the clouds at the cut
     const up = ramp(t, 0.7, tA + 0.05, ease.inCubic);
     camPos.set(lerp(1.6, 0.8, k), lerp(0.2, 0.7, k) + up * 1.2, lerp(17.5, 14.8, ease.outSine(k)));
@@ -597,9 +625,10 @@ export function create(ctx, segment) {
       const wipeOn = t > 0.7 && t < tA + 0.6;
       wipe.visible = true;
       wipeMat.opacity = 1 - paintOut;
-      for (const c of wipeCards) {
-        const u = c.userData, cv = ramp(t, 0.72 + u.d, tA - 0.02 + u.d * 0.3, ease.inOutSine);
-        c.position.set(u.x + (t - 0.7) * 0.5, lerp(u.y - 2.6, u.y, cv), u.z); c.visible = wipeOn && wipeMat.opacity > 0.002;
+      wipeBatch.visible = wipeOn && wipeMat.opacity > 0.002;
+      if (wipeBatch.visible) {
+        for (const u of wipeCards) { const cv = ramp(t, 0.72 + u.d, tA - 0.02 + u.d * 0.3, ease.inOutSine); wipeBatch.place(u, u.x + (t - 0.7) * 0.5, lerp(u.y - 2.6, u.y, cv), u.z); }
+        wipeBatch.commit();
       }
       wipePuffs.visible = wipeOn && t > tA - 0.04;
       if (wipePuffs.visible) {

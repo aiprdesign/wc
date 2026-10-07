@@ -5,6 +5,7 @@ import { HASH_EXPERIENCE, HASH_XR, HASH_ARLITE, HASH_CHAPTER, restoreHash, setHa
 import { Engine } from './core/engine.js';
 import { Player } from './core/player.js';
 import { Explorer } from './core/explore.js';
+import { ExplorePad } from './core/explore-pad.js';
 import { LiveCam } from './core/live.js';
 import { Experience } from './core/experience.js';
 import { XRMode, xrSupport, VR, AR } from './core/xr.js';
@@ -170,6 +171,10 @@ async function boot() {
   setLoad(1);
   player = new Player(engine, score?.buffer ?? null);
   const explorer = new Explorer(engine, $('film'));
+  // game-style walking: phones and tablets start in WALK with an on-screen joystick and buttons
+  const touchScreen = !!globalThis.matchMedia?.('(pointer: coarse)').matches;
+  if (touchScreen) explorer.mode = 'walk';
+  explorer.padUI = new ExplorePad(explorer, { touch: touchScreen });
   // EXPERIENCE: slow-motion drone flythrough with a live ambient score (no narration)
   const ambient = params.has('noaudio') ? null : new Ambient();
   const nowT = () => (experience?.active ? experience.t : player.time);
@@ -415,6 +420,7 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
       explorer.enter(exp.active ? exp.t : player.time);
     } else explorer.exit();
     body.classList.toggle('exploring-on', on);
+    explorer.padUI?.show(on);
     $('btn-explore').setAttribute('aria-pressed', String(on));
     showControls(on);
     if (!on && resumeAfterExplore && exp.active) { resumeAfterExplore = false; expPlay(); }

@@ -12,7 +12,7 @@ import { rng, TAU, lerp } from '../../lib/math.js';
 import { noise2, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { glowSprite } from '../../lib/materials.js';
-import { merge } from './textiles-assets.js';
+import { merge, bakeStatic, inShadowBox } from './textiles-assets.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -350,7 +350,7 @@ function turned(h, r, seg = 16) {
 }
 
 // ------------------------------------------------------------------------------------------------ the courtyard
-export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark } = {}) {
+export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark, shadowLight = null } = {}) {
   const R = rng(9907);
   RB_SEG = lite ? 1 : 2; LK = lite ? 0.45 : 1;
   const set = new THREE.Group(); set.name = 'courtyard'; scene.add(set);
@@ -707,7 +707,7 @@ export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark 
   }
 
   // -------- print table, ink tray and resting blocks (beside the cloth)
-  const tray = new THREE.Group(); tray.position.set(2.35, 0, 0.35); tray.rotation.y = -0.12; set.add(tray);
+  const tray = new THREE.Group(); tray.position.set(2.35, 0, 0.35); tray.rotation.y = -0.12; tray.userData.keepGroup = true; set.add(tray);
   {
     add(rbox(0.9, 0.06, 0.62, 0.02).translate(0, 0.24, 0), wood, { parent: tray, cast: true });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(turned(0.21, 0.022, 8).translate(sx * 0.38, 0.0, sz * 0.25), woodDark, { parent: tray, cast: true });
@@ -791,9 +791,14 @@ export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark 
       const x = -22 + i * (lite ? 4.1 : 1.9) + R() * 1.2, z = -34 - R() * 6, q = R();
       items.push({ kind: q < 0.5 ? 'neem' : q < 0.8 ? 'mango' : 'palm', x, z, s: 0.45 + R() * 0.3, lite: true, tint: 0.8 + R() * 0.3 });
     }
-    return NK.plantForest(items, { sun: leafSun, lite, variants: 2, seed: 12, wind: 0.5 });
+    // (beyond the walls, far outside the key light's shadow box: they receive but never cast)
+    return NK.plantForest(items, { sun: leafSun, lite, variants: 2, seed: 12, wind: 0.5, castShadow: false });
   })();
   set.add(forest.group);
+
+  // every static part is baked into one mesh per material and area (a few dozen draw calls for the whole
+  // courtyard instead of hundreds); only parts inside the key light's shadow box keep casting
+  bakeStatic(set, { cell: 6, keep: (o) => o === floor, cast: (c, r) => !shadowLight || inShadowBox(shadowLight, c, r) });
 
   return {
     floor, floorMat, wallMat, tray,
