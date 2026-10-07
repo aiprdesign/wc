@@ -245,7 +245,7 @@ vec3 skyCol(vec3 d){
   vec3 c = mix(uHor, uZen, t);
   c = mix(c, uHaze, exp(-abs(e) * 16.0) * 0.7);
   float s = max(dot(d, L), 0.0);
-  c += uSunCol * (pow(s, 6.0) * 0.18 + pow(s, 48.0) * 0.45);
+  c += uSunCol * (pow(s, 6.0) * 0.18 + pow(s, 48.0) * 0.45) * (1.0 - 0.7 * uSpace);
   // high altitude: the blue deepens toward black overhead
   vec3 deep = mix(vec3(0.004, 0.012, 0.05), vec3(0.0006, 0.0015, 0.008), smoothstep(0.2, 1.0, e));
   c = mix(c, deep + uHor * 0.2 * exp(-max(e, 0.0) * 10.0), uSpace * smoothstep(-0.25, 0.35, e));
@@ -318,10 +318,10 @@ export function makePaintedSky() {
       uniform float uTime, uGain; uniform vec3 uSun; varying vec3 vDir;
       void main(){
         vec3 d = normalize(vDir); float e = d.y;
-        vec3 parch = vec3(0.80, 0.62, 0.36), warm = vec3(0.86, 0.52, 0.22), lapis = vec3(0.012, 0.04, 0.26);
+        vec3 parch = vec3(0.80, 0.62, 0.36), warm = vec3(0.86, 0.52, 0.22), lapis = vec3(0.02, 0.07, 0.36);
         float wob = 0.035 * snoise(vec3(d.x * 3.0, d.z * 3.0, 1.0)) + 0.012 * snoise(vec3(d.xz * 14.0, 2.0));
         // a band of lapis across the top of the page, parchment-gold below, warm glow toward the painted sun
-        float band = smoothstep(0.30, 0.36, e + wob);
+        float band = smoothstep(0.40, 0.45, e + wob * 0.5);
         vec3 c = mix(parch, warm, smoothstep(0.25, -0.05, e) * 0.35);
         float s = max(dot(d, normalize(uSun)), 0.0);
         c += vec3(0.9, 0.55, 0.15) * pow(s, 5.0) * 0.5;
@@ -331,7 +331,7 @@ export function makePaintedSky() {
         vec3 top = lapis * (0.8 + 0.4 * snoise(vec3(d.xz * 5.0, 7.0)));
         top += vec3(0.9, 0.62, 0.2) * smoothstep(0.97, 1.0, snoise(vec3(d * 40.0))) * 1.5;   // gold-leaf stars
         c = mix(c, top, band);
-        c = mix(c, vec3(1.2, 0.85, 0.35), (1.0 - smoothstep(0.0, 0.006, abs(e + wob - 0.333))) * 0.9);   // the gold rule along the band
+        c = mix(c, vec3(1.2, 0.85, 0.35), (1.0 - smoothstep(0.0, 0.006, abs(e + wob * 0.5 - 0.425))) * 0.9);   // the gold rule along the band
         // paper grain and age
         float gr = snoise(vec3(d * 380.0)) * 0.5 + snoise(vec3(d * 90.0)) * 0.5;
         c *= 0.93 + 0.07 * gr;
@@ -368,11 +368,9 @@ export function paintedCloudAtlas(seed = 11) {
     all(0, gr);
     // the curls inside each lobe (thin blue-grey and gold arcs)
     for (const [x, y, r] of lobes) {
-      if (r < 30) continue;
+      if (r < 44) continue;
       g.strokeStyle = 'rgba(90,110,150,0.55)'; g.lineWidth = 2.2;
       g.beginPath(); for (let k = 0; k <= 30; k++) { const a = Math.PI * 1.05 + k / 30 * Math.PI * 1.6, rr = r * (0.75 - k / 30 * 0.45); const px = ox + x + Math.cos(a) * rr, py = oy + y + r * 0.1 + Math.sin(a) * rr; if (k) g.lineTo(px, py); else g.moveTo(px, py); } g.stroke();
-      g.strokeStyle = 'rgba(200,150,60,0.7)'; g.lineWidth = 1.4;
-      g.beginPath(); g.arc(ox + x, oy + y + r * 0.1, r * 0.82, Math.PI * 1.15, Math.PI * 1.75); g.stroke();
     }
     g.restore();
   }
@@ -472,6 +470,17 @@ export function groundTexture(kind = 'earth', seed = 7) {
   for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(60,48,30,${0.05 + R() * 0.1})`; g.fillRect(R() * S, R() * S, 1 + R() * 3, 1 + R() * 3); }
   const t = toTexture(c, { anisotropy: 8 }); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
 }
+// a big ground plane with large-scale colour variation baked into vertex colours (breaks up the texture tiling)
+export function variedGround(size, seg, map, base, colA, colB, scale = 0.012, seed = 3) {
+  const g = new THREE.PlaneGeometry(size, size, seg, seg); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position, col = new Float32Array(p.count * 3), a = new THREE.Color(colA), b = new THREE.Color(colB), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i), n = sat(fbm2(x * scale + seed, z * scale, 4) * 0.8 + 0.5), m = sat(fbm2(x * scale * 5 - seed, z * scale * 5, 2) * 0.6 + 0.5);
+    c.copy(a).lerp(b, n).multiplyScalar(0.85 + 0.3 * m); col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: base, map, roughness: 0.95, vertexColors: true }));
+}
 function stripeTexture(a = '#b8261c', b = '#f1e6cf', n = 12) {
   const W = 256, H = 64, c = mkCanvas(W, H), g = c.getContext('2d');
   for (let i = 0; i < n; i++) { g.fillStyle = i % 2 ? b : a; g.fillRect(i * W / n, 0, W / n + 1, H); }
@@ -491,7 +500,7 @@ export function flightMaterials() {
     teal: new THREE.MeshStandardMaterial({ color: '#137a6e', roughness: 0.4, metalness: 0.1 }),
     ink: inkMaterial('#2a1406', 0.035),
     // 1911
-    fabric: new THREE.MeshStandardMaterial({ color: '#ffffff', map: fabricTexture(), roughness: 0.82, metalness: 0, side: THREE.DoubleSide }),
+    fabric: new THREE.MeshStandardMaterial({ color: '#d6cab0', map: fabricTexture(), roughness: 0.82, metalness: 0, side: THREE.DoubleSide }),
     spruce: new THREE.MeshStandardMaterial({ color: '#c08a52', map: woodTexture(3), roughness: 0.45, metalness: 0 }),
     wire: new THREE.LineBasicMaterial({ color: '#2a2622', transparent: true, opacity: 0.75 }),
     engine: new THREE.MeshStandardMaterial({ color: '#7a7c80', roughness: 0.42, metalness: 0.85, map: brushedMetalTexture({ seed: 9 }) }),
@@ -503,12 +512,12 @@ export function flightMaterials() {
     skin: new THREE.MeshStandardMaterial({ color: '#c8916a', roughness: 0.6, metalness: 0 }),
     prop: new THREE.MeshStandardMaterial({ color: '#7a4a24', map: woodTexture(8), roughness: 0.32, metalness: 0 }),
     // 1932
-    cream: new THREE.MeshPhysicalMaterial({ color: '#e7dcc2', roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, map: panelTexture('#e7dcc2', 4, { lines: 'rgba(80,70,50,0.25)', rivets: false }) }),
+    cream: new THREE.MeshPhysicalMaterial({ color: '#c9bc9e', roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, map: panelTexture('#e7dcc2', 4, { lines: 'rgba(80,70,50,0.25)', rivets: false }) }),
     maroon: new THREE.MeshPhysicalMaterial({ color: '#6e1a1c', roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 }),
     silverDope: new THREE.MeshStandardMaterial({ color: '#c3c6c8', roughness: 0.45, metalness: 0.55, map: fabricTexture() }),
     glass: new THREE.MeshStandardMaterial({ color: '#0b1218', roughness: 0.04, metalness: 0.3, envMapIntensity: 2.2 }),
     // jets
-    alu: new THREE.MeshStandardMaterial({ color: '#d4d8dd', metalness: 1, roughness: 0.3, map: panelTexture('metal', 12), envMapIntensity: 1.25 }),
+    alu: new THREE.MeshStandardMaterial({ color: '#d4d8dd', metalness: 0.65, roughness: 0.38, map: panelTexture('#c9cdd2', 12, { lines: 'rgba(40,44,50,0.35)' }), envMapIntensity: 1.25 }),
     tejas: new THREE.MeshStandardMaterial({ color: '#9aa1a8', metalness: 0.35, roughness: 0.48, map: panelTexture('#a9afb5', 21, { lines: 'rgba(40,46,52,0.35)' }) }),
     radome: new THREE.MeshStandardMaterial({ color: '#6c7178', metalness: 0.2, roughness: 0.55 }),
     darkMetal: new THREE.MeshStandardMaterial({ color: '#2b2c2f', metalness: 0.8, roughness: 0.45 }),
@@ -524,7 +533,7 @@ export function flightMaterials() {
     pole: new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.8 }),
     foliage: new THREE.MeshStandardMaterial({ color: '#3f5a26', roughness: 0.9, vertexColors: true }),
     trunk: new THREE.MeshStandardMaterial({ color: '#4c3a2a', roughness: 0.9 }),
-    palmFrond: new THREE.MeshStandardMaterial({ color: '#4d6a2a', roughness: 0.8, side: THREE.DoubleSide }),
+    palmFrond: new THREE.MeshStandardMaterial({ color: '#2f4a1c', roughness: 0.8, side: THREE.DoubleSide }),
     flag: new THREE.MeshStandardMaterial({ color: '#c8361e', roughness: 0.8, side: THREE.DoubleSide }),
     crowdBody: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }),
     crowdHead: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }),
@@ -881,7 +890,7 @@ export function buildMarut(M) {
   dark.push(bake(new THREE.CircleGeometry(1, 24), [-7.89, 0.0, 0], [0, -Math.PI / 2, 0], [0.84, 0.52, 1]));
   // pitot on the nose, under-wing tanks
   dark.push(rod(V3(7.85, 0.0, 0), V3(8.6, 0.0, 0), 0.025, 5));
-  for (const s of [1, -1]) skin.push(bake(lathe([[0.001, 0], [0.18, 0.5], [0.24, 1.2], [0.22, 2.2], [0.001, 2.9]], 14), [1.6, -0.6, s * 2.3], [0, 0, -Math.PI / 2]));
+  for (const s of [1, -1]) { skin.push(bake(lathe([[0.001, 0], [0.18, 0.5], [0.24, 1.2], [0.22, 2.2], [0.001, 2.9]], 14), [1.6, -0.55, s * 2.3], [0, 0, -Math.PI / 2])); skin.push(box(1.2, 0.36, 0.06, [0.1, -0.24, s * 2.3])); }
   add(g, skin, M.alu); add(g, dark, M.darkMetal); add(g, glass, M.canopy);
   // roundels on the upper wings
   for (const s of [1, -1]) roundel(M, g, [-1.4, 0.02, s * 3.3], [-Math.PI / 2, 0, 0], 0.42);
@@ -935,7 +944,7 @@ export function buildCrowd(M, spots, seed = 4) {
   const umbG = merge([bake(new THREE.ConeGeometry(0.62, 0.22, 10, 1, true), [0, 2.1, 0]), bake(new THREE.CylinderGeometry(0.012, 0.012, 1.0, 4), [0.12, 1.6, 0])]);
   const bodies = new THREE.InstancedMesh(bodyG, M.crowdBody, n), heads = new THREE.InstancedMesh(headG, M.crowdHead, n);
   const umb = []; const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color();
-  const robes = ['#efe9dc', '#e8e0cc', '#f3efe6', '#d9cfb8', '#2b2a2e', '#3a3328', '#c98a3a', '#9a3a2a', '#e6dcc4', '#efe9dc'];
+  const robes = ['#d8d0bc', '#c8bca0', '#e2dccd', '#a89a80', '#2b2a2e', '#3a3328', '#b07a34', '#8a3426', '#5a4a3a', '#cfc4aa', '#6a5a48', '#2a3a5a'];
   const tops = ['#f2ede2', '#c8402a', '#e6a23a', '#efe9dc', '#d86a8a', '#f2ede2', '#2a2420', '#e8e2d2'];
   spots.forEach(([x, z, sc = 1], i) => {
     const s = (0.92 + R() * 0.16) * sc;
@@ -999,15 +1008,19 @@ export function treeGeo(seed = 1, h = 7) {
 export function palmGeos(seed = 1, h = 9) {
   const R = rng(seed);
   const lean = (R() - 0.5) * 0.5 + 0.2, dir = R() * TAU, lx = Math.cos(dir) * lean * h * 0.35, lz = Math.sin(dir) * lean * h * 0.35, top = V3(lx, h, lz);
-  const trunk = tubeAlong(new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(lx * 0.15, h * 0.35, lz * 0.15), V3(lx * 0.55, h * 0.72, lz * 0.55), top]), (u) => 0.22 * (1 - 0.4 * u) * (1 + 0.06 * Math.sin(u * 160)), 24, 7);
-  const pos = [], NF = 14 + Math.floor(R() * 4), tmp = V3(), side = V3();
+  const trunk = tubeAlong(new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(lx * 0.15, h * 0.35, lz * 0.15), V3(lx * 0.55, h * 0.72, lz * 0.55), top]), (u) => 0.26 * (1 - 0.35 * u) * (1 + 0.06 * Math.sin(u * 160)) + (u < 0.06 ? (0.06 - u) * 2.5 : 0), 24, 7);
+  const pos = [], NF = 18 + Math.floor(R() * 5), tmp = V3(), side = V3();
   for (let f = 0; f < NF; f++) {
-    const a = (f / NF) * TAU + R() * 0.3, el = 0.7 - R() * 0.8, L = 3.4 + R() * 1.4;
+    const a = (f / NF) * TAU + R() * 0.3, el = 0.75 - R() * 0.9, L = 4.0 + R() * 1.5;
     const d0 = V3(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)); side.crossVectors(d0, UP).normalize();
-    const pts = []; for (let i = 0; i <= 12; i++) { const s = i / 12, p = top.clone().addScaledVector(d0, s * L); p.y -= (s * L) ** 2 * 0.13 * (1.3 - el * 0.4); pts.push(p); }
-    for (let i = 1; i < 12; i++) {
-      const s = i / 12, p = pts[i], tan = tmp.subVectors(pts[i + 1], pts[i - 1]).normalize(), ll = 0.95 * Math.sin(Math.PI * Math.min(1, s * 1.1)) + 0.12;
-      for (const sd of [-1, 1]) { const tip = p.clone().addScaledVector(side, sd * ll * 0.9).addScaledVector(tan, ll * 0.45); tip.y -= ll * 0.3; const b = p.clone().addScaledVector(tan, 0.1); pos.push(p.x, p.y, p.z, b.x, b.y, b.z, tip.x, tip.y, tip.z); }
+    const pts = []; for (let i = 0; i <= 14; i++) { const s = i / 14, p = top.clone().addScaledVector(d0, s * L); p.y -= (s * L) ** 2 * 0.12 * (1.3 - el * 0.4); pts.push(p); }
+    for (let i = 1; i < 14; i++) {
+      const s = i / 14, p = pts[i], tan = tmp.subVectors(pts[i + 1], pts[i - 1]).normalize(), ll = 1.15 * Math.sin(Math.PI * Math.min(1, s * 1.05)) + 0.15;
+      for (const sd of [-1, 1]) {
+        const tip = p.clone().addScaledVector(side, sd * ll * 0.9).addScaledVector(tan, ll * 0.5); tip.y -= ll * 0.45;
+        const b = p.clone().addScaledVector(tan, 0.2), tb = tip.clone().addScaledVector(tan, 0.1);
+        pos.push(p.x, p.y, p.z, b.x, b.y, b.z, tip.x, tip.y, tip.z, b.x, b.y, b.z, tb.x, tb.y, tb.z, tip.x, tip.y, tip.z);
+      }
     }
   }
   const fr = new THREE.BufferGeometry(); fr.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fr.computeVertexNormals();

@@ -340,7 +340,7 @@ function mergeColored(list) {
 }
 
 // Steps descend towards -z (east, the river). Water level y = 0.
-export const GHAT = { water: 0, stepZ0: -3.0, rise: 0.2, run: 0.4, lower: 6, landingY: 1.2, landingZ0: -0.6, landingZ1: 2.4, upper: 9, terraceY: 3.0, terraceZ0: 6.0, width: 90 };
+export const GHAT = { water: 0, stepZ0: -3.0, rise: 0.2, run: 0.4, lower: 3, landingY: 0.6, landingZ0: -1.8, landingZ1: 3.0, upper: 12, terraceY: 3.0, terraceZ0: 7.8, width: 90 };
 export function stepHeightAt(z) {
   const G = GHAT;
   if (z < G.stepZ0) return -1;

@@ -99,7 +99,7 @@ function unit(K, o) {
     if (!dadoH) K.box(line, -xr - lw / 2, xr + lw / 2, bi - lw / 2, bi + lw / 2, 0, 0.025);
   }
   if (o.floral !== false && line === 'tajBlack') {
-    const hx = W / 2 - bi - lw / 2, top = H - bi - lw / 2;
+    const hx = W / 2 - bi - lw / 2, top = Math.min(H - bi - lw / 2, spring + riseO + 1.1);
     if (top > spring + riseO + 0.5) K.put('tajFloral', new THREE.ShapeGeometry(spandrelShape(hx, top, wo + 2 * lw, spring, riseO + lw * 1.05, n)).translate(0, 0, 0.025), { uv1: (x, y) => [x / 2.4, y / 2.4] });
   }
   if (o.dado) {
@@ -336,7 +336,8 @@ function domeAndDrum(K) {
         const t = (i / nt) * 2 - 1;
         const [r, y, nr, ny] = rAt(1.2 + s * 5.6);
         // a cushion-like petal with a raised rim and a midrib, its tip lifting a little off the dome
-        const h = 0.08 + 0.4 * (1 - t * t) * (0.45 + 0.55 * Math.sin(Math.PI * Math.min(1, s * 1.15))) + 0.08 * Math.exp(-t * t * 30) + 0.1 * Math.exp(-Math.pow((Math.abs(t) - 0.85) * 7, 2)) + 0.22 * s * s;
+        const tap = Math.pow(Math.sin(Math.PI * (0.12 + 0.88 * s)), 0.6);
+        const h = 0.04 + tap * (0.42 * (1 - t * t) + 0.08 * Math.exp(-t * t * 30) + 0.1 * Math.exp(-Math.pow((Math.abs(t) - 0.85) * 7, 2)));
         const rr = r + nr * h, yy = y + ny * h, a = phi + t * half;
         P.push(Math.sin(a) * rr, yy, Math.cos(a) * rr);
       }

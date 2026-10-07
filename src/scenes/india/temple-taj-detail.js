@@ -29,7 +29,7 @@ function marbleTex(size) {
     const cloud = tileNoise(u, v, 3, 4, 11) * 0.025 + tileNoise(u, v, 9, 3, 5) * 0.012;
     const t = tileNoise(u, v, 2, 5, 3);
     const band = Math.abs(Math.sin((u + v * 0.5 + t * 1.6) * Math.PI * 2));
-    const vein = Math.pow(1 - band, 22) * 0.1 + Math.pow(1 - band, 5) * 0.02;
+    const vein = Math.pow(1 - band, 22) * 0.055 + Math.pow(1 - band, 5) * 0.012;
     const k = 1 + cloud - vein;
     return [246 * k, 242 * k - vein * 20, 235 * k - vein * 34];
   });
@@ -51,7 +51,7 @@ function calligraphyTex() {
   const ink = '#15110e';
   g.fillStyle = ink; g.fillRect(0, H * 0.045, W, H * 0.035); g.fillRect(0, H * 0.92, W, H * 0.035);
   g.strokeStyle = ink; g.lineWidth = 2.6; g.lineCap = 'round'; g.lineJoin = 'round';
-  const yb = H * 0.64, u = H * 0.095, nib = u * 1.05;
+  const yb = H * 0.64, u = H * 0.095, nib = u * 1.3;
   const glyph = (x, type, s = 1, y0 = yb) => {
     const U = u * s, N = nib * s;
     const P = (fn) => nibStroke(g, (q) => { q.beginPath(); fn(q); }, N);
@@ -98,7 +98,7 @@ function floralTex() {
   const leafC = ['#5f7f4e', '#4b6a44', '#6f8c55'];
   const stems = [[0.27, 0.0], [0.77, Math.PI]];
   for (const [y0, ph] of stems) {
-    const yAt = (x) => S * y0 + S * 0.085 * Math.sin((x / S) * Math.PI * 2 + ph);
+    const yAt = (x) => S * y0 + S * 0.2 * Math.sin((x / S) * Math.PI * 2 + ph);
     wrap(() => {
       g.strokeStyle = '#4f5d43'; g.lineWidth = 3.2; g.beginPath();
       for (let x = 0; x <= S; x += 4) (x ? g.lineTo(x, yAt(x)) : g.moveTo(x, yAt(x)));
@@ -206,7 +206,7 @@ function railTex() {
   const W = 256, H = 128, c = mkCanvas(W, H), g = c.getContext('2d');
   g.fillStyle = '#ece6dc'; g.fillRect(0, 0, W, H);
   g.fillStyle = 'rgba(120,110,100,0.35)'; g.fillRect(0, 18, W, 2); g.fillRect(0, H - 20, W, 2);
-  g.globalCompositeOperation = 'destination-out';
+  g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
   const n = 4, w = W / n;
   for (let i = 0; i < n; i++) {
     const x0 = i * w + w * 0.2, x1 = (i + 1) * w - w * 0.2, xm = (x0 + x1) / 2, yb = H - 26, ys = 52, ya = 30;

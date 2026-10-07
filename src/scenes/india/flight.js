@@ -67,6 +67,7 @@ export function create(ctx, segment) {
   // ================================================================ 1 · THE DREAM — the painted world
   const w1 = mk();
   const vim = A.buildVimana(M); w1.add(vim.group);
+  vim.group.traverse((o) => { if (o.isMesh) o.castShadow = false; });   // (the heading word must not fall in its shadow)
   const cloudTex = A.paintedCloudAtlas(11);
   const cardMat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide, color: new THREE.Color(0.92, 0.9, 0.86) });
   const cards = [];
@@ -88,9 +89,9 @@ export function create(ctx, segment) {
   const wipe = new THREE.Group(); scene.add(wipe);
   const wipeMat = cardMat.clone(); wipeMat.depthTest = false;
   const wipeCards = [];
-  for (let row = 0; row < 3; row++) for (let i = 0; i < 5; i++) {
+  for (let row = 0; row < 5; row++) for (let i = 0; i < 5; i++) {
     const w = 2.6 + R() * 0.6, m = new THREE.Mesh(A.paintedCloudGeo((row + i) % 4, w), wipeMat);
-    m.userData = { x: -2.3 + i * 1.15 + (R() - 0.5) * 0.3 + (row % 2) * 0.5, y: [-0.55, 0.2, 0.9][row], z: -3.0 - row * 0.12 - R() * 0.1, d: row * 0.06 + R() * 0.05 };
+    m.userData = { x: -2.3 + i * 1.15 + (R() - 0.5) * 0.3 + (row % 2) * 0.5, y: [-0.55, 0.2, 0.9, -1.35, 1.6][row], z: -3.0 - row * 0.12 - R() * 0.1, d: (row % 3) * 0.06 + R() * 0.05 };
     m.renderOrder = 900 + row; wipe.add(m); wipeCards.push(m);
   }
   const puffTex = A.puffTexture(7);
@@ -103,9 +104,9 @@ export function create(ctx, segment) {
   const w2 = mk();
   const SUN2 = V3(0.55, 0.3, -0.78).normalize();
   {
-    const gt = A.groundTexture('earth', 7); gt.repeat.set(300, 300);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshStandardMaterial({ color: '#d8c8a8', map: gt, roughness: 0.96 }));
-    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; w2.add(ground);
+    const gt = A.groundTexture('earth', 7); gt.repeat.set(500, 500);
+    const ground = A.variedGround(3000, 160, gt, '#ffffff', '#a89470', '#7f8a58', 0.02, 5);
+    ground.receiveShadow = true; w2.add(ground);
     const bank = new THREE.Mesh(new THREE.PlaneGeometry(4000, 16), new THREE.MeshStandardMaterial({ color: '#cdb994', roughness: 0.9 }));
     bank.rotation.x = -Math.PI / 2; bank.position.set(0, 0.03, -72); w2.add(bank);
     const river = A.makeWater(SKU, 4000, 1140, { body: '#3a4a3c', silt: '#6f6040', fadeFar: 1300 }); river.position.set(0, 0.06, -80 - 570); w2.add(river);
@@ -139,26 +140,26 @@ export function create(ctx, segment) {
     const spots = [];
     for (let i = 0; i < 260; i++) { const sx = i % 2 ? 1 : -1; spots.push([sx * (20 + R() * 6), -56 + R() * 58]); }
     for (let i = 0; i < 60; i++) spots.push([-22 + R() * 44, -64 - R() * 5]);
-    for (let i = 0; i < 26; i++) spots.push([-19 + R() * 10, 1 + R() * 6]);
-    for (let i = 0; i < 18; i++) spots.push([-6 + R() * 12, 14 + R() * 5]);
     w2.add(A.buildCrowd(M, spots, 4));
   }
   const som = A.buildSommer(M); w2.add(som.group);
   const somAt = (t, out) => {
     const tau = t - tA, lift = Math.max(0, tau - 0.32);
-    out.set(-16 + 15 * tau + 3 * tau * tau, 2.6 * lift * lift + 1.1 * lift, -12 - 2.2 * tau * tau);
+    out.set(-16 + 15 * tau + 3 * tau * tau, 2.6 * lift * lift + 1.1 * lift, -4 - 2.2 * tau * tau);
     return out;
   };
 
   // ================================================================ 3 · JUHU, BOMBAY, 15 OCTOBER 1932 (sea toward −Z)
   const w3 = mk();
-  const SUN3 = V3(-0.38, 0.72, 0.58).normalize();
+  const SUN3 = V3(0.55, 0.62, -0.25).normalize();
   {
-    const st = A.groundTexture('sand', 9); st.repeat.set(300, 300);
-    const sand = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshStandardMaterial({ color: '#f4e6cc', map: st, roughness: 0.92 }));
-    sand.rotation.x = -Math.PI / 2; sand.receiveShadow = true; w3.add(sand);
-    const wet = new THREE.Mesh(new THREE.PlaneGeometry(4000, 12), new THREE.MeshStandardMaterial({ color: '#8a7658', roughness: 0.16, metalness: 0.1, map: st, envMapIntensity: 1.6 }));
-    wet.rotation.x = -Math.PI / 2; wet.position.set(0, 0.02, -12); wet.receiveShadow = true; w3.add(wet);
+    const st = A.groundTexture('sand', 9); st.repeat.set(400, 400);
+    const sand = A.variedGround(3000, 120, st, '#ffffff', '#b8a07a', '#9a8460', 0.015, 2);
+    sand.receiveShadow = true; w3.add(sand);
+    for (const [z, w, op] of [[-8.5, 3, 0.3], [-11, 2.5, 0.6], [-15.2, 6, 1]]) {
+      const wet = new THREE.Mesh(new THREE.PlaneGeometry(4000, w), new THREE.MeshStandardMaterial({ color: '#7c6748', roughness: 0.3, metalness: 0.05, map: st, envMapIntensity: 1.2, transparent: op < 1, opacity: op, depthWrite: op >= 1 }));
+      wet.rotation.x = -Math.PI / 2; wet.position.set(0, 0.015 + op * 0.01, z); wet.receiveShadow = true; w3.add(wet);
+    }
     const sea = A.makeWater(SKU, 4000, 2400, { body: '#14485a', silt: '#2f6a68', waveK: 1.6, fadeFar: 1800 }); sea.position.set(0, 0.05, -18 - 1200); w3.add(sea);
     const palms = [], fronds = [];
     for (let i = 0; i < 30; i++) { const p = A.palmGeos(i * 7 + 3, 8 + R() * 5); const x = -150 + i * 10 + R() * 6, z = 24 + R() * 40; palms.push(A.bake(p.trunk, [x, 0, z])); fronds.push(A.bake(p.fronds, [x, 0, z])); }
@@ -170,7 +171,7 @@ export function create(ctx, segment) {
   const foam = [];
   for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(4000, 0.7 + i * 0.3), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.97, 1.0).multiplyScalar(1.1 - i * 0.25), transparent: true, opacity: 0.75 - i * 0.2, depthWrite: false })); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.07, -18.5 - i * 4); w3.add(f); foam.push(f); }
   const puss = A.buildPussMoth(M); w3.add(puss.group);
-  const pussAt = (t, out) => { const tau = t - tT; return out.set(-17 + 31 * tau, 1.75 + 3.3 - 1.3 * tau, -2.2); };
+  const pussAt = (t, out) => { const tau = t - tT; return out.set(-42 + 38 * tau, 1.75 + 3.6 - 1.4 * tau, 0); };
 
   // ================================================================ 4–5 · ABOVE THE CLOUDS (metres)
   const w4 = mk();
@@ -179,19 +180,20 @@ export function create(ctx, segment) {
   const deck = new A.SoftPoints(DECK_N + LAYER_N, { map: A.puffTexture(3), near: 3 });
   const deckData = [];
   for (let i = 0; i < DECK_N; i++) { const y = -75 + R() * 40; deckData.push({ x: -600 + R() * 1200, y, z: -800 + R() * 950, s: 34 + R() * 40, a: 0.3 + R() * 0.3, rot: R() * TAU, top: (y + 75) / 40 }); }
-  for (let i = 0; i < LAYER_N; i++) { const y = 24 + R() * 16; deckData.push({ x: -80 + R() * 160, y, z: -150 + R() * 200, s: 10 + R() * 14, a: 0.22 + R() * 0.2, rot: R() * TAU, top: 0.6 + (y - 24) / 40 }); }
+  for (let i = 0; i < LAYER_N; i++) { const y = 26 + R() * 14; deckData.push({ x: -70 + R() * 140, y, z: -150 + R() * 125, s: 10 + R() * 14, a: 0.22 + R() * 0.2, rot: R() * TAU, top: 0.6 + (y - 24) / 40 }); }
   w4.add(deck);
   const marut = A.buildMarut(M); w4.add(marut.group);
-  const MA = V3(-95, 5, -44), MB = V3(52, -2, 5), MD = MB.clone().sub(MA).normalize();
+  const MA = V3(-95, 5, -44), MB = V3(42, -1.5, 8), MD = MB.clone().sub(MA).normalize();
   const marutAt = (t, out) => out.copy(MA).lerp(MB, (t - tM + 0.06) / 0.62);
   const marutQ = new THREE.Quaternion().setFromUnitVectors(V3(1, 0, 0), MD).multiply(new THREE.Quaternion().setFromAxisAngle(V3(1, 0, 0), -0.42));
   marut.group.quaternion.copy(marutQ);
   const marutGlow = marut.nozzles.map((p) => { const s = glowSprite({ color: '#ffb880', intensity: 1.2, scale: 1.4 }); s.position.copy(p); marut.group.add(s); return s; });
-  const glint = glowSprite({ color: '#fff6e6', intensity: 5, scale: 1 }); w4.add(glint);
+  const glint = glowSprite({ color: '#fff6e6', intensity: 3, scale: 1 }); w4.add(glint);
   const tej = A.buildTejas(M); w4.add(tej.group);
   const abCore = plume(0.3, 0.12, 3.2, plumeMat('#fff0d8', 3.4, { diamonds: 0.8 })), abOut = plume(0.45, 0.9, 7.5, plumeMat('#ff9a50', 1.4, { alpha: 0.7 }));
   for (const p of [abCore, abOut]) { p.position.copy(tej.nozzle); p.rotation.z = -Math.PI / 2; tej.group.add(p); }
   const abGlow = glowSprite({ color: '#ffc890', intensity: 4, scale: 6 }); abGlow.position.copy(tej.nozzle); tej.group.add(abGlow);
+  const SUN5 = V3(0.62, 0.42, 0.66).normalize();
   const J0 = V3(6, -3, -12), VJ = 170;
   const thetaJ = (tau) => (Math.PI / 2) * ramp(tau, 0.03, 0.42, ease.inOutSine);
   const tejAt = (t, out) => {
@@ -206,8 +208,8 @@ export function create(ctx, segment) {
   // wingtip vortices during the pull-up
   const VAP_N = 200, vap = new A.SoftPoints(VAP_N, { map: A.puffTexture(5), near: 0.5 }); w4.add(vap);
   // speed lines (camera-attached) across the Marut pass
-  const SL_N = 60, slPos = new Float32Array(SL_N * 6), slData = [];
-  for (let i = 0; i < SL_N; i++) slData.push({ x: R() * 24 - 12, y: (R() - 0.5) * 5, z: -6 - R() * 8, len: 0.8 + R() * 2.4, sp: 30 + R() * 30 });
+  const SL_N = 34, slPos = new Float32Array(SL_N * 6), slData = [];
+  for (let i = 0; i < SL_N; i++) slData.push({ x: R() * 24 - 12, y: (R() - 0.5) * 5, z: -6 - R() * 8, len: 0.5 + R() * 1.4, sp: 30 + R() * 30 });
   const slGeo = new THREE.BufferGeometry(); slGeo.setAttribute('position', new THREE.BufferAttribute(slPos, 3));
   const speedLines = new THREE.LineSegments(slGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(1, 1, 1).multiplyScalar(0.6), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   speedLines.frustumCulled = false; wipe.add(speedLines);
@@ -220,7 +222,7 @@ export function create(ctx, segment) {
   const CAPS = [
     { a: tP + 0.2, b: tA - 0.08, main: 'PUSHPAKA VIMANA · THE RAMAYANA', sub: "AN EPIC'S DREAM OF FLIGHT", tag: 'LEGEND' },
     { a: tA + 0.12, b: tT - 0.04, main: '18 FEBRUARY 1911 · ALLAHABAD → NAINI', sub: "HENRI PEQUET · THE WORLD'S FIRST OFFICIAL AIRMAIL · ABOUT 6,500 LETTERS" },
-    { a: tT + 0.04, b: tM - 0.03, main: '15 OCTOBER 1932 · J. R. D. TATA · KARACHI → BOMBAY', sub: 'THE MAIL FLIGHT THAT BECAME AIR INDIA', tag: "INDIA'S FIRST PILOT'S LICENCE, No. 1 · 1929" },
+    { a: tT + 0.04, b: tM - 0.03, main: '15 OCTOBER 1932 · J. R. D. TATA', sub: 'KARACHI → BOMBAY · THE MAIL FLIGHT THAT BECAME AIR INDIA', tag: "INDIA'S FIRST PILOT'S LICENCE, No. 1 · 1929" },
     { a: tM + 0.03, b: tJ - 0.02, main: 'HF-24 MARUT · 1961', sub: 'THE FIRST INDIAN-DESIGNED JET FIGHTER' },
     { a: tJ + 0.05, b: DUR + 0.2, main: 'TEJAS · FIRST FLIGHT 2001', sub: 'HAL · 4 JANUARY 2001' },
   ];
@@ -267,11 +269,11 @@ export function create(ctx, segment) {
     for (const b of birds) { const u = b.userData; b.position.set(u.x + t * 1.2, u.y + 0.08 * Math.sin(t * 5 + u.ph), u.z); b.scale.y = 0.55 * (0.6 + 0.4 * Math.sin(t * 9 + u.ph)); }
     // dreamlike: a slow push and drift, then the camera rises into the clouds at the cut
     const up = ramp(t, 0.7, tA + 0.05, ease.inCubic);
-    camPos.set(lerp(3.6, 2.4, k), lerp(0.5, 1.0, k) + up * 1.2, lerp(15.6, 12.6, ease.outSine(k)));
-    look.set(vimPos.x - 1.55, 2.35 + up * 1.4, 0);
+    camPos.set(lerp(1.6, 0.8, k), lerp(0.2, 0.7, k) + up * 1.2, lerp(17.5, 14.8, ease.outSine(k)));
+    look.set(vimPos.x - 3.3, 3.2 + up * 1.4, 0);
     camera.position.copy(camPos); camera.up.set(Math.sin(t * 0.8) * 0.015, 1, 0).normalize(); camera.lookAt(look);
     camera.fov = 30;
-    pSky.visible = true; pSky.userData.u.uTime.value = t;
+    pSky.visible = true; pSky.userData.u.uTime.value = t; pSky.userData.u.uGain.value = 0.82;
     setKey(V3(-0.45, 0.7, 0.55).normalize(), '#ffe0a8', 3.2, vimPos, 8, 60);
     setRim(V3(0.6, 0.35, -0.7).normalize(), '#ffcf88', 2.2, vimPos);
     setHemi('#ffe8c4', '#6a4426', 0.75);
@@ -287,20 +289,20 @@ export function create(ctx, segment) {
     som.group.rotation.set(0, 0.12 * tau, Math.atan2(vy, vx) * 0.9 + (tau > 0.25 && tau < 0.4 ? 0.02 : 0));
     som.rotor.rotation.x = -T * 70; som.disc.material.opacity = 0.22;
     const k = ease.inOutSine(sat(tau / (tT - tA)));
-    camPos.set(lerp(-12, -4.5, k), lerp(1.45, 8.0, ease.inQuad(k)), lerp(6, 12.5, k));
-    look.copy(somPos).add(tmp.set(2.5 + 1.5 * k, 1.6 - 0.6 * k, -1.5 * k));
+    camPos.set(lerp(-13, -3, k), lerp(1.3, 4.8, ease.inQuad(k)), lerp(9, 12, k));
+    look.copy(somPos).add(tmp.set(2.6 - 0.6 * k, 2.4 - 0.6 * k, 0));
     camera.position.copy(camPos); camera.lookAt(look);
     camera.fov = 32;
     rSky.visible = true;
-    setSky('#4f78ac', '#e6c9a0', '#efd5b0', '#ffcf90', SUN2, { cloud: 1, gain: 1.05 });
+    setSky('#3466ae', '#cdbb9c', '#d8c6a8', '#ffcf90', SUN2, { cloud: 1, gain: 0.95 });
     setKey(SUN2, '#ffdcac', 3.6, somPos, 14, 120);
     setRim(V3(-0.6, 0.4, 0.7).normalize(), '#9ab8e0', 0.6, somPos);
     setHemi('#b8c8e0', '#6a5640', 0.7);
-    setFog('#e6cfac', 80, 1500);
+    setFog('#d8c4a4', 150, 2600);
     scene.environmentIntensity = 0.7;
-    pin(callSom, tmp.copy(somPos).add(tmp2.set(0.6, 3.2, 0)), ramp(t, tA + 0.35, tA + 0.6), envelope(t, tA + 0.33, tT - 0.08, 0.04, 0.1));
+    pin(callSom, tmp.copy(somPos).add(tmp2.set(0.6, 3.2, 0)), ramp(t, tA + 0.62, tA + 0.85), envelope(t, tA + 0.6, tT - 0.06, 0.04, 0.1));
     pin(callNaini, tmp.set(160, 10, -1220), ramp(t, tA + 0.75, tA + 1.0), envelope(t, tA + 0.73, tT - 0.03, 0.04, 0.06));
-    return ret(camPos.distanceTo(somPos), 0, 1.0);
+    return ret(camPos.distanceTo(somPos), 0, 1.08);
   }
 
   function shotJuhu(t, T) {
@@ -309,8 +311,8 @@ export function create(ctx, segment) {
     puss.group.rotation.set(0.05 * Math.sin(tau * 3), 0, 0.07 + 0.02 * Math.sin(tau * 5));
     puss.prop.rotation.x = T * 80;
     const k = sat(tau / (tM - tT));
-    camPos.set(4.5 - 1.2 * k, 1.35 + 0.15 * k, 9.5);
-    look.copy(pussAt(t - 0.07, tmp)).add(tmp2.set(2.0, -0.2, 0));
+    camPos.set(-4 - 0.8 * k, 1.3 + 0.1 * k, -5.5);
+    look.copy(pussAt(t - 0.05, tmp)).add(tmp2.set(1.5, -0.6, 0));
     // the camera shakes as the aircraft whips past
     const sh = 0.05 * envelope(t, tT + 0.3, tM, 0.1, 0.25);
     camPos.x += Math.sin(T * 61) * sh; camPos.y += Math.sin(T * 47 + 1) * sh;
@@ -318,19 +320,19 @@ export function create(ctx, segment) {
     camera.fov = 34;
     for (let i = 0; i < foam.length; i++) foam[i].position.z = -18.5 - i * 4 + Math.sin(T * 0.9 + i * 1.3) * 0.6;
     rSky.visible = true;
-    setSky('#2f64b0', '#b9d4ea', '#dce8f0', '#fff0d8', SUN3, { cloud: 0.8, gain: 1.15 });
-    setKey(SUN3, '#fff4e2', 4.2, pussPos, 12, 120);
-    setRim(V3(0.5, 0.3, -0.8).normalize(), '#bcd8f0', 1.0, pussPos);
+    setSky('#2a6aac', '#9cc0e0', '#b9d0e0', '#fff0d8', SUN3, { cloud: 0.8, gain: 0.95 });
+    setKey(SUN3, '#fff4e2', 3.0, pussPos, 12, 120);
+    setRim(V3(-0.7, 0.4, 0.3).normalize(), '#bcd8f0', 1.2, pussPos);
     setHemi('#bcd4ee', '#a08a68', 0.8);
-    setFog('#d8e6ef', 120, 2200);
+    setFog('#b9cde0', 250, 3200);
     scene.environmentIntensity = 0.8;
-    pin(callPuss, tmp.copy(pussPos).add(tmp2.set(-1.0, 0.9, 0)), ramp(t, tT + 0.12, tT + 0.32), envelope(t, tT + 0.1, tM - 0.05, 0.04, 0.08));
+    pin(callPuss, tmp.copy(pussPos).add(tmp2.set(-2.5, 0.9, 0)), ramp(t, tT + 0.12, tT + 0.32), envelope(t, tT + 0.1, tM - 0.05, 0.04, 0.08));
     return ret(camPos.distanceTo(pussPos), 0, 1.0);
   }
 
-  function skyWorld(t, T, space) {
+  function skyWorld(t, T, space, SUN = SUN4) {
     rSky.visible = true;
-    setSky('#1f4f9c', '#9fbde0', '#c4d6ea', '#fff0d8', SUN4, { cloud: 0, space, gain: 1.1 });
+    setSky('#1f4f9c', '#9fbde0', '#c4d6ea', '#fff0d8', SUN, { cloud: 0, space, gain: 1.1 });
     setFog('#b8cce4', 300, 4000);
     scene.environmentIntensity = 0.8;
     for (let i = 0; i < deckData.length; i++) {
@@ -338,7 +340,7 @@ export function create(ctx, segment) {
       deck.P[i * 3] = x; deck.P[i * 3 + 1] = c.y; deck.P[i * 3 + 2] = c.z;
       deck.S[i] = c.s; deck.A[i] = c.a; deck.Rot[i] = c.rot + t * 0.05;
       tmp.set(x - camPos.x, c.y - camPos.y, c.z - camPos.z).normalize();
-      const fwd = Math.pow(Math.max(0, tmp.dot(SUN4)), 12) * 0.8, lit = c.top * c.top, dark = 1 - 0.55 * space;
+      const fwd = Math.pow(Math.max(0, tmp.dot(SUN)), 12) * 0.8, lit = c.top * c.top, dark = 1 - 0.55 * space;
       deck.C[i * 3] = (0.2 + lit * 0.8 + fwd * 1.1) * dark; deck.C[i * 3 + 1] = (0.25 + lit * 0.74 + fwd * 0.9) * dark; deck.C[i * 3 + 2] = (0.34 + lit * 0.68 + fwd * 0.62) * dark;
     }
   }
@@ -357,7 +359,7 @@ export function create(ctx, segment) {
     setRim(V3(-0.5, -0.4, 0.7).normalize(), '#8fb0e0', 0.8, marPos);
     setHemi('#9fbbe6', '#c8d4e4', 0.7);
     const g = envelope(t, tM + 0.25, tM + 0.5, 0.08, 0.15);
-    glint.visible = g > 0.001; glint.position.copy(marut.canopy).applyQuaternion(marutQ).add(marPos); glint.scale.setScalar(2 + 10 * g); glint.material.opacity = g;
+    glint.visible = g > 0.001; glint.position.copy(marut.canopy).applyQuaternion(marutQ).add(marPos); glint.scale.setScalar(1.5 + 3.5 * g); glint.material.opacity = g;
     for (const s of marutGlow) s.material.opacity = 0.8;
     return ret(camPos.distanceTo(marPos), 0, 1.0, 0.75);
   }
@@ -367,15 +369,15 @@ export function create(ctx, segment) {
     tejAt(t, tejPos); tej.group.position.copy(tejPos); tejQ(t, qTmp); tej.group.quaternion.copy(qTmp);
     const k = sat(tau / (DUR - tJ));
     const ck = ease.inOutSine(sat(tau / 0.9));
-    camPos.set(lerp(9, 6, ck), lerp(-1, 46, ease.inQuad(ck)), lerp(16, -34, ck));
+    camPos.set(lerp(9, 5, ck), lerp(-1, 14, ck), lerp(16, 24, ck));
     look.copy(tejAt(t - 0.03, tmp)).add(tmp2.set(0, 2, 0));
     const sh = 0.12 * envelope(t, tJ + 0.05, DUR, 0.1, 0.3);
     camPos.x += Math.sin(T * 67) * sh; camPos.y += Math.sin(T * 59 + 1) * sh;
     camera.position.copy(camPos); camera.up.set(0.12 * ck, 1, 0).normalize(); camera.lookAt(look);
     camera.fov = 32 - 4 * k;
-    const space = 0.8 * ramp(tau, 0.25, 0.95, ease.inQuad);
-    skyWorld(t, T, space);
-    setKey(SUN4, '#fff2e0', 4.0, tejPos, 14, 120);
+    const space = 0.6 * ramp(tau, 0.25, 0.95, ease.inQuad);
+    skyWorld(t, T, space, SUN5);
+    setKey(SUN5, '#fff2e0', 4.0, tejPos, 14, 120);
     setRim(V3(-0.5, -0.4, 0.7).normalize(), '#8fb0e0', 0.8, tejPos);
     setHemi('#8fb0e0', '#c8d4e4', 0.6 - 0.25 * space);
     // afterburner
@@ -383,7 +385,7 @@ export function create(ctx, segment) {
     const ab = 0.55 + 0.45 * ramp(tau, 0.0, 0.2);
     abCore.material.uniforms.uA.value = ab * flick; abOut.material.uniforms.uA.value = 0.7 * ab * flick;
     abCore.material.uniforms.uT.value = abOut.material.uniforms.uT.value = T;
-    abGlow.material.opacity = ab * flick; abGlow.scale.setScalar(5 + 3 * ab + 6 * k);
+    abGlow.material.opacity = ab * flick; abGlow.scale.setScalar(3 + 3 * ab);
     // wingtip vortices: soft points along the path history behind each tip
     const g = envelope(tau, 0.05, 0.75, 0.08, 0.3);
     vap.visible = g > 0.001;
@@ -440,8 +442,8 @@ export function create(ctx, segment) {
       // ---- camera-attached layers: the cloud wipe (dream → Allahabad) and the speed lines
       wipe.position.copy(camera.position); wipe.quaternion.copy(camera.quaternion);
       const cover = ramp(t, 0.72, tA - 0.02, ease.inOutSine);
-      const paintOut = ramp(t, tA - 0.07, tA + 0.08, ease.linear);
-      const part = ramp(t, tA + 0.06, tA + 0.5, ease.inOutCubic);
+      const paintOut = ramp(t, tA - 0.02, tA + 0.1, ease.linear);
+      const part = ramp(t, tA + 0.0, tA + 0.36, ease.inOutCubic);
       const wipeOn = t > 0.7 && t < tA + 0.6;
       wipe.visible = true;
       wipeMat.opacity = 1 - paintOut;
@@ -449,15 +451,15 @@ export function create(ctx, segment) {
         const u = c.userData, cv = ramp(t, 0.72 + u.d, tA - 0.02 + u.d * 0.3, ease.inOutSine);
         c.position.set(u.x + (t - 0.7) * 0.5, lerp(u.y - 2.6, u.y, cv), u.z); c.visible = wipeOn && wipeMat.opacity > 0.002;
       }
-      wipePuffs.visible = wipeOn && t > tA - 0.1;
+      wipePuffs.visible = wipeOn && t > tA - 0.04;
       if (wipePuffs.visible) {
-        const fin = ramp(t, tA - 0.1, tA + 0.03, ease.linear), fout = 1 - ramp(t, tA + 0.25, tA + 0.58, ease.inQuad);
+        const fin = ramp(t, tA - 0.04, tA + 0.1, ease.linear), fout = 1 - ramp(t, tA + 0.25, tA + 0.58, ease.inQuad);
         for (let i = 0; i < WP; i++) {
           const d = wpData[i], sx = Math.sign(d.x) || 1;
           wipePuffs.P[i * 3] = d.x + sx * part * (2.6 + d.sh * 2) ; wipePuffs.P[i * 3 + 1] = d.y + part * (d.y > 0 ? 0.8 : -0.8); wipePuffs.P[i * 3 + 2] = d.z + part * 1.2;
           wipePuffs.S[i] = d.s * (1 + part * 0.6); wipePuffs.Rot[i] = d.rot + t * 0.3;
-          wipePuffs.A[i] = 0.92 * fin * fout;
-          const l = 1.05 + 0.25 * d.sh; wipePuffs.C[i * 3] = l * 1.04; wipePuffs.C[i * 3 + 1] = l * 0.98; wipePuffs.C[i * 3 + 2] = l * 0.9;
+          wipePuffs.A[i] = 0.8 * fin * fout;
+          const l = 0.42 + 0.22 * d.sh + 0.28 * (d.y + 1.1); wipePuffs.C[i * 3] = l * 1.04; wipePuffs.C[i * 3 + 1] = l * 0.98; wipePuffs.C[i * 3 + 2] = l * 0.9;
         }
         wipePuffs.commit(info);
       }
@@ -468,10 +470,10 @@ export function create(ctx, segment) {
           const d = slData[i], x = ((d.x - t * d.sp) % 24 + 36) % 24 - 12;
           slPos.set([x, d.y, d.z, x + d.len, d.y, d.z], i * 6);
         }
-        slGeo.attributes.position.needsUpdate = true; speedLines.material.opacity = slOn * 0.5;
+        slGeo.attributes.position.needsUpdate = true; speedLines.material.opacity = slOn * 0.28;
       }
 
-      api.exposure = r.exposure * (1 + 0.25 * envelope(t, tT - 0.05, tT + 0.12, 0.04, 0.1) + 0.12 * envelope(t, tM - 0.04, tM + 0.08, 0.03, 0.06) + 0.12 * envelope(t, tJ - 0.04, tJ + 0.08, 0.03, 0.06));
+      api.exposure = r.exposure * (1 + 0.1 * envelope(t, tT - 0.05, tT + 0.12, 0.04, 0.1) + 0.12 * envelope(t, tM - 0.04, tM + 0.08, 0.03, 0.06) + 0.12 * envelope(t, tJ - 0.04, tJ + 0.08, 0.03, 0.06));
       api.bloom.strength = r.bloom;
       api.dof.focus = r.focus; api.dof.range = 4; api.dof.amount = r.amt;
 
