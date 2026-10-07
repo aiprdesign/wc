@@ -2,6 +2,7 @@
 // "film" grade (ACES, era colour temperature, chromatic aberration, vignette, grain).
 
 import * as THREE from 'three';
+import { FILM } from '../film.js';
 const fsVert = /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 // Ambient-occlusion lookup shared by the DOF pass and the AO apply pass. tAO is half resolution,
@@ -327,12 +328,14 @@ export const FinalShader = {
     uGrain: { value: 0.05 }, uVignette: { value: 0.55 }, uCA: { value: 0.0025 }, uFade: { value: 1 },
     tGlare: { value: null }, uGlare: { value: 0 },
     uResolution: { value: null }, uAspect: { value: 2.39 }, uHarmony: { value: 0.85 },
+    // a film may keep nature in colour: foliage greens and river blue-greens are spared the harmony's pull
+    uNature: { value: FILM.grade?.nature ?? 0 },
     uSS: { value: 1 }, uSrcTexel: { value: new THREE.Vector2(1, 1) }, uTonemap: { value: 0 },
   },
   vertexShader: fsVert,
   fragmentShader: /* glsl */ `
     uniform float uHarmony; uniform int uTonemap;
-    uniform sampler2D tInput, tGlare; uniform float uGlare; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
+    uniform sampler2D tInput, tGlare; uniform float uGlare; uniform float uNature; uniform float uExposure, uWarmth, uTime, uGrain, uVignette, uCA, uFade, uAspect, uSS; uniform vec2 uResolution, uSrcTexel;
     varying vec2 vUv;
     // supersampled input (uSS > 1): a separable (1,3,3,1) tent over the source texels under this
     // output pixel — four bilinear taps, smoother than a box and free of ringing
@@ -385,6 +388,11 @@ export const FinalShader = {
       float kSec = mix(kS, kB, warm);
       float kAcc = 1.0 - smoothstep(0.035, 0.09, hueD(hsv.x, ACCENT));
       float keep = max(kSec, kAcc);
+      // living landscape (uNature): grass and leaves (yellow-green … green) and river water (blue-green … blue)
+      // keep their hue and colour, so fields, trees and rivers read as alive rather than sepia
+      float kLeaf = 1.0 - smoothstep(0.08, 0.15, hueD(hsv.x, 0.27));
+      float kWater = 1.0 - smoothstep(0.07, 0.14, hueD(hsv.x, 0.5));
+      keep = max(keep, uNature * max(kLeaf, kWater * 0.9));
       float sec = warm > 0.5 ? BRONZE : STEEL;
       // pulled toward both targets, weighted by nearness (a hard choice of the nearer one drew a seam where
       // the two are equally far, e.g. across a sky or a lawn)

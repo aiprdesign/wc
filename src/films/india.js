@@ -214,6 +214,7 @@ export default {
   DURATION: 86,
   MUSIC_DURATION: 78, MUSIC_SPLICES,   // the score's own clock, and how it is laid onto this one
   SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, WORDS_HI, SWAPS,
+  grade: { nature: 1 },   // green fields, trees and rivers keep their colour through the grade (core/post.js)
   note: "India's achievements grew through exchange with civilizations across Asia, Africa and Europe.",
   sceneDir: './india',                             // src/scenes/india/<id>.js
   soundtrack: 'assets/audio/india/soundtrack.mp3',
