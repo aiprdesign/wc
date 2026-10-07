@@ -22,6 +22,8 @@ import { buildStupa } from './temple-sanchi.js';
 import { buildKailasa } from './temple-kailasa.js';
 import { buildTower } from './temple-thanjavur.js';
 import { buildTaj } from './temple-taj.js';
+import * as NK from './nature-kit.js';
+import { patchTempleGround, templeTreeItems, lawnMaterial } from './temples-nature.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffd590';
@@ -180,6 +182,7 @@ export function create(ctx, segment) {
   for (const m of tajG.children) { const c = new THREE.Mesh(m.geometry, m.material); c.castShadow = false; c.receiveShadow = true; tajMirror.add(c); }
   tajMirror.position.set(TAJ.x, 2 * WATER_Y, TAJ.z); tajMirror.rotation.y = TAJ_RY; tajMirror.scale.y = -1;
   scene.add(tajMirror);
+  M.grass = lawnMaterial([0, 1]);   // the charbagh's mown lawns (world-space, temples-nature.js)
   const garden = new Parts();
   {
     const { x0, x1, z0, z1, ch } = GARDEN;
@@ -200,24 +203,29 @@ export function create(ctx, segment) {
   const gardenG = garden.build(M, { grass: 0.1, path: 0.12, marble: 0.1, marbleShade: 0.1, redsand: 0.2 });
   gardenG.position.copy(TAJ); gardenG.rotation.y = TAJ_RY;
   scene.add(gardenG);
-  // cypresses along the channel (and their reflections)
-  const cypGeo = (() => { const g = new THREE.LatheGeometry([[0, 0], [0.25, 0], [0.25, 1.2], [1.5, 2.2], [1.9, 4.5], [1.6, 7], [0.9, 9.2], [0, 10.5]].map(([r, y]) => new THREE.Vector2(r, y)), 10); return g; })();
+  // cypresses along the channel (and their reflections): nature-kit cypress, lit through by the low sun
+  const leafSun = { dir: new THREE.Vector3(0, 0.2, 1), color: new THREE.Color(2.2, 1.6, 1.0) };
   const cypPos = [];
   for (let z = 58; z < GARDEN.z1 - 10; z += 11) for (const x of [-12, 12, -30, 30]) if (Math.abs(x) < 20 || (Math.round(z / 11) % 2 === 0)) cypPos.push([x, z]);
-  const cyp = new THREE.InstancedMesh(cypGeo, M.foliage, cypPos.length), cypM = new THREE.InstancedMesh(cypGeo, M.foliage, cypPos.length);
-  {
-    const m4 = new THREE.Matrix4(), r = rng(5);
-    cypPos.forEach(([x, z], i) => {
-      const w = tajW(x, 0, z), s = 0.62 + r() * 0.16;
-      m4.makeScale(s, s * (0.9 + r() * 0.25), s).setPosition(w.x, 0, w.z); cyp.setMatrixAt(i, m4);
-      m4.makeScale(s, -s * (0.9 + r() * 0.25), s).setPosition(w.x, 2 * WATER_Y, w.z); cypM.setMatrixAt(i, m4);
+  const cypMat = NK.foliageMaterial({ sun: leafSun, wind: 0.5, trans: 0.8, side: THREE.DoubleSide, tag: 'cyp' });
+  const cypGeoA = NK.treeGeometry('cypress', 3, lite), cypGeoB = NK.treeGeometry('cypress', 8, lite);
+  const cyps = [];
+  for (const [gi, geo] of [[0, cypGeoA], [1, cypGeoB]]) {
+    const pos = cypPos.filter((_, i) => i % 2 === gi);
+    const cyp = new THREE.InstancedMesh(geo, cypMat, pos.length), cypM = new THREE.InstancedMesh(geo, cypMat, pos.length);
+    const m4 = new THREE.Matrix4(), r = rng(5 + gi), c = new THREE.Color();
+    pos.forEach(([x, z], i) => {
+      const w = tajW(x, 0, z), s = 0.78 + r() * 0.14, sy = s * (0.9 + r() * 0.2);
+      m4.makeScale(s, sy, s).setPosition(w.x, -0.1, w.z); cyp.setMatrixAt(i, m4);
+      m4.makeScale(s, -sy, s).setPosition(w.x, 2 * WATER_Y + 0.1, w.z); cypM.setMatrixAt(i, m4);
+      const k = 0.9 + r() * 0.2; c.setRGB(k, k, k); cyp.setColorAt(i, c); cypM.setColorAt(i, c);
     });
+    cyp.castShadow = cyp.receiveShadow = true;
+    scene.add(cyp, cypM); cyps.push(cyp, cypM);
   }
-  cyp.castShadow = cyp.receiveShadow = true;
-  scene.add(cyp, cypM);
   // the water: a translucent, faintly rippled surface over the mirrored world
   const waterMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uTint: { value: new THREE.Color('#1c2532') }, uSunCol: { value: new THREE.Color('#ffb070') } },
+    uniforms: { uTime: { value: 0 }, uTint: { value: new THREE.Color('#123630') }, uSunCol: { value: new THREE.Color('#ffb070') } },
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `uniform float uTime; uniform vec3 uTint, uSunCol; varying vec3 vW;
       void main(){
@@ -265,7 +273,7 @@ export function create(ctx, segment) {
   {
     const xs = axisCoords(-160, 640, lite ? 8 : 6, 3200), zs = axisCoords(-210, 290, lite ? 8 : 6, 3200);
     const nx = xs.length, nz = zs.length, pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), idx = [];
-    const cA = new THREE.Color('#9a8150'), cB = new THREE.Color('#6b5a36'), cC = new THREE.Color('#55602e'), cR = new THREE.Color('#7a6a5a'), tmp = new THREE.Color();
+    const cA = new THREE.Color('#8a7a4a'), cB = new THREE.Color('#5e5634'), cC = new THREE.Color('#4a6a2a'), cR = new THREE.Color('#7a6a5a'), tmp = new THREE.Color();
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const x = xs[i], z = zs[j], y = groundH(x, z), k = (j * nx + i) * 3;
       pos[k] = x; pos[k + 1] = y; pos[k + 2] = z;
@@ -277,31 +285,17 @@ export function create(ctx, segment) {
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + nx; idx.push(a, b, a + 1, b, b + 1, a + 1); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
+    const gMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+    patchTempleGround(gMat, { stupa: STUPA, tower: TOWER });
+    const ground = new THREE.Mesh(g, gMat);
     ground.receiveShadow = true;
     scene.add(ground);
   }
   // trees: round-crowned (neem, banyan) scattered on the plain, clear of the monuments and the camera path
   const pathPts = [];
+  let forest = null;
   function plantTrees() {
     const r = rng(12);
-    const parts = [new THREE.CylinderGeometry(0.22, 0.42, 3.4, 6).translate(0, 1.7, 0)];
-    for (const [x, y, z, rr] of [[0, 4.6, 0, 2.6], [1.5, 4.0, 0.7, 1.9], [-1.4, 4.1, -0.5, 2.0], [0.2, 5.5, -0.8, 1.8]]) {
-      const g = mergeVertices(new THREE.IcosahedronGeometry(rr, 1).deleteAttribute('normal').deleteAttribute('uv')), p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) { const v = V(p.getX(i), p.getY(i), p.getZ(i)); const k = 1 + 0.16 * Math.sin(v.x * 3.1 + v.y * 2.3) * Math.sin(v.z * 2.7 - v.y * 1.7) + (r() - 0.5) * 0.08; p.setXYZ(i, v.x * k + x, v.y * k * 0.85 + y, v.z * k + z); }
-      g.computeVertexNormals();
-      parts.push(g);
-    }
-    const geos = parts.map((g) => prep(g));
-    const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), P = new Float32Array(n * 3), N = new Float32Array(n * 3), C = new Float32Array(n * 3);
-    let o = 0;
-    geos.forEach((g, gi) => {
-      P.set(g.attributes.position.array, o * 3); N.set(g.attributes.normal.array, o * 3);
-      for (let v = 0; v < g.attributes.position.count; v++) { const sh = gi === 0 ? 1 : 0.8 + 0.4 * r(); C.set(gi === 0 ? [0.2, 0.15, 0.1] : [0.16 * sh, 0.2 * sh, 0.08 * sh], (o + v) * 3); }
-      o += g.attributes.position.count;
-    });
-    const tree = new THREE.BufferGeometry();
-    tree.setAttribute('position', new THREE.BufferAttribute(P, 3)); tree.setAttribute('normal', new THREE.BufferAttribute(N, 3)); tree.setAttribute('color', new THREE.BufferAttribute(C, 3));
     const list = [];
     const avoid = [[STUPA.x, STUPA.z, 34], [TOWER.x, TOWER.z + 30, 100]];
     for (let k = 0; k < 6000 && list.length < (lite ? 110 : 210); k++) {
@@ -309,19 +303,24 @@ export function create(ctx, segment) {
       if (avoid.some(([ax, az, ar]) => Math.hypot(x - ax, z - az) < ar)) continue;
       const y = groundH(x, z);
       if (pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 26 + Math.max(0, p.y - y) * 0.15)) continue;
-      const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 110 && lz > -120 && lz < 250) continue;
+      const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 80 && lz > -120 && lz < 250) continue;
       if (Math.abs(x - KAI.x) < 50 && z - KAI.z < 30 && z - KAI.z > -36) continue;
       if (z - KAI.z < 36 && z - KAI.z > 18 && x - KAI.x > K.L - 5 && x - KAI.x < K.R + 5) continue;
       list.push([x, y, z, 0.8 + r() * 0.9, r() * 6.28]);
     }
-    const trees = new THREE.InstancedMesh(tree, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), list.length);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), tint = new THREE.Color();
-    list.forEach(([x, y, z, s, a], i) => {
-      q.setFromAxisAngle(V(0, 1, 0), a); m4.compose(V(x, y - 0.3, z), q, V(s, s * (0.85 + 0.3 * r()), s)); trees.setMatrixAt(i, m4);
-      tint.setRGB(0.85 + 0.3 * r(), 0.85 + 0.25 * r(), 0.8 + 0.2 * r()); trees.setColorAt(i, tint);
-    });
-    trees.castShadow = trees.receiveShadow = true;
-    scene.add(trees);
+    // a grove of coconut palms round the Thanjavur temple (beyond its cloister, framing the vimana)
+    for (let k = 0; k < 900 && list.length < (lite ? 140 : 270); k++) {
+      const a = r() * 6.28, d = 58 + r() * 90, x = TOWER.x + Math.cos(a) * d, z = TOWER.z + 10 + Math.sin(a) * d;
+      const y = groundH(x, z);
+      if (pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 14)) continue;
+      const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 80 && lz > -120 && lz < 250) continue;
+      list.push([x, y, z, 1, r() * 6.28, 'palm']);
+    }
+    const nearPath = (x, z) => pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 75);
+    const items = templeTreeItems(list, { tower: TOWER, lite, near: nearPath });
+    list.forEach((it, i) => { if (it[5]) { items[i].kind = 'palm'; items[i].s = 0.9 + 0.35 * r(); } });
+    forest = NK.plantForest(items, { sun: leafSun, lite, variants: 3, seed: 5, wind: 0.8 });
+    scene.add(forest.group);
   }
 
   // ------------------------------------------------------------------------------------- sky and light
@@ -413,6 +412,8 @@ export function create(ctx, segment) {
     scene.environmentIntensity = lerp(0.36, 0.2, day);
     scene.fog.color.copy(skyMat.uniforms.uHor.value).multiplyScalar(0.8);
     waterMat.uniforms.uTime.value = t;
+    leafSun.dir.copy(sunDir); leafSun.color.copy(sun.color).multiplyScalar(2.0);
+    forest?.update(t); cypMat.userData.u.uTime.value = t;
 
     // ---- carving Kailasa from the top down
     const cutP = ramp(t, T_KA - 0.05, T_KA + 0.72, ease.inOutSine);
