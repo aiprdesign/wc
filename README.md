@@ -2,8 +2,8 @@
 
 Two 1:48 cinematic short films **rendered live in the browser**, sharing one engine:
 
-- **Achievements of Western Civilization**: 15 chapters from the first idea to the Moon, AI and
-  the vision of Mars.
+- **Achievements of Western Civilization**: 16 sequences (1:57) from the first idea to the Moon, AI,
+  a gallery of the last two centuries' inventions, and the vision of Mars.
 - **Achievements of Indian Civilization**: 21 sequences (2:27) from the Indus cities to zero, Aryabhata,
   wootz steel, Sushruta, Ellora, Rajasthan's stepwells and lakes, Nalanda, Ashoka and Gandhi, cotton and
   chess, yoga, Ayurveda's herbs, Ramanujan, Raman and Bose, modern Indian invention, the Statue of Unity,
@@ -248,18 +248,21 @@ preset costs roughly 8 × 4 = 32× the GPU work of a draft frame.
 | # | time | sequence | technique showcased |
 |---|------|----------|---------------------|
 | 0 | 0:00 | **The Idea**: a point of light, compass-and-straightedge grid, layered manuscripts, the title assembles from particles, then monumental 3D letters | procedural line construction · 2.5D layering · particle typography · 2D→3D type |
-| 1 | 0:07.5 | **Classical Architecture**: a lathe profile revolves into a fluted column (wireframe → clay → marble), then a temple materialises in raking sunlight under blueprint overlays | procedural modelling · look-dev build shaders · archviz · technical HUD |
-| 2 | 0:12 | **Democracy, Law & Institutions**: parchment unfolds, agora → Roman law → parliament, kinetic words turn into architecture | kinetic typography · procedural folding · morphing |
-| 3 | 0:15.5 | **Art & the Renaissance**: golden-ratio geometry and a sketch drawn from thousands of strokes lift into a 3D figure, then burst into pigment | procedural drawing · 2D→3D · particle simulation |
-| 4 | 0:20 | **Scientific Revolution**: slow-motion fall and trajectory, instruments assemble, orrery fly-through, a prism splits white light | speed ramping · scientific visualisation · light and refraction |
-| 5 | 0:24.5 | **Industrial Revolution**: macro gears, hundreds of meshing gears, pistons on the beat, steam, the machine revealed | hard-surface · mechanical rigs · smoke · sound sync |
-| 6 | 0:28.5 | **Electricity & Communication**: a spark races down copper; telegraph → telephone → radio → electronics; a circuit city | match cuts · energy FX · procedural circuit growth |
-| 7 | 0:31.5 | **Medicine**: a microscopic dive, engraving → holographic anatomy, a medical HUD | scientific visualisation · holographic UI |
-| 8 | 0:34.5 | **Flight & Space**: a blueprint folds into an aircraft, clouds, launch, Earth and orbits | blueprint fold · atmospherics · planetary shading |
-| 9 | 0:38.5 | **Computing**: calculator → relays → tubes → transistors → microprocessor, then a dive into the die, data, UI and AI | hard-surface morphs · data-flow viz · UI animation |
-| 10 | 0:42.5 | **Knowledge**: pages form a sphere, then books, pixels and a global network | instanced choreography · multi-stage morphs |
-| 11 | 0:45.5 | **Montage**: columns → gears → orbits → atoms → circuit nodes → stars | shape-driven match cuts · rhythm editing |
-| 12 | 0:50 | **Finale**: particles around Earth, *Ideas build upon ideas.*, then the title on one deep impact | large particle systems · title design |
+| I | 0:10 | **Classical Architecture**: a lathe profile revolves into a fluted column (wireframe → clay → marble), then a temple materialises in raking sunlight under blueprint overlays | procedural modelling · look-dev build shaders · archviz · technical HUD |
+| II | 0:16 | **Democracy, Law & Institutions**: parchment unfolds, agora → Roman law → parliament, kinetic words turn into architecture | kinetic typography · procedural folding · morphing |
+| III | 0:21 | **Art & the Renaissance**: golden-ratio geometry and a sketch drawn from thousands of strokes lift into a 3D figure, then burst into pigment | procedural drawing · 2D→3D · particle simulation |
+| IV | 0:27 | **Scientific Revolution**: slow-motion fall and trajectory, instruments assemble, orrery fly-through, a prism splits white light | speed ramping · scientific visualisation · light and refraction |
+| V | 0:34 | **Industrial Revolution**: macro gears, hundreds of meshing gears, pistons on the beat, steam, the machine revealed | hard-surface · mechanical rigs · smoke · sound sync |
+| VI | 0:39 | **Electricity & Communication**: a spark races down copper; telegraph → telephone → radio → electronics; a circuit city | match cuts · energy FX · procedural circuit growth |
+| VII | 0:43 | **Medicine**: a microscopic dive, engraving → holographic anatomy, a medical HUD | scientific visualisation · holographic UI |
+| VIII | 0:47 | **Flight & Space**: a blueprint folds into an aircraft, clouds, launch, Earth and orbits | blueprint fold · atmospherics · planetary shading |
+| IX | 0:53 | **The Moonshot**: translunar flight, the descent, the landing, the footprint, Earthrise | space cinematography · lunar terrain |
+| X | 0:59 | **Computing & Digital**: calculator → relays → tubes → transistors → microprocessor, a dive into the die, then AI | hard-surface morphs · data-flow viz · UI animation |
+| XI | 1:04 | **Knowledge**: pages form a sphere, then books, pixels and a global network | instanced choreography · multi-stage morphs |
+| XII | 1:08 | **Invention**: a gallery of two centuries — photography, the electric light, the Benz Motorwagen, cinema, television, the laser, GPS, the smartphone, mRNA vaccines | museum lighting · hard-surface exhibits · light shaped by each exhibit, on the score's hits |
+| XIII | 1:17 | **The New Frontier**: the Shuttle, Hubble, the genome, Webb, Perseverance and Ingenuity, Artemis, the vision of Mars | planetary shading · telescope optics · procedural terrain |
+| – | 1:25 | **Legacy** (montage): columns → gears → orbits → atoms → circuit nodes → stars | shape-driven match cuts · rhythm editing |
+| – | 1:31 | **Finale**: particles around Earth, *Ideas build upon ideas.*, then the title on one deep impact | large particle systems · title design |
 
 Colour moves from marble, bronze, parchment and gold to steel, electricity and cool white
 light across the running time. The final grade applies this shift as an era white balance.

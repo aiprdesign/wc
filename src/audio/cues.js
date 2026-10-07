@@ -356,7 +356,7 @@ function frontier(S) {
   // artemis: a distant rocket roar rolling in from the pad
   S.at(C.artemis - 0.05, () => X.distantRoar(S, C.artemis - 0.05, C.marsVision + 0.3, { level: 0.07, attack: 0.35, release: 0.6 }));
   // marsVision: the Martian wind again, wider and gustier, under the swell
-  S.at(C.marsVision - 0.2, () => X.marsWind(S, C.marsVision - 0.2, 55.6, { level: 0.04, attack: 0.4, release: 0.5, gust: 0.8 }));
+  S.at(C.marsVision - 0.2, () => X.marsWind(S, C.marsVision - 0.2, C.mColumns, { level: 0.04, attack: 0.4, release: 0.5, gust: 0.8 }));
 }
 
 function montage(S) {
@@ -442,7 +442,7 @@ function transitionAir(S) {
   // the Western film's chapter downbeats (on its tempo map); another film's: its own segment starts,
   // up to the last chapter before the launch the score lands on (its sound design plays on the film clock)
   const list = FILM_ID === 'western'
-    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4]]
+    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4], [49.5, 0.4]]
     : SEGMENTS.slice(1, -3).map((sg, i) => [sg.start, i % 2 ? -0.5 : 0.5, 0.045]);
   for (const [t, p0, lv = 0.05] of list) {
     const tt = FILM_ID === 'western' ? groove(t) : t;
@@ -450,9 +450,24 @@ function transitionAir(S) {
   }
 }
 
+// invention: a gallery of two centuries — the camera shutter, a filament's hum, an engine cough, the
+// projector's clatter, a picture tube's whine, the laser, a GPS ping, a phone's chime, a cold-chain hiss
+function inventions(S) {
+  const q = (k) => C[k];
+  S.at(q('photograph') + 0.15, () => X.click(S, q('photograph') + 0.15, { level: 0.06, freq: 2600, body: 700, decay: 0.03, pan: -0.3 }));
+  S.at(q('lightBulb'), () => X.hum(S, q('lightBulb'), q('motorwagen'), { level: 0.014, freq: 100, cutoff: 1400, attack: 0.05, release: 0.2 }));
+  for (let k = 0; k < 4; k++) { const t = q('motorwagen') + k * 0.11; S.at(t, () => X.thud(S, t, { level: 0.035, f: 70, tone: 600, decay: 0.1, pan: 0.2 })); }
+  for (let k = 0; k < 8; k++) { const t = q('cinema') + k * 0.06; S.at(t, () => X.click(S, t, { level: 0.02, freq: 1800, body: 500, decay: 0.012, pan: -0.2 })); }
+  S.at(q('television'), () => X.hum(S, q('television'), q('television') + 0.6, { level: 0.008, freq: 15734 / 2, cutoff: 9000, attack: 0.05, release: 0.2 }));
+  S.at(q('laser'), () => X.hum(S, q('laser'), q('gps'), { level: 0.012, freq: 240, cutoff: 3000, attack: 0.05, release: 0.15 }));
+  S.at(q('gps') + 0.1, () => [0, 0.18].forEach((d) => I.blip(S, q('gps') + 0.1 + d, 1568, { level: 0.01, bus: 'sfx' })));
+  S.at(q('smartphone') + 0.2, () => [84, 88, 91].forEach((m, i) => I.blip(S, q('smartphone') + 0.2 + i * 0.07, 440 * 2 ** ((m - 69) / 12), { level: 0.01, bus: 'sfx' })));
+  S.at(q('mrna'), () => I.whoosh(S, q('mrna'), 0.6, { level: 0.02, f0: 1500, f1: 5000, pan0: -0.4, pan1: 0.4, peak: 0.5 }));
+}
+
 // `chapters`: the film's own chapter sound design between the shared opening and montage
 // (the Western film's by default; the Indian film passes src/audio/india/cues.js).
-export function arrangeCues(S, chapters = [classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, frontier]) {
+export function arrangeCues(S, chapters = [classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, inventions, frontier]) {
   transitionAir(S);
   headings(S);
   for (const section of [opening, ...chapters, montage, finale]) {

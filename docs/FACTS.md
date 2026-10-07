@@ -6,7 +6,7 @@ one or two sources for each. Wikipedia links are included only as convenient poi
 primary or institutional source exists (NASA, Britannica, the Library of Congress, museums,
 universities), it is listed first.
 
-**Film time** is the playback time in the 1:48 film (story seconds × 100/72, see
+**Film time** is the playback time in the 1:57 film (story seconds × 100/72, see
 `src/timeline.js`). Captions appear for a second or two around the time given.
 
 **Status**
@@ -24,8 +24,8 @@ universities), it is listed first.
 
 | Film time | Line | Status | Sources |
 |---|---|---|---|
-| 0:01.0 | "Every achievement begins as an idea." | Framing | — |
-| 0:05.8 | "And some ideas change the world." | Framing | — |
+| 0:00.7 | "Every achievement begins as an idea." | Framing | — |
+| 0:05.7 | "And some ideas change the world." | Framing | — |
 | 0:11.2 | "In Athens and Rome, we learned proportion, engineering… and the citizen." | Framing (Greek proportion systems, Roman engineering, Athenian citizenship) | [Britannica: Classical architecture](https://www.britannica.com/art/classical-architecture) · [Britannica: Athenian democracy](https://www.britannica.com/topic/democracy/Classical-Greece) |
 | 0:17.4 | "Then, power was made answerable to the people." | Framing (Cleisthenes 508/7 BC, Magna Carta 1215, Bill of Rights 1689; see Civic) | see chapter II |
 | 0:22.2 | "The Renaissance. Artists became scientists." | Framing (e.g. Leonardo's anatomical and optical studies) | [Britannica: Leonardo da Vinci](https://www.britannica.com/biography/Leonardo-da-Vinci) |
@@ -37,13 +37,14 @@ universities), it is listed first.
 | 0:53.6 | "Nineteen sixty-nine. America went to the Moon." | Correct (Apollo 11, July 1969) | [NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/) |
 | 0:59.6 | "Machines that calculate… became machines that learn." | Framing | — |
 | 1:05.1 | "From the printing press to the internet: knowledge, set free." | Framing (Gutenberg c. 1450s → internet) | [Britannica: Gutenberg](https://www.britannica.com/biography/Johannes-Gutenberg) |
-| 1:09.4 | "From the Shuttle to Webb, America keeps reaching further." | Framing (Webb is NASA-led with ESA and CSA as partners; Hubble is a NASA/ESA project) | [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
-| 1:13.9 | "And next… the first humans on Mars." | Framing (a stated NASA goal, not yet flown) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
-| 1:18.1 | "If I have seen further, it is by standing on the shoulders of giants." | Correct (Newton to Robert Hooke, letter dated 5 February 1675/6; original spelling "ye shoulders of Giants") | [Historical Society of Pennsylvania, item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) · [Wikipedia](https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants) |
-| 1:26.7 | "From the agora to the Moon…" | Framing | — |
-| 1:29.2 | "twenty-five centuries of reason, courage, and invention." | Correct (508/7 BC to AD 1969 is about 2,480 years) | — |
-| 1:33.8 | "Ideas build upon ideas." | Framing | — |
-| 1:41.3 | "The journey continues." | Framing | — |
+| 1:09.7 | "Light, motion, pictures, and the phone in every hand: two centuries of invention." | Framing (photography 1826–39 → the smartphone, 2007; see chapter XII) | see chapter XII |
+| 1:17.7 | "From the Shuttle to Webb, America keeps reaching further." | Framing (Webb is NASA-led with ESA and CSA as partners; Hubble is a NASA/ESA project) | [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
+| 1:22.2 | "And next… the first humans on Mars." | Framing (a stated NASA goal, not yet flown) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
+| 1:26.4 | "If I have seen further, it is by standing on the shoulders of giants." | Correct (Newton to Robert Hooke, letter dated 5 February 1675/6; original spelling "ye shoulders of Giants") | [Historical Society of Pennsylvania, item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) · [Wikipedia](https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants) |
+| 1:35.0 | "From the agora to the Moon…" | Framing | — |
+| 1:37.6 | "twenty-five centuries of reason, courage, and invention." | Correct (508/7 BC to AD 1969 is about 2,480 years) | — |
+| 1:42.2 | "Ideas build upon ideas." | Framing | — |
+| 1:49.6 | "The journey continues." | Framing | — |
 
 ## 0 · The Idea (0:00)
 
@@ -194,40 +195,58 @@ universities), it is listed first.
 | Running heads "DE MOTV CORPORVM", "DE REVOLVTIONIBVS", "OPTICKS", "DIALOGO", "ELEMENTORVM" | page headers | Correct titles (Newton, Copernicus, Newton, Galileo, Euclid) | — |
 | "Bibliotheca universalis" | caption | Correct (Conrad Gessner's universal bibliography, 1545; used here as a caption) | [Wikipedia: Bibliotheca universalis](https://en.wikipedia.org/wiki/Bibliotheca_universalis) |
 
-## XII · The New Frontier (card 1:10.1 · "1981 — 2026")
+## XII · Invention (card 1:09.6 · "1826 — 2020")
+
+A gallery of significant inventions of the last two centuries that the film does not show elsewhere (the
+telegraph, telephone, radio, transistor, vaccination, computing, the printing press and the internet
+have their own chapters).
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "SPACE SHUTTLE · 1981" · "STS-1 · COLUMBIA · FIRST FLIGHT 12 APRIL 1981" | caption, 1:09.3 | Correct | [NASA: STS-1](https://www.nasa.gov/mission/sts-1/) |
-| "HUBBLE · 1990" · "SPACE TELESCOPE · DEPLOYED FROM DISCOVERY · STS-31" | caption, 1:10.4 | Correct (launched 24 April 1990, deployed 25 April) | [NASA: STS-31](https://www.nasa.gov/mission/sts-31/) |
-| "HUMAN GENOME · 2003" · "HUMAN GENOME PROJECT · COMPLETED APRIL 2003" [was "3 BILLION BASE PAIRS READ"] | caption, 1:11.5 | Fixed. The 2003 sequence covered about 92% of the ~3.1 billion bases; the gapless T2T sequence followed in 2022 | [NHGRI: Human Genome Project](https://www.genome.gov/human-genome-project) · [NHGRI: T2T 2022](https://www.genome.gov/about-genomics/telomere-to-telomere) |
+| PHOTOGRAPHY · NIÉPCE 1826–27 · DAGUERRE 1839 | exhibit 1 | Correct (*View from the Window at Le Gras*, the oldest surviving camera photograph, c. 1826–27; the daguerreotype announced 1839) | [Harry Ransom Center: Niépce Heliograph](https://www.hrc.utexas.edu/niepce-heliograph/) · [Britannica: daguerreotype](https://www.britannica.com/technology/daguerreotype) |
+| ELECTRIC LIGHT · SWAN 1878 · EDISON 1879 | exhibit 2 | Correct (Swan demonstrated a carbon-filament lamp in Newcastle, 1878–79; Edison's long-lasting carbon-filament lamp, October 1879) | [Britannica: incandescent lamp](https://www.britannica.com/technology/incandescent-lamp) |
+| AUTOMOBILE · BENZ PATENT-MOTORWAGEN · 1886 · BERTHA BENZ'S 106 KM DRIVE, 1888 | exhibit 3 | Correct (German patent DRP 37435, 29 January 1886; Bertha Benz drove Mannheim → Pforzheim, August 1888) | [Mercedes-Benz Group: Benz Patent Motor Car](https://group.mercedes-benz.com/company/tradition/company-history/1885-1886.html) · [Britannica: Karl Benz](https://www.britannica.com/biography/Karl-Benz) |
+| CINEMA · LUMIÈRE BROTHERS · PARIS 1895 | exhibit 4 | Correct (first public paid screening, Salon Indien du Grand Café, 28 December 1895) | [Britannica: Lumière brothers](https://www.britannica.com/biography/Lumiere-brothers) |
+| TELEVISION · BAIRD 1926 · FARNSWORTH 1927 · ALSO TAKAYANAGI, JAPAN, 1926 | exhibit 5 | Correct (Baird's public demonstration, London, 26 January 1926; Farnsworth's all-electronic image, 7 September 1927; Takayanagi's CRT display, 25 December 1926) | [Britannica: television](https://www.britannica.com/technology/television-technology) · [IEEE Milestone: Takayanagi](https://ethw.org/Milestones:Development_of_Electronic_Television,_1924-1941) |
+| LASER · MAIMAN · HUGHES RESEARCH · 1960 | exhibit 6 | Correct (ruby laser, 16 May 1960; maser–laser principle: Townes, Basov and Prokhorov, Nobel 1964) | [Britannica: laser](https://www.britannica.com/technology/laser) · [Nobel Prize in Physics 1964](https://www.nobelprize.org/prizes/physics/1964/summary/) |
+| GPS · FIRST SATELLITE 1978 · FULL CONSTELLATION 1995 | exhibit 7 | Correct (Navstar 1 launched 22 February 1978; full operational capability declared 17 July 1995) | [GPS.gov: history](https://www.gps.gov/systems/gps/space/) · [Britannica: GPS](https://www.britannica.com/technology/GPS) |
+| SMARTPHONE · 2007 · (BEFORE IT: IBM SIMON, 1994) | exhibit 8 | Correct (the touchscreen smartphone era from 2007; IBM Simon, 1994, is usually called the first smartphone; the model shown is generic) | [Britannica: smartphone](https://www.britannica.com/technology/smartphone) |
+| mRNA VACCINES · 2020 · KARIKÓ & WEISSMAN, NOBEL 2023 | exhibit 9 | Correct (nucleoside-modified mRNA, Karikó & Weissman 2005; first authorised mRNA vaccines December 2020; Nobel Prize in Physiology or Medicine 2023) | [Nobel Prize 2023](https://www.nobelprize.org/prizes/medicine/2023/summary/) |
+
+## XIII · The New Frontier (card 1:18.4 · "1981 — 2026")
+
+| Claim as shown | Where | Status | Sources |
+|---|---|---|---|
+| "SPACE SHUTTLE · 1981" · "STS-1 · COLUMBIA · FIRST FLIGHT 12 APRIL 1981" | caption, 1:17.6 | Correct | [NASA: STS-1](https://www.nasa.gov/mission/sts-1/) |
+| "HUBBLE · 1990" · "SPACE TELESCOPE · DEPLOYED FROM DISCOVERY · STS-31" | caption, 1:18.7 | Correct (launched 24 April 1990, deployed 25 April) | [NASA: STS-31](https://www.nasa.gov/mission/sts-31/) |
+| "HUMAN GENOME · 2003" · "HUMAN GENOME PROJECT · COMPLETED APRIL 2003" [was "3 BILLION BASE PAIRS READ"] | caption, 1:19.8 | Fixed. The 2003 sequence covered about 92% of the ~3.1 billion bases; the gapless T2T sequence followed in 2022 | [NHGRI: Human Genome Project](https://www.genome.gov/human-genome-project) · [NHGRI: T2T 2022](https://www.genome.gov/about-genomics/telomere-to-telomere) |
 | Genome helix pairs A–T, C–G | helix | Correct | — |
-| "JAMES WEBB · 2021" · "18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021" | caption, 1:12.6 | Correct (model: 18 hexagonal segments, 3-4-4-4-3; five-layer sunshield) | [NASA: Webb's Mirrors](https://science.nasa.gov/mission/webb/webbs-mirrors/) · [NASA: Webb launch](https://science.nasa.gov/mission/webb/) |
-| "MARS · PERSEVERANCE & INGENUITY · 2021" · "JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET" | caption, 1:13.8 | Correct (landed 18 Feb 2021; NASA: "first powered, controlled flight on another planet") | [NASA: Ingenuity](https://science.nasa.gov/mission/mars-2020-perseverance/ingenuity-mars-helicopter/) |
+| "JAMES WEBB · 2021" · "18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021" | caption, 1:20.9 | Correct (model: 18 hexagonal segments, 3-4-4-4-3; five-layer sunshield) | [NASA: Webb's Mirrors](https://science.nasa.gov/mission/webb/webbs-mirrors/) · [NASA: Webb launch](https://science.nasa.gov/mission/webb/) |
+| "MARS · PERSEVERANCE & INGENUITY · 2021" · "JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET" | caption, 1:22.1 | Correct (landed 18 Feb 2021; NASA: "first powered, controlled flight on another planet") | [NASA: Ingenuity](https://science.nasa.gov/mission/mars-2020-perseverance/ingenuity-mars-helicopter/) |
 | "INGENUITY · 1.8 KG" · "FIRST FLIGHT · 19 APRIL 2021" | callout | Correct | as above |
 | "EARTH · AVG. 225 MILLION KM" [was "225 MILLION KM"] | callout | Fixed (NASA's average; the distance ranges from about 55 to 401 million km) | [NASA: Mars facts](https://science.nasa.gov/mars/facts/) |
-| "ARTEMIS · RETURNING TO THE MOON" · "ARTEMIS II · CREWED LUNAR FLYBY · APRIL 2026" [was "CREWED LUNAR EXPLORATION PROGRAM"] | caption, 1:14.9 | Fixed, now specific (launched 1 April 2026, lunar flyby 6 April, splashdown 10 April) | [NASA: Artemis II](https://www.nasa.gov/mission/artemis-ii/) |
-| "THE VISION · CREWED MISSIONS TO MARS · NOT YET FLOWN · THE GOAL FOR THE 2030s AND BEYOND" | caption, 1:15.8 | Correct (labelled as a goal) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
+| "ARTEMIS · RETURNING TO THE MOON" · "ARTEMIS II · CREWED LUNAR FLYBY · APRIL 2026" [was "CREWED LUNAR EXPLORATION PROGRAM"] | caption, 1:23.2 | Fixed, now specific (launched 1 April 2026, lunar flyby 6 April, splashdown 10 April) | [NASA: Artemis II](https://www.nasa.gov/mission/artemis-ii/) |
+| "THE VISION · CREWED MISSIONS TO MARS · NOT YET FLOWN · THE GOAL FOR THE 2030s AND BEYOND" | caption, 1:24.1 | Correct (labelled as a goal) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
 | "THE VISION · FIRST FOOTSTEPS ON MARS", "A NEW HOME AMONG THE STARS" | captions | Framing (clearly labelled vision) | — |
 | "EARTH · A BLUE STAR IN THE MARTIAN DAWN" | caption | Correct (from Mars, Earth appears as a bright morning or evening "star") | [NASA: Curiosity sees 'Evening Star' Earth](https://www.nasa.gov/solar-system/nasa-mars-rover-curiosity-sees-evening-star-earth/) |
 | Orbiter "UNITED STATES" fuselage lettering and flag | Shuttle model | Correct | NASA STS-1 photographs ([NASA: STS-1](https://www.nasa.gov/mission/sts-1/)) |
 
-## Legacy montage (1:17)
+## Legacy montage (1:25)
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "Standing on the shoulders of giants." · "NEWTON TO HOOKE · 1675/6" [was "ISAAC NEWTON · 1675"] | card, 1:17.6 | Fixed (letter dated 5 February 1675 Old Style, 1676 New Style) | [HSP item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) |
+| "Standing on the shoulders of giants." · "NEWTON TO HOOKE · 1675/6" [was "ISAAC NEWTON · 1675"] | card, 1:25.9 | Fixed (letter dated 5 February 1675 Old Style, 1676 New Style) | [HSP item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) |
 | "de divina proportione" | label | Correct (Luca Pacioli, Venice 1509, illustrated by Leonardo) | [Britannica: Luca Pacioli](https://www.britannica.com/biography/Luca-Pacioli) |
 | "VAPOR · MDCCXII" | label | Correct (Newcomen's first working atmospheric engine, 1712) | [Britannica: Thomas Newcomen](https://www.britannica.com/biography/Thomas-Newcomen) |
 | "F = G · m₁m₂ / r²" · "MODERN FORM · NEWTON, PRINCIPIA 1687" [was "PRINCIPIA MATHEMATICA · LIBER III · 1687"] | label | Fixed (G and this notation postdate the *Principia*) | [Britannica: Newton's law of gravitation](https://www.britannica.com/science/Newtons-law-of-gravitation) |
 | "µP · 2300 T" | label | Correct (the Intel 4004 had about 2,300 transistors) | [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
 | "72 BPM · SINUS RHYTHM" | label | Depiction (a typical resting heart rate) | — |
 
-## Finale (1:24.7)
+## Finale (1:33.0)
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "From the agora to the Moon, twenty-five centuries of reason, courage and invention." | text, 1:26.8 | Correct (see narration) | — |
+| "From the agora to the Moon, twenty-five centuries of reason, courage and invention." | text, 1:35.1 | Correct (see narration) | — |
 | "IDEAS BUILD UPON IDEAS." · "THE JOURNEY CONTINUES" | text | Framing | — |
 
 
@@ -248,7 +267,8 @@ that the chapter's achievements built on.
 | VIII · Flight | rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961 | [NASA: A brief history of rocketry](https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
 | X · Computing | zero and place value from India · "algorithm" honours al-Khwarizmi, Baghdad | [Britannica: zero](https://www.britannica.com/science/zero-mathematics) · [Britannica: algorithm](https://www.britannica.com/science/algorithm) |
 | XI · Knowledge | paper, China AD 105 (Cai Lun) · movable type, Bi Sheng c. 1040 · metal type, Korea 1377 | [Britannica: Cai Lun](https://www.britannica.com/biography/Cai-Lun) · [Britannica: Bi Sheng](https://www.britannica.com/biography/Bi-Sheng) · [UNESCO: Jikji](https://www.unesco.org/en/memory-world) |
-| XII · Frontier | first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA) | [NASA: Sputnik](https://history.nasa.gov/sputnik/) · [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
+| XII · Invention | television also by Takayanagi (Japan) · the maser and laser by Basov and Prokhorov (USSR) · mRNA vaccines brought to the world by BioNTech (Germany) and Moderna | [IEEE Milestone: Takayanagi](https://ethw.org/Milestones:Development_of_Electronic_Television,_1924-1941) · [Nobel Prize in Physics 1964](https://www.nobelprize.org/prizes/physics/1964/summary/) |
+| XIII · Frontier | first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA) | [NASA: Sputnik](https://history.nasa.gov/sputnik/) · [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
 
 ---
 

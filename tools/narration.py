@@ -9,7 +9,7 @@ import json, sys, numpy as np, soundfile as sf
 from kokoro_onnx import Kokoro
 TS = 100 / 72
 VOICE, SPEED = 'bm_george', 0.92
-LINES = [  # (story seconds, text)
+LINES = [  # (story seconds, text) — the Western film (src/films/western.js): 84 s of story
   (0.5,   "Every achievement begins as an idea."),     # over the flash-forward; clear of the SLAM (3.5)
   (4.1,   "And some ideas change the world."),        # after the SLAM, over the title
   (8.1,   "In Athens and Rome, we learned proportion, engineering… and the citizen."),
@@ -23,13 +23,14 @@ LINES = [  # (story seconds, text)
   (38.6,  "Nineteen sixty-nine. America went to the Moon."),
   (42.9,  "Machines that calculate… became machines that learn."),
   (46.9,  "From the printing press to the internet: knowledge, set free."),
-  (49.95, "From the Shuttle to Webb, America keeps reaching further."),
-  (53.2,  "And next… the first humans on Mars."),
-  (56.2,  "If I have seen further, it is by standing on the shoulders of giants."),
-  (62.4,  "From the agora to the Moon…"),
-  (64.25, "twenty-five centuries of reason, courage, and invention."),
-  (67.55, "Ideas build upon ideas."),
-  (72.9,  "The journey continues."),
+  (50.2,  "Light, motion, pictures, and the phone in every hand: two centuries of invention."),
+  (55.95, "From the Shuttle to Webb, America keeps reaching further."),
+  (59.2,  "And next… the first humans on Mars."),
+  (62.2,  "If I have seen further, it is by standing on the shoulders of giants."),
+  (68.4,  "From the agora to the Moon…"),
+  (70.25, "twenty-five centuries of reason, courage, and invention."),
+  (73.55, "Ideas build upon ideas."),
+  (78.9,  "The journey continues."),
 ]
 LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js): 106 s of story
   (0.5,   "Every achievement begins as an idea."),
@@ -59,7 +60,7 @@ LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js
   (95.55, "Ideas build upon ideas."),
   (100.9, "The journey continues."),
 ]
-STORY = 78.3
+STORY = 84.3
 if len(sys.argv) > 1 and sys.argv[1] == 'india': LINES, STORY = LINES_INDIA, 106.3
 k = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
 SR = 48000
