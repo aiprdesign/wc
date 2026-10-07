@@ -578,7 +578,7 @@ export function flightMaterials() {
 
 // ================================================================== 1 · PUSHPAKA VIMANA (legend; units m, prow +X)
 export function buildVimana(M) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'vimana';
   const gold = [], hull = [], verm = [], lapis = [], ivory = [], teal = [], ink = [];
   const L = 3.1;                                              // half length
   const W = (u) => 1.25 * Math.pow(Math.max(0, Math.sin(Math.PI * u)), 0.55);
@@ -727,7 +727,7 @@ export function waveFlags(flags, t, wind = 1) {
 
 // ================================================================== 2 · HUMBER-SOMMER BIPLANE, 1911 (m; nose +X, origin on the ground)
 export function buildSommer(M) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'sommer';
   const wood = [], fab = [], eng = [], brass = [], rub = [], bag = [], wires = [], dark = [], cloth = [], skin = [], leather = [];
   const LE = 0.95, CH = 1.85, YL = 1.15, YU = 2.95;
   const plane = (y, span, chord, xle = LE) => { const st = []; for (let i = 0; i <= 8; i++) { const z = -span + i / 8 * 2 * span; st.push({ x: xle, y, z, c: chord }); } return st; };
@@ -832,7 +832,7 @@ function add(g, geos, mat) { if (!geos.length) return null; const m = new THREE.
 
 // ================================================================== 3 · DE HAVILLAND PUSS MOTH, 1932 (m; nose +X, origin at the datum)
 export function buildPussMoth(M) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'pussmoth';
   const body = [], trim = [], wingS = [], dark = [], glass = [], rub = [], metal = [];
   const fus = (x) => {
     // nose x = 2.55 … tail x = -4.95
@@ -896,7 +896,7 @@ function roundel(M, parent, p, r, rad) {
 
 // ================================================================== 4 · HAL HF-24 MARUT, 1961 (m; nose +X)
 export function buildMarut(M) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'marut';
   const skin = [], dark = [], glass = [];
   const fus = (x) => {
     // nose 7.9 … tail -7.9; twin engines side by side → a wide, flat-sided rear fuselage
@@ -936,7 +936,7 @@ export function buildMarut(M) {
 
 // ================================================================== 5 · HAL TEJAS (m; nose +X)
 export function buildTejas(M) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(); g.name = 'tejas';
   const skin = [], dome = [], dark = [], glass = [];
   const fus = (x) => {
     if (x > 4.0) { const u = (x - 4.0) / 2.6; const r = Math.sqrt(Math.max(0, 1 - u * u)) * (1 - 0.25 * u); return [0.5 * Math.pow(r, 1.2) + 0.01, 0.52 * Math.pow(r, 1.2) + 0.01, 0.1 - 0.12 * u * u, 2]; }
