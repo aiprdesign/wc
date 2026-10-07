@@ -1,12 +1,18 @@
 // Sound design, sequence by sequence. Every event is pinned to a CUES number from
 // the shared timeline so picture and sound hit together.
 
-import { CUES as C, SEGMENTS } from '../timeline.js';
+import { CUES as C, SEGMENTS, MUSIC_SPLICES } from '../timeline.js';
 import { FILM_ID } from '../film.js';
 import * as I from './instruments.js';
 import * as X from './sfx.js';
 import * as O from './orchestra.js';
-import { groove } from './music.js';
+import { groove as grooveM } from './music.js';
+// the score's tempo map is written on its own clock: a story time past a splice (MUSIC_SPLICES) is grooved
+// where the music playing under it lies, then carried back to the film's clock
+const musicOff = (t) => { let o = 0; for (const [at, off] of MUSIC_SPLICES) if (t >= at) o = off; return o; };
+const groove = (t) => { const o = musicOff(t); return grooveM(t - o) + o; };
+// shift of the Western film's later chapters against the times this file was first written on
+const WSH = C.microDive != null ? C.microDive - 32.0 : 0;
 import { headingList, kickTiming, onBeat, SWAPS } from '../lib/headings.js';
 
 function opening(S) {
@@ -223,7 +229,7 @@ function medicine(S) {
   S.at(C.anatomy, () => I.whoosh(S, C.anatomy, 1.2, { level: 0.04, f0: 150, f1: 700, pan0: -0.2, pan1: 0.2 }));
   // medical HUD: monitor beeps, then one beep per beat
   [0, 0.08, 0.16].forEach((d) => S.at(C.medicalHud + d, () => I.blip(S, C.medicalHud + d, 1976, { level: 0.02, pan: 0.4 })));
-  for (const t of [34.0, 34.5]) S.at(t, () => I.blip(S, t, 1760, { level: 0.018, decay: 0.12, pan: 0.4 }));
+  for (const t of [34.0 + WSH, 34.5 + WSH]) S.at(t, () => I.blip(S, t, 1760, { level: 0.018, decay: 0.12, pan: 0.4 }));
 }
 
 function flight(S) {
@@ -306,7 +312,7 @@ function computing(S) {
 }
 
 // (v8: the blips run on to 50.0, knowledge's handover — no longer the montage's first morph)
-const BINARY_END = 50.0;
+const BINARY_END = C.network != null ? C.network + 0.7 : 50.0;   // knowledge's handover
 
 function knowledge(S) {
   // pages fly: a flutter of short paper flicks
@@ -442,10 +448,10 @@ function transitionAir(S) {
   // the Western film's chapter downbeats (on its tempo map); another film's: its own segment starts,
   // up to the last chapter before the launch the score lands on (its sound design plays on the film clock)
   const list = FILM_ID === 'western'
-    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4], [49.5, 0.4]]
+    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, -0.5, 0.04], ...[[20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4], [49.5, 0.4]].map(([t, ...r]) => [t + WSH, ...r])]
     : SEGMENTS.slice(1, -3).map((sg, i) => [sg.start, i % 2 ? -0.5 : 0.5, 0.045]);
   for (const [t, p0, lv = 0.05] of list) {
-    const tt = FILM_ID === 'western' ? groove(t) : t;
+    const tt = FILM_ID === 'western' ? groove(t) : t;   // (the italy and inventions entries land in spliced bars: grooved there)
     S.at(tt - 0.35, () => I.whoosh(S, tt - 0.35, 0.9, { level: lv, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
   }
 }

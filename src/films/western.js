@@ -8,18 +8,19 @@ const SEGMENTS = [
   { id: 'classical',   title: 'Classical Architecture',       start: 7.5,  end: 12.5, transition: 'luma' },
   { id: 'civic',       title: 'Democracy, Law & Institutions', start: 12.0, end: 16.0, transition: 'luma' },
   { id: 'renaissance', title: 'Art & the Renaissance',        start: 15.5, end: 20.5, transition: 'flash' },
-  { id: 'science',     title: 'Scientific Revolution',        start: 20.0, end: 25.0, transition: 'spectrum' },
-  { id: 'industrial',  title: 'Industrial Revolution',        start: 24.5, end: 29.0, transition: 'flash' },
-  { id: 'electricity', title: 'Electricity & Communication',  start: 28.5, end: 32.0, transition: 'zoom' },
-  { id: 'medicine',    title: 'Medicine',                     start: 31.5, end: 35.0, transition: 'luma' },
-  { id: 'flight',      title: 'Flight & Space',               start: 34.5, end: 39.0, transition: 'dissolve' },
-  { id: 'moonshot',    title: 'The Moonshot · American Century', start: 38.5, end: 43.0, transition: 'dissolve' },
-  { id: 'computing',   title: 'Computing & Digital',          start: 42.5, end: 47.0, transition: 'zoom' },
-  { id: 'knowledge',   title: 'Knowledge',                    start: 46.5, end: 50.0, transition: 'flash' },
-  { id: 'inventions',  title: 'Invention',                    start: 49.5, end: 56.0, transition: 'dissolve' },
-  { id: 'frontier',    title: 'The New Frontier',             start: 55.5, end: 62.0, transition: 'zoom' },
-  { id: 'montage',     title: 'Legacy',                       start: 61.5, end: 66.5, transition: 'letter' },   // zoom through the A of STARS
-  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 66.0, end: 84.0, transition: null },
+  { id: 'italy',       title: 'The Italian Renaissance',      start: 20.0, end: 26.5, transition: 'dissolve' },
+  { id: 'science',     title: 'Scientific Revolution',        start: 26.0, end: 31.0, transition: 'spectrum' },
+  { id: 'industrial',  title: 'Industrial Revolution',        start: 30.5, end: 35.0, transition: 'flash' },
+  { id: 'electricity', title: 'Electricity & Communication',  start: 34.5, end: 38.0, transition: 'zoom' },
+  { id: 'medicine',    title: 'Medicine',                     start: 37.5, end: 41.0, transition: 'luma' },
+  { id: 'flight',      title: 'Flight & Space',               start: 40.5, end: 45.0, transition: 'dissolve' },
+  { id: 'moonshot',    title: 'The Moonshot · American Century', start: 44.5, end: 49.0, transition: 'dissolve' },
+  { id: 'computing',   title: 'Computing & Digital',          start: 48.5, end: 53.0, transition: 'zoom' },
+  { id: 'knowledge',   title: 'Knowledge',                    start: 52.5, end: 56.0, transition: 'flash' },
+  { id: 'inventions',  title: 'Invention',                    start: 55.5, end: 62.0, transition: 'dissolve' },
+  { id: 'frontier',    title: 'The New Frontier',             start: 61.5, end: 68.0, transition: 'zoom' },
+  { id: 'montage',     title: 'Legacy',                       start: 67.5, end: 72.5, transition: 'letter' },   // zoom through the A of STARS
+  { id: 'finale',      title: 'Ideas Build Upon Ideas',       start: 72.0, end: 90.0, transition: null },
 ];
 
 // Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`; the score places its hits
@@ -137,30 +138,40 @@ const BASE = {
   fadeOut: 76.0,
 };
 
-// … then laid on this film's own 84 s clock: the Invention gallery (49.5–55.5) plays three bars of the
-// score again — Electricity & Medicine's (music 29.5–35.5), so each exhibit lands on one of their hits —
-// and from the New Frontier on, everything runs 6 s later (music time = story − 6).
-const MUSIC_SPLICES = [[49.5, 20], [55.5, 6]];   // [story time, offset]: from there on, music time = story − offset
+// … then laid on this film's own 90 s clock. Two chapters of its own play whole bars of the score again:
+//   The Italian Renaissance 20.0–26.0 ← music 14.0–20.0 (the Renaissance's bars), then the score runs on 6 s later
+//   Invention               55.5–61.5 ← music 29.5–35.5 (Electricity & Medicine's: each exhibit on one of their hits)
+//   from the New Frontier on, music time = story − 12
+const MUSIC_SPLICES = [[20.0, 6], [55.5, 26], [61.5, 12]];   // [story time, offset]: from there on, music time = story − offset
 const CUES = {
-  ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, v >= 49.5 ? v + 6 : v])),
+  ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, v >= 49.5 ? v + 12 : v >= 20.0 ? v + 6 : v])),
+  // the italian renaissance — Florence and Rome
+  italyDome: 20.0,      // over Florence's roofs to the cathedral dome
+  brunelleschi: 20.9,   // the cutaway: Brunelleschi's double shell and herringbone brick, 1420–1436
+  leonardoNotebook: 21.9, // Leonardo's notebook pages draw themselves
+  aerialScrew: 22.5,    // the aerial screw, c. 1489
+  ornithopter: 23.2,    // the ornithopter, c. 1490
+  armouredCar: 23.9,    // the armoured vehicle, 1487
+  sistine: 24.6,        // the Sistine Chapel: Michelangelo's ceiling, 1508–1512
+  creationOfAdam: 25.4, // the two hands
   // invention — a gallery of the last two centuries (each exhibit on a hit of the replayed bars)
-  photograph: 49.5,     // Niépce's view from the window, 1826–27; Daguerre, 1839
-  lightBulb: 50.0,      // the electric light: Swan and Edison, 1879   (music: the telephone hit)
-  motorwagen: 50.6,     // Benz Patent-Motorwagen, 1886                 (radio)
-  cinema: 51.2,         // the Lumière cinématographe, 1895             (electronics)
-  television: 52.0,     // television: Baird 1926, Farnsworth 1927       (microDive)
-  laser: 53.0,          // the laser: Maiman, 1960                       (anatomy)
-  gps: 53.6,            // GPS: first satellite 1978, complete 1995      (medicalHud)
-  smartphone: 54.2,     // the smartphone, 2007
-  mrna: 54.8,           // mRNA vaccines, 2020: Karikó and Weissman      (blueprint)
+  photograph: 55.5,     // Niépce's view from the window, 1826–27; Daguerre, 1839
+  lightBulb: 56.0,      // the electric light: Swan and Edison, 1879   (music: the telephone hit)
+  motorwagen: 56.6,     // Benz Patent-Motorwagen, 1886                 (radio)
+  cinema: 57.2,         // the Lumière cinématographe, 1895             (electronics)
+  television: 58.0,     // television: Baird 1926, Farnsworth 1927       (microDive)
+  laser: 59.0,          // the laser: Maiman, 1960                       (anatomy)
+  gps: 59.6,            // GPS: first satellite 1978, complete 1995      (medicalHud)
+  smartphone: 60.2,     // the smartphone, 2007
+  mrna: 60.8,           // mRNA vaccines, 2020: Karikó and Weissman      (blueprint)
 };
 // the score's own clock: its beat names at their composed times
 const MUSIC_CUES = BASE;
 
 // Colour temperature of the grade over time: +1 = marble/bronze/gold, -1 = steel/electric/cool.
 const WARMTH_KEYS = [
-  [0, 0.9], [8, 1.0], [20, 0.8], [25, 0.35], [29, 0.0], [32, -0.35],
-  [39, -0.6], [43, -0.55], [49.5, -0.65], [50, 0.15], [55.5, 0.15], [56, -0.75], [62, -0.7], [66.5, -0.5], [72, -0.2], [76, 0.25], [84, 0.3],
+  [0, 0.9], [8, 1.0], [20, 0.8], [26, 0.85], [26.5, 0.8], [31, 0.35], [35, 0.0], [38, -0.35],
+  [45, -0.6], [49, -0.55], [55.5, -0.65], [56, 0.15], [61.5, 0.15], [62, -0.75], [68, -0.7], [72.5, -0.5], [78, -0.2], [82, 0.25], [90, 0.3],
 ];
 
 // Headings per segment. Dates are the milestones each chapter shows. `roots` credits the earlier
@@ -169,33 +180,34 @@ const CHAPTERS = {
   classical:   { n: 'I',    era: 'c. 500 BC — AD 400',          heading: 'THE FOUNDATIONS',        story: 'Athens and Rome gave the world proportion, engineering and the citizen.', roots: "Roots: Egypt's stone columns · arches first built in Mesopotamia and Egypt" },
   civic:       { n: 'II',   era: '508/7 BC · 1215 · 1689',      heading: 'THE RULE OF LAW',        story: 'From the Athenian assembly to parliament: power answerable to the people.', roots: "Roots: written law in Mesopotamia · Ur-Nammu c. 2100 BC · Hammurabi c. 1754 BC" },
   renaissance: { n: 'III',  era: 'c. 1400 — 1600',              heading: 'THE REBIRTH',            story: 'Artists became scientists, and learned to see the world anew.', roots: "Roots: Greek texts kept by Byzantine and Arabic scholars · optics of Ibn al-Haytham" },
-  science:     { n: 'IV',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.', roots: "Roots: refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi" },
-  industrial:  { n: 'V',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.', roots: "Roots: steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551" },
-  electricity: { n: 'VI',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.', roots: "Roots: radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia)" },
-  medicine:    { n: 'VII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa" },
-  flight:      { n: 'VIII', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.', roots: "Roots: rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961" },
-  moonshot:    { n: 'IX',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
-  computing:   { n: 'X',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.', roots: "Roots: zero and place value from India · 'algorithm' honours al-Khwarizmi, Baghdad" },
-  inventions:  { n: 'XII',  era: '1826 — 2020',                 heading: 'TWO CENTURIES OF INVENTION', story: 'Photography, electric light, the car, cinema, television, the laser, GPS, the smartphone, mRNA.', roots: 'Exchange: television also by Takayanagi (Japan) · the maser and laser by Basov and Prokhorov (USSR) · mRNA vaccines brought to the world by BioNTech (Germany) and Moderna' },
-  frontier:    { n: 'XIII', era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.', roots: "Roots: first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA)" },
-  knowledge:   { n: 'XI',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper, China AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
+  italy:       { n: 'IV',   era: '1420 — 1512',                 heading: 'THE ITALIAN RENAISSANCE', story: "Brunelleschi's dome, Leonardo's notebooks, Michelangelo's ceiling: Florence and Rome remade the arts.", roots: 'Roots: the Pantheon\'s Roman dome, c. AD 125 · Greek texts saved by Byzantine and Arab scholars' },
+  science:     { n: 'V',   era: '1543 — 1704',                 heading: 'THE AGE OF REASON',      story: 'Copernicus, Galileo, Newton: the universe became knowable.', roots: "Roots: refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi" },
+  industrial:  { n: 'VI',    era: '1769 — 1900',                 heading: 'THE AGE OF MACHINES',    story: 'Steam and steel multiplied human strength a thousandfold.', roots: "Roots: steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551" },
+  electricity: { n: 'VII',   era: '1831 — 1947',                 heading: 'THE CONNECTED WORLD',    story: 'Lightning, tamed, carried the human voice across oceans.', roots: "Roots: radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia)" },
+  medicine:    { n: 'VIII',  era: '1543 · 1796 · 1895 · 1928',   heading: 'THE GIFT OF LIFE',       story: 'Anatomy, vaccines and antibiotics gave billions longer lives.', roots: "Roots: lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa" },
+  flight:      { n: 'IX', era: '1903 — 1961',                 heading: 'THE CONQUEST OF THE SKY', story: 'Within one lifetime, from wooden wings to orbit.', roots: "Roots: rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961" },
+  moonshot:    { n: 'X',   era: '1969',                        heading: null,                     story: null }, // the sequence carries its own title
+  computing:   { n: 'XI',    era: '1822 — TODAY',                heading: 'THE DIGITAL REVOLUTION', story: 'Machines that calculate became machines that learn.', roots: "Roots: zero and place value from India · 'algorithm' honours al-Khwarizmi, Baghdad" },
+  inventions:  { n: 'XIII',  era: '1826 — 2020',                 heading: 'TWO CENTURIES OF INVENTION', story: 'Photography, electric light, the car, cinema, television, the laser, GPS, the smartphone, mRNA.', roots: 'Exchange: television also by Takayanagi (Japan) · the maser and laser by Basov and Prokhorov (USSR) · mRNA vaccines brought to the world by BioNTech (Germany) and Moderna' },
+  frontier:    { n: 'XIV', era: '1981 — 2026',                 heading: 'THE NEW FRONTIER',       story: 'From the Shuttle to Webb, and next: the first humans on Mars.', roots: "Roots: first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA)" },
+  knowledge:   { n: 'XII',   era: 'c. 1450 — TODAY',             heading: 'THE SHARED MIND',        story: 'From the printing press to the internet: knowledge set free.', roots: "Roots: paper, China AD 105 · movable type, Bi Sheng c. 1040 · metal type, Korea 1377" },
 };
 
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.5, end: 2.95, text: 'Every achievement begins as an idea.' },     // with the VO's "begins as an idea"; gone before the SLAM (3.5)
-  { start: 61.9, end: 66.2, text: 'Standing on the shoulders of giants.', cite: 'NEWTON TO HOOKE · 1675/6', low: true },
+  { start: 67.9, end: 72.2, text: 'Standing on the shoulders of giants.', cite: 'NEWTON TO HOOKE · 1675/6', low: true },
 ];
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
 // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
 const WORDS = {
   classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
-  renaissance: 'BEAUTY', science: 'REASON', industrial: 'POWER',
+  renaissance: 'BEAUTY', italy: 'WONDER', science: 'REASON', industrial: 'POWER',
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
-  moonshot: { text: 'USA', t0: 39.95, t1: 40.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 42.55, t1: 44.3, pace: 0.8 }, { text: 'AI', t0: 45.5, t1: 46.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
+  moonshot: { text: 'USA', t0: 45.95, t1: 46.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 48.55, t1: 50.3, pace: 0.8 }, { text: 'AI', t0: 51.5, t1: 52.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
   inventions: 'INVENTION',
-  frontier: { text: 'FRONTIER', t0: 55.8, t1: 56.95, pace: 0.8 },   // clears before the genome shot
+  frontier: { text: 'FRONTIER', t0: 61.8, t1: 62.95, pace: 0.8 },   // clears before the genome shot
 };
 // the montage's rapid word swaps, each on its cue
 const SWAPS = [['mColumns', 'ORDER'], ['mGears', 'MOTION'], ['mOrbits', 'ORBITS'], ['mAtoms', 'ATOMS'], ['mCircuit', 'CIRCUITS'], ['mStars', 'STARS']];
@@ -205,7 +217,7 @@ export default {
   title: 'Achievements of Western Civilization',
   short: 'Western Civilization',
   slug: 'achievements-of-western-civilization',
-  DURATION: 84,
+  DURATION: 90,
   MUSIC_DURATION: 78, MUSIC_SPLICES,   // the score's own clock, and how it is laid onto this one
   SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, SWAPS,
   sceneDir: '.',                                   // src/scenes/<id>.js
