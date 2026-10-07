@@ -216,7 +216,7 @@ const KINDS = {
   ashoka: { col: [0.065, 0.17, 0.04] },
   cypress: { col: [0.04, 0.115, 0.05] },
   palm: { col: [0.12, 0.2, 0.05] },
-  shrub: { col: [0.1, 0.19, 0.045] },
+  shrub: { col: [0.13, 0.24, 0.05] },
 };
 
 // Builds one tree geometry (metres, base at the origin). Variation comes from `seed`.
@@ -227,17 +227,17 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
   if (kind === 'palm') {
     const H = 9 + r() * 5, lean = V(r() - 0.5, 0, r() - 0.5).normalize().multiplyScalar(H * (0.12 + r() * 0.18));
     const top = V(lean.x, H, lean.z);
-    const trunk = limb(V(0, 0, 0), top, 0.22, 0.15, lite ? 5 : 7, 0.0, seed, 4);
+    const trunk = limb(V(0, 0, 0), top, 0.22, 0.15, lite ? 4 : 7, 0.0, seed, lite ? 2 : 4);
     // the curve: bow towards the lean
     const tp = trunk.attributes.position;
     for (let i = 0; i < tp.count; i++) { const y = tp.getY(i), k = (y / H); tp.setX(i, tp.getX(i) + lean.x * (k * k - k) * 0.6); tp.setZ(i, tp.getZ(i) + lean.z * (k * k - k) * 0.6); }
     trunk.computeVertexNormals();
     parts.push(paint(trunk, (x, y, z, nx, ny, nz, c, o) => { const ring = 0.75 + 0.25 * Math.abs(Math.sin(y * 9)); c.copy(BARK_PALE).multiplyScalar(ring * (0.6 + 0.3 * Math.max(0, nx))); o.leaf = 0; o.sway = 0.25 * (y / H) ** 2; }));
     // fronds: arched ribbons with a folded midrib, leaflet comb cut in by the shader's clump noise
-    const NF = lite ? 9 : 15;
+    const NF = lite ? 7 : 15;
     for (let f = 0; f < NF; f++) {
       const az = (f / NF) * TAU + r() * 0.3, el = 0.55 - (f % 3) * 0.35 + r() * 0.2, L = 3.6 + r() * 1.4;
-      const segs = lite ? 5 : 8, pos = [], dir = V(Math.cos(az), 0, Math.sin(az)), side = V(-dir.z, 0, dir.x);
+      const segs = lite ? 4 : 8, pos = [], dir = V(Math.cos(az), 0, Math.sin(az)), side = V(-dir.z, 0, dir.x);
       for (let s = 0; s <= segs; s++) {
         const u = s / segs, d = u * L, y = Math.sin(el) * d - 0.42 * d * d / L * (1.4 - el);
         const wdt = 0.75 * Math.sin(Math.min(1, u * 1.15) * Math.PI) * (1 - 0.3 * u) + 0.05;
@@ -293,8 +293,8 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
     banyan: { H: 12, W: 10.5, flat: 0.42, trunk: 0.9, clumps: 16, rise: 0.36 },
   }[kind];
   const H = P.H * (0.85 + r() * 0.3), W = P.W * (0.85 + r() * 0.3), cy = H - W * P.flat, trunkTop = H * P.rise;
-  parts.push(paint(limb(V(0, -0.3, 0), V((r() - 0.5) * 0.6, trunkTop + 0.5, (r() - 0.5) * 0.6), P.trunk, P.trunk * 0.6, lite ? 5 : 8, 0.12, seed, 2), barkPainter(kind === 'peepal' ? BARK_PALE.clone().multiplyScalar(0.7) : BARK, 0, H)));
-  const nLimb = lite ? 3 : 5, cl = [];
+  parts.push(paint(limb(V(0, -0.3, 0), V((r() - 0.5) * 0.6, trunkTop + (lite ? W * 0.3 : 0.5), (r() - 0.5) * 0.6), P.trunk, P.trunk * 0.6, lite ? 4 : 8, 0.12, seed, lite ? 1 : 2), barkPainter(kind === 'peepal' ? BARK_PALE.clone().multiplyScalar(0.7) : BARK, 0, H)));
+  const nLimb = lite ? 0 : 5, cl = [];
   for (let i = 0; i < nLimb; i++) {
     const a = (i / nLimb) * TAU + r() * 0.8, d = W * (0.45 + r() * 0.3), end = V(Math.cos(a) * d, cy + (r() - 0.2) * W * P.flat * 0.6, Math.sin(a) * d);
     parts.push(paint(limb(V(0, trunkTop, 0), end, P.trunk * 0.5, P.trunk * 0.15, lite ? 4 : 5, 0.25, seed + i, 2), barkPainter(BARK, 0.25, H)));
@@ -310,7 +310,7 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
   for (const g of cl) parts.push(paint(g, pc));
   if (kind === 'banyan') {
     // prop trunks and hanging aerial roots under the spread
-    const nr = lite ? 8 : 22;
+    const nr = lite ? 5 : 22;
     for (let i = 0; i < nr; i++) {
       const a = r() * TAU, d = W * (0.25 + r() * 0.6), x = Math.cos(a) * d, z = Math.sin(a) * d, ytop = cy - W * P.flat * 0.25;
       const reach = r() < 0.4 ? 0 : 0.35 + r() * 0.5;   // 0 = reaches the ground (a prop trunk)
@@ -487,11 +487,11 @@ export function zebuGeometry(grazing = true, seed = 1) {
   const r = rng(seed), parts = [];
   const coat = [new THREE.Color(0.55, 0.52, 0.47), new THREE.Color(0.42, 0.33, 0.24), new THREE.Color(0.62, 0.6, 0.56), new THREE.Color(0.2, 0.17, 0.14)][Math.floor(r() * 4)];
   const add = (g, col = coat, k = 1) => parts.push(paint(g, (x, y, z, nx, ny, nz, c, o) => { c.copy(col).multiplyScalar(k * (0.7 + 0.35 * Math.max(0, ny))); o.leaf = 0; o.sway = 0; }));
-  add(new THREE.SphereGeometry(1, 9, 6).scale(0.85, 0.42, 0.36).translate(0, 1.15, 0));            // barrel
+  add(new THREE.SphereGeometry(1, 7, 5).scale(0.85, 0.42, 0.36).translate(0, 1.15, 0));            // barrel
   add(new THREE.SphereGeometry(1, 6, 4).scale(0.22, 0.2, 0.18).translate(0.45, 1.55, 0));          // hump
   const hx = grazing ? 1.05 : 1.0, hy = grazing ? 0.45 : 1.35;
   add(new THREE.CylinderGeometry(0.13, 0.22, 0.75, 6).rotateZ(grazing ? 2.3 : 1.0).translate(0.8, grazing ? 0.85 : 1.3, 0));   // neck
-  add(new THREE.SphereGeometry(1, 7, 5).scale(0.28, 0.14, 0.13).rotateZ(grazing ? -1.1 : -0.4).translate(hx, hy, 0));          // head
+  add(new THREE.SphereGeometry(1, 5, 4).scale(0.28, 0.14, 0.13).rotateZ(grazing ? -1.1 : -0.4).translate(hx, hy, 0));          // head
   add(new THREE.SphereGeometry(1, 5, 4).scale(0.35, 0.18, 0.06).translate(0.75, grazing ? 0.6 : 0.95, 0), coat, 0.85);          // dewlap
   for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.03, 0.22, 4).rotateZ(s * 0.3).translate(hx - 0.1, hy + 0.17, s * 0.09), new THREE.Color(0.1, 0.09, 0.08));
   for (const [x, z] of [[0.55, 0.17], [0.55, -0.17], [-0.55, 0.17], [-0.55, -0.17]]) add(new THREE.CylinderGeometry(0.05, 0.065, 0.95, 5).translate(x, 0.48, z), coat, 0.8);

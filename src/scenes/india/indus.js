@@ -574,7 +574,7 @@ export function create(ctx, segment) {
   const forest = (() => {
     const items = [], rt = rng(77);
     let n = 0;
-    for (let k = 0; k < 2600 && n < (lite ? 230 : 460); k++) {
+    for (let k = 0; k < 2600 && n < (lite ? 150 : 320); k++) {
       const x = -700 + rt() * 1500, z = -900 + rt() * 1700;
       const inCity = x > -150 && x < 215 && z > -140 && z < 135;
       const dr = riverDist(x, z);
@@ -586,7 +586,7 @@ export function create(ctx, segment) {
       items.push({ kind, x, y: 0, z, s: (0.7 + rt() * 0.6) * (kind === 'banyan' ? 1.15 : 1), lite: true, tint: 0.85 + rt() * 0.3 }); n++;
     }
     // low scrub scattered over the plain (denser near the camera's opening run: parallax, scale)
-    for (let k = 0; k < (lite ? 320 : 820); k++) {
+    for (let k = 0; k < (lite ? 280 : 680); k++) {
       const near = k % 2 === 0;
       const x = near ? 120 + rt() * 230 : -500 + rt() * 1100, z = near ? 60 + rt() * 240 : -700 + rt() * 1300;
       if ((x > -140 && x < 205 && z > -130 && z < 125) || riverDist(x, z) < RIVER_W * 0.55) continue;
