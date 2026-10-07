@@ -1,12 +1,13 @@
 // THE INDIAN FILM — "Achievements of Indian Civilization": its timeline, chapter cards and headings.
 // Pure data (no three.js): the score and the tools read it too. src/film.js picks the film a page plays.
 //
-// It runs on the Western film's clock and grid (120 BPM, the same chapter slots up to Gifts to the
-// World), then two chapters of its own — Yoga & Pranayama and Flight — make it 8 s (four bars) longer:
-// 86 s of story, 1:59 of film. The shared machinery (the opening, the montage's word swaps, the finale's
-// coda, the chapter rail) reads the cues, so it follows. The score is written on the 78 s clock: its
-// music is laid onto this one by MUSIC_SPLICES (two bars of the build heard again under each new
-// chapter; see audio/score.js). Facts and sources: docs/FACTS-INDIA.md.
+// It runs on the Western film's clock and grid (120 BPM, the same chapter slots up to Architecture),
+// then six chapters of its own — Water Wisdom, Yoga & Pranayama, Herbs & Ayurveda, Invention, the Statue
+// of Unity and Flight — make it 28 s (fourteen bars) longer: 106 s of story, 2:27 of film. The shared
+// machinery (the opening, the montage's word swaps, the finale's coda, the chapter rail) reads the cues,
+// so it follows. The score is written on the 78 s clock: its music is laid onto this one by
+// MUSIC_SPLICES (whole bars of the score heard again under each new chapter; see audio/score.js).
+// Facts and sources: docs/FACTS-INDIA.md.
 
 // transition: how this segment hands over to the NEXT one.
 //   dissolve | luma | zoom | flash | spectrum | iris | letter
@@ -19,15 +20,19 @@ const SEGMENTS = [
   { id: 'metallurgy', title: 'Metallurgy',                  start: 24.5, end: 29.0, transition: 'flash' },
   { id: 'surgery',    title: 'Surgery & Medicine',          start: 28.5, end: 32.0, transition: 'zoom' },
   { id: 'temples',    title: 'Architecture',                start: 31.5, end: 35.0, transition: 'luma' },
-  { id: 'nalanda',    title: 'The First Universities',      start: 34.5, end: 39.0, transition: 'dissolve' },
-  { id: 'dharma',     title: 'The Path of Peace',           start: 38.5, end: 43.0, transition: 'dissolve' },
-  { id: 'textiles',   title: 'Gifts to the World',          start: 42.5, end: 47.0, transition: 'zoom' },
-  { id: 'yoga',       title: 'Yoga & Pranayama',            start: 46.5, end: 51.0, transition: 'dissolve' },
-  { id: 'modern',     title: 'The Modern Mind',             start: 50.5, end: 54.0, transition: 'flash' },
-  { id: 'flight',     title: 'Flight',                      start: 53.5, end: 58.0, transition: 'zoom' },
-  { id: 'isro',       title: 'To the Moon & Mars',          start: 57.5, end: 64.0, transition: 'zoom' },
-  { id: 'montage',    title: 'Legacy',                      start: 63.5, end: 68.5, transition: 'letter' },   // zoom through the A of STARS
-  { id: 'finale',     title: 'Ideas Build Upon Ideas',      start: 68.0, end: 86.0, transition: null, scene: './finale.js' },
+  { id: 'water',      title: 'Water Wisdom',                start: 34.5, end: 41.0, transition: 'dissolve' },
+  { id: 'nalanda',    title: 'The First Universities',      start: 40.5, end: 45.0, transition: 'dissolve' },
+  { id: 'dharma',     title: 'The Path of Peace',           start: 44.5, end: 49.0, transition: 'dissolve' },
+  { id: 'textiles',   title: 'Gifts to the World',          start: 48.5, end: 53.0, transition: 'zoom' },
+  { id: 'yoga',       title: 'Yoga & Pranayama',            start: 52.5, end: 57.0, transition: 'dissolve' },
+  { id: 'herbs',      title: 'Herbs & Ayurveda',            start: 56.5, end: 61.0, transition: 'dissolve' },
+  { id: 'modern',     title: 'The Modern Mind',             start: 60.5, end: 64.0, transition: 'flash' },
+  { id: 'inventors',  title: 'Invention',                   start: 63.5, end: 70.0, transition: 'dissolve' },
+  { id: 'unity',      title: 'The Statue of Unity',         start: 69.5, end: 74.0, transition: 'dissolve' },
+  { id: 'flight',     title: 'Flight',                      start: 73.5, end: 78.0, transition: 'zoom' },
+  { id: 'isro',       title: 'To the Moon & Mars',          start: 77.5, end: 84.0, transition: 'zoom' },
+  { id: 'montage',    title: 'Legacy',                      start: 83.5, end: 88.5, transition: 'letter' },   // zoom through the A of STARS
+  { id: 'finale',     title: 'Ideas Build Upon Ideas',      start: 88.0, end: 106.0, transition: null, scene: './finale.js' },
 ];
 
 // Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`; the score places its hits
@@ -120,28 +125,59 @@ const BASE = {
   sunrise: 69.6, finalImpact: 71.0, closingLine: 72.8, fadeOut: 76.0,
 };
 
-// … then laid on this film's own 86 s clock: the four bars of Yoga & Pranayama (from 46.5) and of Flight
-// (from 53.5) push everything after them on.
-const MUSIC_SPLICES = [[46.5, 4], [53.5, 8]];   // [story time, offset]: from there on, music time = story − offset
-const fromBase = (t) => (t >= 49.5 ? t + 8 : t >= 46.5 ? t + 4 : t);
+// … then laid on this film's own 106 s clock. Each new chapter plays whole bars of the score again (offsets
+// are whole bars, so the beat never stumbles), chosen so they differ from their neighbours':
+//   Water Wisdom  34.5–40.5  ← music 28.5–34.5 (Surgery and Architecture's bars)
+//   Yoga          52.5–56.5  ← music 42.5–46.5 (the build into the calculator hit)
+//   Herbs         56.5–60.5  ← music 38.5–42.5 (the Path of Peace's bars)
+//   Invention     63.5–69.5  ← music 33.5–39.5
+//   Unity, Flight 69.5–77.5  ← music 41.5–49.5, running straight on into the ISRO launch (music 49.5)
+const MUSIC_SPLICES = [[34.5, 6], [52.5, 10], [56.5, 18], [60.5, 14], [63.5, 30], [69.5, 28]];   // [story time, offset]: from there on, music time = story − offset
+// the score's own beats (BASE, music time) on the film's clock: Nalanda → Textiles +6, Modern +14, ISRO on +28
+const fromBase = (t) => (t >= 49.5 ? t + 28 : t >= 46.5 ? t + 14 : t >= 34.5 ? t + 6 : t);
 const toMusic = (t) => { let off = 0; for (const [at, o] of MUSIC_SPLICES) if (t >= at) off = o; return t - off; };
 const CUES = {
   ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, fromBase(v)])),
   // yoga & pranayama (its music: the bars of 42.5–46.5 heard again — the calculator hit lands on the
   // sunrise, the A-major tension under the held breath, the release on the exhale)
-  yogaSunrise: 46.8,    // dawn over the river ghats
-  suryaNamaskar: 47.3,  // the twelve positions of the sun salutation flow, figure by figure
-  pranayama: 48.4,      // the breath made visible: inhale …
-  nadiShodhana: 49.0,   // … alternate-nostril breathing, the two channels
-  exhale: 49.6,         // the long exhale (the orchestra's release)
-  eightLimbs: 50.1,     // Patanjali's eight limbs, pranayama the fourth
-  yogaDay: 50.5,        // 21 June, the International Day of Yoga
+  yogaSunrise: 52.8,    // dawn over the river ghats
+  suryaNamaskar: 53.3,  // the twelve positions of the sun salutation flow, figure by figure
+  pranayama: 54.4,      // the breath made visible: inhale …
+  nadiShodhana: 55.0,   // … alternate-nostril breathing, the two channels
+  exhale: 55.6,         // the long exhale (the orchestra's release)
+  eightLimbs: 56.1,     // Patanjali's eight limbs, pranayama the fourth
+  yogaDay: 56.5,        // 21 June, the International Day of Yoga
   // flight (its music: the bars of 45.5–49.5, the build that lands on the ISRO launch)
-  pushpaka: 53.6,       // the dream: the Pushpaka Vimana of the Ramayana (legend)
-  airmail: 54.6,        // 18 February 1911: the first official airmail, Allahabad → Naini
-  tataMail: 55.8,       // 15 October 1932: J. R. D. Tata flies the mail Karachi → Bombay
-  marut: 56.6,          // 1961: the HF-24 Marut, the first Indian-designed jet fighter
-  tejas: 57.1,          // 2001: Tejas, first flight
+  pushpaka: 73.6,       // the dream: the Pushpaka Vimana of the Ramayana (legend)
+  airmail: 74.6,        // 18 February 1911: the first official airmail, Allahabad → Naini
+  tataMail: 75.8,       // 15 October 1932: J. R. D. Tata flies the mail Karachi → Bombay
+  marut: 76.6,          // 1961: the HF-24 Marut, the first Indian-designed jet fighter
+  tejas: 77.1,          // 2001: Tejas, first flight
+  // water wisdom (Rajasthan): Chand Baori, the monsoon kept, Udaipur's lakes, the Hawa Mahal
+  waterStepwell: 34.5,  // descend into Chand Baori, Abhaneri (c. 9th century, 13 storeys of steps)
+  waterMonsoon: 37.3,   // the monsoon: rain collected and stored, the water rises up the steps
+  waterUdaipur: 38.4,   // the rain clears over Lake Pichola and the Lake Palace
+  waterJaipur: 39.7,    // over the ridge to Jaipur's pink city and the Hawa Mahal
+  // herbs & ayurveda
+  herbGarden: 56.5,     // the garden and the apothecary bench at dawn
+  turmeric: 57.0,       // turmeric (residues in Indus pots at Farmana, c. 2500 BC)
+  blackPepper: 57.6,    // ginger, and black pepper from the Malabar coast
+  spiceBox: 58.2,       // the masala dabba: cardamom, cinnamon, cloves (from the Maluku islands)
+  tulsi: 58.8,          // tulsi in its planter, under a neem bough
+  ashwagandha: 59.4,    // ashwagandha roots and berries
+  chyawanprash: 59.9,   // amla and chyawanprash (a recipe of the Charaka Samhita)
+  charaka: 60.4,        // the kharal grinding; the Charaka Samhita; out over the wall to the sea
+  // invention — a gallery of modern Indian science and engineering
+  jcBose: 63.5,         // J. C. Bose's millimetre waves, Calcutta 1895
+  sahaEquation: 64.65,  // Meghnad Saha's ionization equation, 1920
+  chandrasekhar: 65.55, // the Chandrasekhar limit, 1930
+  fibreOptics: 66.45,   // Kapany and Hopkins: images through glass fibres, 1954
+  co2Laser: 67.25,      // Kumar Patel's carbon-dioxide laser, Bell Labs 1964
+  jaipurFoot: 67.9,     // the Jaipur Foot, 1969
+  usb: 68.55,           // USB, co-invented by Ajay Bhatt at Intel, 1996
+  upi: 69.2,            // UPI, real-time payments, 2016
+  // the statue of unity (its beats are the scene's own: valley 69.5, crane 70.7, height 72.0, pull-back 72.7)
+  unityValley: 69.5,
 };
 
 // The score: the trailer score's architecture (src/audio/music.js) is written against the Western
@@ -161,8 +197,9 @@ const MUSIC_CUES = {
 
 // Colour temperature of the grade over time: +1 = terracotta/bronze/gold, -1 = steel/electric/cool.
 const WARMTH_KEYS = [
-  [0, 0.9], [8, 1.0], [16, 0.85], [20, 0.6], [25, 1.0], [29, 0.6], [32, 0.9], [39, 0.75],
-  [43, 0.7], [47, 0.85], [50.5, 0.6], [51, 0.1], [54, 0.4], [58, -0.45], [64, -0.6], [68.5, -0.45], [74, -0.1], [78, 0.3], [86, 0.35],
+  [0, 0.9], [8, 1.0], [16, 0.85], [20, 0.6], [25, 1.0], [29, 0.6], [32, 0.9], [34.5, 0.9], [35.5, 0.7], [40.5, 0.7],
+  [45, 0.75], [49, 0.7], [53, 0.85], [56.5, 0.85], [57, 0.75], [60.5, 0.6], [61, 0.1], [63.5, 0.1], [64, 0.45], [69.5, 0.45],
+  [70, 0.15], [74, 0.4], [78, -0.45], [84, -0.6], [88.5, -0.45], [94, -0.1], [98, 0.3], [106, 0.35],
 ];
 
 // Chapter cards. `roots` names the exchange each chapter's achievements were part of: what India
@@ -175,19 +212,23 @@ const CHAPTERS = {
   metallurgy: { n: 'V',    era: 'c. 300 BC — AD 400',     heading: 'THE MASTERY OF METAL',     story: 'Crucible steel, and an iron pillar that has stood 1,600 years with barely a trace of rust.', roots: 'Exchange: wootz ingots forged into Damascus blades · zinc distilled at Zawar' },
   surgery:    { n: 'VI',   era: 'SUSHRUTA SAMHITA',       heading: 'THE HEALING HAND',         story: 'Sushruta described more than a hundred instruments, and how to rebuild a nose.', roots: "Also Charaka's medicine · the 'Indian method' of rhinoplasty reached London, 1794" },
   temples:    { n: 'VII',  era: '3RD C. BC — AD 1653',    heading: 'STONE AND SPIRIT',         story: 'From Sanchi to Ellora, where a whole temple was carved down from one rock.', roots: 'Also the Taj Mahal, 1632–1653, raised with Persian and Central Asian masters' },
-  nalanda:    { n: 'VIII', era: 'c. AD 427 — 1200',       heading: 'THE FIRST UNIVERSITIES',   story: 'For eight centuries Nalanda drew thousands of students from across Asia.', roots: 'Earlier: Takshashila · Xuanzang came from China to study there in the 630s' },
-  dharma:     { n: 'IX',   era: 'c. 260 BC · 1947 · 1950', heading: 'THE PATH OF PEACE',       story: 'From Ashoka to Gandhi: the idea that nonviolence can change the world.', roots: "Buddhism spread across Asia · Gandhi's nonviolence inspired Martin Luther King Jr." },
-  textiles:   { n: 'X',    era: 'c. 5000 BC — TODAY',     heading: 'GIFTS TO THE WORLD',       story: 'Cotton cloth, indigo and chess travelled from India to every continent.', roots: 'Exchange: chess went on through Persia as shatranj · indigo is named for India' },
-  yoga:       { n: 'XI',   era: 'PATANJALI · YOGA SUTRAS',  heading: 'THE SCIENCE OF BREATH',  story: "Patanjali set out yoga's eight limbs; the fourth, pranayama, is the mastery of breath.", roots: 'Now practised worldwide · UNESCO intangible heritage, 2016 · International Day of Yoga, 21 June' },
-  modern:     { n: 'XII',  era: '1913 — 1930',            heading: 'THE MODERN MIND',          story: 'Ramanujan, Raman and Bose: new mathematics and new physics.', roots: 'Ramanujan worked with G. H. Hardy at Cambridge · bosons are named after S. N. Bose' },
-  flight:     { n: 'XIII', era: '1911 — 2001',            heading: 'THE DREAM OF FLIGHT',      story: 'The epics dreamed of flying chariots; in 1911 the first official airmail flew at Allahabad.', roots: 'Exchange: flown by the French pilot Henri Pequet in a British biplane · HAL founded 1940' },
-  isro:       { n: 'XIV',  era: '1963 — 2023',            heading: 'TO THE MOON AND MARS',     story: "Mars orbit at the first attempt; then a landing near the Moon's south pole.", roots: 'Roots: first rocket from Thumba, 1963, an American Nike-Apache · first satellite launched by the USSR, 1975' },
+  water:      { n: 'VIII', era: 'c. 9TH CENTURY — 1799',   heading: 'WATER WISDOM',             story: 'Stepwells like Chand Baori stored the monsoon; Udaipur became a city of lakes.', roots: 'Stepwells across western India · Rani ki Vav, Gujarat, UNESCO World Heritage 2014' },
+  nalanda:    { n: 'IX', era: 'c. AD 427 — 1200',       heading: 'THE FIRST UNIVERSITIES',   story: 'For eight centuries Nalanda drew thousands of students from across Asia.', roots: 'Earlier: Takshashila · Xuanzang came from China to study there in the 630s' },
+  dharma:     { n: 'X',   era: 'c. 260 BC · 1947 · 1950', heading: 'THE PATH OF PEACE',       story: 'From Ashoka to Gandhi: the idea that nonviolence can change the world.', roots: "Buddhism spread across Asia · Gandhi's nonviolence inspired Martin Luther King Jr." },
+  textiles:   { n: 'XI',    era: 'c. 5000 BC — TODAY',     heading: 'GIFTS TO THE WORLD',       story: 'Cotton cloth, indigo and chess travelled from India to every continent.', roots: 'Exchange: chess went on through Persia as shatranj · indigo is named for India' },
+  yoga:       { n: 'XII',   era: 'PATANJALI · YOGA SUTRAS',  heading: 'THE SCIENCE OF BREATH',  story: "Patanjali set out yoga's eight limbs; the fourth, pranayama, is the mastery of breath.", roots: 'Now practised worldwide · UNESCO intangible heritage, 2016 · International Day of Yoga, 21 June' },
+  herbs:      { n: 'XIII', era: 'CHARAKA SAMHITA',          heading: 'THE KNOWLEDGE OF LIFE',    story: 'Turmeric, pepper, tulsi, neem, ashwagandha: Ayurveda described hundreds of medicinal plants.', roots: 'Exchange: pepper and spices drew traders from Rome to China · cloves came from the Maluku islands' },
+  modern:     { n: 'XIV',  era: '1913 — 1930',            heading: 'THE MODERN MIND',          story: 'Ramanujan, Raman and Bose: new mathematics and new physics.', roots: 'Ramanujan worked with G. H. Hardy at Cambridge · bosons are named after S. N. Bose' },
+  inventors:  { n: 'XV',   era: '1895 — 2016',            heading: 'THE SPIRIT OF INVENTION',  story: 'Radio waves, starlight, fibre optics and lasers; an artificial foot for millions; payments for all.', roots: 'With collaborators worldwide: Hopkins in London, Bell Labs, Intel · the Jaipur Foot made with a village craftsman' },
+  unity:      { n: 'XVI',  era: '2018',                   heading: 'THE STATUE OF UNITY',      story: 'Sardar Vallabhbhai Patel, 182 m tall: the tallest statue in the world.', roots: 'Sculptor Ram V. Sutar · on the Narmada, facing the Sardar Sarovar Dam' },
+  flight:     { n: 'XVII', era: '1911 — 2001',            heading: 'THE DREAM OF FLIGHT',      story: 'The epics dreamed of flying chariots; in 1911 the first official airmail flew at Allahabad.', roots: 'Exchange: flown by the French pilot Henri Pequet in a British biplane · HAL founded 1940' },
+  isro:       { n: 'XVIII',  era: '1963 — 2023',            heading: 'TO THE MOON AND MARS',     story: "Mars orbit at the first attempt; then a landing near the Moon's south pole.", roots: 'Roots: first rocket from Thumba, 1963, an American Nike-Apache · first satellite launched by the USSR, 1975' },
 };
 
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.5, end: 2.95, text: 'Every achievement begins as an idea.' },
-  { start: 63.9, end: 68.2, text: 'The world is one family.', cite: 'VASUDHAIVA KUTUMBAKAM · MAHA UPANISHAD', low: true },
+  { start: 83.9, end: 88.2, text: 'The world is one family.', cite: 'VASUDHAIVA KUTUMBAKAM · MAHA UPANISHAD', low: true },
 ];
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
@@ -195,13 +236,15 @@ const INTERLUDES = [
 const WORDS = {
   indus: 'CITIES', language: 'LANGUAGE', zero: 'ZERO', astronomy: 'COSMOS', metallurgy: 'METAL',
   surgery: 'HEALING', temples: 'STONE', nalanda: 'LEARNING', dharma: 'PEACE', textiles: 'GIFTS', yoga: 'YOGA',
-  modern: 'GENIUS', flight: 'FLIGHT', isro: { text: 'SPACE', t0: 57.8, t1: 58.95, pace: 0.8 },
+  modern: 'GENIUS', flight: 'FLIGHT', isro: { text: 'SPACE', t0: 77.8, t1: 78.95, pace: 0.8 },
+  water: 'WATER', herbs: 'HERBS', inventors: 'INVENTION', unity: 'UNITY',
 };
 // the same headings in Hindi (drawn large, the English word small beneath; shaped by tools/deva-headings.py)
 const WORDS_HI = {
   indus: 'नगर', language: 'भाषा', zero: 'शून्य', astronomy: 'ब्रह्मांड', metallurgy: 'धातु',
   surgery: 'चिकित्सा', temples: 'शिला', nalanda: 'विद्या', dharma: 'शांति', textiles: 'उपहार', yoga: 'योग',
   modern: 'प्रतिभा', flight: 'उड़ान', isro: 'अंतरिक्ष',
+  water: 'जल', herbs: 'औषधि', inventors: 'आविष्कार', unity: 'एकता',
 };
 // the montage's rapid word swaps, each on its cue (the last word keeps an A: the cut zooms through it)
 const SWAPS = [['mGrid', 'CITIES'], ['mZero', 'ZERO'], ['mWheel', 'DHARMA'], ['mTemple', 'STONE'], ['mOrbit', 'ORBIT'], ['mStars', 'STARS']];
@@ -211,7 +254,7 @@ export default {
   title: 'Achievements of Indian Civilization',
   short: 'Indian Civilization',
   slug: 'achievements-of-indian-civilization',
-  DURATION: 86,
+  DURATION: 106,
   MUSIC_DURATION: 78, MUSIC_SPLICES,   // the score's own clock, and how it is laid onto this one
   SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, WORDS_HI, SWAPS,
   grade: { nature: 1 },   // green fields, trees and rivers keep their colour through the grade (core/post.js)

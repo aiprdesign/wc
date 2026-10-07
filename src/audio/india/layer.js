@@ -348,10 +348,53 @@ function isro(S) {
   S.at(CN.southPole, () => X.thud(S, CN.southPole, { level: 0.08, f: 60, tone: 700, decay: 0.4 }));
 }
 
+function water(S) {
+  // down into the stepwell: cool air and a deep stone echo; the monsoon's rain hiss and the drops on the
+  // water; the lake's open air at Udaipur; a breeze through the Hawa Mahal's windows
+  S.at(CN.waterStepwell, () => X.air(S, CN.waterStepwell, CN.waterMonsoon, { level: 0.016, freq: 500, q: 0.7, attack: 0.4, release: 0.3, bus: 'sfx', drift: 0.5 }));
+  for (let k = 0; k < 3; k++) { const t = CN.waterStepwell + 0.5 + k * 0.6; S.at(t, () => I.stoneTap(S, t, { level: 0.03, pan: -0.4 + k * 0.4, f0: 700 })); }
+  S.at(CN.waterMonsoon - 0.1, () => X.air(S, CN.waterMonsoon - 0.1, CN.waterUdaipur + 0.2, { level: 0.04, freq: 5200, q: 0.4, attack: 0.25, release: 0.3, bus: 'sfx', drift: 0.3 }));
+  for (let k = 0; k < 8; k++) { const t = CN.waterMonsoon + 0.1 + k * 0.12; S.at(t, () => I.blip(S, t, 1400 + ((k * 37) % 5) * 180, { level: 0.006, bus: 'sfx' })); }
+  S.at(CN.waterUdaipur, () => X.air(S, CN.waterUdaipur, CN.waterJaipur, { level: 0.014, freq: 1400, q: 0.6, attack: 0.3, release: 0.3, bus: 'sfx', drift: 0.7 }));
+  S.at(CN.waterJaipur, () => I.whoosh(S, CN.waterJaipur, 0.7, { level: 0.025, f0: 500, f1: 1800, pan0: -0.4, pan1: 0.4, peak: 0.4 }));
+}
+
+function herbs(S) {
+  // morning in the garden: leaves in the air, a knife through turmeric, spices poured, a bell at the tulsi,
+  // the pestle grinding in the kharal
+  S.at(CN.herbGarden, () => X.air(S, CN.herbGarden, CN.turmeric + 0.3, { level: 0.015, freq: 2600, q: 0.6, attack: 0.3, release: 0.3, bus: 'sfx', drift: 0.6 }));
+  S.at(CN.turmeric, () => X.click(S, CN.turmeric, { level: 0.05, freq: 2200, body: 600, decay: 0.03, pan: -0.2 }));
+  S.at(CN.blackPepper, () => { for (let k = 0; k < 6; k++) X.click(S, CN.blackPepper + k * 0.04, { level: 0.02, freq: 3000 + k * 200, body: 900, decay: 0.015, pan: 0.2 }); });
+  S.at(CN.spiceBox, () => X.paperSwish(S, CN.spiceBox, 0.35, { level: 0.03, pan0: -0.2, pan1: 0.2 }));
+  S.at(CN.tulsi, () => ghanta(S, CN.tulsi, 69, { level: 0.012 }));
+  S.at(CN.chyawanprash, () => X.thud(S, CN.chyawanprash, { level: 0.03, f: 140, tone: 900, decay: 0.15 }));
+  S.at(CN.charaka, () => X.stoneGrind(S, CN.charaka, CN.charaka + 0.5, { level: 0.035 }));
+}
+
+function inventors(S) {
+  // the gallery: Bose's spark gap, a hum under the star spectra, the laser's whine, the USB click, the payment chime
+  for (let k = 0; k < 3; k++) { const t = CN.jcBose + 0.2 + k * 0.14; S.at(t, () => X.click(S, t, { level: 0.04, freq: 4200, body: 1500, decay: 0.02, pan: -0.3 })); }
+  S.at(CN.sahaEquation, () => X.hum(S, CN.sahaEquation, CN.chandrasekhar, { level: 0.012, freq: 110, cutoff: 1200, attack: 0.1, release: 0.2 }));
+  S.at(CN.chandrasekhar, () => [88, 93, 96].forEach((m, i) => I.bell(S, CN.chandrasekhar + i * 0.06, m, { level: 0.008, pan: -0.2 + i * 0.2, bus: 'far' })));
+  S.at(CN.fibreOptics, () => I.whoosh(S, CN.fibreOptics, 0.6, { level: 0.02, f0: 1500, f1: 6000, pan0: -0.5, pan1: 0.5, peak: 0.6 }));
+  S.at(CN.co2Laser, () => X.hum(S, CN.co2Laser, CN.jaipurFoot, { level: 0.014, freq: 240, cutoff: 3000, attack: 0.05, release: 0.15 }));
+  S.at(CN.jaipurFoot, () => X.thud(S, CN.jaipurFoot + 0.1, { level: 0.04, f: 100, tone: 800, decay: 0.15 }));
+  S.at(CN.usb + 0.25, () => X.click(S, CN.usb + 0.25, { level: 0.06, freq: 1800, body: 700, decay: 0.03 }));
+  S.at(CN.upi + 0.4, () => [84, 88, 91].forEach((m, i) => I.blip(S, CN.upi + 0.4 + i * 0.07, 440 * 2 ** ((m - 69) / 12), { level: 0.01, bus: 'sfx' })));
+}
+
+function unity(S) {
+  // a wide valley: wind over the Narmada, the crane rising up the bronze (a deep metallic resonance), a bell
+  const t0 = CN.unityValley;
+  S.at(t0, () => X.air(S, t0, t0 + 4.4, { level: 0.02, freq: 700, q: 0.6, attack: 0.5, release: 0.5, bus: 'sfx', drift: 0.8 }));
+  S.at(t0 + 1.2, () => X.hum(S, t0 + 1.2, t0 + 2.5, { level: 0.014, freq: 55, cutoff: 600, attack: 0.4, release: 0.4 }));
+  S.at(t0 + 2.5, () => ghanta(S, t0 + 2.5, 50, { level: 0.02 }));
+}
+
 function montageIndia(S) {
   S.at(CN.mGrid, () => X.thud(S, CN.mGrid, { level: 0.05, f: 70, tone: 1000, decay: 0.25 }));
   S.at(CN.mWheel, () => I.whoosh(S, CN.mWheel, 0.4, { level: 0.03, f0: 400, f1: 2000, pan0: -0.3, pan1: 0.3 }));
   S.at(CN.mTemple, () => ghanta(S, CN.mTemple, 57, { level: 0.02 }));
 }
 
-export const chapterCues = [indus, language, zero, astronomy, metallurgy, surgery, temples, nalanda, dharma, textiles, yoga, modern, flight, isro, montageIndia];
+export const chapterCues = [indus, language, zero, astronomy, metallurgy, surgery, temples, water, nalanda, dharma, textiles, yoga, herbs, modern, inventors, unity, flight, isro, montageIndia];

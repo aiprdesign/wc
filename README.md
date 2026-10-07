@@ -4,9 +4,11 @@ Two 1:48 cinematic short films **rendered live in the browser**, sharing one eng
 
 - **Achievements of Western Civilization**: 15 chapters from the first idea to the Moon, AI and
   the vision of Mars.
-- **Achievements of Indian Civilization**: 15 chapters from the Indus cities to zero, Aryabhata,
-  wootz steel, Sushruta, Ellora, Nalanda, Ashoka and Gandhi, cotton and chess, Ramanujan, Raman
-  and Bose, and ISRO's missions to Mars and the Moon's south pole. Its score lays an Indian layer
+- **Achievements of Indian Civilization**: 21 sequences (2:27) from the Indus cities to zero, Aryabhata,
+  wootz steel, Sushruta, Ellora, Rajasthan's stepwells and lakes, Nalanda, Ashoka and Gandhi, cotton and
+  chess, yoga, Ayurveda's herbs, Ramanujan, Raman and Bose, modern Indian invention, the Statue of Unity,
+  flight, and ISRO's missions to Mars and the Moon's south pole, closing on वसुधैव कुटुम्बकम्. Its
+  chapter headings are in Hindi, with the English word beneath. Its score lays an Indian layer
   (tanpura, sitar, bansuri, santoor, tabla, temple bells, all synthesised in code) over the shared
   orchestral score.
 
@@ -267,20 +269,26 @@ light across the running time. The final grade applies this shift as an era whit
 | # | time | sequence | what you see |
 |---|------|----------|--------------|
 | 0 | 0:00 | **The Idea** | the shared cold open: a stupa, zero, a PSLV and the Moon flash in gold; a Sulba Sutra construction draws a Nagara temple; ACHIEVEMENTS OF INDIAN CIVILIZATION slams together |
-| I | 0:10 | **The Indus Cities** | Mohenjo-daro rises from the plain, streets on a grid, an x-ray of the covered drains, the Great Bath fills, chert weights and a seal |
-| II | 0:17 | **Language & Grammar** | a palm-leaf manuscript fans open; Panini's rules derive *bhavati*; Brahmi branches into the scripts of Asia |
-| III | 0:22 | **Zero & the Decimal System** | the Bakhshali dot, place value (205), Brahmagupta's rules (628), the digits travel west |
-| IV | 0:28 | **Astronomy** | the Earth turns on its axis (Aryabhata, 499), π = 62832/20000, the sine table, the Samrat Yantra at Jaipur |
+| I | 0:10 | **The Indus Cities** | Mohenjo-daro rises from a green floodplain with grazing herds, streets on a grid, an x-ray of the covered drains, the Great Bath fills, chert weights and a seal |
+| II | 0:16 | **Language & Grammar** | a palm-leaf manuscript fans open; Panini's rules derive *bhavati*; Brahmi branches into the scripts of Asia |
+| III | 0:21 | **Zero & the Decimal System** | the Bakhshali dot, place value (205), Brahmagupta's rules (628), the digits travel west |
+| IV | 0:27 | **Astronomy** | the Earth turns on its axis (Aryabhata, 499), π = 62832/20000, the sine table, the Samrat Yantra at Jaipur |
 | V | 0:34 | **Metallurgy** | a crucible furnace, wootz steel's watered pattern, the Iron Pillar of Delhi, Zawar's zinc |
-| VI | 0:40 | **Surgery & Medicine** | Sushruta's instruments and the cheek-flap rhinoplasty as a hologram |
-| VII | 0:44 | **Architecture** | Sanchi, Kailasa carved down from the rock, Thanjavur, the Taj Mahal |
-| VIII | 0:48 | **The First Universities** | Nalanda rebuilds; scholars, the library, routes across Asia |
-| IX | 0:54 | **The Path of Peace** | the Lion Capital, Ashoka's edicts, the chakra, the charkha, the Salt March, 1947 · 1950 |
-| X | 0:59 | **Gifts to the World** | cotton, the loom, chintz and indigo, chaturanga becoming chess, yoga |
-| XI | 1:05 | **The Modern Mind** | Ramanujan's 1729, the Raman effect, Bose's condensate |
-| XII | 1:09 | **To the Moon & Mars** | Thumba 1963, Aryabhata 1975, PSLV, Chandrayaan-1, Mangalyaan, Chandrayaan-3 at the south pole |
-| – | 1:17 | **Legacy** | the montage: city grid → zero → dharma chakra → vimana → Mars orbit → stars |
-| – | 1:23 | **Finale** | Earth turned to India: *From the Indus to the Moon, five thousand years of curiosity, craft and discovery.* |
+| VI | 0:39 | **Surgery & Medicine** | Sushruta's instruments and the cheek-flap rhinoplasty as a hologram |
+| VII | 0:43 | **Architecture** | Sanchi, Kailasa carved down from the rock, Thanjavur, the Taj Mahal and its charbagh |
+| VIII | 0:47 | **Water Wisdom** | down into Chand Baori's 13 storeys of steps; the monsoon kept; Lake Pichola and the Lake Palace; the Hawa Mahal |
+| IX | 0:56 | **The First Universities** | Nalanda rebuilds among its groves; scholars, the library, routes across Asia |
+| X | 1:01 | **The Path of Peace** | the Lion Capital, Ashoka's edicts, the chakra, the charkha, the Salt March, 1947 · 1950 |
+| XI | 1:07 | **Gifts to the World** | cotton, the loom, chintz and indigo, chaturanga becoming chess |
+| XII | 1:12 | **Yoga & Pranayama** | dawn on the ghats: the sun salutation, the breath made visible, Patanjali's eight limbs |
+| XIII | 1:18 | **Herbs & Ayurveda** | turmeric, ginger and Malabar pepper, the spice box, tulsi and neem, ashwagandha, amla and chyawanprash |
+| XIV | 1:24 | **The Modern Mind** | Ramanujan's 1729, the Raman effect, Bose's condensate |
+| XV | 1:28 | **Invention** | a gallery: J. C. Bose, Saha, Chandrasekhar, Kapany & Hopkins, Kumar Patel, the Jaipur Foot, USB, UPI |
+| XVI | 1:36 | **The Statue of Unity** | Sardar Patel, 182 m, on the Narmada; twice the Statue of Liberty |
+| XVII | 1:42 | **Flight** | the Pushpaka vimana (legend), the 1911 airmail at Allahabad, Tata's Puss Moth, Marut, Tejas |
+| XVIII | 1:47 | **To the Moon & Mars** | Thumba 1963, Aryabhata 1975, PSLV, Chandrayaan-1, Mangalyaan, Chandrayaan-3 at the south pole |
+| – | 1:55 | **Legacy** | the montage: city grid → zero → dharma chakra → vimana → Mars orbit → stars |
+| – | 2:02 | **Finale** | Earth turned to India: *From the Indus to the Moon, five thousand years of curiosity, craft and discovery.* — वसुधैव कुटुम्बकम्, *the world is one family* |
 
 ## How it's built
 

@@ -31,7 +31,7 @@ LINES = [  # (story seconds, text)
   (67.55, "Ideas build upon ideas."),
   (72.9,  "The journey continues."),
 ]
-LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js): 86 s of story
+LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js): 106 s of story
   (0.5,   "Every achievement begins as an idea."),
   (4.1,   "And some ideas change the world."),
   (8.1,   "On the Indus, more than four thousand years ago, cities rose on a grid."),
@@ -41,22 +41,26 @@ LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js
   (25.1,  "Indian smiths made steel the world desired."),
   (29.0,  "Sushruta's surgeons learned to rebuild a nose."),
   (32.0,  "Whole temples were carved from living rock."),
-  (35.0,  "At Nalanda, scholars came from across Asia to learn."),
-  (38.6,  "From Ashoka to Gandhi: the power of peace."),
-  (42.9,  "Cotton, indigo and chess: gifts to every continent."),
-  (46.9,  "Yoga and pranayama: the mastery of body and breath."),
-  (50.9,  "Ramanujan. Raman. Bose. The modern mind."),
-  (53.9,  "In 1911, India flew the world's first airmail."),
-  (57.95, "Then India reached for space."),
-  (61.2,  "Mars at the first attempt… and the Moon's south pole."),
-  (64.2,  "The world is one family."),
-  (70.4,  "From the Indus to the Moon…"),
-  (72.25, "five thousand years of curiosity, craft, and discovery."),
-  (75.55, "Ideas build upon ideas."),
-  (80.9,  "The journey continues."),
+  (35.1,  "In the desert, stepwells kept the monsoon for the dry months."),
+  (41.0,  "At Nalanda, scholars came from across Asia to learn."),
+  (44.6,  "From Ashoka to Gandhi: the power of peace."),
+  (48.9,  "Cotton, indigo and chess: gifts to every continent."),
+  (52.9,  "Yoga and pranayama: the mastery of body and breath."),
+  (56.9,  "Turmeric, tulsi, neem: Ayurveda, the knowledge of life."),
+  (60.9,  "Ramanujan. Raman. Bose. The modern mind."),
+  (64.0,  "From radio waves to fibre optics, Indian minds kept inventing."),
+  (69.9,  "The Statue of Unity: the tallest in the world."),
+  (73.9,  "In 1911, India flew the world's first airmail."),
+  (77.95, "Then India reached for space."),
+  (81.2,  "Mars at the first attempt… and the Moon's south pole."),
+  (84.2,  "The world is one family."),
+  (90.4,  "From the Indus to the Moon…"),
+  (92.25, "five thousand years of curiosity, craft, and discovery."),
+  (95.55, "Ideas build upon ideas."),
+  (100.9, "The journey continues."),
 ]
 STORY = 78.3
-if len(sys.argv) > 1 and sys.argv[1] == 'india': LINES, STORY = LINES_INDIA, 86.3
+if len(sys.argv) > 1 and sys.argv[1] == 'india': LINES, STORY = LINES_INDIA, 106.3
 k = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
 SR = 48000
 DUR = STORY * TS
