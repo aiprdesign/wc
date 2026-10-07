@@ -409,7 +409,8 @@ export function hwMaterials(env = null, lite = false) {
   const S = lite ? 512 : 1024, s2 = lite ? 256 : 512;
   const skin = skinMaps(S), foil = foilMaps(S), cells = cellMaps(S), back = backMaps(s2), regen = nozzleMaps(lite ? 128 : 256, 'regen'), rad = nozzleMaps(lite ? 128 : 256, 'rad');
   const steelT = steelMaps(s2), conc = concreteMaps(s2), dishT = dishMaps(s2), osr = osrMaps(s2), br = brushedMaps(s2), tr = treadMaps(256);
-  const std = (o) => { const m = new THREE.MeshStandardMaterial(o); if (env) m.envMap = env; return m; };
+  // (own maps throughout: the film-wide micro-detail pass would add metre-scale smudges on top)
+  const std = (o) => { const m = new THREE.MeshStandardMaterial(o); if (env) m.envMap = env; m.userData.noDetail = true; return m; };
   const N = (x, y = x) => new THREE.Vector2(x, y);
   return {
     // painted vehicle skin (vertex colours carry stage bands)
@@ -419,8 +420,8 @@ export function hwMaterials(env = null, lite = false) {
     dark: std({ color: '#222326', ...br, normalScale: N(0.25), roughness: 1.4, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#ffffff', ...regen, metalness: 0.75, roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.7 }),
     nozzleRad: std({ color: '#ffffff', ...rad, metalness: 0.8, roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.8 }),
-    gold: std({ color: '#f2b84c', ...foil, normalMap: null, normalScale: N(0.28), roughness: 1.4, metalness: 0.62, envMapIntensity: 1.4 }),
-    silver: std({ color: '#d8dbe0', ...foil, normalScale: N(0.35), roughness: 1.5, metalness: 0.65, envMapIntensity: 1.3 }),
+    gold: std({ color: '#f2b84c', ...foil, normalScale: N(0.5), roughness: 1.4, metalness: 0.75, envMapIntensity: 1.4 }),
+    silver: std({ color: '#e2e5ea', ...foil, normalScale: N(0.5), roughness: 1.6, metalness: 0.55, envMapIntensity: 1.3 }),
     kapton: std({ color: '#3a2a20', ...foil, normalScale: N(0.7), roughness: 1.3, metalness: 0.35, envMapIntensity: 0.8 }),
     cells: std({ color: '#ffffff', ...cells, normalScale: N(0.2), roughness: 2.0, metalness: 0.3, envMapIntensity: 1.3 }),
     cellBack: std({ color: '#ffffff', ...back, normalScale: N(0.5), roughness: 1, metalness: 0.2, envMapIntensity: 0.6 }),

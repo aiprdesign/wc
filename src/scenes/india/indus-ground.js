@@ -151,7 +151,7 @@ export function groundPatch(sh, masks) {
         vec3 pc = c.z > 0.95 ? vec3(0.33, 0.12, 0.06) : mix(vec3(0.2, 0.18, 0.15), vec3(0.36, 0.3, 0.24), fract(c.z * 13.0));
         col = mix(col, pc, peb);
         col *= 0.9 + 0.2 * n5;
-        diffuseColor.rgb *= col; diffuseColor.rgb = vec3(0.0, 1.0, 0.0);
+        diffuseColor.rgb *= col; diffuseColor.rgb = vec3(cover, apron, fld);
         gBump = (peb * (0.2 - c.x) * 0.06 + n5 * 0.004 - rut * 0.02 + n4 * 0.01) * det2;
         gRough = 1.0 - 0.15 * peb;
       }`)
