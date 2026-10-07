@@ -508,11 +508,17 @@ export function bronzeMaterial() {
       vec3 an = abs(normalize(vON));
       vec2 q; float ax;
       if (an.x > an.y && an.x > an.z) { q = vObj.zy; ax = 1.0; } else if (an.y > an.z) { q = vObj.xz; ax = 2.0; } else { q = vObj.xy; ax = 3.0; }
-      vec2 g = q / vec2(0.04, 0.03) + vec2(0.0, 0.5) * mod(floor(q.x / 0.04), 2.0);
+      // panels of irregular size following the drape: narrow columns of tall panels (each column its own
+      // panel height and row offset, so rows stagger), the joints wavering slightly; the seams are faint and
+      // broken up by the patina, so the bronze reads first as one sculpted surface
+      vec2 qw = q + vec2(0.004 * snoise(vec3(q * 9.0, ax)), 0.006 * snoise(vec3(q * 7.0, ax + 3.0)));
+      float colW = 0.032, cx = floor(qw.x / colW), ph = 0.042 + 0.03 * bHash(vec2(cx, ax)), off = bHash(vec2(cx + 7.0, ax)) * ph;
+      vec2 g = vec2(qw.x / colW, (qw.y + off) / ph);
       vec2 fw = fwidth(g), f = abs(fract(g) - 0.5) * 2.0;
-      float seam = max(smoothstep(1.0 - fw.x * 1.2 - 0.04, 1.0, f.x), smoothstep(1.0 - fw.y * 1.2 - 0.04, 1.0, f.y));
-      seam *= (1.0 - smoothstep(0.1, 0.35, max(fw.x, fw.y))) * (0.35 + 0.65 * vKind);
-      float tone = bHash(floor(g) + ax * 17.0);
+      float seam = max(smoothstep(1.0 - fw.x * 1.2 - 0.03, 1.0, f.x), smoothstep(1.0 - fw.y * 1.2 - 0.03, 1.0, f.y));
+      seam *= (1.0 - smoothstep(0.05, 0.22, max(fw.x, fw.y))) * (0.3 + 0.7 * vKind);
+      seam *= smoothstep(0.25, 0.75, snoise(vec3(vObj * 14.0)) * 0.5 + 0.5);
+      float tone = bHash(vec2(cx, floor(g.y)) + ax * 17.0) * 0.5 + 0.25;
       float cav = clamp(1.0 - vAo, 0.0, 1.0) * (0.4 + 0.6 * vKind);
       float streak = smoothstep(0.45, 0.95, snoise(vec3(vObj.x * 70.0, vObj.y * 5.0, vObj.z * 70.0)) * 0.5 + 0.5);
       float blot = snoise(vObj * 9.0) * 0.5 + 0.5;
@@ -521,14 +527,14 @@ export function bronzeMaterial() {
       vec3 verd = vec3(0.1, 0.16, 0.12);
       vec3 bc = mix(bz, dark, clamp(cav * 1.3 + streak * 0.45, 0.0, 1.0) * 0.8);
       bc = mix(bc, verd, smoothstep(0.35, 0.8, cav) * 0.4 + streak * 0.1);
-      bc *= 1.0 - 0.16 * seam;
+      bc *= 1.0 - 0.07 * seam;
       // the viewing gallery's openings: a row of small slits across the chest, facing the dam
       float gx = vObj.x / 0.021 + 0.5, gw = abs(fract(gx) - 0.5) * 2.0;
       float gal = step(0.62, normalize(vON).z) * step(abs(vObj.x), 0.115) * smoothstep(1.396, 1.399, vObj.y) * (1.0 - smoothstep(1.421, 1.424, vObj.y)) * (1.0 - smoothstep(0.55, 0.65, gw));
       bc = mix(bc, vec3(0.012, 0.014, 0.018), gal);
       diffuseColor.rgb = bc;
       float bMetal = mix(0.8, 0.3, clamp(cav * 1.2 + streak * 0.35, 0.0, 1.0));
-      float bRough = 0.48 + 0.22 * cav + 0.04 * (tone - 0.5) * vKind + 0.08 * seam + 0.1 * streak - 0.06 * (1.0 - vKind);`)
+      float bRough = 0.48 + 0.22 * cav + 0.04 * (tone - 0.5) * vKind + 0.03 * seam + 0.1 * streak - 0.06 * (1.0 - vKind);`)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = bRough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = bMetal * (1.0 - gal); roughnessFactor = mix(roughnessFactor, 0.15, gal);');
   };

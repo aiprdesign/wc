@@ -218,7 +218,7 @@ function bodyPrims() {
 function headPrims() {
   // a bronze portrait head, about 1/7.5 of the figure: a rounded skull, the forehead sloping into a soft
   // brow over deep-set eyes (eyeballs with upper and lower lids), cheekbones blending into soft cheeks,
-  // nasolabial folds, a closed mouth with a fuller lower lip, a strong rounded jaw and chin, ears set
+  // soft cheeks into the mouth, a closed mouth with a fuller lower lip, a strong rounded jaw and chin, ears set
   // between the eye and the nose, the neck's sternocleidomastoid planes running down into the collar.
   // Patel: a broad face, strong jaw, bald crown, short hair at the sides, a serious, calm expression.
   const P = [], S = TAG.skin;
@@ -248,11 +248,10 @@ function headPrims() {
   for (const s of [1, -1]) {
     P.push(ell([0.0112 * s, 1.659, 0.1065], [0.0082, 0.0074, 0.0082], { k: 0.008, tag: S }));       // alae
     P.push(ell([0.0062 * s, 1.6535, 0.1105], [0.0034, 0.002, 0.0042], { k: 0.002, sub: true, tag: S }));   // nostril
-    P.push(cone([0.0165 * s, 1.657, 0.1075], [0.0265 * s, 1.639, 0.0995], 0.0045, 0.004, { k: 0.014, sub: true, tag: S }));  // nasolabial fold
   }
-  P.push(ell([0, 1.6398, 0.0938], [0.0198, 0.0048, 0.0055], { k: 0.018, tag: S }));                 // upper lip
-  P.push(ell([0, 1.6305, 0.0942], [0.0168, 0.0058, 0.0056], { k: 0.016, tag: S }));                 // fuller lower lip
-  P.push(cone([-0.0155, 1.6354, 0.1012], [0.0155, 1.6354, 0.1012], 0.0028, 0.0028, { k: 0.004, sub: true, tag: S }));  // the closed mouth: a shallow line
+  // a simple closed mouth: two soft lip volumes meeting in one clean parting, the corners easing into the cheeks
+  P.push(ell([0, 1.6392, 0.0912], [0.0165, 0.0046, 0.0062], { k: 0.024, tag: S }));                  // upper lip, set back under the nose
+  P.push(ell([0, 1.6312, 0.0914], [0.0142, 0.0056, 0.0064], { k: 0.013, tag: S }));                 // fuller lower lip
   for (const s of [1, -1]) {
     P.push(ell([0.083 * s, 1.68, -0.006], [0.011, 0.029, 0.018], { yaw: 0.25 * s, k: 0.007, tag: S }));          // ear
     P.push(ell([0.0905 * s, 1.681, -0.0035], [0.0052, 0.019, 0.011], { yaw: 0.25 * s, k: 0.003, sub: true, tag: S }));
