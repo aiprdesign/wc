@@ -272,12 +272,12 @@ export function create(ctx, segment) {
     const pr = rng(seed), plant = new THREE.Group(); plant.position.copy(base); scene.add(plant);
     const top = exactTop ?? V3((pr() - 0.5) * 0.06, h, (pr() - 0.5) * 0.06);
     const stemCurve = new THREE.CatmullRomCurve3([V3(0, 0, 0), V3(0.02, h * 0.35, -0.01), V3(-0.01, h * 0.7, 0.01), top]);
-    plant.add(new THREE.Mesh(AS.varTube(stemCurve, 24, 6, (u) => 0.009 - 0.005 * u), stemMat));
+    plant.add(new THREE.Mesh(AS.varTube(stemCurve, lite ? 12 : 24, lite ? 4 : 6, (u) => 0.009 - 0.005 * u), stemMat));
     const tips = [];
     for (let k = 0; k < bolls; k++) {
       const u = 0.5 + (k / Math.max(1, bolls)) * 0.4, p = stemCurve.getPointAt(u), a = pr() * TAU, len = 0.08 + pr() * 0.07;
       const end = p.clone().add(V3(Math.cos(a) * len, 0.05 + pr() * 0.04, Math.sin(a) * len));
-      plant.add(new THREE.Mesh(AS.varTube(new THREE.CatmullRomCurve3([p, p.clone().lerp(end, 0.5).add(V3(0, 0.03, 0)), end]), 10, 5, () => 0.004), stemMat));
+      plant.add(new THREE.Mesh(AS.varTube(new THREE.CatmullRomCurve3([p, p.clone().lerp(end, 0.5).add(V3(0, 0.03, 0)), end]), lite ? 6 : 10, lite ? 4 : 5, () => 0.004), stemMat));
       tips.push(end);
     }
     for (let k = 0; k < 6; k++) {

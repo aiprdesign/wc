@@ -339,7 +339,8 @@ function lathe(knots, seg = 24, n = 0) {
   const pts = new THREE.SplineCurve(knots.map(([r, y]) => V2(Math.max(0, r), y))).getPoints(n || knots.length * 3).map((p) => V2(Math.max(0, p.x), p.y));
   return new THREE.LatheGeometry(pts, seg);
 }
-const rbox = (w, h, d, r = 0.02, s = 2) => new RoundedBoxGeometry(w, h, d, s, Math.min(r, w / 2.01, h / 2.01, d / 2.01));
+let RB_SEG = 2;
+const rbox = (w, h, d, r = 0.02, s = RB_SEG) => new RoundedBoxGeometry(w, h, d, Math.min(s, RB_SEG), Math.min(r, w / 2.01, h / 2.01, d / 2.01));
 const at = (g, x, y, z) => g.translate(x, y, z);
 const uvScale = (g, sx, sy) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy); return g; };
 // a box with UVs in metres on every face (for tiling textures at a physical scale)
@@ -358,6 +359,7 @@ function turned(h, r, seg = 16) {
 // ------------------------------------------------------------------------------------------------ the courtyard
 export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafMat, wood, woodDark, blockWood, dyeFace } = {}) {
   const R = rng(9907);
+  RB_SEG = lite ? 1 : 2;
   const set = new THREE.Group(); set.name = 'courtyard'; scene.add(set);
   const shadowRecv = (m) => { m.receiveShadow = true; return m; };
   const add = (geo, mat, { cast = false, parent = set } = {}) => { const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = cast; parent.add(m); return m; };
@@ -429,7 +431,7 @@ export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafM
     moulding(x0, z0, x1, z1, n, WH, 0.08, WT * 0.5 + 0.06, sandstone, 0.02);   // coping
   }
   // small brackets under the drip ledge
-  {
+  if (!lite) {
     const br = new THREE.Shape(); br.moveTo(0, 0); br.lineTo(0.16, 0); br.bezierCurveTo(0.12, -0.05, 0.06, -0.06, 0.04, -0.14); br.lineTo(0, -0.16); br.closePath();
     const bg = new THREE.ExtrudeGeometry(br, { depth: 0.06, bevelEnabled: false, curveSegments: 6 }).translate(0, 0, -0.03);
     const list = [];

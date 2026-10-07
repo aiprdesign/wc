@@ -593,6 +593,5 @@ export function create(ctx, segment) {
     arSubject: () => subject,
     exploreLimits: { yaw: 1.0, pitchDown: 0.4, pitchUp: 0.6, zoomIn: 0.4, zoomOut: 2.5 },
   };
-  { let n = 0; scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); console.warn('DHARMA_TRIS ' + Math.round(n) + (lite ? ' lite' : '')); const L = []; scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; L.push([Math.round((g.index ? g.index.count : g.attributes.position.count) / 3), o.material.type]); } }); L.sort((a, b) => b[0] - a[0]); console.warn('DHARMA_TOP ' + JSON.stringify(L.slice(0, 10))); }
   return api;
 }

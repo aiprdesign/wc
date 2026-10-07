@@ -27,7 +27,7 @@ export const mergeUV = (list) => mergeGeometries(list.map((g) => { const n = g.i
 // smooth lathe profile through [r, y] knots (a Catmull-Rom spline), revolved
 // detail level (the 'lite' quality builds coarser revolutions)
 const DETAIL = { seg: 20, k: 1 };
-export function setDetail(lite) { DETAIL.seg = lite ? 10 : 18; DETAIL.k = lite ? 0.5 : 0.85; }
+export function setDetail(lite) { DETAIL.seg = lite ? 8 : 18; DETAIL.k = lite ? 0.5 : 0.85; }
 function lathe(knots, { seg = DETAIL.seg, n = 0, smooth = true } = {}) {
   let pts = knots.map(([r, y]) => V2(Math.max(0, r), y));
   if (smooth) pts = new THREE.SplineCurve(pts).getPoints(n || Math.max(knots.length + 2, Math.round(knots.length * 3 * DETAIL.k))).map((p) => V2(Math.max(0, p.x), p.y));
@@ -97,7 +97,7 @@ export function reedTexture(dents = 104) {
 // ------------------------------------------------------------------------------------------------ cotton
 // A fibre lobe of the open boll: a lumpy, puffed sphere (noise-displaced), ~unit radius.
 export function lobeGeometry(seed = 1) {
-  const g = new THREE.SphereGeometry(1, DETAIL.k < 0.6 ? 11 : 18, DETAIL.k < 0.6 ? 8 : 12), p = g.attributes.position, v = new THREE.Vector3();
+  const g = new THREE.SphereGeometry(1, DETAIL.k < 0.6 ? 10 : 18, DETAIL.k < 0.6 ? 7 : 12), p = g.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
     const n = 0.16 * noise3(v.x * 2.2 + seed, v.y * 2.2, v.z * 2.2) + 0.07 * noise3(v.x * 6 - seed, v.y * 6, v.z * 6) + 0.035 * noise3(v.x * 15, v.y * 15 + seed, v.z * 15);
@@ -112,7 +112,7 @@ export function lobeGeometry(seed = 1) {
 // A dried carpel wall (bur segment): a cupped, pointed shell rising along +y from its base, concave side
 // towards -z (the boll's centre). Unit length ≈ 0.075.
 export function burGeometry(len = 0.075, width = 0.034) {
-  const NU = 14, NV = 9, pos = [], idx = [];
+  const NU = DETAIL.k < 0.6 ? 8 : 14, NV = DETAIL.k < 0.6 ? 5 : 9, pos = [], idx = [];
   for (let i = 0; i <= NU; i++) {
     const u = i / NU, w = width * Math.pow(Math.sin(Math.PI * Math.min(1, u * 0.95 + 0.04)), 0.7) * (1 - 0.35 * u);
     for (let j = 0; j <= NV; j++) {
@@ -129,7 +129,7 @@ export function burGeometry(len = 0.075, width = 0.034) {
 
 // A frilly, deeply toothed bract (the three leafy bracts that cup the boll).
 export function bractGeometry(len = 0.07, width = 0.05) {
-  const NU = 14, NV = 8, pos = [], idx = [];
+  const NU = DETAIL.k < 0.6 ? 8 : 14, NV = DETAIL.k < 0.6 ? 5 : 8, pos = [], idx = [];
   for (let i = 0; i <= NU; i++) {
     const u = i / NU;
     const w = width * Math.pow(Math.sin(Math.PI * Math.min(1, 0.15 + u * 0.85)), 0.5) * (1 - 0.5 * u);

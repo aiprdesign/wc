@@ -297,13 +297,13 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
   }
 
   // shrubs, tufts and stones along the verges and the field edges near the road (the crane's foreground)
-  for (let k = 0, n = lite ? 60 : 260; k < n; k++) {
+  for (let k = 0, n = lite ? 50 : 170; k < n; k++) {
     const sAl = -10 + r() * 120, sd = r() < 0.5 ? -1 : 1, o = sd * (2.9 + Math.pow(r(), 2.2) * 30);
     const [x, z] = fromSO(sAl, o);
     if (!clear(x, z, -1.2, 9)) continue;
     const y = GROUND_Y + groundH(x, z);
     if (r() < 0.22) { const g = new THREE.DodecahedronGeometry(0.1 + r() * 0.2, 0); g.scale(1, 0.55, 0.9).rotateY(r() * TAU).translate(x, y + 0.05, z); const t = 0.2 + r() * 0.12; solid(g, [t, t * 0.9, t * 0.78]); continue; }
-    const R = 0.22 + r() * 0.38, leaf = r() < 0.4 ? [0.13, 0.12, 0.05] : leafOf(0.9);
+    const R = 0.22 + r() * 0.38, leaf = r() < 0.4 ? [0.19, 0.17, 0.08] : leafOf(1.25);
     blob(x, y + R * 0.25, z, R * (1 + r() * 0.5), R * (0.5 + r() * 0.35), R * (1 + r() * 0.4), leaf, 0, r() * 50);
     shadowsQ.push([x, z, R * 2.2, R * 4]);
   }

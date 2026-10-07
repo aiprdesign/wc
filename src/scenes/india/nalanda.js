@@ -76,7 +76,7 @@ export function create(ctx, segment) {
   const temMat = brickMaterial(U, { ruinLo: 8.0, ruinHi: 12.0, jag: 3, tint: [0.96, 0.9, 0.86] });
   const libMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.2, jag: 5 });
   const facadeMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.2, jag: 5, slice: true });
-  const woodMat = new THREE.MeshStandardMaterial({ color: '#3a2214', roughness: 0.75 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: '#4e2f19', roughness: 0.72 });
   const voidMat = new THREE.MeshStandardMaterial({ color: '#0b0705', roughness: 1 });
   const waterMat = new THREE.MeshStandardMaterial({ color: '#05080a', roughness: 0.08, metalness: 0 });
   const stoneMat = new THREE.MeshStandardMaterial({ color: '#8a7559', roughness: 0.8, side: THREE.DoubleSide });   // Chunar-like sandstone
