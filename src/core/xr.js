@@ -316,7 +316,11 @@ export class XRMode {
     this.saved = {
       toneMapping: r.toneMapping, exposure: r.toneMappingExposure, cs: r.outputColorSpace, autoClear: r.autoClear,
       clip: r.clippingPlanes, clear: r.getClearColor(new THREE.Color()), alpha: r.getClearAlpha(),
+      shadowAuto: r.shadowMap.autoUpdate,
     };
+    // shadows are redrawn every other frame in a session (at 72–90 Hz a one-frame lag is invisible, and the
+    // shadow pass — every caster drawn again — is the dearest pass a mobile GPU runs after the eyes)
+    r.shadowMap.autoUpdate = false; r.shadowMap.needsUpdate = true; this._shTick = 0;
     // straight to the headset: tone mapping and sRGB in the materials (the XR framebuffer takes
     // the output colour space at session start)
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -326,8 +330,9 @@ export class XRMode {
     r.xr.enabled = true;
     r.xr.cameraAutoUpdate = false;
     r.xr.setReferenceSpaceType('local');
-    // phones (lite): a smaller XR framebuffer (fill rate and memory; the camera feed stays sharp)
-    if (e.quality === 'lite') r.xr.setFramebufferScaleFactor(0.7);
+    // phones in AR (lite): a smaller XR framebuffer (fill rate and memory; the camera feed stays sharp).
+    // Headsets keep the full framebuffer: the lens magnifies every pixel, and they have the fill rate
+    if (e.quality === 'lite' && mode === AR) r.xr.setFramebufferScaleFactor(0.7);
     e.xrStarting = true;
     try {
       await r.xr.setSession(session);
@@ -405,6 +410,7 @@ export class XRMode {
     if (s) {
       r.toneMapping = s.toneMapping; r.toneMappingExposure = s.exposure; r.outputColorSpace = s.cs;
       r.autoClear = s.autoClear; r.clippingPlanes = s.clip; r.setClearColor(s.clear, s.alpha);
+      r.shadowMap.autoUpdate = s.shadowAuto ?? true;
     }
     e.xrActive = false;
   }
@@ -414,7 +420,7 @@ export class XRMode {
     this._detach();
     this.inst = inst;
     inst.scene.add(this.rig);
-    this._hideList = null; this._wallList = null;
+    this._hideList = null; this._wallList = null; this._cullList = null;
     if (this.mode === AR) this._clipShaders(inst);
   }
 
@@ -775,6 +781,7 @@ void main() {
         if (fog.isFogExp2) fog.density *= k; else { fog.near /= k; fog.far /= k; }
       }
       this._hideOutside(inst, pos, half, full);
+      this._cullFar(inst, pos, full ? half * (cfg.fade + cfg.fadeW) : half * Math.hypot(Math.max(1, cfg.deep), cfg.tall * 2), full);
       r.setClearColor(0x000000, 0);
       const head = this._head();
       const us = this.userScale;
@@ -828,6 +835,7 @@ void main() {
     const xc = r.xr.getCamera();
     if (xc.cameras.length === 2) unionFrustum(xc, xc.cameras[0], xc.cameras[1]);
     try {
+      r.shadowMap.needsUpdate = (this._shTick = (this._shTick ?? 0) + 1) % 2 === 1;
       r.render(scene, this.cam);
       // room layer: panel, hints, reticle, plinth (never clipped)
       r.clippingPlanes = [];
@@ -1019,6 +1027,35 @@ void main() {
       _sph.copy(bs).applyMatrix4(o.matrixWorld);
       const out = !isFinite(_sph.radius) || _sph.center.distanceTo(c) + _sph.radius * 0.6 > lim;
       if (out) { o.visible = false; this.hidden.push(o); }
+    }
+  }
+
+  // AR, per frame (performance): parts of the set lying wholly beyond what the viewer can see — outside the
+  // vitrine (Small view), or past the radius where the Full view's fade has dissolved them — are skipped for
+  // the frame: no vertices, no draw calls, no shadow casting. A big set (a city, a valley, a temple
+  // complex) then costs on a phone what its tabletop piece costs. Leaf renderables only (hiding a parent
+  // would take children inside the view with it); a small margin keeps nearby shadow casters.
+  _cullFar(inst, c, R, full) {
+    let list = this._cullList;
+    if (!list) {
+      list = this._cullList = [];
+      inst.scene.traverse((o) => {
+        if (!(o.isMesh || o.isPoints || o.isLine) || o.children.length || o.isSkinnedMesh || !o.geometry?.attributes?.position) return;
+        if (o.userData.arKeep) return;
+        list.push(o);
+      });
+    }
+    const lim = R * 1.15;
+    for (const o of list) {
+      if (!o.visible || !o.parent) continue;
+      let bs;
+      if (o.isInstancedMesh) { if (!o.boundingSphere || (this._cfTick = (this._cfTick ?? 0) + 1) % 60 === 0) o.computeBoundingSphere(); bs = o.boundingSphere; }
+      else { const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere(); bs = g.boundingSphere; }
+      if (!bs || !isFinite(bs.radius)) continue;
+      _sph.copy(bs).applyMatrix4(o.matrixWorld);
+      // the Full view's fade is measured across the ground (xz); the vitrine is a prism round the subject
+      const d = full ? Math.hypot(_sph.center.x - c.x, _sph.center.z - c.z) : _sph.center.distanceTo(c);
+      if (d - _sph.radius > lim) { o.visible = false; this.hidden.push(o); }
     }
   }
 

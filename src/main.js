@@ -27,7 +27,9 @@ const LITE_DEVICE = (() => {
     const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
     const lowMem = navigator.deviceMemory != null && navigator.deviceMemory <= 4;
     const fewCores = navigator.hardwareConcurrency != null && navigator.hardwareConcurrency <= 2;
-    return touchOnly || mobileUA || lowMem || fewCores;
+    // standalone headsets (Quest, Pico, …): mobile GPUs drawing every frame twice at 72–90 Hz
+    const headset = /OculusBrowser|Quest|Pico|Wolvic|Mobile VR/i.test(navigator.userAgent);
+    return touchOnly || mobileUA || lowMem || fewCores || headset;
   } catch { return false; }
 })();
 const $ = (id) => document.getElementById(id);
