@@ -69,12 +69,7 @@ function calligraphyTex() {
   const dot = (x, y, s) => { g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillStyle = ink; g.fillRect(-s / 2, -s / 2, s, s); g.restore(); };
   const big = ['alif', 'lam', 'kashida', 'bowl', 'loop', 'ess', 'tooth', 'alif', 'kashida', 'lam'];
   const small = ['tooth', 'loop', 'ess', 'kashida'];
-  // compose into an offscreen strip, then draw it three times (wrapped) so the band tiles
-  const strip = mkCanvas(W, H), sg = strip.getContext('2d');
-  const main = g; let x = 12;
-  // draw onto the strip context by temporarily swapping
-  const drawInto = (ctx, fn) => { const prev = gRef.g; gRef.g = ctx; fn(); gRef.g = prev; };
-  const gRef = { g: main }; void drawInto; void sg;
+  let x = 12;
   while (x < W - 3.5 * u) {
     const n = 2 + Math.floor(r() * 4);
     for (let k = 0; k < n && x < W - 3.5 * u; k++) {
@@ -226,8 +221,7 @@ function minarTex() {
   return pixels(W, H, (u, v, x, y) => {
     const k = 1 + tileNoise(u, v, 3, 3, 17) * 0.025;
     const line = x < 7 || Math.abs(y - H / 2) < 1.2 ? 1 : 0;
-    const thin = Math.abs(x - 3) < 1 ? 0 : 0;
-    return line ? [34, 28, 24] : [244 * k, 239 * k - thin, 230 * k];
+    return line ? [34, 28, 24] : [244 * k, 239 * k, 230 * k];
   });
 }
 
@@ -292,7 +286,7 @@ export class Kit {
   at(x, y, z, ry, fn) { this.push(new THREE.Matrix4().makeRotationY(ry || 0).setPosition(x, y, z)); fn(); this.pop(); }
   atM(mat, fn) { this.push(mat); fn(); this.pop(); }
   put(key, g, o = {}) {
-    const n = g.index ? g.toNonIndexed() : g;
+    const n = g.index ? g.toNonIndexed() : g.clone();
     if (!n.attributes.normal) n.computeVertexNormals();
     const p = n.attributes.position, cnt = p.count;
     const custom = CUSTOM.has(key);
@@ -372,7 +366,7 @@ export function arcadeShape(x0, x1, y0, y1, holes, n = 10) {
 }
 // the arch outline closed at its foot (a filled arched panel)
 export function archPanelShape(w, spring, rise, n = 12, y0 = 0) {
-  return new THREE.Shape([V2(-w / 2, y0), ...archFull(w, rise, spring, n).map(([x, y]) => V2(x, y)), V2(w / 2, y0)].reverse().reverse());
+  return new THREE.Shape([V2(-w / 2, y0), ...archFull(w, rise, spring, n).map(([x, y]) => V2(x, y)), V2(w / 2, y0)]);
 }
 // a band following an arch: between the arch (w, rise) and a larger one (w + 2t, rise + t), legs down to y0
 export function archBandShape(w, spring, rise, t, n = 14, y0 = 0) {
@@ -457,7 +451,7 @@ export function mouldStrip(L, prof) {
   const pts = [V2(0, prof[0][1]), ...prof.map(([o, y]) => V2(o, y)), V2(0, prof[prof.length - 1][1])];
   const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: L, bevelEnabled: false });
   // shape x = outward (→ z), shape y = up; extrusion along z (→ x)
-  g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, -L / 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1));
+  g.applyMatrix4(new THREE.Matrix4().set(0, 0, -1, L / 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1));
   return g;
 }
 // lathe from [[r, y]] pairs
@@ -466,4 +460,17 @@ export const lathe = (pts, seg = 32, phi0 = 0) => new THREE.LatheGeometry(pts.ma
 export function smoothProfile(ctrl, n) {
   const c = new THREE.SplineCurve(ctrl.map(([r, y]) => V2(r, y)));
   return c.getSpacedPoints(n).map((v) => [v.x, v.y]);
+}
+// lathe with flat facets round the axis (octagonal kiosks, eaves, bases): each facet keeps its own normal
+export function latheFlat(pts, seg = 8, phi0 = Math.PI / 8) {
+  const g = new THREE.LatheGeometry(pts.map(([r, y]) => V2(Math.max(r, 0), y)), seg, phi0).toNonIndexed();
+  g.deleteAttribute('normal'); g.computeVertexNormals();
+  return g;
+}
+// bend a part authored flat (x along the wall, z outward from a wall at z = 0) round a cylinder of radius R
+export function bendRound(g, R) {
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), z = p.getZ(i), a = x / R, r = R + z; p.setXYZ(i, Math.sin(a) * r, p.getY(i), Math.cos(a) * r); }
+  g.deleteAttribute('normal'); g.computeVertexNormals();
+  return g;
 }

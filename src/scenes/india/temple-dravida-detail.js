@@ -262,17 +262,23 @@ export function prastara(F, plan, h, { over = 0.32 * h, kudu = 2.2, kuduR = 0.2 
 }
 const arcShape = (r, gap, seg) => { const pts = []; for (let i = 0; i <= seg; i++) { const a = -PI / 2 + gap / 2 + (2 * PI - gap) * i / seg; pts.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r)); } return new THREE.ShapeGeometry(new THREE.Shape(pts)); };
 // kudu: horseshoe-arched dormer facing +z on the plane z, the feet of the arch at y; radius r
-export function kudu1(F, x, y, z, r, { face = true, finial = true, back = true, tube = 0.18 } = {}) {
-  const t = r * tube, gap = 0.56 * PI, lite = F.lite, cy = y + Math.cos(gap / 2) * r + t;
-  F.add('stone', new THREE.TorusGeometry(r, t, lite ? 3 : 4, lite ? 7 : 11, 2 * PI - gap).rotateZ(-PI / 2 + gap / 2), x, cy, z + t * 0.6);
-  if (back) F.add('shade', arcShape(r * 0.98, gap, lite ? 6 : 10), x, cy, z + 0.01);
-  if (face && !lite) F.add('stone', new THREE.SphereGeometry(r * 0.3, 6, 4).scale(1, 1.05, 0.55), x, cy + r * 0.28, z + r * 0.12);   // the kirtimukha face
+export function kudu1(F, x, y, z, r, { face = true, finial = true, back = true, tube = 0.18, mini = false } = {}) {
+  const t = r * tube, gap = 0.56 * PI, lite = F.lite || mini, cy = y + Math.cos(gap / 2) * r + t;
+  F.add('stone', new THREE.TorusGeometry(r, t, 3, lite ? 7 : 10, 2 * PI - gap).rotateZ(-PI / 2 + gap / 2), x, cy, z + t * 0.6);
+  if (back) F.add('shade', arcShape(r * 0.98, gap, lite ? 5 : 8), x, cy, z + 0.01);
+  if (face && !lite) F.add('stone', new THREE.SphereGeometry(r * 0.3, 5, 3).scale(1, 1.05, 0.55), x, cy + r * 0.28, z + r * 0.12);   // the kirtimukha face
   if (finial) F.add('stone', new THREE.ConeGeometry(r * 0.34, r * 0.6, 4).scale(1, 1, 0.5), x, cy + r + t + r * 0.24, z + t * 0.6);    // shovel head
 }
 
 // ------------------------------------------------------------------------------------------- pilasters, niches
 // pilaster on the wall plane z (front at z + d), from y0 to y1, centred on x; oct = vishnukanta (octagonal shaft)
-export function pilaster(F, x, y0, y1, z, { w = 0.44, d = 0.16, oct = false, bracket = true } = {}) {
+export function pilaster(F, x, y0, y1, z, { w = 0.44, d = 0.16, oct = false, bracket = true, simple = false } = {}) {
+  if (simple || F.lite) {
+    F.box('stone', x - w * 0.6, x + w * 0.6, y0, y0 + 0.12, z, z + d + 0.04);
+    F.box('stone', x - w / 2, x + w / 2, y0 + 0.12, y1 - 0.1, z, z + d);
+    F.box('stone', x - w * 0.75, x + w * 0.75, y1 - 0.1, y1, z, z + d + 0.06);
+    return;
+  }
   const H = y1 - y0, hb = Math.min(0.36, H * 0.07), hc = Math.min(1.15, H * 0.24), yb = y0 + hb, yc = y1 - hc;
   F.box('stone', x - w * 0.64, x + w * 0.64, y0, yb, z, z + d + 0.06);                                                // base
   if (oct && !F.lite) F.add('stone', flat(new THREE.CylinderGeometry(w / 2, w / 2, yc - yb, 8, 1, true).rotateY(PI / 8)), x, (yb + yc) / 2, z + d - w / 2);
@@ -281,13 +287,13 @@ export function pilaster(F, x, y0, y1, z, { w = 0.44, d = 0.16, oct = false, bra
   const hk = hc * 0.6, hp = hc * 0.12, hbr = hc * 0.28, R = w * 0.5;
   if (!F.lite) {
     // kalasha · tadi · kumbha · padma
-    F.add('stone', lathe([[R * 0.8, 0], [R * 1.08, hk * 0.13], [R * 1.12, hk * 0.26], [R * 0.72, hk * 0.4], [R * 0.62, hk * 0.48], [R * 1.12, hk * 0.62], [R * 1.12, hk * 0.7], [R * 0.82, hk * 0.8], [R * 1.5, hk]], 8, PI / 8), x, yc, z + d - R);
+    F.add('stone', lathe([[R * 0.8, 0], [R * 1.12, hk * 0.2], [R * 0.66, hk * 0.44], [R * 1.14, hk * 0.64], [R * 0.84, hk * 0.8], [R * 1.5, hk]], 8, PI / 8), x, yc, z + d - R);
   } else F.box('stone', x - R * 1.1, x + R * 1.1, yc, yc + hk, z, z + d + 0.04);
   F.box('stone', x - w * 0.8, x + w * 0.8, yc + hk, yc + hk + hp, z, z + d + 0.12);                                    // phalaka
   if (bracket) {                                                                                                       // pushpapotika
     F.box('stone', x - w * 0.95, x + w * 0.95, yc + hk + hp, yc + hk + hp + hbr * 0.45, z, z + d + 0.16);
     F.box('stone', x - w * 1.35, x + w * 1.35, yc + hk + hp + hbr * 0.45, y1, z, z + d + 0.22);
-    if (!F.lite) for (const s of [-1, 1]) F.add('stone', new THREE.SphereGeometry(hbr * 0.32, 5, 3), x + s * w * 1.15, yc + hk + hp + hbr * 0.42, z + d + 0.12);
+    if (!F.lite) for (const s of [-1, 1]) F.add('stone', new THREE.SphereGeometry(hbr * 0.32, 4, 2), x + s * w * 1.15, yc + hk + hp + hbr * 0.42, z + d + 0.12);
   }
 }
 // free-standing pillar (square blocks — sadurams — alternating with octagonal kattus; a kalasha-kumbha-padma
@@ -319,10 +325,10 @@ export function kumbhaPanjara(F, x, y0, y1, z, w = 0.8) {
   F.box('stone', x - w * 0.45, x + w * 0.45, y0, y0 + 0.08 * H, z, z + w * 0.35);
   F.add('stone', lathe([[w * 0.18, 0], [w * 0.38, H * 0.05], [w * 0.4, H * 0.1], [w * 0.22, H * 0.16], [w * 0.28, H * 0.18], [0, H * 0.18]], F.lite ? 6 : 8), x, y0 + 0.08 * H, z + w * 0.1);
   F.box('stone', x - w * 0.13, x + w * 0.13, y0 + 0.25 * H, y0 + 0.74 * H, z, z + w * 0.22);
-  if (!F.lite) for (let k = 0; k < 3; k++) for (const s of [-1, 1]) {                                                  // the foliage spilling from the pot
-    F.add('stone', new THREE.SphereGeometry(w * 0.16, 5, 3).scale(1.4, 0.6, 0.5), x + s * w * (0.22 + 0.06 * k), y0 + H * (0.27 - 0.04 * k), z + w * 0.18, s * 0.5);
+  if (!F.lite) for (let k = 0; k < 2; k++) for (const s of [-1, 1]) {                                                  // the foliage spilling from the pot
+    F.add('stone', new THREE.SphereGeometry(w * 0.17, 4, 2).scale(1.4, 0.6, 0.5), x + s * w * (0.24 + 0.08 * k), y0 + H * (0.27 - 0.05 * k), z + w * 0.18, s * 0.5);
   }
-  panjaraShrine(F.sub(x, y0 + 0.74 * H, z + w * 0.1), w * 0.9, w * 0.5, H * 0.26);
+  panjaraShrine(F.sub(x, y0 + 0.74 * H, z + w * 0.1), w * 0.9, w * 0.5, H * 0.26, { mini: true });
 }
 // a standing figure (a deity or guardian) on a lotus base, with four arms and a crown, before a prabha arch
 export function figure(F, x, y, z, h, { arms = 4, sway = 1, prabha = true } = {}) {
@@ -396,36 +402,36 @@ function shrineBody(F, w, d, hb) {
   F.add('stone', ring(rect(w * 0.44, d * 0.44), F.lite ? [[0, 0], [w * 0.1, hc * 0.5], [0, hc]] : [[0, 0], [w * 0.05, hc * 0.2], [w * 0.11, hc * 0.5], [w * 0.1, hc * 0.8], [0, hc]]), 0, hbase + hp, 0);
   return hb;
 }
-const finial = (F, x, y, z, s) => F.add('stone', lathe([[s * 0.5, 0], [s * 0.62, s * 0.3], [s * 0.3, s * 0.6], [s * 0.38, s * 0.75], [0, s * 1.3]], F.lite ? 4 : 6), x, y, z);
+const finial = (F, x, y, z, s) => F.add('stone', flat(lathe([[s * 0.55, 0], [s * 0.3, s * 0.55], [s * 0.4, s * 0.72], [0, s * 1.3]], F.lite ? 4 : 5)), x, y, z);
 // karnakuta: square, with a square dome; `faces` = the turns of the faces that carry a kudu
 export function kutaShrine(F, w, { faces = [0], hb = w * 0.78 } = {}) {
   const y = shrineBody(F, w, w, hb), a = w * 0.46;
   F.add('stone', ring(rect(a, a), F.lite ? [[0, 0], [-0.1 * w, 0.3 * w], [-a, 0.5 * w]] : [[0, 0], [0.02 * w, 0.07 * w], [-0.02 * w, 0.2 * w], [-0.12 * w, 0.33 * w], [-0.27 * w, 0.43 * w], [-a, 0.5 * w]]), 0, y, 0);
   finial(F, 0, y + 0.48 * w, 0, w * 0.22);
-  if (!F.lite) for (const ry of faces) kudu1(F.sub(0, 0, 0, ry), 0, y - 0.02 * w, a + 0.02 * w, w * 0.2, { face: false });
+  if (!F.lite) for (const ry of faces) kudu1(F.sub(0, 0, 0, ry), 0, y - 0.02 * w, a + 0.02 * w, w * 0.2, { face: false, finial: false, mini: true });
 }
 // shala: oblong (w along the side, d deep), barrel vaulted, a kudu on the long face, finials on the ridge
 export function shalaShrine(F, w, d, { hb = d * 0.95, kudu = true } = {}) {
   const y = shrineBody(F, w, d, hb), rr = d * 0.44, len = w * 0.9;
   F.add('stone', new THREE.CylinderGeometry(rr, rr, len, F.lite ? 5 : 8, 1, false, 0, PI).rotateZ(PI / 2).scale(1, 1.2, 1), 0, y, 0);
   if (!F.lite) {
-    for (const s of [-1, 1]) F.add('stone', new THREE.TorusGeometry(rr * 0.98, rr * 0.08, 3, 8, PI).rotateY(PI / 2).scale(1, 1.2, 1), s * len / 2, y, 0);   // gable arches
-    if (kudu) kudu1(F, 0, y - 0.02 * d, rr * 0.92, Math.min(rr * 0.62, w * 0.2), { face: true });
+    for (const s of [-1, 1]) F.add('stone', new THREE.TorusGeometry(rr * 0.98, rr * 0.09, 3, 6, PI).rotateY(PI / 2).scale(1, 1.2, 1), s * len / 2, y, 0);   // gable arches
+    if (kudu) kudu1(F, 0, y - 0.02 * d, rr * 0.92, Math.min(rr * 0.62, w * 0.2), { face: w > 2.5, finial: false, mini: w <= 2.5 });
   }
-  const nf = F.lite ? 1 : w > 2.2 * d ? 5 : 3;
+  const nf = F.lite ? 1 : w > 2.2 * d ? 3 : 2;
   for (let i = 0; i < nf; i++) finial(F, nf === 1 ? 0 : -len * 0.4 + (len * 0.8) * i / (nf - 1), y + rr * 1.18, 0, d * 0.16);
 }
 // panjara: apsidal (elephant-backed) roof running outward, a kudu gable on the front
-export function panjaraShrine(F, w, d, hb = w * 0.8) {
+export function panjaraShrine(F, w, d, hb = w * 0.8, { mini = false } = {}) {
   const y = shrineBody(F, w, d, hb), rr = w * 0.42, z0 = -d * 0.12, len = d * 0.56;
   F.add('stone', new THREE.CylinderGeometry(rr, rr, len, F.lite ? 4 : 7, 1, true, -PI / 2, PI).rotateX(-PI / 2), 0, y, z0 + len / 2);
   F.add('stone', new THREE.SphereGeometry(rr, F.lite ? 4 : 7, F.lite ? 2 : 3, PI, PI, 0, PI / 2).scale(1, 1, 0.8), 0, y, z0);
-  if (!F.lite) kudu1(F, 0, y - 0.04 * w, z0 + len, rr * 0.8, { face: true, back: true });
+  if (!F.lite && !mini) kudu1(F, 0, y - 0.04 * w, z0 + len, rr * 0.8, { face: false, finial: false, mini: true });
   finial(F, 0, y + rr * 0.92, z0 + len * 0.3, w * 0.18);
 }
 // hara: a parapet of miniature shrines along the edge of a rectangular roof (hx × hz = the outer faces of the
 // shrines); bh = { L, p } puts a wide shala on a projecting central band of each face
-export function hara(F, hx, hz, { w = 1.6, bh = null, gap = 0.3, wall = true, shalaFrac = 0.34, faces = [0, 1, 2, 3] } = {}) {
+export function hara(F, hx, hz, { w = 1.6, bh = null, gap = 0.45, wall = true, shalaFrac = 0.34, faces = [0, 1, 2, 3] } = {}) {
   sides(hx, hz).forEach(({ ry, D, L }, k) => {
     if (!faces.includes(k)) return;
     const S = F.sub(0, 0, 0, ry);
@@ -437,7 +443,7 @@ export function hara(F, hx, hz, { w = 1.6, bh = null, gap = 0.3, wall = true, sh
     const sD = bh ? D + bh.p : D, sd = w * 0.88;
     if (sw > w * 0.9) shalaShrine(S.sub(0, base, sD - sd / 2), sw, sd, { hb: w * 0.86 });
     if (bh && bh.p > 0.05) S.box('stone', -bh.L, bh.L, 0, base, D, sD);
-    const pw = w * 0.7, span = L - w - gap - sw / 2 - gap;
+    const pw = w * 0.74, span = L - w - gap - sw / 2 - gap;
     const n = Math.floor((span + gap) / (pw + gap));
     for (let i = 0; i < n; i++) {
       const u = sw / 2 + gap + (i + 0.5) * span / n;

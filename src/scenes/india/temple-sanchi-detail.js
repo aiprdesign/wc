@@ -736,8 +736,8 @@ export function chakraGeo(q = 1) {
   return s.geometry();
 }
 // the volute: a spiral ridge winding in to a central boss, on one face (z = 0 plane, facing +z)
-export function spiralGeo(R, q = 1) {
-  const s = new Sculpt(q), pts = [], turns = 2.4, n = Math.round(56 * q);
+export function spiralGeo(R, q = 1, sx = 1) {
+  const s = new Sculpt(q, sx), pts = [], turns = 2.4, n = Math.round(56 * q);
   for (let i = 0; i <= n; i++) { const t = i / n, a = Math.PI / 2 - t * turns * Math.PI * 2, r = R * (1 - t * 0.86); pts.push([Math.cos(a) * r, Math.sin(a) * r, 0]); }
   s.tube(pts, R * 0.085, n, 5);
   s.ball([0, 0, 0], R * 0.2, 8);
