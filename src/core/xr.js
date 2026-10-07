@@ -48,6 +48,10 @@ export const TUNE = {
     half: 0.3, sides: 8, frame: 1.6, depth: 0.35, follow: 0.45, turn: 0.8, zoom: 0.8, reach: 0.9, drop: 0.45,
     // the vitrine: `deep` × deeper front to back (the set's depth shows), `tall` × as tall as it is wide
     deep: 1.3, tall: 1.25,
+    // Full view: the set fades out softly round the focus object — from `fade` × the vitrine's half-width
+    // (the subject's own size) over a further `fadeW` × — so grounds, terrain and long floors end just past
+    // the subject and never run on over the room or the viewer's feet
+    fade: 0.95, fadeW: 0.55,
     // pinch to resize (× the base size), surface tracking (marker glide /s, steady time before "ready")
     minScale: 0.25, maxScale: 5, glide: 14, steady: 0.25, minUp: 0.75,
     // 'case' (Small): cut to the vitrine, leaving the camera view clear; 'full': the whole set,
@@ -424,6 +428,7 @@ export class XRMode {
   //    light instead of turning into a dark veil.
   _clipShaders(inst) {
     const saved = this._patched ??= new Map();
+    this._fadeU ??= { c: { value: new THREE.Vector3() }, r: { value: new THREE.Vector2(1e6, 1) } };
     const MAIN = /void\s+main\s*\(\s*(void)?\s*\)/;
     const glow = this._glow ??= new Map();
     inst.scene.traverse((o) => {
@@ -435,17 +440,40 @@ export class XRMode {
         if (saved.has(m) || m.isRawShaderMaterial) continue;
         const opaque = !m.transparent && m.blending === THREE.NormalBlending;
         const clip = m.isShaderMaterial && !m.clipping && !m.userData.arNoClip && MAIN.test(m.vertexShader) && MAIN.test(m.fragmentShader);
-        if (!opaque && !clip) continue;
+        const std = !m.isShaderMaterial;   // a built-in material: it also learns the Full view's soft edge
+        if (!opaque && !clip && !std) continue;
         saved.set(m, { obc: m.onBeforeCompile, key: m.customProgramCacheKey, own: Object.hasOwn(m, 'onBeforeCompile'), ownKey: Object.hasOwn(m, 'customProgramCacheKey'), clipping: m.clipping });
         const prev = m.onBeforeCompile, key = m.customProgramCacheKey;
         const full = opaque ? 'gl_FragColor.a = 1.0;' : '';
         if (clip) m.clipping = true;
+        const fadeU = this._fadeU;
+        // the soft edge: fragments past the radius dissolve (opaque: a dithered cut-out, no sorting;
+        // see-through: their alpha fades), measured on the ground plane from the vitrine's centre
+        const FADE_V = 'varying vec3 vXrW;';
+        const FADE_F = `varying vec3 vXrW; uniform vec3 uXrFadeC; uniform vec2 uXrFadeR;
+float xrFade() { float d = length((vXrW - uXrFadeC).xz); return 1.0 - smoothstep(uXrFadeR.x, uXrFadeR.x + uXrFadeR.y, d); }
+float xrDither() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }`;
+        const cut = 'if (xrFade() <= xrDither()) discard;';
+        const worldPos = (p) => `#ifdef USE_INSTANCING
+  vXrW = (modelMatrix * instanceMatrix * vec4(${p}, 1.0)).xyz;
+#else
+  vXrW = (modelMatrix * vec4(${p}, 1.0)).xyz;
+#endif`;
         m.onBeforeCompile = function (sh, r) {
           prev?.call(this, sh, r);
+          sh.uniforms.uXrFadeC = fadeU.c; sh.uniforms.uXrFadeR = fadeU.r;
+          if (std && sh.vertexShader.includes('#include <project_vertex>')) {
+            sh.vertexShader = `${FADE_V}\n${sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n${worldPos('transformed')}`)}`;
+            sh.fragmentShader = `${FADE_F}\n${sh.fragmentShader}`;
+            if (opaque) sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n${cut}`);
+            sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\n${full}${opaque ? '' : '\ngl_FragColor.a *= xrFade();'}`);
+            return;
+          }
           if (clip) {
-            sh.vertexShader = `#include <clipping_planes_pars_vertex>\n${sh.vertexShader.replace(MAIN, 'void xrUserMain()')}
+            sh.vertexShader = `#include <clipping_planes_pars_vertex>\n${FADE_V}\n${sh.vertexShader.replace(MAIN, 'void xrUserMain()')}
 void main() {
   xrUserMain();
+  ${worldPos('position')}
   #if NUM_CLIPPING_PLANES > 0
     #ifdef USE_INSTANCING
       vClipPosition = -(modelViewMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
@@ -454,17 +482,19 @@ void main() {
     #endif
   #endif
 }`;
-            sh.fragmentShader = `#include <clipping_planes_pars_fragment>\n${sh.fragmentShader.replace(MAIN, 'void xrUserMain()')}
+            sh.fragmentShader = `#include <clipping_planes_pars_fragment>\n${FADE_F}\n${sh.fragmentShader.replace(MAIN, 'void xrUserMain()')}
 void main() {
   #include <clipping_planes_fragment>
+  ${opaque ? cut : ''}
   xrUserMain();
   ${full}
+  ${opaque ? '' : 'gl_FragColor.a *= xrFade(); gl_FragColor.rgb *= xrFade();'}
 }`;
           } else if (sh.fragmentShader.includes('#include <dithering_fragment>')) {
             sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\n${full}`);
           }
         };
-        m.customProgramCacheKey = function () { return `${key.call(this)}|xr-ar${clip ? 'c' : ''}${opaque ? 'o' : ''}`; };
+        m.customProgramCacheKey = function () { return `${key.call(this)}|xr-ar${clip ? 'c' : ''}${opaque ? 'o' : ''}${std ? 's' : ''}|fade1`; };
         m.needsUpdate = true;
       }
     });
@@ -731,6 +761,12 @@ void main() {
       const full = this.view === 'full';
       clipPrism(this.planes, pos, f.yaw.x, half, cfg.sides, cfg.deep, half * (2 * cfg.tall - 1));
       r.clippingPlanes = full ? [] : this.planes;
+      // Full view: the set dissolves past a radius round the subject, so grounds and terrain don't run on over
+      // the room (Small view: the vitrine's walls cut it already)
+      if (this._fadeU) {
+        this._fadeU.c.value.copy(pos);
+        this._fadeU.r.value.set(full ? half * cfg.fade : 1e6, half * cfg.fadeW);
+      }
       scene.background = null;
       // haze as thick at the subject as in the film, measured from where the viewer stands
       if (fog) {
