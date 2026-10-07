@@ -223,7 +223,8 @@ export default {
   },
   finale: {
     story1: 'From the Indus to the Moon,', story2: 'five thousand years of curiosity, craft and discovery.',
-    title2: 'OF INDIAN CIVILIZATION', world: 'Shared with the whole world',
+    title2: 'OF INDIAN CIVILIZATION', world: 'The world is one family',
+    sanskrit: 'वसुधैव कुटुम्बकम्',   // Vasudhaiva Kutumbakam (Maha Upanishad 6.71–75)
     spin: -0.75,   // the Earth turned so the subcontinent faces the camera, lit, as the story lines play
   },
 };

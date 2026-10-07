@@ -411,7 +411,20 @@ export function create(ctx, segment) {
   const world = new TextPlane(FILM.finale?.world ?? 'Built on the ideas of the whole world', { font: FONTS.serif, italic: true, weight: 500, height: 0.2, color: '#f1e2c6', intensity: 1.0, depthWrite: false });
   const wS = L(1.9, 1.35) / inkW(world, 0.2);
   world.scale.setScalar(wS);
-  const worldY = subY - subH * 0.5 - L(0.2, 0.13) * M * 0.5 - 0.2 * wS * 0.5;
+  let worldY = subY - subH * 0.5 - L(0.2, 0.13) * M * 0.5 - 0.2 * wS * 0.5;
+  // a film's closing words in their own script (the Indian film: वसुधैव कुटुम्बकम्, Vasudhaiva Kutumbakam),
+  // in gold between the title and its translation
+  let sanskrit = null;
+  if (FILM.finale?.sanskrit) {
+    sanskrit = new TextPlane(FILM.finale.sanskrit, { font: FONTS.deva, weight: 400, height: 0.2, color: '#f2d79c', intensity: 1.15, depthWrite: false });
+    const kS = L(2.3, 1.55) / inkW(sanskrit, 0.2);
+    sanskrit.scale.setScalar(kS);
+    const kY = subY - subH * 0.5 - L(0.24, 0.16) * M * 0.5 - 0.2 * kS * 0.5;
+    sanskrit.position.set(0, kY, 0);
+    sanskrit.renderOrder = 10;
+    hud.scene.add(sanskrit);
+    worldY = kY - 0.2 * kS * 0.55 - L(0.12, 0.09) * M * 0.5 - 0.2 * wS * 0.5;
+  }
   world.position.set(0, worldY, 0);
   const closing = new TextPlane('THE JOURNEY CONTINUES', { font: FONTS.mono, weight: 400, height: 0.2, letterSpacing: 0.62, color: '#e2e8f1', intensity: 0.95, depthWrite: false, soft: 0.25 });
   const cS = L(2.45, 1.6) / inkW(closing, 0.2);
@@ -603,6 +616,10 @@ export function create(ctx, segment) {
     rule.scale.set(Math.max(0.001, rl * titleW * 0.42), 0.0042 * L(1.2, 1), 1);
     rule.material.opacity = rl * 0.75 * textFade;
     rule.visible = on && rl > 0;
+    if (sanskrit) {
+      sanskrit.opacity = sat((T - C_CLOSE + 1.2) / 0.6) * 0.95 * textFade;
+      sanskrit.reveal = ease.outCubic(sat((T - C_CLOSE + 1.2) / 1.2));
+    }
     world.opacity = sat((T - C_CLOSE + 0.6) / 0.5) * 0.9 * textFade;
     world.reveal = ease.outCubic(sat((T - C_CLOSE + 0.6) / 1.1));
     closing.opacity = sat((T - C_CLOSE) / 0.5) * 0.85 * textFade;

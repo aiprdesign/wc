@@ -1,0 +1,4 @@
+freeserif-devanagari-sub.woff2 is a subset of FreeSerif from GNU FreeFont (https://www.gnu.org/software/freefont/),
+covering only the glyphs of "वसुधैव कुटुम्बकम्". GNU FreeFont is licensed under the GNU General Public License
+v3 or later, with the font exception: embedding the font in a document does not by itself cause the document
+to be covered by the GPL.

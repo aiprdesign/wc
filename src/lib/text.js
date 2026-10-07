@@ -9,9 +9,11 @@ export const FONTS = {
   serif: 'Cormorant Garamond',     // manuscripts, elegant captions
   mono: 'IBM Plex Mono',           // HUD, annotations, technical labels
   sans: 'Inter',                   // modern-era UI
+  deva: 'FreeSerif Devanagari',    // Devanagari (the Indian film's closing words; a subset of GNU FreeSerif)
 };
 
 const FACES = [
+  ['FreeSerif Devanagari', 'freeserif-devanagari-sub', 400],
   ['Cinzel', 'cinzel-latin-400-normal', 400], ['Cinzel', 'cinzel-latin-600-normal', 600],
   ['Cinzel', 'cinzel-latin-700-normal', 700], ['Cinzel', 'cinzel-latin-900-normal', 900],
   ['Cormorant Garamond', 'cormorant-garamond-latin-400-normal', 400],
