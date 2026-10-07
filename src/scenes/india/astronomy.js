@@ -23,6 +23,7 @@ import { Dust } from '../../lib/particles.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
 import { GLSL_NOISE, fbm2 } from '../../lib/noise.js';
 import { bakeEarth, earthVert, earthFrag, atmoVert, atmoFrag } from '../finale-earth.js';
+import * as AA from './astronomy-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const DEG = Math.PI / 180;
@@ -124,7 +125,7 @@ function strip(A, B, uvA = null, uvB = null) {
 
 // World-space build front: geometry exists only below uBuild (world Y, noisy edge); a hot rim glows
 // at the front (the classical chapter's wire → stone language).
-function withBuild(material, edgeColor = '#ffb766') {
+function withBuild(material, edgeColor = '#ffb766', { weather = 0 } = {}) {
   const u = { uBuild: { value: 100 }, uEdge: { value: new THREE.Color(edgeColor) }, uEdgeGain: { value: 2.2 } };
   material.userData.build = u;
   material.onBeforeCompile = (sh) => {
@@ -142,11 +143,23 @@ function withBuild(material, edgeColor = '#ffb766') {
         float bn = (bNoise(vBuildW.xz * 0.35 + vBuildW.y * 0.08) - 0.5) * 1.6;
         float bd = uBuild + bn - vBuildW.y;
         if (bd < 0.0) discard;`)
+      .replace('#include <map_fragment>', weather > 0 ? `#include <map_fragment>
+        {
+          // weathering in world space (never tiles): broad blotches, rain streaks down the walls from
+          // every ledge, rising damp at the foot, a little soot in the hollows
+          vec3 wN = normalize(cross(dFdx(vBuildW), dFdy(vBuildW)));
+          float blot = bNoise(vBuildW.xz * 0.09 + vBuildW.y * 0.07) * 0.6 + bNoise(vBuildW.zx * 0.37 + vBuildW.y * 0.29) * 0.4;
+          float side = abs(wN.x) > abs(wN.z) ? vBuildW.z : vBuildW.x;
+          float vert = 1.0 - abs(wN.y);
+          float streak = smoothstep(0.58, 0.95, bNoise(vec2(side * 2.7, vBuildW.y * 0.09))) * smoothstep(0.25, 0.7, bNoise(vec2(side * 0.35 + 7.0, vBuildW.y * 0.025)));
+          float damp = 1.0 - smoothstep(0.0, 1.3 + 0.6 * bNoise(vBuildW.xz * 0.5), vBuildW.y);
+          diffuseColor.rgb *= mix(1.0, (0.88 + 0.22 * blot) * (1.0 - 0.2 * streak * vert) * (1.0 - 0.22 * damp), ${weather.toFixed(3)});
+        }` : '#include <map_fragment>')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         float bSlope = smoothstep(0.002, 0.04, fwidth(vBuildW.y));
         totalEmissiveRadiance += uEdge * uEdgeGain * mix(0.04, 1.0, bSlope) * (1.0 - smoothstep(0.0, 0.6, bd));`);
   };
-  material.customProgramCacheKey = () => 'astro-build-v1';
+  material.customProgramCacheKey = () => 'astro-build-v2-' + weather;
   return material;
 }
 
@@ -457,7 +470,8 @@ export function create(ctx, segment) {
   const QC = (s) => V(s * W2, HC, ZC);                // quadrant centres sit on the edges
   const arcPt = (s, phi, out = V(0, 0, 0)) => out.copy(QC(s)).addScaledVector(V(s, 0, 0), QR * Math.cos(phi)).addScaledVector(E2, QR * Math.sin(phi));
 
-  const P = { stone: [], west: [], east: [], wall: [] };
+  const P = { stone: [], west: [], east: [], wall: [], stair: [], chh: [] };
+  const quadLines = [];
   const put = (k, g, x = 0, y = 0, z = 0) => { const q = prep(g); q.translate(x, y, z); P[k].push(q); };
   // gnomon: a right triangle with arched openings, extruded across its thickness (shape x = -z)
   {
@@ -484,21 +498,21 @@ export function create(ctx, segment) {
     const N = 64, rise = H / N, tread = rise / TAN;
     for (let i = 0; i < N; i++) {
       const b = new THREE.BoxGeometry(2 * W2 - 0.84, rise + 0.4, tread);
-      put('stone', b, 0, (i + 1) * rise - (rise + 0.4) / 2, ZTOE - (i + 0.5) * tread);
+      put('stair', b, 0, (i + 1) * rise - (rise + 0.4) / 2, ZTOE - (i + 0.5) * tread);
     }
     // top platform parapet and the chhatri (pavilion)
     for (const [w, d, x, z] of [[2 * W2, 0.3, 0, ZN + 0.15], [0.3, ZTOP - ZN, -W2 + 0.15, (ZN + ZTOP) / 2], [0.3, ZTOP - ZN, W2 - 0.15, (ZN + ZTOP) / 2]]) put('stone', new THREE.BoxGeometry(w, 0.9, d), x, H + 0.45, z);
     const cz = (ZN + ZTOP) / 2;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      put('stone', new THREE.CylinderGeometry(0.11, 0.13, 2.3, 10), sx * 1.05, H + 1.15, cz + sz * 1.05);
-      put('stone', new THREE.BoxGeometry(0.34, 0.2, 0.34), sx * 1.05, H + 0.1, cz + sz * 1.05);
+      put('chh', new THREE.CylinderGeometry(0.11, 0.13, 2.3, 10), sx * 1.05, H + 1.15, cz + sz * 1.05);
+      put('chh', new THREE.BoxGeometry(0.34, 0.2, 0.34), sx * 1.05, H + 0.1, cz + sz * 1.05);
     }
-    put('stone', new THREE.BoxGeometry(3.1, 0.24, 3.1), 0, H + 2.42, cz);
-    put('stone', new THREE.BoxGeometry(3.4, 0.08, 3.4), 0, H + 2.58, cz);
+    put('chh', new THREE.BoxGeometry(3.1, 0.24, 3.1), 0, H + 2.42, cz);
+    put('chh', new THREE.BoxGeometry(3.4, 0.08, 3.4), 0, H + 2.58, cz);
     const dome = new THREE.SphereGeometry(1.15, 24, 10, 0, TAU, 0, Math.PI / 2); dome.scale(1, 1.1, 1);
-    put('stone', dome, 0, H + 2.62, cz);
-    put('stone', new THREE.CylinderGeometry(0.04, 0.09, 0.7, 8), 0, H + 4.1, cz);
-    put('stone', new THREE.SphereGeometry(0.13, 10, 8), 0, H + 3.9, cz);
+    put('chh', dome, 0, H + 2.62, cz);
+    put('chh', new THREE.CylinderGeometry(0.04, 0.09, 0.7, 8), 0, H + 4.1, cz);
+    put('chh', new THREE.SphereGeometry(0.13, 10, 8), 0, H + 3.9, cz);
   }
   // the two quadrants: curved walls in the equatorial plane, the graduated band on top
   {
@@ -512,6 +526,7 @@ export function create(ctx, segment) {
         uvLo.push([j / NQ, 0]); uvHi.push([j / NQ, 1]);
       }
       P[s < 0 ? 'west' : 'east'].push(prep(strip(lo, hi, uvLo, uvHi)));
+      quadLines.push({ lo, hi, gLo, gHi });
       // the curved walls carry the plaster texture (courses and an arcade of arched recesses), in metres / 6
       for (const [top, gnd, flip] of [[lo, gLo, false], [hi, gHi, true]]) {
         let acc = 0;
@@ -528,11 +543,21 @@ export function create(ctx, segment) {
     }
   }
   // materials: sandstone and lime plaster (ochre-pink), white marble scales
-  const stoneMat = withBuild(new THREE.MeshStandardMaterial({ color: '#d9ab84', roughness: 0.88, metalness: 0, side: THREE.DoubleSide }));
+  // lime plaster on the masonry (box-projected, one tile = 4 m) with world-space weathering on top
+  const PL = AA.plasterMaps(), UVM = 1 / PL.metres;
+  const stoneMat = withBuild(new THREE.MeshStandardMaterial({ map: PL.map, bumpMap: PL.bump, bumpScale: 1.4, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }), '#ffb766', { weather: 1 });
+  stoneMat.userData.noAntiTile = true;
+  const treadMat = withBuild(new THREE.MeshStandardMaterial({ bumpMap: PL.bump, bumpScale: 2.2, color: '#b9a99a', roughness: 0.8, metalness: 0 }), '#ffb766', { weather: 0.9 });
+  treadMat.userData.noAntiTile = true;
+  const declTex = AA.declinationTexture();
+  const marbleMat = withBuild(new THREE.MeshStandardMaterial({ map: declTex, bumpMap: declTex, bumpScale: 1.2, color: '#d4ccbf', roughness: 0.42, metalness: 0 }), '#ffd9a0');
+  marbleMat.userData.noAntiTile = true;
+  const sectorTex = AA.sectorTexture();
+  const sectorMat = withBuild(new THREE.MeshStandardMaterial({ map: sectorTex, bumpMap: sectorTex, bumpScale: 1, color: '#d4ccbf', roughness: 0.45, metalness: 0 }), '#ffd9a0');
   const westTex = scaleTexture((deg) => 6 + Math.round(deg / 15), 3);      // west quadrant reads the morning: 6 → 12
   const eastTex = scaleTexture((deg) => 18 - Math.round(deg / 15), 5);     // east quadrant, the afternoon: 18 → 12
-  const westMat = withBuild(new THREE.MeshStandardMaterial({ map: westTex, color: '#c4b9a8', roughness: 0.5, metalness: 0, side: THREE.DoubleSide }), '#ffd9a0');
-  const eastMat = withBuild(new THREE.MeshStandardMaterial({ map: eastTex, color: '#c4b9a8', roughness: 0.5, metalness: 0, side: THREE.DoubleSide }), '#ffd9a0');
+  const westMat = withBuild(new THREE.MeshStandardMaterial({ map: westTex, bumpMap: westTex, bumpScale: 1.3, color: '#c4b9a8', roughness: 0.5, metalness: 0, side: THREE.DoubleSide }), '#ffd9a0');
+  const eastMat = withBuild(new THREE.MeshStandardMaterial({ map: eastTex, bumpMap: eastTex, bumpScale: 1.3, color: '#c4b9a8', roughness: 0.5, metalness: 0, side: THREE.DoubleSide }), '#ffd9a0');
   const wallTex = (() => {
     const N = 512, c = document.createElement('canvas'); c.width = c.height = N;
     const g = c.getContext('2d'), rr = rng(1734), px = N / 6;   // 6 m tile
@@ -551,12 +576,22 @@ export function create(ctx, segment) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8;
     return t;
   })();
-  const wallMat = withBuild(new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }));
+  const wallMat = withBuild(new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9, metalness: 0, side: THREE.DoubleSide }), '#ffb766', { weather: 0.8 });
   eastMat.userData.build.uBuild = westMat.userData.build.uBuild;
   stoneMat.userData.build.uBuild = westMat.userData.build.uBuild;
   wallMat.userData.build.uBuild = westMat.userData.build.uBuild;
-  const stoneGeo = mergeGeometries(P.stone), wallGeo = mergeGeometries(P.wall);
-  const stoneMesh = new THREE.Mesh(stoneGeo, stoneMat);
+  for (const m of [treadMat, marbleMat, sectorMat]) m.userData.build.uBuild = westMat.userData.build.uBuild;
+  // the coarse instrument (the wire build, the distant copies; the main one on the lite path) and the
+  // detailed main one: tread slabs, trims, marble declination scales, the full chhatri
+  const stoneGeo = AA.boxUV(mergeGeometries([...P.stone, ...P.stair, ...P.chh]), UVM), wallGeo = mergeGeometries(P.wall);
+  const detail = lite ? null : AA.samratDetail({ H, W2, TAN, LAT, ZN, ZTOP, ZTOE, PAR, ARCHES, quad: quadLines });
+  const stoneMesh = new THREE.Mesh(detail ? AA.boxUV(mergeGeometries([...P.stone, ...detail.stone, ...detail.chhatri]), UVM) : stoneGeo, stoneMat);
+  const detailMeshes = [];
+  if (detail) {
+    detailMeshes.push(new THREE.Mesh(AA.boxUV(mergeGeometries(detail.tread), UVM * 1.6), treadMat));
+    detailMeshes.push(new THREE.Mesh(mergeGeometries(detail.marble), marbleMat));
+    for (const m of detailMeshes) { m.castShadow = m.receiveShadow = true; jaipur.add(m); }
+  }
   const westMesh = new THREE.Mesh(mergeGeometries(P.west), westMat);
   const eastMesh = new THREE.Mesh(mergeGeometries(P.east), eastMat);
   const wallMesh = new THREE.Mesh(wallGeo, wallMat);
@@ -569,24 +604,18 @@ export function create(ctx, segment) {
   // Yantras (open cylinders with a central pillar)
   for (const [x, z, k, ry] of [[52, -34, 0.24, 0], [-38, -58, 0.18, 0]]) {
     for (const src of [stoneMesh, westMesh, eastMesh, wallMesh]) {
-      const m = new THREE.Mesh(src.geometry, src.material);
+      const m = new THREE.Mesh(src === stoneMesh ? stoneGeo : src.geometry, src.material);
       m.scale.setScalar(k); m.position.set(x, 0, z); m.rotation.y = ry;
       m.castShadow = m.receiveShadow = true;
       jaipur.add(m); smallCopies.push(m);
     }
   }
   {
-    const parts = [];
-    for (const [x, z] of [[-58, -26], [-70, -8]]) {
-      const ring = new THREE.CylinderGeometry(6.5, 6.5, 4.2, 40, 1, true); ring.translate(x, 2.1, z); parts.push(prep(ring));
-      const ring2 = new THREE.CylinderGeometry(6.0, 6.0, 4.2, 40, 1, true); ring2.translate(x, 2.1, z); parts.push(prep(ring2));
-      const cap = new THREE.RingGeometry(6.0, 6.5, 40); cap.rotateX(-Math.PI / 2); cap.translate(x, 4.2, z); parts.push(prep(cap));
-      const post = new THREE.CylinderGeometry(0.3, 0.35, 4.6, 12); post.translate(x, 2.3, z); parts.push(prep(post));
-      for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU; const pl = new THREE.BoxGeometry(0.7, 4.2, 0.7); pl.translate(x + Math.cos(a) * 6.25, 2.1, z + Math.sin(a) * 6.25); parts.push(prep(pl)); }
-    }
-    const rama = new THREE.Mesh(mergeGeometries(parts), wallMat);
-    rama.castShadow = rama.receiveShadow = true;
-    jaipur.add(rama); smallCopies.push(rama);
+    const wallParts = [], topParts = [];
+    for (const [x, z] of [[-58, -26], [-70, -8]]) { const r = AA.ramaYantra(x, z, { lite }); wallParts.push(...r.wall); topParts.push(...r.marble); }
+    const rama = new THREE.Mesh(AA.boxUV(mergeGeometries(wallParts), UVM), stoneMat);
+    const ramaTops = new THREE.Mesh(mergeGeometries(topParts), sectorMat);
+    for (const m of [rama, ramaTops]) { m.castShadow = m.receiveShadow = true; jaipur.add(m); smallCopies.push(m); }
   }
 
   // the courtyard and the plain
@@ -877,6 +906,7 @@ export function create(ctx, segment) {
       const build = lerp(-2, H + 6, ramp(t, tCut + 0.2, tShadow - 0.05, ease.inOutSine));
       westMat.userData.build.uBuild.value = build;
       stoneMesh.visible = westMesh.visible = eastMesh.visible = wallMesh.visible = build > -1.5;
+      for (const m of detailMeshes) m.visible = build > -1.5;
       for (const m of smallCopies) m.visible = build > -1.5;
 
       // the shadow edge on the east quadrant: φ = 90° − H (the edge and the quadrant share the axis)

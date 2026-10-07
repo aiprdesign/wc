@@ -11,7 +11,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, TAU } from '../../lib/math.js';
 import { fbm2, noise2, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
-import { sdfBody, meshBody } from '../../lib/sdfmesh.js';
+import { meshBody } from '../../lib/sdfmesh.js';
 
 // ------------------------------------------------------------------ geometry helpers
 function clean(g) {
@@ -354,65 +354,85 @@ function needles(R, q) {
   return { steel: merge(steel), polish: merge(polish), wood: null, brass: null, L: 0.42 };
 }
 
-// ---- the cast heads of the svastika forceps (local: x forward, y up, z sideways; resting at y = 0)
-const ell = (c, r, k = 0, ang = 0, yaw = 0) => ({ type: 'ell', c, r, k, ang, yaw });
-const cone = (a, b, ra, rb, k = 0, flat = 1) => ({ type: 'cone', a, b, ra, rb, k, flat });
-function lionPrims() {
-  const P = [
-    cone([-0.062, 0.012, 0], [-0.022, 0.02, 0], 0.009, 0.015, 0),      // socket round the arms → neck
-    ell([0, 0.026, 0], [0.024, 0.021, 0.022], 0.008),                  // cranium
-    ell([0.022, 0.019, 0], [0.016, 0.011, 0.014], 0.006),              // muzzle
-    cone([0.006, 0.035, 0], [0.03, 0.024, 0], 0.008, 0.006, 0.004),    // bridge of the nose
-    ell([0.037, 0.022, 0], [0.005, 0.004, 0.0065], 0.002),             // nose pad
-    ell([0.024, 0.007, 0], [0.015, 0.0045, 0.012], 0.002),             // lower jaw, the mouth agape
-  ];
-  for (const s of [-1, 1]) {
-    P.push(ell([0.013, 0.036, s * 0.0095], [0.0085, 0.0042, 0.0065], 0.003, -0.15));   // brow
-    P.push(ell([0.018, 0.0305, s * 0.0105], [0.0032, 0.0028, 0.0032], 0.001));         // eye
-    P.push(ell([0.019, 0.016, s * 0.0115], [0.011, 0.0095, 0.0085], 0.004));           // cheek / whisker pad
-    P.push(ell([-0.004, 0.047, s * 0.0165], [0.0055, 0.0075, 0.0038], 0.003));         // ear
-  }
-  for (const [x0, R0, n, ra] of [[-0.006, 0.03, 18, 0.0065], [-0.02, 0.027, 15, 0.0075]]) {   // the mane: two rows of locks
-    for (let k = 0; k < n; k++) {
-      const f = (k / n) * TAU + (x0 < -0.01 ? 0.2 : 0), cy = Math.sin(f), cz = Math.cos(f);
-      if (cy < -0.45) continue;
-      const a = [x0, 0.026 + cy * R0 * 0.8, cz * R0 * 0.85], b = [x0 - 0.014, 0.026 + cy * (R0 + 0.012), cz * (R0 + 0.012)];
-      a[1] = Math.max(0.004, a[1]); b[1] = Math.max(0.003, b[1]);
-      P.push(cone(a, b, ra, ra * 0.35, 0.004));
+// ---- the cast heads of the svastika forceps (local: x forward, y up, z sideways; resting at y = 0),
+// sculpted as signed-distance fields and meshed with surface nets
+function smin(a, b, k) { if (k <= 0) return Math.min(a, b); const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; }
+function sdEll(x, y, z, cx, cy, cz, rx, ry, rz) {
+  const px = (x - cx), py = (y - cy), pz = (z - cz);
+  const k0 = Math.hypot(px / rx, py / ry, pz / rz), k1 = Math.hypot(px / (rx * rx), py / (ry * ry), pz / (rz * rz));
+  return k1 < 1e-9 ? -Math.min(rx, ry, rz) : k0 * (k0 - 1) / k1;
+}
+function sdCap(x, y, z, ax, ay, az, bx, by, bz, ra, rb) {   // round cone a → b
+  const dx = bx - ax, dy = by - ay, dz = bz - az, L2 = dx * dx + dy * dy + dz * dz;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy + (z - az) * dz) / L2));
+  return Math.hypot(x - ax - dx * t, y - ay - dy * t, z - az - dz * t) - (ra + (rb - ra) * t);
+}
+// shared: the socket that wraps the crossed arms and flows into the neck
+const socket = (x, y, z) => sdCap(x, y, z, -0.064, 0.012, 0, -0.02, 0.019, 0, 0.0085, 0.014);
+const HEADS = {
+  // a stylised lion as on the Mauryan capitals: a flame-locked ruff round the face, heavy brow,
+  // wide muzzle, the mouth open on the jaws
+  lion(x, y, z) {
+    let d = socket(x, y, z);
+    d = smin(d, sdEll(x, y, z, 0, 0.026, 0, 0.024, 0.021, 0.021), 0.008);
+    d = smin(d, sdEll(x, y, z, 0.022, 0.019, 0, 0.016, 0.011, 0.014), 0.006);
+    d = smin(d, sdCap(x, y, z, 0.006, 0.035, 0, 0.031, 0.024, 0, 0.008, 0.0058), 0.004);
+    d = smin(d, sdEll(x, y, z, 0.037, 0.022, 0, 0.005, 0.004, 0.0065), 0.002);
+    d = smin(d, sdEll(x, y, z, 0.024, 0.007, 0, 0.015, 0.0045, 0.012), 0.002);
+    const zs = Math.abs(z);
+    d = smin(d, sdEll(x, y, zs, 0.013, 0.036, 0.0095, 0.0085, 0.0042, 0.0065), 0.003);
+    d = smin(d, sdEll(x, y, zs, 0.019, 0.016, 0.0115, 0.011, 0.0095, 0.0085), 0.004);
+    d = smin(d, sdEll(x, y, zs, -0.004, 0.047, 0.0165, 0.0055, 0.0075, 0.0038), 0.003);
+    // the ruff: two rows of flame-shaped locks in a ring about the x axis, sweeping back
+    const yc = 0.025, ry = y - yc, r = Math.hypot(ry, z), th = Math.atan2(ry, z);
+    for (const [xm, rm, n, ph, w] of [[-0.006, 0.027, 9, 0, 0.0085], [-0.017, 0.03, 8, 0.5, 0.009]]) {
+      const lock = Math.pow(Math.abs(Math.cos(th * n + ph)), 1.5);
+      const sweepBack = (r - rm) * 0.7;                 // tips lean backwards
+      const dr = Math.hypot((x - xm + sweepBack) * 1.6, r - rm - 0.004 * lock) - (w * (0.55 + 0.45 * lock));
+      d = smin(d, dr, 0.003);
     }
-  }
-  return P;
-}
-function heronPrims() {
-  const P = [
-    cone([-0.062, 0.012, 0], [-0.016, 0.018, 0], 0.009, 0.012, 0),
-    ell([0, 0.02, 0], [0.022, 0.016, 0.0145], 0.007),
-    cone([0.008, 0.02, 0], [0.026, 0.018, 0], 0.011, 0.0065, 0.004),   // tapering into the beak
-    cone([-0.006, 0.033, 0], [-0.042, 0.04, 0], 0.0045, 0.0015, 0.004), // crest plumes
-    cone([-0.01, 0.03, 0.0], [-0.036, 0.03, 0], 0.004, 0.0012, 0.003),
-  ];
-  for (const s of [-1, 1]) {
-    P.push(ell([0.006, 0.025, s * 0.0118], [0.0035, 0.003, 0.0026], 0.0012));         // eye
-    P.push(ell([0.0055, 0.025, s * 0.0109], [0.0058, 0.0048, 0.002], 0.0015));        // eye ring
-  }
-  return P;
-}
-function crowPrims() {
-  const P = [
-    cone([-0.062, 0.012, 0], [-0.016, 0.019, 0], 0.009, 0.013, 0),
-    ell([0, 0.021, 0], [0.021, 0.018, 0.0165], 0.007),
-    cone([0.01, 0.021, 0], [0.024, 0.017, 0], 0.012, 0.009, 0.004),
-    ell([-0.006, 0.034, 0], [0.012, 0.004, 0.008], 0.004),            // feathered crown ridge
-  ];
-  for (const s of [-1, 1]) { P.push(ell([0.009, 0.026, s * 0.0125], [0.003, 0.0028, 0.0025], 0.0012)); P.push(ell([-0.01, 0.017, s * 0.013], [0.012, 0.007, 0.004], 0.004, 0.2)); }
-  return P;
-}
+    // carved hollows: eye sockets and nostrils
+    d = Math.max(d, -sdEll(x, y, zs, 0.0215, 0.0305, 0.0128, 0.003, 0.0022, 0.0026));
+    d = Math.max(d, -sdEll(x, y, zs, 0.0405, 0.0215, 0.0028, 0.0018, 0.0014, 0.0016));
+    d = smin(d, sdEll(x, y, zs, 0.0198, 0.0302, 0.0112, 0.0022, 0.0022, 0.0022), 0.0006);   // eyeballs
+    return Math.max(d, -y);
+  },
+  heron(x, y, z) {
+    let d = socket(x, y, z);
+    d = smin(d, sdEll(x, y, z, 0, 0.02, 0, 0.022, 0.016, 0.0145), 0.007);
+    d = smin(d, sdCap(x, y, z, 0.008, 0.02, 0, 0.026, 0.018, 0, 0.011, 0.0065), 0.004);
+    d = smin(d, sdCap(x, y, z, -0.006, 0.033, 0, -0.045, 0.041, 0, 0.0045, 0.0012), 0.004);   // crest plumes
+    d = smin(d, sdCap(x, y, z, -0.01, 0.03, 0, -0.038, 0.031, 0.004, 0.0038, 0.001), 0.003);
+    d = smin(d, sdCap(x, y, z, -0.01, 0.03, 0, -0.038, 0.031, -0.004, 0.0038, 0.001), 0.003);
+    const zs = Math.abs(z);
+    d = smin(d, sdEll(x, y, zs, 0.0055, 0.025, 0.0105, 0.006, 0.005, 0.0022), 0.0015);           // eye ring
+    d = Math.max(d, -sdEll(x, y, zs, 0.0062, 0.0252, 0.0128, 0.0032, 0.0028, 0.0018));
+    d = smin(d, sdEll(x, y, zs, 0.0062, 0.0252, 0.0112, 0.0024, 0.0024, 0.0024), 0.0005);
+    // feather grooves along the neck
+    d += 0.0006 * Math.max(0, Math.sin(Math.atan2(y - 0.018, z) * 10)) * (x < -0.008 ? 1 : 0);
+    return Math.max(d, -y);
+  },
+  crow(x, y, z) {
+    let d = socket(x, y, z);
+    d = smin(d, sdEll(x, y, z, 0, 0.021, 0, 0.021, 0.018, 0.0165), 0.007);
+    d = smin(d, sdCap(x, y, z, 0.01, 0.021, 0, 0.024, 0.017, 0, 0.012, 0.009), 0.004);
+    d = smin(d, sdEll(x, y, z, -0.006, 0.034, 0, 0.012, 0.004, 0.008), 0.004);
+    const zs = Math.abs(z);
+    d = smin(d, sdEll(x, y, zs, -0.01, 0.017, 0.013, 0.012, 0.007, 0.004), 0.004);
+    d = Math.max(d, -sdEll(x, y, zs, 0.0095, 0.0262, 0.0148, 0.003, 0.0028, 0.0022));
+    d = smin(d, sdEll(x, y, zs, 0.0095, 0.0262, 0.0132, 0.0024, 0.0024, 0.0024), 0.0005);
+    // overlapping feather scales over the crown and nape
+    const fth = Math.atan2(y - 0.021, zs), fr = Math.hypot(y - 0.021, zs);
+    d += 0.0007 * Math.max(0, Math.sin(fth * 9 + x * 700)) * (fr > 0.012 && x < 0.004 ? 1 : 0);
+    return Math.max(d, -y);
+  },
+};
 function headGeo(kind, q) {
-  const prims = kind === 'lion' ? lionPrims() : kind === 'heron' ? heronPrims() : crowPrims();
-  const g = meshBody(sdfBody(prims), [-0.072, -0.004, -0.05], [0.05, 0.064, 0.05], q.sdf);
-  // the cast's foot rests flat on the cloth
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) if (p.getY(i) < 0.0015) p.setY(i, 0.0015);
+  const f = HEADS[kind];
+  const body = { field2: () => -1, column: () => undefined, columnField: f };
+  const g = meshBody(body, [-0.07, -0.003, -0.05], [0.05, 0.064, 0.05], q.sdf);
+  const p = g.attributes.position;          // the cast's foot rests flat on the cloth
+  for (let i = 0; i < p.count; i++) if (p.getY(i) < 0.0012) p.setY(i, 0.0012);
   return g;
 }
 
@@ -438,10 +458,10 @@ function forceps(kind, R, q) {
   if (kind === 'lion') {
     for (const [yj, s] of [[0.017, 1], [0.0045, -1]]) {   // upper / lower jaw: broad, with a row of teeth facing each other
       const c = lineX(hx + 0.026, hx + 0.1, yj);
-      steel.push(sweep(c, 8, (u) => roundedRect(0.024 - 0.012 * u, 0.0042, 0.0016, 1)));
+      steel.push(sweep(c, 8, (u) => roundedRect(0.018 - 0.008 * u, 0.0038, 0.0015, 1)));
       for (let k = 0; k < 7; k++) {
         const x = hx + 0.034 + k * 0.0095;
-        for (const zz of [-1, 1]) { const g = new THREE.ConeGeometry(0.0016, 0.003, 6); if (s > 0) g.rotateX(Math.PI); g.translate(x, yj - s * 0.0034, zz * (0.0085 - k * 0.0008)); steel.push(g); }
+        for (const zz of [-1, 1]) { const g = new THREE.ConeGeometry(0.0014, 0.0028, 6); if (s > 0) g.rotateX(Math.PI); g.translate(x, yj - s * 0.0032, zz * (0.0068 - k * 0.0005)); steel.push(g); }
       }
     }
     L = hx + 0.1;
@@ -459,7 +479,7 @@ function forceps(kind, R, q) {
 // (geometry UVs are box-projected for the tileable steel / brass maps; wood keeps its lathe UVs).
 export function buildInstruments(seed = 5, { lite = false } = {}) {
   const R = rng(seed);
-  const q = lite ? { seg: 10, ring: 24, twist: 40, arm: 24, sdf: 0.0024 } : { seg: 18, ring: 40, twist: 110, arm: 48, sdf: 0.0013 };
+  const q = lite ? { seg: 7, ring: 14, twist: 20, arm: 14, sdf: 0.0042 } : { seg: 18, ring: 40, twist: 110, arm: 48, sdf: 0.0013 };
   const order = ['probe', 'lion', 'leaf', 'hook', 'round', 'tongs', 'needle-k', 'sickle', 'tube', 'probe2', 'saw', 'crow',
     'needles', 'axe', 'probe', 'leaf', 'tongs', 'hook', 'round', 'tube', 'sickle', 'probe2', 'heron', 'leaf'];
   const UVS = 1 / 0.06;   // one forged-map tile per 6 cm
@@ -566,16 +586,16 @@ export function bandageGeometry(lite) {
   const turns = 9, w = 0.07, r0 = 0.012, dr = 0.0016, N = lite ? 120 : 260, pos = [], idx = [];
   const cols = lite ? 6 : 10;
   for (let i = 0; i <= N; i++) {
-    const t = i / N, a = t * turns * TAU, r = r0 + dr * t * turns;
+    const t = i / N, a = t * turns * TAU - Math.PI / 2, r = r0 + dr * t * turns;
     for (let j = 0; j <= cols; j++) {
       const z = (j / cols - 0.5) * w * (1 - 0.04 * Math.sin(a * 0.5));
       pos.push(Math.cos(a) * r, Math.sin(a) * r, z + 0.0012 * noise2(a, j));
     }
   }
-  const last = turns * TAU, rl = r0 + dr * turns;
-  for (let i = 1; i <= 40; i++) {               // the tail laid out on the table
+  const rl = r0 + dr * turns;
+  for (let i = 1; i <= 40; i++) {               // the tail, leaving the roll underneath and laid out on the table
     const s = i / 40 * 0.16;
-    for (let j = 0; j <= cols; j++) pos.push(Math.cos(last) * rl + s, -rl + 0.0008 + 0.002 * Math.sin(s * 40) * (j / cols), (j / cols - 0.5) * w + 0.002 * Math.sin(s * 25));
+    for (let j = 0; j <= cols; j++) pos.push(s, -rl + 0.0008 + 0.0015 * Math.sin(s * 40) * (j / cols) * Math.min(1, s * 30), (j / cols - 0.5) * w + 0.002 * Math.sin(s * 25));
   }
   const rows = N + 1 + 40;
   for (let i = 0; i < rows - 1; i++) for (let j = 0; j < cols; j++) { const a = i * (cols + 1) + j, b = a + cols + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }

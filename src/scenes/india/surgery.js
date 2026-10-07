@@ -168,7 +168,7 @@ export function create(ctx, segment) {
   const tulsiStemMat = new THREE.MeshStandardMaterial({ color: '#5a3448', roughness: 0.55 });
   const budMat = new THREE.MeshStandardMaterial({ color: '#8a4f8e', roughness: 0.5, emissive: new THREE.Color('#1a0820') });
   const tulsiLeaves = new THREE.InstancedMesh(tulsiGeo, tulsiMat, 80);
-  const buds = new THREE.InstancedMesh(new THREE.SphereGeometry(0.0065, 8, 6), budMat, 160);
+  const buds = new THREE.InstancedMesh(new THREE.SphereGeometry(0.0065, lite ? 5 : 8, lite ? 4 : 6), budMat, 160);
   let tl = 0, bd = 0;
   const lotaTop = V3(0.48, 0.24, -0.34);
   [[0.0, 0.42, 0.0], [2.1, 0.36, 0.35], [4.2, 0.32, -0.3]].forEach(([dir, h, lean]) => {
@@ -221,13 +221,13 @@ export function create(ctx, segment) {
   // instruments: forged steel (hammer facets, burnished highs), polished ground edges and shafts,
   // oiled rosewood handles, cast and hammered brass
   const FM = SI.forgedMaps(), WM = SI.rosewoodMaps();
-  const steelMat = new THREE.MeshStandardMaterial({ color: '#c6cace', metalness: 1, roughness: 0.52, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6) });
+  const steelMat = new THREE.MeshStandardMaterial({ color: '#c6cace', metalness: 1, roughness: 0.52, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.32, 0.32) });
   steelMat.userData.detail = { scratch: 0.5, rough: 0.35, albedo: 0.07, bump: 0.00006, scale: 8 };
-  const polishMat = new THREE.MeshStandardMaterial({ color: '#e4e7eb', metalness: 1, roughness: 0.14 });
+  const polishMat = new THREE.MeshStandardMaterial({ color: '#d2d6da', metalness: 1, roughness: 0.24 });
   polishMat.userData.detail = { scratch: 0.9, rough: 0.45, albedo: 0.04, bump: 0.00002, scale: 10 };
   const woodMat = new THREE.MeshPhysicalMaterial({ map: WM.map, normalMap: WM.normalMap, roughnessMap: WM.roughnessMap, roughness: 0.7, clearcoat: 0.4, clearcoatRoughness: 0.32, envMapIntensity: 0.6 });
   woodMat.userData.detail = { albedo: 0.05, rough: 0.2, bump: 0.00002, scratch: 0.1, grime: 0.15, scale: 8 };
-  const instBrass = new THREE.MeshStandardMaterial({ color: '#d2a052', metalness: 1, roughness: 0.62, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.35, 0.35) });
+  const instBrass = new THREE.MeshStandardMaterial({ color: '#a97d46', metalness: 1, roughness: 0.6, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.35, 0.35) });
   instBrass.userData.detail = { scratch: 0.3, rough: 0.4, albedo: 0.12, grime: 0.45, bump: 0.00004, scale: 8 };
   const inst = SI.buildInstruments(5, { lite }).map((b, i) => {
     const g = new THREE.Group(); g.scale.setScalar(ISCALE);
