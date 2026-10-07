@@ -53,7 +53,7 @@ export function groundH(x, z) {
 }
 
 export function buildTerrain(lite) {
-  const N = lite ? 120 : 180, X = 8500, Z0 = -7000, Z1 = 9000, ZC = 500;
+  const N = lite ? 110 : 150, X = 8500, Z0 = -7000, Z1 = 9000, ZC = 500;
   const warp = (u) => Math.sign(u) * Math.pow(Math.abs(u), 2.1);
   const pos = new Float32Array((N + 1) * (N + 1) * 3), idx = [];
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
@@ -379,7 +379,7 @@ export function buildBridge(lite) {
 
 // ---------------------------------------------------------------------------------------------- trees & people
 export function buildTrees(lite) {
-  const R = rng(5150), R0 = rng(808), n = lite ? 420 : 1500, M = [], C = [];
+  const R = rng(5150), R0 = rng(808), n = lite ? 380 : 1250, M = [], C = [];
   // lumpy crowns: displace the sphere a little so instances read as foliage, not balls; the crowns near
   // the island (seen from the crane) get the finer sphere, the far ones the coarse one
   const crown = (detail) => {

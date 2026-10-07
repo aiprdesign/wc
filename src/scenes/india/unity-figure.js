@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { smin, profilePrim, meshBody } from '../../lib/sdfmesh.js';
 import { noise3 } from '../../lib/noise.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const FIG_H = 1.82;
 const smax = (a, b, k) => -smin(-a, -b, k);
@@ -156,7 +157,7 @@ function bodyPrims() {
     [0.222, 0.216, 0.208, 0.198, 0.19, 0.182, 0.184, 0.19, 0.186, 0.152, 0.1, 0.07],
     [0.182, 0.172, 0.16, 0.15, 0.144, 0.146, 0.144, 0.134, 0.119, 0.097, 0.075, 0.064],
     [0.03, 0.022, 0.014, 0.008, 0.006, 0.014, 0.014, 0.01, 0.002, -0.008, -0.012, -0.012],
-    { tag: TAG.kurta, fold: (phi, y) => { const m = Math.min(1, Math.max(0, (0.98 - y) / 0.36)); return 0.004 + 0.06 * m * (0.5 + 0.5 * Math.sin(phi * 10 + 0.6 * Math.sin(phi * 3) + y * 3)); }, fmax: 0.07 }));
+    { tag: TAG.kurta, fold: (phi, y) => { const u = Math.min(1, Math.max(0, (1.02 - y) / 0.42)), m = u * u * (3 - 2 * u); return 0.004 + 0.06 * m * (0.5 + 0.5 * Math.sin(phi * 10 + 0.6 * Math.sin(phi * 3) + y * 3)); }, fmax: 0.07 }));
   // shoulders and the trapezius under the cloth
   P.push(cone([-0.196, 1.41, -0.012], [0.196, 1.41, -0.012], 0.066, 0.066, { flat: 1.15, k: 0.05, tag: TAG.kurta }));
   P.push(ell([0, 1.47, -0.02], [0.12, 0.045, 0.07], { k: 0.04, tag: TAG.kurta }));
@@ -180,7 +181,6 @@ function bodyPrims() {
   P.push(cone(RK, RA, 0.095, 0.08, { ...dk, k: 0.04, cap: 2 }));
   // the pleated front panel hanging between the legs, and the kachha tucked up behind
   P.push(cone([0.0, 0.83, 0.075], [0.018, 0.25, 0.104], 0.07, 0.08, { flat: 0.42, k: 0.035, tag: TAG.dhoti }));
-  P.push(cone([0.0, 0.84, -0.06], [-0.012, 0.38, -0.085], 0.075, 0.06, { flat: 0.55, k: 0.03, tag: TAG.dhoti }));
   // ankles and feet in sandals (a sole plate and a toe strap)
   for (const [A, yaw, s] of [[LA, 0.12, 1], [RA, -0.1, -1]]) {
     const fz = A[2] + 0.075, fx = A[0] + 0.006 * s;
@@ -203,7 +203,7 @@ function bodyPrims() {
       th: 0.0135, tag: TAG.shawl, k: 0.013, fmax: 0.22, hemMin: 0.58, top: 1.585,
       topAt: (phi) => 1.582 - 0.03 * Math.exp(-((phi / 0.75) ** 2)),
       fold: (phi, y) => {
-        const A = 0.02 + 0.22 * Math.min(1, Math.max(0, (1.47 - y) / 0.42));
+        const u = Math.min(1, Math.max(0, (1.47 - y) / 0.55)), A = 0.02 + 0.22 * u * u * (3 - 2 * u);
         const side = 1 - 0.55 * Math.exp(-(((Math.abs(phi) - 1.57) / 0.4) ** 2)) * (y > 1.0 ? 1 : 0.4);
         const q = phi + 0.16 * Math.sin(2 * phi + 4 * y) + 0.05 * Math.sin(5 * phi - 7 * y);
         const w = 0.72 * Math.sin(7 * q + 1.0) + 0.28 * Math.sin(11 * q + 2.3 + 3 * y);
@@ -216,45 +216,48 @@ function bodyPrims() {
 }
 
 function headPrims() {
-  // a dignified portrait head, about 1/7.5 of the figure: broad and strong, high forehead and bald crown,
-  // short cropped hair at the sides and back, a slightly heavy brow over deep-set eyes, strong cheekbones
-  // and jaw, a straight nose, the mouth firmly closed. Forms are kept broad and softly blended, as a
-  // monumental bronze is modelled to be read from far below.
+  // a bronze portrait head, about 1/7.5 of the figure: a rounded skull, the forehead sloping into a soft
+  // brow over deep-set eyes (eyeballs with upper and lower lids), cheekbones blending into soft cheeks,
+  // nasolabial folds, a closed mouth with a fuller lower lip, a strong rounded jaw and chin, ears set
+  // between the eye and the nose, the neck's sternocleidomastoid planes running down into the collar.
+  // Patel: a broad face, strong jaw, bald crown, short hair at the sides, a serious, calm expression.
   const P = [], S = TAG.skin;
-  P.push(cone([0, 1.462, -0.004], [0, 1.632, -0.018], 0.066, 0.058, { tag: S }));                     // neck
-  P.push(ell([0, 1.538, 0.032], [0.015, 0.016, 0.014], { k: 0.024, tag: S }));                       // Adam's apple
-  P.push(ell([0, 1.726, -0.012], [0.086, 0.094, 0.1], { k: 0.03, tag: S }));                         // cranium
-  P.push(ell([0, 1.742, 0.028], [0.078, 0.07, 0.07], { k: 0.025, tag: S }));                         // high forehead
-  P.push(ell([0, 1.662, 0.03], [0.064, 0.08, 0.068], { k: 0.03, tag: S }));                          // face mass
+  P.push(cone([0, 1.462, -0.004], [0, 1.632, -0.02], 0.064, 0.056, { tag: S }));                      // neck
+  for (const s of [1, -1]) P.push(cone([0.055 * s, 1.655, -0.03], [0.014 * s, 1.5, 0.045], 0.012, 0.011, { k: 0.03, tag: S }));   // sternocleidomastoid
+  P.push(ell([0, 1.54, 0.034], [0.013, 0.014, 0.012], { k: 0.024, tag: S }));                        // larynx
+  P.push(ell([0, 1.728, -0.014], [0.084, 0.093, 0.1], { k: 0.03, tag: S }));                         // rounded skull
+  P.push(ell([0, 1.735, 0.03], [0.074, 0.072, 0.066], { k: 0.03, tag: S }));                         // forehead, sloping back over the crown
+  P.push(ell([0, 1.716, 0.084], [0.062, 0.012, 0.016], { k: 0.03, tag: S }));                        // soft brow
+  P.push(ell([0, 1.665, 0.035], [0.06, 0.07, 0.062], { k: 0.03, tag: S }));                          // the mid-face
   for (const s of [1, -1]) {
-    P.push(cone([0.058 * s, 1.665, -0.01], [0.034 * s, 1.603, 0.066], 0.022, 0.022, { k: 0.028, tag: S }));      // strong jaw
-    P.push(ell([0.05 * s, 1.688, 0.062], [0.024, 0.016, 0.02], { k: 0.022, tag: S }));                         // cheekbone
-    P.push(ell([0.042 * s, 1.638, 0.058], [0.024, 0.026, 0.022], { k: 0.026, tag: S }));                       // cheek
+    P.push(ell([0.05 * s, 1.688, 0.058], [0.022, 0.015, 0.022], { k: 0.025, tag: S }));                        // cheekbone
+    P.push(ell([0.04 * s, 1.645, 0.056], [0.026, 0.03, 0.024], { k: 0.03, tag: S }));                          // soft cheek
+    P.push(ell([0.055 * s, 1.632, 0.0], [0.022, 0.03, 0.035], { k: 0.03, tag: S }));                           // angle of the jaw
+    P.push(cone([0.052 * s, 1.625, 0.0], [0.022 * s, 1.598, 0.07], 0.019, 0.019, { k: 0.03, tag: S }));        // the jaw's body
   }
-  P.push(ell([0, 1.598, 0.078], [0.03, 0.02, 0.021], { k: 0.02, tag: S }));                          // chin
-  P.push(ell([0, 1.717, 0.088], [0.064, 0.013, 0.016], { k: 0.022, tag: S }));                       // the heavy brow
+  P.push(ell([0, 1.597, 0.078], [0.027, 0.02, 0.02], { k: 0.025, tag: S }));                         // rounded chin
+  P.push(ell([0, 1.6, 0.04], [0.05, 0.022, 0.04], { k: 0.03, tag: S }));                             // under the jaw
   for (const s of [1, -1]) {
-    P.push(ell([0.031 * s, 1.716, 0.097], [0.025, 0.008, 0.009], { yaw: -0.3 * s, ang: -0.08 * s, k: 0.014, tag: S }));   // brows
-    P.push(ell([0.031 * s, 1.703, 0.098], [0.018, 0.0105, 0.0068], { k: 0.02, sub: true, tag: S }));                    // deep-set socket
-    P.push(ell([0.031 * s, 1.7, 0.0815], [0.0122, 0.0122, 0.0122], { k: 0.006, tag: S }));                             // eyeball
-    P.push(ell([0.031 * s, 1.7065, 0.0838], [0.016, 0.006, 0.0106], { ang: 0.1 * s, k: 0.01, tag: S }));                // upper lid: a calm, level gaze
-    P.push(ell([0.031 * s, 1.6925, 0.0838], [0.015, 0.0045, 0.0098], { k: 0.01, tag: S }));                             // lower lid
+    P.push(ell([0.03 * s, 1.703, 0.1], [0.019, 0.012, 0.009], { k: 0.02, sub: true, tag: S }));                 // eye socket
+    P.push(ell([0.03 * s, 1.7, 0.081], [0.0128, 0.0128, 0.0128], { k: 0.003, tag: S }));                       // eyeball
+    P.push(ell([0.03 * s, 1.7105, 0.0815], [0.0155, 0.0115, 0.0114], { ang: 0.08 * s, k: 0.004, tag: S }));      // upper lid
+    P.push(ell([0.03 * s, 1.6935, 0.0815], [0.0145, 0.0072, 0.0116], { k: 0.004, tag: S }));                   // lower lid
   }
-  P.push(cone([0, 1.708, 0.094], [0, 1.669, 0.117], 0.0085, 0.011, { k: 0.014, tag: S }));          // straight nose
-  P.push(ell([0, 1.6625, 0.1165], [0.0115, 0.0098, 0.0098], { k: 0.01, tag: S }));
+  P.push(cone([0, 1.709, 0.092], [0, 1.668, 0.116], 0.0082, 0.0105, { k: 0.014, tag: S }));         // nose
+  P.push(ell([0, 1.6625, 0.1155], [0.011, 0.0095, 0.0095], { k: 0.01, tag: S }));
   for (const s of [1, -1]) {
-    P.push(ell([0.0115 * s, 1.659, 0.1075], [0.0085, 0.0075, 0.0085], { k: 0.008, tag: S }));       // alae
-    P.push(ell([0.0064 * s, 1.6535, 0.111], [0.0035, 0.002, 0.0045], { k: 0.002, sub: true, tag: S }));   // nostril
-    P.push(cone([0.016 * s, 1.656, 0.106], [0.027 * s, 1.63, 0.093], 0.0024, 0.0022, { k: 0.012, sub: true, tag: S }));  // soft nasolabial line
+    P.push(ell([0.0112 * s, 1.659, 0.1065], [0.0082, 0.0074, 0.0082], { k: 0.008, tag: S }));       // alae
+    P.push(ell([0.0062 * s, 1.6535, 0.1105], [0.0034, 0.002, 0.0042], { k: 0.002, sub: true, tag: S }));   // nostril
+    P.push(cone([0.0165 * s, 1.657, 0.1075], [0.0265 * s, 1.639, 0.0995], 0.0045, 0.004, { k: 0.014, sub: true, tag: S }));  // nasolabial fold
   }
-  P.push(ell([0, 1.6352, 0.0948], [0.0195, 0.0105, 0.0062], { k: 0.018, tag: S }));                 // the lips, one firm closed form
-  P.push(cone([-0.017, 1.6352, 0.1006], [0.017, 1.6352, 0.1006], 0.0012, 0.0012, { k: 0.004, sub: true, tag: S }));   // the closed mouth: a fine straight line
+  P.push(ell([0, 1.6398, 0.0938], [0.0198, 0.0048, 0.0055], { k: 0.018, tag: S }));                 // upper lip
+  P.push(ell([0, 1.6305, 0.0942], [0.0168, 0.0058, 0.0056], { k: 0.016, tag: S }));                 // fuller lower lip
+  P.push(cone([-0.0155, 1.6354, 0.1012], [0.0155, 1.6354, 0.1012], 0.0028, 0.0028, { k: 0.004, sub: true, tag: S }));  // the closed mouth: a shallow line
   for (const s of [1, -1]) {
-    P.push(ell([0.084 * s, 1.69, -0.008], [0.012, 0.03, 0.019], { yaw: 0.25 * s, k: 0.007, tag: S }));          // ear
-    P.push(ell([0.092 * s, 1.691, -0.0055], [0.0056, 0.019, 0.012], { yaw: 0.25 * s, k: 0.003, sub: true, tag: S }));
+    P.push(ell([0.083 * s, 1.68, -0.006], [0.011, 0.029, 0.018], { yaw: 0.25 * s, k: 0.007, tag: S }));          // ear
+    P.push(ell([0.0905 * s, 1.681, -0.0035], [0.0052, 0.019, 0.011], { yaw: 0.25 * s, k: 0.003, sub: true, tag: S }));
   }
-  // short cropped hair at the sides and the back (the crown is bare)
-  P.push(ell([0, 1.69, -0.035], [0.089, 0.048, 0.093], { k: 0.008, tag: TAG.hair }));
+  P.push(ell([0, 1.69, -0.036], [0.0875, 0.047, 0.092], { k: 0.008, tag: TAG.hair }));             // short hair at the sides and back
   return P;
 }
 
@@ -318,16 +321,27 @@ function bake(g, body, all) {
 
 // → { body, head, hands } BufferGeometries in figure units (feet on y = 0)
 export function buildFigure({ lite = false } = {}) {
-  const B = makeBody(bodyPrims(), disp, 0.005), H = makeBody(headPrims(), disp, 0.002);
+  // the shawl is meshed as its own body at a finer cell (its hems and edges stay clean), the rest of the
+  // figure at a coarser one; the head and hands finest of all
+  const prims = bodyPrims(), cloth = prims.filter((p) => p.tag === TAG.shawl), rest = prims.filter((p) => p.tag !== TAG.shawl);
+  const B = makeBody(rest, disp, 0.0065), SH = makeBody(cloth, null, 0), H = makeBody(headPrims(), disp, 0.002);
   const HL = makeBody(handPrims(1), null, 0), HR = makeBody(handPrims(-1), null, 0);
-  const all = (x, y, z) => Math.min(B.field3(x, y, z), H.field3(x, y, z), HL.field3(x, y, z), HR.field3(x, y, z));
-  const hb = lite ? 0.014 : 0.0088, hh = lite ? 0.006 : 0.0034, hd = lite ? 0.006 : 0.004;
-  const body = bake(meshBody(B, [-0.35, -0.004, -0.215], [0.35, 1.595, 0.35], hb, { project: 3 }), B, all);
-  const head = bake(meshBody(H, [-0.1, 1.475, -0.125], [0.1, 1.835, 0.142], hh), H, all);
+  const all = (x, y, z) => Math.min(B.field3(x, y, z), SH.field3(x, y, z), H.field3(x, y, z), HL.field3(x, y, z), HR.field3(x, y, z));
+  const hb = lite ? 0.016 : HB_FULL, hs = lite ? 0.013 : HS_FULL, hh = lite ? 0.006 : HH_FULL, hd = lite ? 0.006 : 0.004;
+  const body = bake(meshBody(B, [-0.33, -0.004, -0.2], [0.33, 1.56, 0.34], hb, { project: 3 }), B, all);
+  const shawl = bake(meshBody(SH, [-0.36, 0.56, -0.24], [0.36, 1.595, 0.3], hs, { project: 3 }), SH, all);
+  const head = bake(meshBody(H, [-0.1, 1.475, -0.125], [0.1, 1.835, 0.142], hh, { project: 2 }), H, all);
   const hands = [HL, HR].map((Hb, i) => {
     const W = i ? WRIST_R : WRIST_L, s = i ? -1 : 1;
     const x0 = W[0] - (s > 0 ? 0.04 : 0.035), x1 = W[0] + (s > 0 ? 0.035 : 0.04);
     return bake(meshBody(Hb, [x0 - 0.01, W[1] - 0.235, W[2] - 0.06], [x1 + 0.01, W[1] + 0.03, W[2] + 0.12], hd), Hb, all);
   });
-  return { body, head, hands, fields: { all } };
+  return { body: mergeBody(body, shawl), head, hands, fields: { all } };
+}
+export let HB_FULL = 0.0098, HS_FULL = 0.0078, HH_FULL = 0.003;
+export function setCells(b, s, h) { HB_FULL = b; HS_FULL = s; HH_FULL = h; }
+function mergeBody(a, b) {
+  const g = mergeGeometries([a, b]);
+  g.computeBoundingSphere();
+  return g;
 }
