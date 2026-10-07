@@ -21,6 +21,7 @@ import { Callout } from '../../lib/hud.js';
 import { plume, plumeMat } from './isro-assets.js';
 import * as A from './flight-assets.js';
 import * as X from './flight-allahabad.js';
+import * as C from './flight-craft.js';
 
 const V3 = A.V3;
 
@@ -42,6 +43,7 @@ export function create(ctx, segment) {
   M.fabric = new THREE.MeshStandardMaterial({ color: '#d4c6a6', map: X.linenSurface(), emissive: '#f0bc72', emissiveMap: X.linenTranslucency(), emissiveIntensity: 0, roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
   M.spruce = new THREE.MeshPhysicalMaterial({ color: '#ffffff', map: X.spruceTexture(), roughness: 0.4, metalness: 0, clearcoat: 0.9, clearcoatRoughness: 0.16 });
   M.steel = new THREE.MeshStandardMaterial({ color: '#c9ccd0', metalness: 1, roughness: 0.2, envMapIntensity: 1.6 });
+  M.lite = lite;
 
   // ---------------------------------------------------------------- one constant set of lights, re-aimed per shot
   const key = new THREE.DirectionalLight('#ffffff', 3);
@@ -120,11 +122,11 @@ export function create(ctx, segment) {
   const SUN2 = V3(0.55, 0.3, -0.78).normalize();
   {
     w2.add(X.groundMesh('field', 3600, lite ? 8 : 24));
-    const river = A.makeWater(SKU, 4000, 1140, { body: '#2e4a46', silt: '#6a6248', fadeFar: 1300, glitter: 1 }); river.position.set(0, 0.06, -80 - 570); w2.add(river);
+    const river = A.makeWater(SKU, 4000, 1140, { body: '#1a6e6c', silt: '#2a7a6a', fadeFar: 1300, glitter: 1, confluence: ['#5a8a6a', 60, -0.15] }); river.position.set(0, 0.06, -80 - 570); w2.add(river);
     // the far bank: a low line of trees at Naini, hazed by distance
     const tg = new THREE.IcosahedronGeometry(1, 1), far = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1 }), 160);
     const mtx = new THREE.Matrix4(), fc = new THREE.Color();
-    for (let i = 0; i < 160; i++) { const s = 6 + R() * 10; mtx.compose(V3(-1900 + i * 25 + R() * 14, s * 0.45, -1228 - R() * 60), new THREE.Quaternion(), V3(s * (1.1 + R() * 0.8), s * (0.7 + R() * 0.5), s)); far.setMatrixAt(i, mtx); far.setColorAt(i, fc.set(['#3e5232', '#4a5c36', '#56603a', '#3a4a30'][i % 4])); }
+    for (let i = 0; i < 160; i++) { const s = 6 + R() * 10; mtx.compose(V3(-1900 + i * 25 + R() * 14, s * 0.45, -1228 - R() * 60), new THREE.Quaternion(), V3(s * (1.1 + R() * 0.8), s * (0.7 + R() * 0.5), s)); far.setMatrixAt(i, mtx); far.setColorAt(i, fc.set(['#2e5a26', '#3c6a2c', '#4a7232', '#2a5228'][i % 4])); }
     w2.add(far);
   }
   // ---- the exhibition: Indo-Saracenic halls, a grandstand, striped shamianas, bell tents, bunting, shade trees
@@ -212,6 +214,27 @@ export function create(ctx, segment) {
       occupied.push([x, z, h * 0.35]); placed++;
     }
     meshOf(A.merge(crowns), SM.leaf); meshOf(A.merge(trunks), SM.bark);
+    // living ground cover: instanced bushes and grass clumps round the grounds and along the bank (kept off the
+    // polo ground, the crowd lines, the buildings and the water)
+    {
+      const RS = rng(616), N = lite ? 220 : 760, spotsB = [];
+      for (let tries = 0; tries < N * 6 && spotsB.length < N; tries++) {
+        const x = -210 + RS() * 420, z = -76 + RS() * 120;
+        if (Math.abs(x) < 26 && z > -66) continue;
+        if (Math.hypot(x + 10, z - 10) < 8) continue;
+        if (occupied.some(([ox, oz, or]) => Math.hypot(x - ox, z - oz) < or + 1)) continue;
+        spotsB.push([x, z]);
+      }
+      const bush = new THREE.IcosahedronGeometry(1, 0); bush.translate(0, 0.55, 0);
+      const im = new THREE.InstancedMesh(bush, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }), spotsB.length);
+      const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color(), greens = ['#2e6a20', '#3e7a28', '#4c8a30', '#2a5a1e', '#5a8a34', '#6a8a3a'];
+      spotsB.forEach(([x, z], i) => {
+        const big = RS() < 0.35, s = big ? 0.9 + RS() * 1.3 : 0.25 + RS() * 0.35;
+        q.setFromEuler(new THREE.Euler(0, RS() * TAU, 0)); mtx.compose(V3(x, -0.15 * s, z), q, V3(s * (1 + RS() * 0.6), s * (0.6 + RS() * 0.5), s * (1 + RS() * 0.6)));
+        im.setMatrixAt(i, mtx); im.setColorAt(i, c.set(greens[Math.floor(RS() * greens.length)]).multiplyScalar(0.8 + RS() * 0.35));
+      });
+      im.castShadow = true; im.receiveShadow = true; w2.add(im);
+    }
     // country boats on the river
     const hulls = [], sails = [], RB = rng(88);
     for (let i = 0; i < (lite ? 5 : 10); i++) {
@@ -241,7 +264,7 @@ export function create(ctx, segment) {
     w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] !== true), { seed: 4, facing }));
     w2.add(X.buildCrowd2(SM, spots.filter((p) => p[3] === true), { seed: 5, facing: () => gsR, parasols: 0 }));
   }
-  const som = A.buildSommer(M); w2.add(som.group);
+  const som = C.buildSommer(M); w2.add(som.group);
   som.disc.material = new THREE.MeshBasicMaterial({ map: X.propDiscTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false });
   if (som.prop) som.prop.visible = false;                         // at speed the blades read only as the blurred disc
   const somAt = (t, out) => {
@@ -256,11 +279,24 @@ export function create(ctx, segment) {
   const SUN3 = V3(0.55, 0.62, -0.25).normalize();
   {
     const sand = X.groundMesh('sand', 3600, lite ? 8 : 24); w3.add(sand); sandU = sand.material.userData.U;
-    const sea = A.makeWater(SKU, 4000, 2400, { body: '#14485a', silt: '#2f6a68', waveK: 1.6, fadeFar: 1800 }); sea.position.set(0, 0.05, -18 - 1200); w3.add(sea);
+    const sea = A.makeWater(SKU, 4000, 2400, { body: '#0f4f5e', silt: '#1f6e6a', waveK: 1.6, fadeFar: 1800 }); sea.position.set(0, 0.05, -18 - 1200); w3.add(sea);
     const palms = [], fronds = [];
     for (let i = 0; i < 30; i++) { const p = A.palmGeos(i * 7 + 3, 8 + R() * 5); const x = -150 + i * 10 + R() * 6, z = 24 + R() * 40; palms.push(A.bake(p.trunk, [x, 0, z])); fronds.push(A.bake(p.fronds, [x, 0, z])); }
     const pm = new THREE.Mesh(A.merge(palms), M.trunk), fm = new THREE.Mesh(A.merge(fronds), M.palmFrond);
     for (const m of [pm, fm]) { m.castShadow = true; m.receiveShadow = true; w3.add(m); }
+    // beach scrub under the palms (instanced)
+    {
+      const RS = rng(1015), N = lite ? 70 : 240;
+      const bush = new THREE.IcosahedronGeometry(1, 0); bush.translate(0, 0.5, 0);
+      const im = new THREE.InstancedMesh(bush, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true }), N);
+      const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color(), greens = ['#2e6a22', '#3c7a2a', '#4a7a2e', '#5a8030'];
+      for (let i = 0; i < N; i++) {
+        const x = -160 + RS() * 320, z = 19 + RS() * 40, s = 0.4 + RS() * 1.2;
+        q.setFromEuler(new THREE.Euler(0, RS() * TAU, 0)); mtx.compose(V3(x, -0.1 * s, z), q, V3(s * (1.2 + RS() * 0.6), s * (0.5 + RS() * 0.4), s * (1.2 + RS() * 0.6)));
+        im.setMatrixAt(i, mtx); im.setColorAt(i, c.set(greens[i % 4]).multiplyScalar(0.8 + RS() * 0.3));
+      }
+      im.castShadow = true; im.receiveShadow = true; w3.add(im);
+    }
     // Koli fishing boats drawn up on the sand below the palms, with their masts
     const RB = rng(1932), bh = [], bs = [];
     for (let i = 0; i < (lite ? 4 : 8); i++) {
@@ -274,7 +310,7 @@ export function create(ctx, segment) {
   }
   const foam = [];
   for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1.2 + i * 0.5), X.foamMaterial(i === 0 ? 0.9 : 1.0 - i * 0.22)); f.rotation.x = -Math.PI / 2; f.position.set(0, i === 0 ? 0.02 : 0.07, i === 0 ? -16.6 : -18.6 - (i - 1) * 4); w3.add(f); foam.push(f); }
-  const puss = A.buildPussMoth(M); w3.add(puss.group);
+  const puss = C.buildPussMoth(M); w3.add(puss.group);
   const pussAt = (t, out) => { const tau = t - tT; return out.set(-42 + 38 * tau, 1.75 + 3.6 - 1.4 * tau, 0); };
 
   // ================================================================ 4–5 · ABOVE THE CLOUDS (metres)
@@ -286,14 +322,14 @@ export function create(ctx, segment) {
   for (let i = 0; i < DECK_N; i++) { const y = -75 + R() * 40; deckData.push({ x: -600 + R() * 1200, y, z: -800 + R() * 950, s: 34 + R() * 40, a: 0.3 + R() * 0.3, rot: R() * TAU, top: (y + 75) / 40 }); }
   for (let i = 0; i < LAYER_N; i++) { const y = 26 + R() * 14; deckData.push({ x: -70 + R() * 140, y, z: -150 + R() * 125, s: 10 + R() * 14, a: 0.22 + R() * 0.2, rot: R() * TAU, top: 0.6 + (y - 24) / 40 }); }
   w4.add(deck);
-  const marut = A.buildMarut(M); w4.add(marut.group);
+  const marut = C.buildMarut(M); w4.add(marut.group);
   const MA = V3(-95, 5, -44), MB = V3(42, -1.5, 8), MD = MB.clone().sub(MA).normalize();
   const marutAt = (t, out) => out.copy(MA).lerp(MB, (t - tM + 0.06) / 0.62);
   const marutQ = new THREE.Quaternion().setFromUnitVectors(V3(1, 0, 0), MD).multiply(new THREE.Quaternion().setFromAxisAngle(V3(1, 0, 0), -0.42));
   marut.group.quaternion.copy(marutQ);
   const marutGlow = marut.nozzles.map((p) => { const s = glowSprite({ color: '#ffb880', intensity: 1.2, scale: 1.4 }); s.position.copy(p); marut.group.add(s); return s; });
   const glint = glowSprite({ color: '#fff6e6', intensity: 3, scale: 1 }); w4.add(glint);
-  const tej = A.buildTejas(M); w4.add(tej.group);
+  const tej = C.buildTejas(M); w4.add(tej.group);
   const abCore = plume(0.3, 0.12, 3.2, plumeMat('#fff0d8', 3.4, { diamonds: 0.8 })), abOut = plume(0.45, 0.9, 7.5, plumeMat('#ff9a50', 1.4, { alpha: 0.7 }));
   for (const p of [abCore, abOut]) { p.position.copy(tej.nozzle); p.rotation.z = -Math.PI / 2; tej.group.add(p); }
   const abGlow = glowSprite({ color: '#ffc890', intensity: 4, scale: 6 }); abGlow.position.copy(tej.nozzle); tej.group.add(abGlow);
@@ -528,6 +564,9 @@ export function create(ctx, segment) {
       if (s === 3) return { centre: marPos.clone(), radius: 9 };
       return { centre: tejPos.clone(), radius: 8 };
     },
+    // a paused frame: the pusher's blades show through a fainter blur disc (the film shows only the disc)
+    explore() { if (shotNow === 1 && som.prop) { som.prop.visible = true; som.disc.material.opacity = 0.35; } },
+    exploreEnd() { if (som.prop) som.prop.visible = false; },
     explorePosed(cam) {
       pSky.position.copy(cam.position); rSky.position.copy(cam.position);
       wipe.visible = false; for (const c of CALLS) c.reveal(0, 0);
@@ -537,6 +576,7 @@ export function create(ctx, segment) {
       const shot = shotOf(t);
       shotNow = shot;
       worlds[0].visible = shot === 0; worlds[1].visible = shot === 1; worlds[2].visible = shot === 2; worlds[3].visible = shot >= 3;
+      if (som.prop) som.prop.visible = false;
       marut.group.visible = shot === 3; tej.group.visible = shot === 4; vap.visible = false; glint.visible = false;
       pSky.visible = false; rSky.visible = false;
       camera.up.set(0, 1, 0); camera.near = shot === 0 ? 0.1 : 0.2; camera.far = 5000;

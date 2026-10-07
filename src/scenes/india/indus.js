@@ -20,6 +20,7 @@ import { TextPlane, FONTS } from '../../lib/text.js';
 import { sectionTexture, chertTexture, sealTextures, Acc, STATIC, NOJIT, riseMaterial, riseDepth } from './indus-assets.js';
 import { cityMaterial } from './indus-surface.js';
 import { groundMasks, groundPatch } from './indus-ground.js';
+import * as NK from './nature-kit.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const SUN_DIR = V(0.85, 0.4, -0.38).normalize();         // low morning sun, east-north-east
@@ -553,7 +554,7 @@ export function create(ctx, segment) {
     ground.receiveShadow = true;
     city.add(ground);
   }
-  const riverMat = waterMaterial({ scale: 0.02, deep: [0.06, 0.1, 0.11], speed: 0.3, amp: 0.35 });
+  const riverMat = waterMaterial({ scale: 0.02, deep: [0.025, 0.085, 0.08], body: [0.004, 0.022, 0.018], speed: 0.3, amp: 0.35 });   // the Indus: silty blue-green
   {
     const pos = [], idx = [], N = 160;
     for (let i = 0; i <= N; i++) {
@@ -567,39 +568,43 @@ export function create(ctx, segment) {
     m.material.side = THREE.DoubleSide;
     city.add(m);
   }
-  // trees and scrub on the plain, thicker along the river
-  {
-    const parts = [], rt = rng(77);
-    const trunk = new THREE.CylinderGeometry(0.22, 0.34, 3.2, 5).toNonIndexed(); trunk.translate(0, 1.6, 0);
-    const crown = new THREE.IcosahedronGeometry(2.4, lite ? 0 : 1), crown0 = new THREE.IcosahedronGeometry(2.4, 0);
+  // trees and scrub on the plain, thicker along the river (nature-kit: instanced, wind-swayed, lit through the
+  // leaves); peepal, neem and banyan on the river belt with a few date palms, neem and scrub on the pasture
+  const forestSun = { dir: SUN_DIR, color: SUN_COL.clone().multiplyScalar(2.2) };
+  const forest = (() => {
+    const items = [], rt = rng(77);
     let n = 0;
-    for (let k = 0; k < 2600 && n < (lite ? 260 : 520); k++) {
+    for (let k = 0; k < 2600 && n < (lite ? 230 : 460); k++) {
       const x = -700 + rt() * 1500, z = -900 + rt() * 1700;
       const inCity = x > -150 && x < 215 && z > -140 && z < 135;
       const dr = riverDist(x, z);
       if (inCity || dr < RIVER_W * 0.55 || Math.hypot(x - 300, z - 262) < 175) continue;
-      const pKeep = dr < RIVER_W * 0.5 + 120 ? 0.9 : 0.16;
-      if (rt() > pKeep) continue;
-      const s = 0.7 + rt() * 0.9, y0 = 0;
-      const t1 = trunk.clone().scale(s, s, s).translate(x, y0, z);
-      const c1 = crown.clone().scale(s * (1.1 + rt() * 0.5), s * (0.65 + rt() * 0.3), s * (1.1 + rt() * 0.5)).translate(x, y0 + 3.6 * s, z);
-      const c2 = crown0.clone().scale(s * 0.8, s * 0.55, s * 0.8).translate(x + 1.1 * s, y0 + 3.1 * s, z + 0.6 * s);
-      parts.push(t1, c1, c2); n++;
+      const belt = dr < RIVER_W * 0.5 + 120;
+      if (rt() > (belt ? 0.9 : 0.2)) continue;
+      const q = rt();
+      const kind = belt ? (q < 0.3 ? 'peepal' : q < 0.55 ? 'neem' : q < 0.72 ? 'banyan' : q < 0.88 ? 'palm' : 'mango') : (q < 0.55 ? 'neem' : q < 0.75 ? 'mango' : q < 0.88 ? 'peepal' : 'palm');
+      items.push({ kind, x, y: 0, z, s: (0.7 + rt() * 0.6) * (kind === 'banyan' ? 1.15 : 1), lite: true, tint: 0.85 + rt() * 0.3 }); n++;
     }
     // low scrub scattered over the plain (denser near the camera's opening run: parallax, scale)
-    const bush = new THREE.IcosahedronGeometry(0.6, 0);
-    for (let k = 0; k < (lite ? 500 : 1800); k++) {
+    for (let k = 0; k < (lite ? 320 : 820); k++) {
       const near = k % 2 === 0;
       const x = near ? 120 + rt() * 230 : -500 + rt() * 1100, z = near ? 60 + rt() * 240 : -700 + rt() * 1300;
       if ((x > -140 && x < 205 && z > -130 && z < 125) || riverDist(x, z) < RIVER_W * 0.55) continue;
-      const sx = 0.6 + rt() * 1.4;
-      parts.push(bush.clone().scale(sx, sx * (0.35 + rt() * 0.3), sx * (0.8 + rt() * 0.5)).translate(x, 0.1, z));
+      items.push({ kind: 'shrub', x, y: 0.05, z, s: 0.8 + rt() * 1.5, sy: 0.7 + rt() * 0.4, lite: true, tint: 0.8 + rt() * 0.35 });
     }
-    for (const q of parts) { q.deleteAttribute('uv'); }
-    const trees = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ color: '#56602f', roughness: 0.9, flatShading: true }));
-    trees.castShadow = trees.receiveShadow = true;
-    city.add(trees);
-  }
+    return NK.plantForest(items, { sun: forestSun, lite: true, variants: 3, seed: 7, wind: 0.6 });
+  })();
+  city.add(forest.group);
+  // zebu cattle grazing on the pasture beyond the town edge, along the camera's opening run
+  const herd = (() => {
+    const items = [], rh = rng(91);
+    for (const [hx, hz, n] of [[205, 168, 9], [150, 205, 7], [292, 150, 8], [252, 112, 5]]) for (let i = 0; i < (lite ? Math.ceil(n / 2) : n); i++) {
+      const a = rh() * 6.28, d = Math.sqrt(rh()) * 16;
+      items.push({ x: hx + Math.cos(a) * d, z: hz + Math.sin(a) * d, rot: rh() * 6.28, grazing: rh() < 0.75, s: 0.9 + rh() * 0.2 });
+    }
+    return NK.plantHerd(items, { sun: forestSun, lite });
+  })();
+  city.add(herd.group);
 
   // ------------------------------------------------------------------------------------- under the street
   const drains = new THREE.Group(); city.add(drains);
@@ -915,6 +920,7 @@ export function create(ctx, segment) {
     for (const m of [wMain, wHouse]) m.uniforms.uTime.value = t;
     work.intensity = 45 * xr * (1 - ramp(t, T_BATH - 0.25, T_BATH));
     riverMat.uniforms.uTime.value = t;
+    forest.update(t);
 
     // the Great Bath fills
     const fillK = ramp(t, T_BATH, T_BATH + 0.72, ease.inOutSine);

@@ -26,9 +26,9 @@ vec3 groundCol(vec2 p, float fw, out float rough, out float h){
   float dM = 1.0 - smoothstep(0.4, 3.0, fw);
   float m1 = snoise(vec3(p * 0.0045, 1.3)), m2 = snoise(vec3(p * 0.021, 4.7)), m3 = snoise(vec3(p * 0.09, 8.1));
   float f1 = snoise(vec3(p * 0.55, 2.2)) * dM, f2 = snoise(vec3(p * 2.7, 5.5)) * dF, f3 = snoise(vec3(p * 9.0, 3.1)) * dF;
-  vec3 green = vec3(0.155, 0.235, 0.07), olive = vec3(0.26, 0.29, 0.10), straw = vec3(0.45, 0.39, 0.19), dust = vec3(0.47, 0.38, 0.25);
+  vec3 green = vec3(0.085, 0.24, 0.045), olive = vec3(0.16, 0.29, 0.07), straw = vec3(0.36, 0.36, 0.15), dust = vec3(0.47, 0.38, 0.25);
   vec3 c = mix(green, olive, smoothstep(-0.7, 0.7, m1));
-  c = mix(c, straw, smoothstep(0.15, 0.85, m2) * 0.55);
+  c = mix(c, straw, smoothstep(0.25, 0.9, m2) * 0.3);
   float blade = snoise(vec3(p.x * 1.2, p.y * 7.0, 4.4)) * dF;          // streaky grass, combed by the mower
   c *= 0.9 + 0.12 * m3 + 0.07 * f1 + 0.035 * f2 + 0.02 * f3 + 0.04 * blade;
   h = 0.45 * f2 + 0.25 * f3 + 0.3 * blade;
@@ -71,7 +71,7 @@ vec3 groundCol(vec2 p, float fw, out float rough, out float h){
   float farSide = smoothstep(-1200.0, -1230.0, p.y);
   vec2 q = vec2(p.x * 0.96 + p.y * 0.28, p.y * 0.96 - p.x * 0.28);
   float plot = fract(sin(dot(floor(q / vec2(60.0, 38.0)), vec2(12.9898, 78.233))) * 43758.5453);
-  vec3 crop = plot < 0.33 ? vec3(0.17, 0.26, 0.07) : plot < 0.55 ? vec3(0.55, 0.5, 0.12) : plot < 0.8 ? vec3(0.32, 0.31, 0.13) : vec3(0.45, 0.37, 0.24);
+  vec3 crop = plot < 0.4 ? vec3(0.1, 0.26, 0.05) : plot < 0.58 ? vec3(0.55, 0.5, 0.1) : plot < 0.85 ? vec3(0.16, 0.3, 0.07) : vec3(0.42, 0.36, 0.22);
   crop = mix(sand, crop, smoothstep(-1235.0, -1260.0, p.y));
   c = mix(c, crop * (0.9 + 0.12 * m3), farSide);
   return c;
@@ -128,7 +128,7 @@ vec3 groundCol(vec2 p, float fw, out float rough, out float h){
   c = mix(c, c * 0.8, tk * 0.6 * (1.0 - wet)); h -= tk * 0.8;
   // back of the beach: sand gives way to scrub under the palms
   float scrub = smoothstep(16.0, 26.0, p.y + 4.0 * snoise(vec3(p.x * 0.05, 8.0, 2.0)));
-  c = mix(c, mix(vec3(0.33, 0.33, 0.16), vec3(0.5, 0.43, 0.28), smoothstep(-0.3, 0.5, m3)), scrub * 0.8);
+  c = mix(c, mix(vec3(0.16, 0.3, 0.08), vec3(0.42, 0.4, 0.22), smoothstep(-0.3, 0.6, m3)), scrub * 0.85);
   return c;
 }`;
 export function groundMaterial(kind = 'field') {
@@ -426,7 +426,7 @@ export function pennantGeo(len, h, seed = 1, swallow = false) {
 // ------------------------------------------------------------------ shade trees (neem, mango, peepal) with tonal crowns
 export function shadeTree(seed = 1, h = 9, lobes = 9) {
   const R = rng(seed), crown = [];
-  const hue = [['#3f5a24', '#5d7a32'], ['#2f4a22', '#4c6a2c'], ['#4a5e26', '#748a3a'], ['#35502a', '#56723a']][Math.floor(R() * 4)];
+  const hue = [['#2c5a1c', '#4f8a2c'], ['#204a1a', '#3e7a26'], ['#36621e', '#64923a'], ['#2a5424', '#4a8232']][Math.floor(R() * 4)];
   const ca = new THREE.Color(hue[0]), cb = new THREE.Color(hue[1]), c = new THREE.Color();
   const spread = h * (0.32 + R() * 0.14);
   for (let i = 0; i < lobes; i++) {

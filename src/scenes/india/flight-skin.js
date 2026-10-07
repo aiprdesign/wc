@@ -65,11 +65,14 @@ export function skin(mat, cfg = {}, lite = false) {
       ${rivet(a)}
     }\n`;
   });
-  // extra lines: hinge lines of control surfaces, doors, hatches (restricted to a range along another axis)
+  // extra lines: hinge lines of control surfaces, doors, hatches. Line where p.a (|p.a| with absA) equals
+  // at + sl·|p.b|, kept where p.c (|p.c| with symC) lies in [lo, hi]
   for (const l of cfg.lines ?? []) {
     const w = l.w ?? LW * 1.4, dp = l.depth ?? (P?.depth ?? 0.001) * 1.6;
-    const along = l.b ? `smoothstep(${fl(l.lo - 0.01)}, ${fl(l.lo + 0.01)}, ${l.sym ? 'abs(q.' + l.b + ')' : 'q.' + l.b}) * (1.0 - smoothstep(${fl(l.hi - 0.01)}, ${fl(l.hi + 0.01)}, ${l.sym ? 'abs(q.' + l.b + ')' : 'q.' + l.b}))` : '1.0';
-    b += `{ float ds = abs(q.${l.a} - ${fl(l.at)}) / sqrt(max(1.0 - an.${l.a} * an.${l.a}, 0.04));
+    const A = l.absA ? `abs(p.${l.a})` : `p.${l.a}`, off = l.sl ? ` - ${fl(l.sl)} * abs(p.${l.b})` : '';
+    const C = l.symC ? `abs(p.${l.c})` : `p.${l.c}`;
+    const along = l.c ? `smoothstep(${fl(l.lo - 0.01)}, ${fl(l.lo + 0.01)}, ${C}) * (1.0 - smoothstep(${fl(l.hi - 0.01)}, ${fl(l.hi + 0.01)}, ${C}))` : '1.0';
+    b += `{ float ds = abs(${A} - ${fl(l.at)}${off}) / sqrt(max(1.0 - an.${l.a} * an.${l.a}, 0.04));
       float m = skAA(ds, ${fl(w)}, fw) * ${along} * (1.0 - smoothstep(0.8, 0.95, an.${l.a})) * (1.0 - smoothstep(${fl(w * 1.5)}, ${fl(w * 12)}, fw));
       skH -= ${fl(dp)} * m; skC *= 1.0 - 0.45 * m; }\n`;
   }
@@ -167,17 +170,19 @@ export function skin(mat, cfg = {}, lite = false) {
         }`);
   };
   mat.customProgramCacheKey = () => key;
+  // the film-wide micro detail (lib/surface.js) is replaced by this one: keep only its gentle cues
+  mat.userData.detail = { albedo: 0.04, rough: 0.25, bump: 0.00002, scratch: 0.15, grime: 0.0, ...(cfg.detail ?? {}) };
   return mat;
 }
 
 // glazing: nearly clear head-on, a mirror toward grazing angles; reflections stay at full strength
-export function glassMat({ tint = '#8ea4b4', base = 0.1, key = 'glass', gold = false } = {}) {
+export function glassMat({ tint = '#8ea4b4', base = 0.1, key = 'glass', gold = false, lumK = 0.35 } = {}) {
   const m = new THREE.MeshPhysicalMaterial({ color: tint, roughness: 0.03, metalness: 0, transparent: true, depthWrite: false, envMapIntensity: 1.8, specularIntensity: 1, specularColor: gold ? new THREE.Color('#ffd890') : new THREE.Color('#ffffff') });
   m.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `
       { float fres = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 4.0);
         float lum = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722));
-        diffuseColor.a = clamp(${fl(base)} + fres * 0.85 + lum * 0.5, 0.0, 1.0); }
+        diffuseColor.a = clamp(${fl(base)} + fres * 0.85 + lum * ${fl(lumK)}, 0.0, 1.0); }
       #include <opaque_fragment>`);
   };
   m.customProgramCacheKey = () => 'flight-glass-' + key;
@@ -265,14 +270,14 @@ export function panelTexture(kind = 'wood', seed = 3) {
 // ------------------------------------------------------------------ small parts
 // a rigging-wire turnbuckle at `a` along unit direction `dir`: barrel, threaded ends, eyes
 export function turnbuckle(a, dir, s = 1) {
-  const g = lathe([[0.0015, -0.06], [0.004, -0.058], [0.004, -0.032], [0.0065, -0.03], [0.0072, -0.02], [0.0072, 0.02], [0.0065, 0.03], [0.004, 0.032], [0.004, 0.058], [0.0015, 0.06]].map(([r, y]) => [r * s, y * s]), 8);
+  const g = lathe([[0.0015, -0.06], [0.004, -0.058], [0.004, -0.032], [0.0065, -0.03], [0.0072, -0.02], [0.0072, 0.02], [0.0065, 0.03], [0.004, 0.032], [0.004, 0.058], [0.0015, 0.06]].map(([r, y]) => [r * s, y * s]), 6);
   const q = new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), dir);
   g.applyQuaternion(q); g.translate(a.x, a.y, a.z);
   return g;
 }
 // a wire eye / shackle at point p, ring axis perpendicular to dir
 export function eye(p, dir, r = 0.008, t = 0.0022) {
-  const g = new THREE.TorusGeometry(r, t, 4, 10);
+  const g = new THREE.TorusGeometry(r, t, 3, 6);
   const q = new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), V3().crossVectors(dir, Math.abs(dir.y) < 0.9 ? V3(0, 1, 0) : V3(1, 0, 0)).normalize());
   g.applyQuaternion(q); g.translate(p.x, p.y, p.z);
   return g;

@@ -23,6 +23,7 @@ import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { glowSprite } from '../../lib/materials.js';
 import { Callout, RingGauge, faceCamera } from '../../lib/hud.js';
 import { fbm2, noise2 } from '../../lib/noise.js';
+import { leafEdge, laminaTexture, undersideTexture, flakeGeo, canvasNormal, buildPlinth, trayFrame, goldMaterials, smudgeRoughness, beadMaterial, speckleMaps } from './zero-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD_HUD = '#ffd89a';
@@ -35,8 +36,32 @@ const FOG_COL = '#080605';
 const LEAF_W = 1.2, LEAF_D = 0.52;
 const leafHeight = (x, z) => 0.014 * Math.pow(Math.abs(x) / (LEAF_W / 2), 4) + 0.006 * Math.pow(Math.abs(z) / (LEAF_D / 2), 3) + 0.0025 * Math.sin(x * 9 + z * 5);
 const DOT_UV = [0.535, 0.56];                 // canvas fraction of the zero dot
+// the leaf's ragged outline in canvas pixels (superellipse with softened corners, noise-displaced, one chip)
+function leafOutline(W, H) {
+  const N = 220, pts = [];
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * TAU, cx = Math.cos(a), cy = Math.sin(a);
+    const px = Math.sign(cx) * Math.pow(Math.abs(cx), 0.18), py = Math.sign(cy) * Math.pow(Math.abs(cy), 0.22);
+    const d = 1 - 0.035 - 0.03 * (noise2(cx * 3 + 11, cy * 3) + 0.6 * noise2(cx * 14, cy * 14 + 5));
+    let x = W / 2 + px * (W / 2) * d, y = H / 2 + py * (H / 2) * d;
+    if (a > 5.15 && a < 5.75) y += 26 * (H / 666) + 30 * (H / 666) * Math.sin((a - 5.15) / 0.6 * Math.PI);  // the chip
+    pts.push([x, y]);
+  }
+  return pts;
+}
+function clipToLeaf(g, W, H) {
+  g.save(); g.globalCompositeOperation = 'destination-in';
+  g.beginPath(); leafOutline(W, H).forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  g.closePath(); g.fillStyle = '#fff'; g.fill();
+  g.restore();
+}
 function barkTexture(seed = 7) {
   const W = 1536, H = 666, c = mkCanvas(W, H), g = c.getContext('2d'), R = rng(seed);
+  // relief (height) drawn alongside the colour from the same random draws: lenticels are slits with raised
+  // lips, fibres are fine ridges, the base has a soft undulation
+  const hc = mkCanvas(W / 2, H / 2), hg = hc.getContext('2d');
+  { const im = hg.createImageData(W / 2, H / 2); for (let y = 0; y < H / 2; y++) for (let x = 0; x < W / 2; x++) { const v = 128 + 26 * fbm2(x / (W / 2) * 9, y / (H / 2) * 4, 3) + 10 * noise2(x * 0.05, y * 0.9); const i = (y * W / 2 + x) * 4; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } hg.putImageData(im, 0, 0); }
+  hg.scale(0.5, 0.5);
   // base colour + noise, per pixel at half resolution
   const lo = mkCanvas(W / 2, H / 2), lg = lo.getContext('2d'), img = lg.createImageData(W / 2, H / 2);
   for (let y = 0; y < H / 2; y++) for (let x = 0; x < W / 2; x++) {
@@ -54,12 +79,17 @@ function barkTexture(seed = 7) {
     const x = R() * W, y = R() * H, l = 8 + R() * 70, h = 1.5 + R() * 3;
     g.fillStyle = `rgba(232,205,160,${0.25 + R() * 0.2})`; g.fillRect(x - 2, y - h, l + 4, h * 0.8);
     g.fillStyle = `rgba(70,40,20,${0.35 + R() * 0.4})`; g.fillRect(x, y, l, h);
+    hg.fillStyle = 'rgba(255,255,255,0.35)'; hg.fillRect(x - 3, y - h * 1.2, l + 6, h * 3.4);
+    hg.fillStyle = 'rgba(0,0,0,0.75)'; hg.fillRect(x, y, l, h);
   }
   // fibres
   for (let i = 0; i < 900; i++) {
     const y = R() * H, x = R() * W, l = 40 + R() * 260;
     g.strokeStyle = `rgba(${R() < 0.5 ? '90,55,28' : '235,210,170'},${0.05 + R() * 0.08})`; g.lineWidth = 0.6 + R();
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y + (R() - 0.5) * 3); g.stroke();
+    const dy = (R() - 0.5) * 3;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + l, y + dy); g.stroke();
+    hg.strokeStyle = g.strokeStyle.startsWith('rgba(90') || g.strokeStyle.startsWith('#5a') ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)'; hg.lineWidth = g.lineWidth * 1.4;
+    hg.beginPath(); hg.moveTo(x, y); hg.lineTo(x + l, y + dy); hg.stroke();
   }
   // writing: six rows of abstract ink strokes
   const ink = (a) => `rgba(52,28,12,${a})`;
@@ -102,21 +132,8 @@ function barkTexture(seed = 7) {
   const vg = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.58);
   vg.addColorStop(0, 'rgba(60,32,14,0)'); vg.addColorStop(1, 'rgba(60,32,14,0.55)');
   g.fillStyle = vg; g.fillRect(0, 0, W, H);
-  g.save(); g.globalCompositeOperation = 'destination-in';
-  g.beginPath();
-  const N = 220;
-  for (let i = 0; i <= N; i++) {
-    const a = (i / N) * TAU, cx = Math.cos(a), cy = Math.sin(a);
-    // superellipse outline (a leaf with softened corners) displaced by noise
-    const px = Math.sign(cx) * Math.pow(Math.abs(cx), 0.18), py = Math.sign(cy) * Math.pow(Math.abs(cy), 0.22);
-    const d = 1 - 0.035 - 0.03 * (noise2(cx * 3 + 11, cy * 3) + 0.6 * noise2(cx * 14, cy * 14 + 5));
-    let x = W / 2 + px * (W / 2) * d, y = H / 2 + py * (H / 2) * d;
-    if (a > 5.15 && a < 5.75) y += 26 + 30 * Math.sin((a - 5.15) / 0.6 * Math.PI);  // the chip
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
-  }
-  g.closePath(); g.fillStyle = '#fff'; g.fill();
-  g.restore();
-  return toTexture(c);
+  clipToLeaf(g, W, H);
+  return { map: toTexture(c), height: hc };
 }
 
 // --------------------------------------------------------------------------------------- digit atlas
@@ -234,23 +251,45 @@ export function create(ctx, segment) {
 
   // ======================================================================================== the leaf
   const plinthMat = new THREE.MeshPhysicalMaterial({ color: '#0b0a09', roughness: 0.3, metalness: 0.1, clearcoat: 0.5, clearcoatRoughness: 0.12, envMapIntensity: 0.15 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: '#f0c46a', metalness: 1, roughness: 0.24, envMapIntensity: 1.2 });
-  const goldSatin = new THREE.MeshStandardMaterial({ color: '#e5b862', metalness: 1, roughness: 0.38, envMapIntensity: 1.0 });
+  const { goldMat, goldSatin } = goldMaterials();
+  const lite = ctx.engine?.quality === 'lite';
+  const sp = speckleMaps(14, 2);
+  plinthMat.roughnessMap = sp.r; plinthMat.clearcoatRoughnessMap = sp.r; plinthMat.userData.detail = { grime: 0.04, albedo: 0.04, scratch: 0.3, scale: 5 };
   const plinth = new THREE.Group(); scene.add(plinth);
   {
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.06, 0.78), plinthMat); slab.position.y = 0.03; slab.castShadow = slab.receiveShadow = true;
-    const trim = new THREE.Mesh(mergeGeometries([
-      new THREE.BoxGeometry(1.57, 0.006, 0.006).translate(0, 0.06, 0.39), new THREE.BoxGeometry(1.57, 0.006, 0.006).translate(0, 0.06, -0.39),
-      new THREE.BoxGeometry(0.006, 0.006, 0.79).translate(0.785, 0.06, 0), new THREE.BoxGeometry(0.006, 0.006, 0.79).translate(-0.785, 0.06, 0),
-    ]), goldMat);
-    plinth.add(slab, trim);
+    // bevelled lacquer slab on a recessed kick, a gold bead inlaid round the top (the original's trim line),
+    // a blank brass plaque on the front
+    const kickMat = new THREE.MeshStandardMaterial({ color: '#050404', roughness: 0.7, metalness: 0 });
+    plinth.add(buildPlinth({ w: 1.56, h: 0.06, d: 0.78, mat: plinthMat, gold: goldMat, kickMat, lite }));
   }
-  const barkMap = barkTexture();
+  const bark = barkTexture(), barkMap = bark.map;
   const leafGeo = new THREE.PlaneGeometry(LEAF_W, LEAF_D, 60, 26); leafGeo.rotateX(-Math.PI / 2);
   { const p = leafGeo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, leafHeight(p.getX(i), p.getZ(i))); leafGeo.computeVertexNormals(); }
-  const leafMat = new THREE.MeshStandardMaterial({ map: barkMap, bumpMap: barkMap, bumpScale: 1.2, roughness: 0.82, metalness: 0, alphaTest: 0.5, side: THREE.DoubleSide, envMapIntensity: 0.4 });
+  const leafMat = new THREE.MeshStandardMaterial({ map: barkMap, normalMap: canvasNormal(bark.height, 5), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.82, metalness: 0, alphaTest: 0.5, side: THREE.FrontSide, envMapIntensity: 0.4 });
+  leafMat.userData.detail = { grime: 0.05, albedo: 0.05, scale: 6 };
   const leaf = new THREE.Mesh(leafGeo, leafMat); leaf.position.y = 0.064; leaf.rotation.y = 0.05; leaf.castShadow = true; leaf.receiveShadow = true;
   plinth.add(leaf);
+  // the sheet's thickness: inner-bark underside, a laminated torn edge, a few flakes lifting off the edge
+  {
+    const TH = 0.0022;
+    const under = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ map: undersideTexture(clipToLeaf), roughness: 0.75, alphaTest: 0.5, side: THREE.BackSide }));
+    under.position.y = -TH; leaf.add(under);
+    const W = 1536, H = 666, pts = leafOutline(W, H).map(([x, y]) => [(x / W - 0.5) * LEAF_W, (y / H - 0.5) * LEAF_D]);
+    const edgeTex = laminaTexture();
+    const edge = new THREE.Mesh(leafEdge(pts, leafHeight, TH), new THREE.MeshStandardMaterial({ map: edgeTex, roughness: 0.85, side: THREE.DoubleSide }));
+    edge.castShadow = true; leaf.add(edge);
+    const flakeMat = new THREE.MeshStandardMaterial({ color: '#cfae82', roughness: 0.85, side: THREE.DoubleSide, normalMap: leafMat.normalMap, normalScale: new THREE.Vector2(0.5, 0.5) });
+    const RF = rng(515), flakes = [];
+    for (const k of [12, 47, 83, 126, 158, 196, 211]) {
+      const [x, z] = pts[k], [x2, z2] = pts[k + 1], tang = Math.atan2(z2 - z, x2 - x);
+      const inward = new THREE.Vector2(-x, -z).normalize().multiplyScalar(0.012 + RF() * 0.01);
+      const g = flakeGeo(0.02 + RF() * 0.016, 0.006 + RF() * 0.006, 0.5 + RF() * 0.7, 6);
+      g.rotateY(-tang + (RF() - 0.5) * 0.4); g.translate(x + inward.x, leafHeight(x + inward.x, z + inward.y) + 0.0005, z + inward.y);
+      const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, x / LEAF_W + 0.5 + uv.getX(i) * 0.03, 0.5 - z / LEAF_D + uv.getY(i) * 0.012);
+      flakes.push(g);
+    }
+    const fl = new THREE.Mesh(mergeGeometries(flakes), flakeMat); fl.castShadow = true; leaf.add(fl);
+  }
   // the dot's world position on the leaf
   const dotLocal = V((DOT_UV[0] - 0.5) * LEAF_W, 0, (DOT_UV[1] - 0.5) * LEAF_D);
   dotLocal.y = leafHeight(dotLocal.x, dotLocal.z) + 0.0015;
@@ -270,22 +309,16 @@ export function create(ctx, segment) {
 
   // ======================================================================================== place value
   const TRAY_X = [-0.62, 0, 0.62], TRAY_Z = -1.0, TRAY_H = 1.0;
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 0, roughness: 0.05, transparent: true, opacity: 0.11, envMapIntensity: 2.2, specularIntensity: 1, ior: 1.5, depthWrite: false, side: THREE.DoubleSide });
+  const glassMat = new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 0, roughness: 0.05, roughnessMap: smudgeRoughness(), transparent: true, opacity: 0.11, envMapIntensity: 2.2, specularIntensity: 1, ior: 1.5, depthWrite: false, side: THREE.DoubleSide });
   const ledMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb860').multiplyScalar(2.2), toneMapped: false });
-  const trayGold = (() => {
-    const parts = [new THREE.BoxGeometry(0.54, 0.05, 0.4).translate(0, 0.025, 0)];
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(new THREE.BoxGeometry(0.012, TRAY_H, 0.012).translate(sx * 0.25, 0.05 + TRAY_H / 2, sz * 0.18));
-    for (const sz of [-1, 1]) parts.push(new THREE.BoxGeometry(0.512, 0.012, 0.012).translate(0, 0.05 + TRAY_H, sz * 0.18));
-    for (const sx of [-1, 1]) parts.push(new THREE.BoxGeometry(0.012, 0.012, 0.372).translate(sx * 0.25, 0.05 + TRAY_H, 0));
-    parts.push(new THREE.CylinderGeometry(0.008, 0.008, 0.62, 12).translate(0, 0.05 + 0.31, 0));
-    parts.push(new THREE.CylinderGeometry(0.03, 0.036, 0.016, 24).translate(0, 0.058, 0));
-    return mergeGeometries(parts.map((g) => g.toNonIndexed()));
-  })();
+  const trayParts = trayFrame(TRAY_H, { lite }), trayGold = trayParts.gold;
+  const channelMat = new THREE.MeshStandardMaterial({ color: '#0c0906', roughness: 0.6, metalness: 0.3 });
   const glassGeo = new THREE.BoxGeometry(0.49, TRAY_H, 0.35).translate(0, 0.05 + TRAY_H / 2, 0);
   const ledGeo = new THREE.BoxGeometry(0.44, 0.005, 0.012);
   const trays = TRAY_X.map((x, i) => {
     const grp = new THREE.Group(); grp.position.set(x, 0, TRAY_Z);
     const gold = new THREE.Mesh(trayGold, goldSatin); gold.castShadow = gold.receiveShadow = true;
+    const channel = new THREE.Mesh(trayParts.dark, channelMat); grp.add(channel);
     const glass = new THREE.Mesh(glassGeo, glassMat); glass.renderOrder = 2;
     const led1 = new THREE.Mesh(ledGeo, ledMat); led1.position.set(0, 0.052, 0.17);
     const led2 = new THREE.Mesh(ledGeo, ledMat); led2.position.set(0, 0.052, -0.17);
@@ -303,7 +336,7 @@ export function create(ctx, segment) {
   });
   // abacus beads: lens-shaped, threaded on each rod
   const beadGeo = new THREE.LatheGeometry(Array.from({ length: 17 }, (_, k) => { const y = -0.042 + (k / 16) * 0.084, r = 0.011 + 0.072 * Math.pow(Math.cos((y / 0.042) * Math.PI / 2), 0.55); return new THREE.Vector2(r, y); }), 40);
-  const beadMat = new THREE.MeshPhysicalMaterial({ color: '#7c2410', roughness: 0.2, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, sheen: 0.15, sheenColor: new THREE.Color('#ffb070'), envMapIntensity: 1.4 });
+  const beadMat = beadMaterial();
   const BEAD_Y = (k) => 0.066 + 0.044 + k * 0.088;
   const mkBead = () => { const b = new THREE.Mesh(beadGeo, beadMat); b.castShadow = b.receiveShadow = true; scene.add(b); return b; };
   const beads2 = [mkBead(), mkBead()], beads5 = Array.from({ length: 5 }, mkBead);

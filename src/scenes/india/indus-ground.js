@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { canvas as mkCanvas } from '../../lib/textures.js';
 import { rng } from '../../lib/math.js';
 import { INDUS_NOISE } from './indus-surface.js';
+import { NK_NOISE, NK_GROUND } from './nature-kit.js';
 
 export const PLAIN_RECT = [-1200, -1200, 2400, 2400];    // x0, z0, width, depth (m)
 export const TOWN_RECT = [-150, -140, 370, 280];
@@ -103,6 +104,8 @@ export function groundPatch(sh, masks) {
   sh.fragmentShader = sh.fragmentShader
     .replace('#include <common>', `#include <common>
       ${INDUS_NOISE}
+      ${NK_NOISE}
+      ${NK_GROUND}
       uniform sampler2D tPlain, tTown; uniform vec4 uPlainR, uTownR; uniform float uTownK; float gBump; float gRough;`)
     .replace('#include <map_fragment>', `
       {
@@ -119,12 +122,21 @@ export function groundPatch(sh, masks) {
         col = mix(col, pale, smoothstep(0.55, 0.78, n1) * 0.6);                                     // salt-crusted flats
         col = mix(col, pale * 1.05, smoothstep(0.6, 0.68, n2 * 0.6 + n3 * 0.5) * 0.5 * (1.0 - pm.r));   // salt crust patches
         col *= 0.8 + 0.36 * n3;
-        // moist river belt and fields: darker earth, crops, scrub
-        float green = pm.r * smoothstep(0.25, 0.65, n2 * 0.7 + n3 * 0.5);
-        col = mix(col, mix(vec3(0.13, 0.095, 0.06), vec3(0.085, 0.10, 0.04), pm.b), pm.r * 0.55);
-        col = mix(col, vec3(0.07, 0.085, 0.032) * (0.8 + 0.4 * n4), green * 0.7);
-        float grass = smoothstep(0.55, 0.8, n3 * 0.7 + n2 * 0.45) * (1.0 - pm.r * 0.5);
-        col = mix(col, mix(vec3(0.19, 0.16, 0.07), vec3(0.1, 0.105, 0.04), n4), grass * 0.8);   // dry grass and scrub
+        // the living flood plain: pasture everywhere the town's dust does not reach, lusher on the river belt,
+        // fields of wheat, barley, mustard and cotton in parcels along the river, bare earth here and there
+        vec2 tdd = max(max(uTownR.xy - q, q - (uTownR.xy + uTownR.zw)), 0.0);
+        float dTown = length(tdd);
+        float apron = 1.0 - smoothstep(4.0, 22.0 + 16.0 * n2, dTown);
+        float dry = (1.0 - pm.r) * 0.7;
+        vec3 grassC = nkPasture(q, w, dry);
+        float cover = smoothstep(0.22, 0.5, n2 * 0.55 + n1 * 0.35 + pm.r * 0.45 + 0.2) * (1.0 - apron * 0.85);
+        col = mix(col, grassC, cover);
+        float fld = smoothstep(0.12, 0.3, pm.b) * (1.0 - apron);
+        float ck = fract(pm.b * 7.31);
+        float kind = ck < 0.4 ? 0.0 : (ck < 0.6 ? 1.0 : (ck < 0.8 ? 3.0 : 5.0));
+        vec2 fdir = fract(pm.b * 3.7) > 0.5 ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec3 crop = nkCrop(q, w, fdir, kind, floor(pm.b * 20.0));
+        col = mix(col, crop, fld * 0.92);
         // cart tracks: paler packed earth
         col = mix(col, vec3(0.30, 0.245, 0.18) * (0.9 + 0.2 * n4), pm.g * 0.65);
         // the town: dust aprons, contact shadow, packed streets with wheel ruts
@@ -139,7 +151,7 @@ export function groundPatch(sh, masks) {
         vec3 pc = c.z > 0.95 ? vec3(0.33, 0.12, 0.06) : mix(vec3(0.2, 0.18, 0.15), vec3(0.36, 0.3, 0.24), fract(c.z * 13.0));
         col = mix(col, pc, peb);
         col *= 0.9 + 0.2 * n5;
-        diffuseColor.rgb *= col;
+        diffuseColor.rgb *= col; diffuseColor.rgb = vec3(0.0, 1.0, 0.0);
         gBump = (peb * (0.2 - c.x) * 0.06 + n5 * 0.004 - rut * 0.02 + n4 * 0.01) * det2;
         gRough = 1.0 - 0.15 * peb;
       }`)

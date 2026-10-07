@@ -27,6 +27,8 @@ import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { glowSprite } from '../../lib/materials.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
 import { fbm2 } from '../../lib/noise.js';
+import { labMaterials, slateRelief, buildSlateFrame, buildTrough, chalkStickGeo, chalkMaterial, buildEraser, buildBench, rider, filterCell, bevelDiscGeo, neckClamp, beamDump, stopperGeo, buildBecRig } from './modern-assets.js';
+import { Parts } from './language-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const CHALK = '#eef2f6';
@@ -240,22 +242,28 @@ export function create(ctx, segment) {
   })();
   const slateMat = new THREE.MeshStandardMaterial({ map: slateTex, roughness: 0.86, metalness: 0, envMapIntensity: 0.22 });
   slateMat.userData.noDetail = true;   // (its own texture carries the stone; the engine's metre-scale grime read as blotches)
+  {
+    const rel = slateRelief();
+    slateMat.normalMap = rel.n.clone(); slateMat.normalMap.repeat.set(9, 5); slateMat.normalMap.needsUpdate = true; slateMat.normalScale.set(0.07, 0.07);
+    slateMat.roughnessMap = rel.r.clone(); slateMat.roughnessMap.repeat.set(3, 2); slateMat.roughnessMap.needsUpdate = true;
+  }
+  const mats = labMaterials();
   const slate = new THREE.Mesh(new THREE.BoxGeometry(SW, SH, 0.08), slateMat);
   slate.position.copy(SC); scene.add(slate);
-  const oak = new THREE.MeshStandardMaterial({ color: '#2b1e15', roughness: 0.55, metalness: 0, envMapIntensity: 0.5 });
   {
-    const fw = 0.09, fz = SC.z + 0.01;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(SW + fw * 2, fw, 0.13), oak); top.position.set(SC.x, SC.y + SH / 2 + fw / 2, fz);
-    const bot = new THREE.Mesh(new THREE.BoxGeometry(SW + fw * 2, fw, 0.13), oak); bot.position.set(SC.x, SC.y - SH / 2 - fw / 2, fz);
-    const l = new THREE.Mesh(new THREE.BoxGeometry(fw, SH, 0.13), oak); l.position.set(SC.x - SW / 2 - fw / 2, SC.y, fz);
-    const r = new THREE.Mesh(new THREE.BoxGeometry(fw, SH, 0.13), oak); r.position.set(SC.x + SW / 2 + fw / 2, SC.y, fz);
-    const ledge = new THREE.Mesh(new THREE.BoxGeometry(SW, 0.03, 0.16), oak); ledge.position.set(SC.x, SC.y - SH / 2 - fw - 0.015, SC.z + 0.09);
-    scene.add(top, bot, l, r, ledge);
-    const chalkMat = new THREE.MeshStandardMaterial({ color: '#e8e6e0', roughness: 0.95 });
+    // quarter-sawn oak frame (rounded moulding, corner plates), plywood back with hanging rings, a lipped
+    // chalk trough with chalk dust, worn sticks of chalk and a felt eraser
+    const fw = 0.09;
+    const frame = buildSlateFrame({ SC, SW, SH, fw, lite, mats });
+    scene.add(frame.group);
+    const ty = SC.y - SH / 2 - fw - 0.025, tz = SC.z + 0.11;
+    scene.add(buildTrough({ x: SC.x, y: ty, z: tz, len: SW, oak: frame.oak, lite }));
+    const chalkMat = chalkMaterial();
     [[-1.2, 0.3], [-1.05, -0.2], [2.3, 0.1]].forEach(([x, a]) => {
-      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, x > 0 ? 0.07 : 0.11, 12), chalkMat);
-      s.rotation.set(0, a, Math.PI / 2); s.position.set(x, ledge.position.y + 0.03, ledge.position.z); scene.add(s);
+      const s = new THREE.Mesh(chalkStickGeo(x > 0 ? 0.07 : 0.11, 0.014), chalkMat);
+      s.rotation.set(0, a, 0); s.position.set(x, ty + 0.006 + 0.014, tz + 0.01); s.castShadow = true; scene.add(s);
     });
+    const eraser = buildEraser(frame.oak); eraser.position.set(-2.6, ty + 0.006, tz + 0.01); eraser.rotation.y = 0.12; scene.add(eraser);
   }
 
   const chalkPlanes = [];
@@ -391,32 +399,35 @@ export function create(ctx, segment) {
   const WHITE_HOT = new THREE.Color(1, 0.96, 0.9);
 
   // ============================================================================== the optical bench
-  const anod = new THREE.MeshStandardMaterial({ color: '#1a1d22', roughness: 0.35, metalness: 0.85, envMapIntensity: 0.9 });
-  const steelM = new THREE.MeshStandardMaterial({ color: '#b9c1cc', roughness: 0.25, metalness: 1, envMapIntensity: 1.0 });
+  const anod = mats.anod, steelM = mats.steel;
   const bench = new THREE.Group(); scene.add(bench);
   {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.06, 0.14), anod); rail.position.set(7.0, RAIL_Y, ZB); bench.add(rail);
-    const groove = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.006, 0.03), steelM); groove.position.set(7.0, RAIL_Y + 0.032, ZB); bench.add(groove);
-    for (const sx of [5.15, 8.85]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, RAIL_Y - FLOOR_Y, 16), anod); leg.position.set(sx, (RAIL_Y + FLOOR_Y) / 2, ZB); bench.add(leg); const ft = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.03, 32), anod); ft.position.set(sx, FLOOR_Y + 0.015, ZB); bench.add(ft); }
-    const carrier = (x, topY) => {
-      const cr = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.18), anod); cr.position.set(x, RAIL_Y + 0.06, ZB); bench.add(cr);
-      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 12), steelM); knob.rotation.x = Math.PI / 2; knob.position.set(x, RAIL_Y + 0.06, ZB + 0.11); bench.add(knob);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, topY - RAIL_Y - 0.09, 12), steelM); post.position.set(x, (topY + RAIL_Y + 0.09) / 2, ZB); bench.add(post);
-    };
-    carrier(FX, YU - 0.19); carrier(FL.x, FL.y - BULB - 0.04); carrier(DUMP_X, YU - 0.07);
+    // dovetail rail with brass end caps on levelling legs; riders with knurled clamps carry the posts
+    bench.add(buildBench({ cx: 7.0, railY: RAIL_Y, z: ZB, L: 4.0, legX: [5.15, 8.85], floorY: FLOOR_Y, mats, lite }));
+    const BP = new Parts();
+    rider(BP, { x: FX, railY: RAIL_Y, z: ZB, topY: YU - 0.19, mats, lite });
+    rider(BP, { x: FL.x, railY: RAIL_Y, z: ZB, topY: FL.y - BULB - 0.04, mats, lite });
+    rider(BP, { x: DUMP_X, railY: RAIL_Y, z: ZB, topY: YU - 0.07, mats, lite });
+    // a retort rod on its own rider, a bosshead and a three-prong clamp on the flask's neck
+    const rodX = FL.x - 0.36, rodZ = ZB - 0.08;
+    rider(BP, { x: rodX, railY: RAIL_Y, z: ZB, topY: RAIL_Y + 0.1, mats, lite });
+    neckClamp(BP, { cx: FL.x, neckY: FL.y + 0.6, cz: FL.z, neckR: 0.075, rodX, rodZ, baseY: RAIL_Y + 0.09, mats, lite });
+    // cork stopper in the neck
+    BP.add(mats.cork, stopperGeo(0.069).translate(FL.x, FL.y + 0.69, FL.z));
+    bench.add(BP.build());
     // flask ring support
     const ringS = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.008, 8, 48), steelM); ringS.rotation.x = Math.PI / 2; ringS.position.set(FL.x, FL.y - BULB + 0.05, ZB); bench.add(ringS);
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.17, 8), steelM); arm.rotation.z = Math.PI / 2; arm.position.set(FL.x - 0.085, FL.y - BULB + 0.05, ZB); bench.add(arm);
-    // beam dump: a black cylinder with a hot spot
-    const dump = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 24), anod); dump.rotation.z = Math.PI / 2; dump.position.set(DUMP_X, YU, ZB); bench.add(dump);
+    // beam dump: a finned black can with a conical entrance
+    const dump = beamDump(mats, { lite }); dump.position.set(DUMP_X, YU, ZB); bench.add(dump);
   }
   // filter: violet glass disc in a ring mount
   const filterMat = new THREE.MeshStandardMaterial({ color: '#2a1470', roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85, emissive: VIOLET.clone(), emissiveIntensity: 0.15, envMapIntensity: 1.6 });
   const filter = new THREE.Group(); filter.position.set(FX, YU, ZB); scene.add(filter);
   {
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.018, 48), filterMat); disc.rotation.z = Math.PI / 2; filter.add(disc);
-    const mount = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.022, 12, 64), anod); mount.rotation.y = Math.PI / 2; filter.add(mount);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 12), anod); stem.position.y = -0.18; filter.add(stem);
+    const disc = new THREE.Mesh(bevelDiscGeo(0.15, 0.018, 48), filterMat); disc.rotation.z = Math.PI / 2; filter.add(disc);
+    filter.add(filterCell(mats, { lite }));
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 12), anod); stem.position.y = -0.2; filter.add(stem);
   }
   const filterGlow = glowSprite({ color: VIOLET.clone().lerp(new THREE.Color(1, 1, 1), 0.3), intensity: 1.2, scale: 0.3 }); filterGlow.position.set(FX, YU, ZB); scene.add(filterGlow);
   const dumpGlow = glowSprite({ color: VIOLET.clone(), intensity: 1.4, scale: 0.22 }); dumpGlow.position.set(DUMP_X - 0.07, YU, ZB); scene.add(dumpGlow);
@@ -648,10 +659,13 @@ export function create(ctx, segment) {
   {
     const platMat = new THREE.MeshStandardMaterial({ color: '#0a0c11', roughness: 0.48, metalness: 0.5, envMapIntensity: 0.4 });
     platMat.userData.detail = { albedo: 0.04, rough: 0.25, grime: 0.03, scratch: 0.15, scale: 4 };
+    { const sp = mats.anod.roughnessMap.clone(); sp.repeat.set(6, 6); sp.needsUpdate = true; platMat.roughnessMap = sp; }
     const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.9, 0.06, 96), platMat);
     plat.position.copy(CB).add(V(0, -0.03, 0)); becRig.add(plat);
     const rimR = new THREE.Mesh(new THREE.TorusGeometry(1.875, 0.012, 8, 160), steelM); rimR.rotation.x = Math.PI / 2; rimR.position.copy(CB); becRig.add(rimR);
-    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, CB.y - FLOOR_Y, 32), anod); stand.position.set(CB.x, (CB.y + FLOOR_Y) / 2 - 0.03, CB.z); becRig.add(stand);
+    const anodBig = anod.clone(); anodBig.normalMap = anod.normalMap.clone(); anodBig.normalMap.repeat.set(5, 4); anodBig.normalMap.needsUpdate = true; anodBig.normalScale.set(0.2, 0.2);
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, CB.y - FLOOR_Y, 32), anodBig); stand.position.set(CB.x, (CB.y + FLOOR_Y) / 2 - 0.03, CB.z); becRig.add(stand);
+    becRig.add(buildBecRig({ CB, floorY: FLOOR_Y, mats, lite }));
     const ax = [], y = CB.y + 0.004;
     ax.push([V(CB.x - 1.65, y, CB.z), V(CB.x + 1.65, y, CB.z)], [V(CB.x, y, CB.z - 1.65), V(CB.x, y, CB.z + 1.65)]);
     for (let i = -6; i <= 6; i++) { if (!i) continue; const d = i * 0.25; ax.push([V(CB.x + d, y, CB.z - 0.04), V(CB.x + d, y, CB.z + 0.04)], [V(CB.x - 0.04, y, CB.z + d), V(CB.x + 0.04, y, CB.z + d)]); }

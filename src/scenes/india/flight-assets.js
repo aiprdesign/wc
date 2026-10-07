@@ -303,12 +303,16 @@ export function makeRealSky(u) {
   return mesh;
 }
 // river / sea: a wavy mirror of the same sky, silt or blue water underneath, hazed with distance
-export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK = 1, fadeFar = 900, glitter = 1 } = {}) {
-  const uu = { ...u, uBody: { value: new THREE.Color(body) }, uSilt: { value: new THREE.Color(silt) }, uWave: { value: waveK }, uFar: { value: fadeFar }, uGlit: { value: glitter } };
+// confluence: [colour, x0, slope] — a second water (the Ganga's paler silt-green against the Yamuna's deeper
+// blue-green at the Sangam) on the far side of a wavering seam x = x0 + slope·z
+export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK = 1, fadeFar = 900, glitter = 1, confluence = null } = {}) {
+  const cf = confluence ?? [body, 1e6, 0];
+  const uu = { ...u, uBody: { value: new THREE.Color(body) }, uSilt: { value: new THREE.Color(silt) }, uWave: { value: waveK }, uFar: { value: fadeFar }, uGlit: { value: glitter },
+    uBody2: { value: new THREE.Color(cf[0]) }, uSeam: { value: new THREE.Vector2(cf[1], cf[2]) } };
   const m = new THREE.ShaderMaterial({
     uniforms: uu, fog: false,
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `${GLSL_NOISE}\n${SKY_FN}\nuniform vec3 uBody, uSilt; uniform float uWave, uFar, uGlit; varying vec3 vW;
+    fragmentShader: `${GLSL_NOISE}\n${SKY_FN}\nuniform vec3 uBody, uSilt, uBody2; uniform vec2 uSeam; uniform float uWave, uFar, uGlit; varying vec3 vW;
       void main(){
         vec3 v = vW - cameraPosition; float dist = length(v); vec3 d = v / dist;
         vec2 p = vW.xz;
@@ -317,17 +321,19 @@ export function makeWater(u, w, d, { body = '#2a3a30', silt = '#6a5a3a', waveK =
         g += 0.5 * vec2(snoise(vec3(p * 0.6 + uTime, 2.0)), snoise(vec3(p * 0.6 - uTime, 7.0)));
         vec3 n = normalize(vec3(g.x * 0.07 * uWave * fade, 1.0, g.y * 0.07 * uWave * fade));
         vec3 r = reflect(d, n); r.y = max(abs(r.y), 0.003);
-        float fr = 0.025 + 0.975 * pow(1.0 - max(dot(-d, n), 0.0), 5.0);
+        float fr = 0.02 + 0.68 * pow(1.0 - max(dot(-d, n), 0.0), 5.0);
         float silt = smoothstep(-0.3, 0.6, snoise(vec3(p * 0.004, 3.0)));
-        vec3 bodyC = mix(uBody, uSilt, silt) * (0.5 + 0.5 * max(dot(vec3(0.0, 1.0, 0.0), normalize(uSun)), 0.0)) * uGain;
-        vec3 col = mix(bodyC, skyCol(r), fr);
+        float seam = p.x - uSeam.x - uSeam.y * p.y + 40.0 * snoise(vec3(p * 0.004, 8.0)) + 8.0 * snoise(vec3(p * 0.03, 9.0));
+        float side = smoothstep(-25.0, 25.0, seam);
+        vec3 bodyC = mix(mix(uBody, uSilt, silt * 0.6), uBody2, side) * (0.5 + 0.5 * max(dot(vec3(0.0, 1.0, 0.0), normalize(uSun)), 0.0)) * uGain;
+        vec3 col = mix(bodyC, skyCol(r) * mix(vec3(1.0), normalize(bodyC + 1e-4) * 1.6, 0.3), fr);
         // sun glitter: facets of the small chop catch the sun (a sparkling path toward it)
         vec2 g2 = vec2(snoise(vec3(p * 1.3 + vec2(uTime * 0.9, 0.0), 11.0)), snoise(vec3(p * 1.5 - vec2(0.0, uTime * 0.8), 13.0)));
         g2 += 0.6 * vec2(snoise(vec3(p * 4.1, uTime * 2.0)), snoise(vec3(p * 3.7, uTime * 2.0 + 5.0)));
         vec3 n2 = normalize(vec3(g2.x * 0.2, 1.0, g2.y * 0.2));
         float gl = pow(max(dot(reflect(d, n2), normalize(uSun)), 0.0), 700.0);
         col += uSunCol * gl * 26.0 * uGlit * uGain * exp(-dist * 0.0012);
-        col = mix(col, skyCol(vec3(d.x, 0.003, d.z)), smoothstep(uFar * 0.25, uFar, dist));
+        col = mix(col, mix(skyCol(vec3(d.x, 0.003, d.z)), bodyC * 1.4, 0.3), smoothstep(uFar * 0.25, uFar, dist));
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -567,7 +573,7 @@ export function flightMaterials() {
     pole: new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 0.8 }),
     foliage: new THREE.MeshStandardMaterial({ color: '#3f5a26', roughness: 0.9, vertexColors: true }),
     trunk: new THREE.MeshStandardMaterial({ color: '#4c3a2a', roughness: 0.9 }),
-    palmFrond: new THREE.MeshStandardMaterial({ color: '#2f4a1c', roughness: 0.8, side: THREE.DoubleSide }),
+    palmFrond: new THREE.MeshStandardMaterial({ color: '#2e6222', roughness: 0.8, side: THREE.DoubleSide }),
     flag: new THREE.MeshStandardMaterial({ color: '#c8361e', roughness: 0.8, side: THREE.DoubleSide }),
     crowdBody: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9 }),
     crowdHead: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 }),
@@ -685,6 +691,17 @@ export function buildVimana(M) {
   }
   // bells hanging under the hull
   for (let i = 0; i < 7; i++) { const u = 0.25 + i * 0.5 / 6, x = lerp(-L, L, u), y = gun(u) - D(u) - 0.05; gold.push(rod(V3(x, y + 0.08, 0), V3(x, y - 0.12, 0), 0.008, 4), bake(lathe([[0.001, 0], [0.06, 0.0], [0.05, 0.05], [0.035, 0.11], [0.01, 0.13]], 10), [x, y - 0.25, 0])); }
+  // inlaid cabochons along both sheers (lapis / turquoise / ruby), a keel moulding and a lotus medallion under the hull
+  for (const s of [1, -1]) for (let i = 0; i < 26; i++) {
+    const u = 0.1 + i / 25 * 0.8, x = lerp(-L, L, u), y = gun(u) - 0.11, z = s * W(u) * 0.985;
+    (i % 3 === 0 ? verm : i % 3 === 1 ? teal : lapis).push(bake(new THREE.SphereGeometry(0.032, 8, 6), [x, y, z], [0, 0, 0], [1, 1, 0.55]));
+  }
+  { const pts = []; for (let i = 0; i <= 40; i++) { const u = 0.12 + i / 40 * 0.76; pts.push(V3(lerp(-L, L, u), gun(u) - D(u) - 0.015, 0)); } gold.push(tubeAlong(new THREE.CatmullRomCurve3(pts), () => 0.03, 48, 6)); }
+  for (let k = 0; k < 12; k++) {
+    const a = k / 12 * TAU, f = plate([[0, -0.07], [0.3, 0], [0, 0.07], [-0.02, 0]], 0.02, 0.006);
+    gold.push(bake(f, [Math.cos(a) * 0.08, gun(0.5) - D(0.5) - 0.04, Math.sin(a) * 0.08], [Math.PI / 2, -a, 0]));
+  }
+  gold.push(bake(new THREE.SphereGeometry(0.09, 14, 8), [0, gun(0.5) - D(0.5) - 0.05, 0], [0, 0, 0], [1, 0.5, 1]));
   // banner poles at the plinth corners
   const poles = [[1.75, 0.85], [1.75, -0.85], [-1.75, 0.85], [-1.75, -0.85]];
   for (const [x, z] of poles) { gold.push(cyl(0.028, 0.035, 2.6, 8, [x, 0.5 + 1.3, z]), bake(new THREE.SphereGeometry(0.06, 10, 8), [x, 3.14, z]), bake(new THREE.ConeGeometry(0.04, 0.16, 8), [x, 3.26, z])); }
@@ -725,251 +742,7 @@ export function waveFlags(flags, t, wind = 1) {
   });
 }
 
-// ================================================================== 2 · HUMBER-SOMMER BIPLANE, 1911 (m; nose +X, origin on the ground)
-export function buildSommer(M) {
-  const g = new THREE.Group(); g.name = 'sommer';
-  const wood = [], fab = [], eng = [], brass = [], rub = [], bag = [], wires = [], dark = [], cloth = [], skin = [], leather = [];
-  const LE = 0.95, CH = 1.85, YL = 1.15, YU = 2.95;
-  const plane = (y, span, chord, xle = LE) => { const st = []; for (let i = 0; i <= 8; i++) { const z = -span + i / 8 * 2 * span; st.push({ x: xle, y, z, c: chord }); } return st; };
-  fab.push(wingGeo(plane(YL, 4.3, CH), { n: 10, t: 0.035, cam: 0.05 }));
-  fab.push(wingGeo(plane(YU, 5.3, CH), { n: 10, t: 0.035, cam: 0.05 }));
-  // interplane struts (front and rear spars) and the slanting extension struts out to the upper tips
-  const yAt = (y, x) => y + 0.05 * CH * 4 * ((LE - x) / CH) * (1 - (LE - x) / CH);
-  const fx = LE - 0.18, rx = LE - CH * 0.72;
-  for (const z of [-0.65, 0.65, -2.0, 2.0, -3.4, 3.4, -4.25, 4.25]) for (const x of [fx, rx]) wood.push(strut(V3(x, yAt(YL, x), z), V3(x, yAt(YU, x), z), 0.022, 0.05));
-  for (const s of [1, -1]) for (const x of [fx, rx]) wood.push(strut(V3(x, yAt(YL, x), s * 4.25), V3(x, yAt(YU, x), s * 5.15), 0.02, 0.045));
-  // bracing wires: an X in each bay, front and rear
-  const bays = [-5.15, -4.25, -3.4, -2.0, -0.65, 0.65, 2.0, 3.4, 4.25, 5.15];
-  for (let i = 0; i < bays.length - 1; i++) {
-    const z0 = bays[i], z1 = bays[i + 1]; if (Math.abs(z0) > 4.3 || Math.abs(z1) > 4.3) continue;
-    for (const x of [fx, rx]) wires.push(V3(x, yAt(YL, x), z0), V3(x, yAt(YU, x), z1), V3(x, yAt(YL, x), z1), V3(x, yAt(YU, x), z0));
-    // drag wires across the wing (in plan)
-  }
-  // skids (curling up at the front) on struts, with paired wheels
-  for (const s of [1, -1]) {
-    const z = s * 0.95;
-    const sk = new THREE.CatmullRomCurve3([V3(-1.2, 0.42, z), V3(0.4, 0.4, z), V3(1.8, 0.48, z), V3(2.7, 0.8, z), V3(3.0, 1.25, z), V3(2.85, 1.5, z)]);
-    wood.push(tubeAlong(sk, () => 0.04, 40, 6));
-    wood.push(strut(V3(fx, YL, z), V3(fx, 0.42, z), 0.022, 0.05), strut(V3(rx, YL, z), V3(rx + 0.2, 0.42, z), 0.022, 0.05), strut(V3(2.2, 0.55, z), V3(LE + 0.05, YL, z), 0.02, 0.04));
-    wood.push(strut(V3(2.85, 1.48, z), V3(LE, YU - 0.02, z * 0.7), 0.018, 0.035));
-    for (const dz of [0.22, -0.22]) {
-      const wz = z + dz, wx = 0.35, wr = 0.33;
-      rub.push(bake(new THREE.TorusGeometry(wr, 0.04, 8, 28), [wx, wr, wz]));
-      brass.push(cyl(0.05, 0.05, 0.12, 10, [wx, wr, wz], [Math.PI / 2, 0, 0]));
-      for (let k = 0; k < 12; k++) { const a = k / 12 * TAU; dark.push(rod(V3(wx, wr, wz + (k % 2 ? 0.04 : -0.04)), V3(wx + Math.cos(a) * wr * 0.95, wr + Math.sin(a) * wr * 0.95, wz), 0.004, 3)); }
-    }
-    dark.push(rod(V3(0.35, 0.33, z - 0.3), V3(0.35, 0.33, z + 0.3), 0.02, 6));
-    // rubber-cord shock absorbers wrapped on the axle
-    dark.push(bake(new THREE.TorusGeometry(0.05, 0.02, 6, 10), [0.35, 0.38, z], [0, Math.PI / 2, 0]));
-  }
-  // tail booms (wide at the wing to clear the propeller, converging to the box tail)
-  const TX0 = -5.9, TX1 = -7.0, TY0 = 1.75, TY1 = 2.55, TZ = 0.85;
-  for (const s of [1, -1]) {
-    wood.push(rod(V3(LE - CH, YU, s * 1.5), V3(TX0, TY1, s * TZ), 0.03, 6), rod(V3(LE - CH, YL, s * 1.5), V3(TX0, TY0, s * TZ), 0.03, 6));
-    const mx = -3.4, k = (mx - (LE - CH)) / (TX0 - (LE - CH));
-    const zm = lerp(1.5, TZ, k) * s, yu = lerp(YU, TY1, k), yl = lerp(YL, TY0, k);
-    wood.push(rod(V3(mx, yl, zm), V3(mx, yu, zm), 0.022, 6), rod(V3(TX0, TY0, s * TZ), V3(TX0, TY1, s * TZ), 0.022, 6));
-    wires.push(V3(mx, yl, zm), V3(TX0, TY1, s * TZ), V3(mx, yu, zm), V3(TX0, TY0, s * TZ), V3(LE - CH, YL, s * 1.5), V3(mx, yu, zm), V3(LE - CH, YU, s * 1.5), V3(mx, yl, zm));
-  }
-  for (const [x, y] of [[-3.4, lerp(YL, TY0, (-3.4 - (LE - CH)) / (TX0 - (LE - CH)))], [-3.4, lerp(YU, TY1, (-3.4 - (LE - CH)) / (TX0 - (LE - CH)))], [TX0, TY0], [TX0, TY1]]) {
-    const k = (x - (LE - CH)) / (TX0 - (LE - CH)), z = lerp(1.5, TZ, k);
-    wood.push(rod(V3(x, y, -z), V3(x, y, z), 0.018, 5));
-  }
-  // box tail: two horizontal surfaces, two rudders between them
-  for (const y of [TY0, TY1]) fab.push(wingGeo([{ x: TX0 + 0.15, y, z: -1.35, c: 1.25 }, { x: TX0 + 0.15, y, z: 0, c: 1.25 }, { x: TX0 + 0.15, y, z: 1.35, c: 1.25 }], { n: 8, t: 0.04, cam: 0.02 }));
-  for (const s of [1, -1]) fab.push(bake(plate([[0, 0], [0.75, 0], [0.8, 0.8], [0, 0.8]], 0.03, 0.006), [TX1 - 0.2, TY0, s * 0.55], [0, 0, 0]));
-  for (const s of [1, -1]) wood.push(rod(V3(TX1 - 0.18, TY0, s * 0.55), V3(TX1 - 0.18, TY1, s * 0.55), 0.015, 5));
-  // seat, footbar, control column, the pilot (cloth coat, leather cap), two mail bags
-  wood.push(box(0.5, 0.04, 0.44, [1.15, YL + 0.12, 0]), box(0.04, 0.4, 0.44, [0.92, YL + 0.32, 0]));
-  wood.push(rod(V3(1.0, YL + 0.08, -0.3), V3(1.95, 0.62, -0.3), 0.02, 5), rod(V3(1.0, YL + 0.08, 0.3), V3(1.95, 0.62, 0.3), 0.02, 5));
-  wood.push(rod(V3(1.95, 0.62, -0.3), V3(1.95, 0.62, 0.3), 0.02, 5), rod(V3(1.85, 0.65, 0), V3(2.25, 0.55, 0), 0.02, 5));
-  dark.push(rod(V3(1.45, YL + 0.1, 0), V3(1.42, YL + 0.68, 0), 0.015, 5), bake(new THREE.TorusGeometry(0.1, 0.012, 5, 16), [1.42, YL + 0.72, 0], [0, Math.PI / 2, 0]));
-  cloth.push(bake(new THREE.CapsuleGeometry(0.19, 0.42, 4, 10), [1.08, YL + 0.55, 0], [0, 0, -0.18], [1, 1, 1.15]));
-  for (const s of [1, -1]) { cloth.push(rod(V3(1.12, YL + 0.18, s * 0.12), V3(1.75, 0.75, s * 0.15), 0.065, 6)); cloth.push(rod(V3(1.12, YL + 0.68, s * 0.2), V3(1.38, YL + 0.72, s * 0.08), 0.05, 6)); }
-  skin.push(bake(new THREE.SphereGeometry(0.12, 14, 10), [1.13, YL + 1.0, 0]));
-  leather.push(bake(new THREE.SphereGeometry(0.13, 14, 10, 0, TAU, 0, Math.PI * 0.55), [1.12, YL + 1.02, 0]));
-  dark.push(bake(new THREE.TorusGeometry(0.05, 0.015, 5, 12), [1.24, YL + 1.04, 0.05], [0, Math.PI / 2, 0]), bake(new THREE.TorusGeometry(0.05, 0.015, 5, 12), [1.24, YL + 1.04, -0.05], [0, Math.PI / 2, 0]));
-  for (const s of [1, -1]) {
-    bag.push(bake(new THREE.SphereGeometry(0.22, 12, 10), [0.45, YL + 0.22, s * 0.48], [0.2 * s, 0.3, 0.1], [1.3, 0.85, 0.9]));
-    bag.push(bake(new THREE.CylinderGeometry(0.05, 0.1, 0.12, 8), [0.45, YL + 0.42, s * 0.48]));
-    leather.push(bake(new THREE.TorusGeometry(0.2, 0.012, 4, 20), [0.45, YL + 0.22, s * 0.48], [0, 0, Math.PI / 2], [1.25, 1, 1]));
-  }
-  // fuel tank (brass) above the lower wing
-  brass.push(cyl(0.15, 0.15, 0.8, 16, [0.1, YL + 0.35, 0], [Math.PI / 2, 0, 0]));
-  wood.push(rod(V3(0.1, YL, -0.3), V3(0.1, YL + 0.22, -0.3), 0.015, 4), rod(V3(0.1, YL, 0.3), V3(0.1, YL + 0.22, 0.3), 0.015, 4));
-  // engine bearers
-  const EX = LE - CH - 0.15, EYc = 2.05;
-  for (const s of [1, -1]) wood.push(rod(V3(EX + 0.6, YL, s * 0.35), V3(EX + 0.05, EYc, s * 0.12), 0.025, 5), rod(V3(EX + 0.6, YU, s * 0.35), V3(EX + 0.05, EYc, s * 0.12), 0.025, 5));
-  eng.push(cyl(0.06, 0.06, 0.5, 10, [EX + 0.25, EYc, 0], [0, 0, Math.PI / 2]));
-  add(g, wood, M.spruce); add(g, fab, M.fabric); add(g, brass, M.brass); add(g, rub, M.rubber); add(g, bag, M.canvasBag); add(g, dark, M.darkMetal); add(g, cloth, M.cloth); add(g, skin, M.skin); add(g, leather, M.leather); add(g, eng, M.engine);
-  if (M.steel) { const wr = []; for (let i = 0; i < wires.length; i += 2) wr.push(rod(wires[i], wires[i + 1], 0.0065, 4)); add(g, wr, M.steel); }
-  else { const wireGeo = new THREE.BufferGeometry().setFromPoints(wires); const wl = new THREE.LineSegments(wireGeo, M.wire); g.add(wl); }
-  // rotary engine + pusher propeller (turn together about X)
-  const rot = new THREE.Group(); rot.position.set(EX, EYc, 0); g.add(rot);
-  let propMesh = null;
-  {
-    const re = [], rf = [];
-    re.push(cyl(0.17, 0.17, 0.18, 20, [0, 0, 0], [0, 0, Math.PI / 2]));
-    for (let k = 0; k < 7; k++) {
-      const a = k / 7 * TAU, dir = V3(0, Math.cos(a), Math.sin(a)), at = (r) => V3(0, dir.y * r, dir.z * r);
-      re.push(rod(at(0.15), at(0.42), 0.055, 10));
-      for (let f = 0; f < 7; f++) rf.push(bake(new THREE.CylinderGeometry(0.075, 0.075, 0.008, 12), [0, dir.y * (0.2 + f * 0.03), dir.z * (0.2 + f * 0.03)], [a, 0, 0]));
-      rf.push(rod(at(0.42), V3(0.12, dir.y * 0.16, dir.z * 0.16), 0.01, 4));
-    }
-    rot.add(new THREE.Mesh(merge(re), M.engine), new THREE.Mesh(merge(rf), M.darkMetal));
-    const pr = [];
-    for (const s of [0, Math.PI]) pr.push(bake(bladeGeo(1.25, 0.2, 0.12, 0.5, 0.04), [-0.22, 0, 0], [s, 0, 0]));
-    pr.push(cyl(0.08, 0.08, 0.12, 12, [-0.22, 0, 0], [0, 0, Math.PI / 2]));
-    propMesh = new THREE.Mesh(merge(pr), M.prop); rot.add(propMesh);
-  }
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5a3a20').multiplyScalar(0.5), transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }));
-  disc.position.set(EX - 0.22, EYc, 0); disc.rotation.y = Math.PI / 2; g.add(disc);
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  disc.castShadow = false;
-  return { group: g, rotor: rot, disc, prop: propMesh, bags: V3(0.45, YL + 0.3, 0.48) };
-}
-function add(g, geos, mat) { if (!geos.length) return null; const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; }
-
-// ================================================================== 3 · DE HAVILLAND PUSS MOTH, 1932 (m; nose +X, origin at the datum)
-export function buildPussMoth(M) {
-  const g = new THREE.Group(); g.name = 'pussmoth';
-  const body = [], trim = [], wingS = [], dark = [], glass = [], rub = [], metal = [];
-  const fus = (x) => {
-    // nose x = 2.55 … tail x = -4.95
-    if (x > 1.95) { const u = (x - 1.95) / 0.6; return [0.4 * Math.sqrt(Math.max(0, 1 - u * u * 0.85)) + 0.02, 0.48 * Math.sqrt(Math.max(0, 1 - u * u * 0.8)) + 0.02, -0.05 - 0.05 * u, 2.6]; }
-    if (x > -0.4) { const u = (1.95 - x) / 2.35; return [lerp(0.4, 0.5, Math.min(1, u * 2)), lerp(0.48, 0.66, Math.min(1, u * 1.6)), lerp(-0.05, 0.02, u), 3.2]; }
-    const u = (-0.4 - x) / 4.55; return [lerp(0.5, 0.07, Math.pow(u, 0.9)), lerp(0.66, 0.16, Math.pow(u, 0.85)), lerp(0.02, 0.3, u * u), lerp(3.2, 2.4, u)];
-  };
-  body.push(bodyGeo(-4.95, 2.55, fus, 72, 28));
-  // a dark-red cheat stripe and the cowling seam (thin bands standing proud of the skin)
-  for (const s of [1, -1]) trim.push(gridSurf((u, v) => { const x = lerp(2.4, -4.6, u), [w, h, yc] = fus(x), y = yc + lerp(-0.05, 0.07, v) * (h / 0.6); return V3(x, y, s * (w * 1.003 + 0.004)); }, 40, 2));
-  // high wing: tapered, square-raked tips, slight dihedral; the wing sits on the cabin roof
-  const ws = []; for (let i = 0; i <= 12; i++) { const s = i / 12, z = s * 5.6; ws.push({ x: 1.02 - s * 0.15, y: 0.68 + s * 0.18, z, c: lerp(1.75, 1.2, s) - (s > 0.92 ? (s - 0.92) * 4 : 0) }); }
-  wingS.push(wingGeo(ws, { n: 12, t: 0.13, cam: 0.025 }));
-  wingS.push(wingGeo(ws.map((w) => ({ ...w, z: -w.z })), { n: 12, t: 0.13, cam: 0.025 }));
-  // V-struts from the lower longeron to the wing, with a jury strut
-  for (const s of [1, -1]) {
-    const foot = V3(0.4, -0.6, s * 0.48);
-    metal.push(strut(foot, V3(0.8, 0.72 + 0.18 * 0.5, s * 2.8), 0.03, 0.07), strut(foot, V3(-0.25, 0.72 + 0.18 * 0.5, s * 2.8), 0.03, 0.07));
-    metal.push(strut(V3(0.55, -0.1, s * 1.55), V3(0.55, 0.78, s * 1.55), 0.015, 0.03));
-  }
-  // undercarriage: faired legs splayed out, wheels, tail skid
-  for (const s of [1, -1]) {
-    const top = V3(0.95, -0.5, s * 0.46), axle = V3(0.95, -1.42, s * 1.05);
-    metal.push(strut(top, axle, 0.06, 0.13, 10), rod(V3(0.4, -0.6, s * 0.46), axle, 0.025, 6));
-    rub.push(bake(new THREE.TorusGeometry(0.24, 0.085, 10, 24), [axle.x, axle.y, axle.z + s * 0.06]));
-    metal.push(cyl(0.16, 0.16, 0.12, 18, [axle.x, axle.y, axle.z + s * 0.06], [Math.PI / 2, 0, 0]));
-  }
-  dark.push(rod(V3(-4.4, 0.22, 0), V3(-4.7, -0.12, 0), 0.025, 5));
-  // tail: the de Havilland curved fin and rudder, tailplane and elevators
-  body.push(plate([[-3.9, 0.42], [-4.3, 0.75], [-4.55, 1.05], [-4.72, 1.25], [-4.88, 1.33], [-5.02, 1.3], [-5.1, 1.15], [-5.12, 0.8], [-5.08, 0.4], [-4.98, 0.15], [-4.6, 0.25]], 0.05, 0.012));
-  const tp = (s) => plate([[0, 0], [0.15 * s, 1.55], [-0.35, 1.7], [-0.8, 1.6], [-0.9, 0.25], [-0.85, 0]].map(([x, z]) => [x, z]), 0.05, 0.012);
-  for (const s of [1, -1]) wingS.push(bake(tp(1), [-4.15, 0.32, 0], [s * Math.PI / 2, 0, 0]));
-  // cockpit and cabin glazing: windscreen, three side windows each side, roof light
-  glass.push(gridSurf((u, v) => { const x = lerp(1.35, 1.02, v), [w, h, yc] = fus(x), a = lerp(-0.65, 0.65, u); return V3(x + 0.01, yc + Math.cos(a) * h * 0.97 + 0.01, Math.sin(a) * w * 0.98); }, 10, 3));
-  for (const s of [1, -1]) for (const [x0, x1] of [[0.95, 0.45], [0.38, -0.12], [-0.2, -0.55]]) {
-    glass.push(gridSurf((u, v) => { const x = lerp(x0, x1, u), [w, h, yc] = fus(x); return V3(x, yc + lerp(0.05, 0.5, v) * h, s * (w * 1.004 + 0.006)); }, 4, 2));
-  }
-  // engine cowl details: exhaust pipe down the port side, louvres, spinner and the two-blade metal propeller
-  dark.push(rod(V3(2.25, -0.3, -0.42), V3(0.6, -0.45, -0.5), 0.03, 6));
-  for (let i = 0; i < 6; i++) for (const s of [1, -1]) dark.push(box(0.12, 0.012, 0.01, [2.2 - i * 0.07, 0.05, s * 0.415]));
-  const prop = new THREE.Group(); prop.position.set(2.62, -0.07, 0); g.add(prop);
-  { const pr = [bake(bladeGeo(1.0, 0.13, 0.08, 0.5, 0.025), [0, 0, 0], [0, 0, 0]), bake(bladeGeo(1.0, 0.13, 0.08, 0.5, 0.025), [0, 0, 0], [Math.PI, 0, 0])];
-    pr.forEach((p) => p.rotateZ(0)); const pm = new THREE.Mesh(merge(pr), M.engine); pm.rotation.y = 0; prop.add(pm);
-    prop.add(new THREE.Mesh(bake(lathe([[0.13, 0], [0.12, 0.08], [0.07, 0.17], [0.0, 0.22]], 16), [0, 0, 0], [0, 0, -Math.PI / 2]), M.maroon)); }
-  // the blade geometry is along +Y; turn the whole rotor so it spins about X
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color('#9aa0a6').multiplyScalar(0.35), transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
-  disc.position.set(2.66, -0.07, 0); disc.rotation.y = Math.PI / 2; g.add(disc);
-  add(g, body, M.cream); add(g, trim, M.maroon); add(g, wingS, M.silverDope); add(g, dark, M.darkMetal); add(g, glass, M.glass); add(g, rub, M.rubber); add(g, metal, M.engine);
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  disc.castShadow = false;
-  return { group: g, prop, disc };
-}
-
-// IAF roundel (saffron / white / green discs) lying on a surface: centre p, normal axis rotation r
-function roundel(M, parent, p, r, rad) {
-  for (const [k, mat, dz] of [[1, M.saffron, 0], [0.66, M.white, 0.004], [0.33, M.green, 0.008]]) {
-    const m = new THREE.Mesh(new THREE.CircleGeometry(rad * k, 28), mat);
-    m.position.set(...p); m.rotation.set(...r); m.translateZ(dz + 0.01); parent.add(m);
-  }
-}
-
-// ================================================================== 4 · HAL HF-24 MARUT, 1961 (m; nose +X)
-export function buildMarut(M) {
-  const g = new THREE.Group(); g.name = 'marut';
-  const skin = [], dark = [], glass = [];
-  const fus = (x) => {
-    // nose 7.9 … tail -7.9; twin engines side by side → a wide, flat-sided rear fuselage
-    if (x > 4.0) { const u = (x - 4.0) / 3.9; const r = Math.sqrt(Math.max(0, 1 - u * u)) * (1 - 0.2 * u); return [0.62 * Math.pow(r, 1.1) + 0.01, 0.66 * Math.pow(r, 1.1) + 0.01, 0.05 - 0.12 * u * u, 2]; }
-    if (x > -4.0) { const u = (4.0 - x) / 8; return [lerp(0.62, 0.92, Math.min(1, u * 2.5)), lerp(0.66, 0.78, Math.min(1, u * 2)), 0.05, lerp(2, 2.7, Math.min(1, u * 2))]; }
-    const u = (-4.0 - x) / 3.9; return [lerp(0.92, 0.82, u), lerp(0.78, 0.5, u), 0.05 - 0.05 * u, 2.7];
-  };
-  skin.push(bodyGeo(-7.9, 7.9, fus, 90, 32));
-  // canopy bubble with a frame line, dorsal spine behind it
-  glass.push(bake(new THREE.SphereGeometry(1, 28, 14, 0, TAU, 0, Math.PI / 2), [4.5, 0.62, 0], [0, 0, 0], [1.25, 0.5, 0.42]));
-  skin.push(bake(new THREE.SphereGeometry(1, 20, 10, 0, TAU, 0, Math.PI / 2), [2.2, 0.66, 0], [0, 0, 0], [2.6, 0.26, 0.3]));
-  // side intakes (half-round, behind the cockpit)
-  for (const s of [1, -1]) {
-    skin.push(bake(lathe([[0.42, 0], [0.44, 0.15], [0.4, 1.6], [0.2, 3.0], [0.01, 3.4]], 20), [3.0, -0.05, s * 0.7], [0, 0, Math.PI / 2]));
-    dark.push(bake(new THREE.CircleGeometry(0.37, 20), [3.01, -0.05, s * 0.7], [0, Math.PI / 2, 0]));
-  }
-  // 45° swept wing, mid-set; swept fin; low-set swept tailplane
-  const span = 4.5, root = 0.75;
-  const wst = []; for (let i = 0; i <= 8; i++) { const s = i / 8, z = root + s * (span - root); wst.push({ x: 1.6 - (z - root) * 1.0, y: -0.05 - s * 0.08, z, c: lerp(4.2, 1.35, s) }); }
-  for (const sd of [1, -1]) skin.push(wingGeo(wst.map((w) => ({ ...w, z: sd * w.z })), { n: 12, t: 0.06, cam: 0.0 }));
-  const fst = []; for (let i = 0; i <= 6; i++) { const s = i / 6; fst.push({ x: -3.6 - s * 2.3, y: 0.7 + s * 2.4, z: 0, c: lerp(3.6, 1.1, s) }); }
-  skin.push(wingGeo(fst, { n: 10, plane: 'v', t: 0.06, cam: 0 }));
-  const tst = []; for (let i = 0; i <= 5; i++) { const s = i / 5, z = 0.5 + s * 2.3; tst.push({ x: -5.4 - (z - 0.5) * 1.0, y: -0.1, z, c: lerp(2.2, 0.8, s) }); }
-  for (const sd of [1, -1]) skin.push(wingGeo(tst.map((w) => ({ ...w, z: sd * w.z })), { n: 10, t: 0.06, cam: 0 }));
-  // twin jet pipes
-  for (const s of [1, -1]) { dark.push(bake(lathe([[0.36, 0], [0.34, 0.5], [0.31, 0.62]], 20, true), [-7.75, 0.0, s * 0.42], [0, 0, Math.PI / 2])); dark.push(bake(new THREE.CircleGeometry(0.3, 20), [-7.6, 0.0, s * 0.42], [0, -Math.PI / 2, 0])); }
-  dark.push(bake(new THREE.CircleGeometry(1, 24), [-7.89, 0.0, 0], [0, -Math.PI / 2, 0], [0.84, 0.52, 1]));
-  // pitot on the nose, under-wing tanks
-  dark.push(rod(V3(7.85, 0.0, 0), V3(8.6, 0.0, 0), 0.025, 5));
-  for (const s of [1, -1]) { skin.push(bake(lathe([[0.001, 0], [0.18, 0.5], [0.24, 1.2], [0.22, 2.2], [0.001, 2.9]], 14), [1.6, -0.55, s * 2.3], [0, 0, -Math.PI / 2])); skin.push(box(1.2, 0.36, 0.06, [0.1, -0.24, s * 2.3])); }
-  add(g, skin, M.alu); add(g, dark, M.darkMetal); add(g, glass, M.canopy);
-  // roundels on the upper wings
-  for (const s of [1, -1]) roundel(M, g, [-1.4, 0.02, s * 3.3], [-Math.PI / 2, 0, 0], 0.42);
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { group: g, nozzles: [V3(-7.9, 0, 0.42), V3(-7.9, 0, -0.42)], canopy: V3(4.6, 0.85, 0) };
-}
-
-// ================================================================== 5 · HAL TEJAS (m; nose +X)
-export function buildTejas(M) {
-  const g = new THREE.Group(); g.name = 'tejas';
-  const skin = [], dome = [], dark = [], glass = [];
-  const fus = (x) => {
-    if (x > 4.0) { const u = (x - 4.0) / 2.6; const r = Math.sqrt(Math.max(0, 1 - u * u)) * (1 - 0.25 * u); return [0.5 * Math.pow(r, 1.2) + 0.01, 0.52 * Math.pow(r, 1.2) + 0.01, 0.1 - 0.12 * u * u, 2]; }
-    if (x > -4.5) { const u = (4.0 - x) / 8.5; return [lerp(0.5, 0.68, Math.min(1, u * 3)), lerp(0.52, 0.68, Math.min(1, u * 3)), 0.1, 2.3]; }
-    const u = (-4.5 - x) / 2.1; return [lerp(0.68, 0.5, u), lerp(0.68, 0.5, u), 0.1 - 0.06 * u, lerp(2.3, 2, u)];
-  };
-  const nose = bodyGeo(4.0, 6.6, fus, 24, 32), main = bodyGeo(-6.6, 4.0, fus, 60, 32);
-  dome.push(nose); skin.push(main);
-  // canopy: one-piece bubble; a dorsal spine to the fin
-  glass.push(bake(new THREE.SphereGeometry(1, 28, 14, 0, TAU, 0, Math.PI / 2), [3.2, 0.5, 0], [0, 0, 0], [1.35, 0.52, 0.4]));
-  skin.push(bake(new THREE.SphereGeometry(1, 20, 10, 0, TAU, 0, Math.PI / 2), [0.2, 0.62, 0], [0, 0, 0], [3.4, 0.22, 0.34]));
-  // side intakes under the wing roots (Y-duct), splitter plates
-  for (const s of [1, -1]) {
-    skin.push(bodyGeo(-1.5, 1.9, (x) => { const u = (1.9 - x) / 3.4; return [0.32 * (1 - 0.6 * u * u), 0.38 * (1 - 0.5 * u * u), -0.3 + 0.1 * u, 3]; }, 16, 18).translate(0, 0, s * 0.72));
-    dark.push(bake(new THREE.CircleGeometry(1, 18), [1.91, -0.3, s * 0.72], [0, Math.PI / 2, 0], [0.3, 0.36, 1]));
-  }
-  // compound delta: steep inner leading edge, shallower outer; straight trailing edge; thin section
-  const LEx = (z) => (z < 2.0 ? lerp(2.6, -1.3, (z - 0.6) / 1.4) : lerp(-1.3, -4.7, (z - 2.0) / 2.1));
-  const wst = []; for (let i = 0; i <= 14; i++) { const z = 0.6 + i / 14 * 3.5, te = lerp(-5.9, -5.45, (z - 0.6) / 3.5); wst.push({ x: LEx(z), y: -0.12, z, c: Math.max(0.5, LEx(z) - te) }); }
-  for (const sd of [1, -1]) skin.push(wingGeo(wst.map((w) => ({ ...w, z: sd * w.z })), { n: 12, t: 0.045, cam: 0 }));
-  // a single tall swept fin
-  const fst = []; for (let i = 0; i <= 6; i++) { const s = i / 6; fst.push({ x: -2.7 - s * 2.2, y: 0.62 + s * 2.6, z: 0, c: lerp(3.8, 1.0, s) }); }
-  skin.push(wingGeo(fst, { n: 10, plane: 'v', t: 0.05, cam: 0 }));
-  // afterburner nozzle with petals
-  dark.push(bake(lathe([[0.52, 0], [0.5, 0.3], [0.44, 0.75], [0.42, 0.8]], 24), [-6.5, 0.04, 0], [0, 0, Math.PI / 2]));
-  for (let k = 0; k < 12; k++) { const a = k / 12 * TAU; dark.push(box(0.5, 0.012, 0.2, [-7.05, 0.04 + Math.cos(a) * 0.43, Math.sin(a) * 0.43], [a, 0, 0])); }
-  dark.push(bake(new THREE.CircleGeometry(0.4, 20), [-6.95, 0.04, 0], [0, -Math.PI / 2, 0]));
-  dark.push(rod(V3(6.55, 0.08, 0), V3(7.3, 0.08, 0), 0.02, 5));
-  add(g, skin, M.tejas); add(g, dome, M.radome); add(g, dark, M.darkMetal); add(g, glass, M.canopy);
-  for (const s of [1, -1]) roundel(M, g, [-3.4, -0.03, s * 2.6], [-Math.PI / 2, 0, 0], 0.36);
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { group: g, nozzle: V3(-7.2, 0.04, 0), tips: [V3(-4.9, -0.12, 4.1), V3(-4.9, -0.12, -4.1)] };
-}
+// (the four real aircraft are built in flight-craft.js)
 
 // ================================================================== set dressing
 // a seated / standing crowd: bodies + heads (turbans, caps, sun helmets) + a few black umbrellas, instanced

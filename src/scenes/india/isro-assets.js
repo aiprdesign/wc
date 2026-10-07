@@ -8,7 +8,7 @@ import { rng, TAU } from '../../lib/math.js';
 import { fbm2 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { GLSL_NOISE } from '../../lib/noise.js';
-import { PLANET_VERT, MOON_FRAG, mliTexture, crinkleTexture } from '../moonshot-assets.js';
+import { PLANET_VERT, MOON_FRAG } from '../moonshot-assets.js';
 
 export const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -66,82 +66,11 @@ function tubeAlong(curve, rFn, segs = 24, radial = 8) {
   return g;
 }
 
-// ------------------------------------------------------------------ textures
-// square solar-cell grid: dark blue cells, silver interconnects
-export function cellTexture(n = 12, seed = 4) {
-  const r = rng(seed), S = 256, c = mkCanvas(S), g = c.getContext('2d');
-  g.fillStyle = '#9aa0aa'; g.fillRect(0, 0, S, S);
-  const cw = S / n;
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const l = r() * 12;
-    g.fillStyle = `rgb(${26 + l},${42 + l},${104 + l * 1.4})`; g.fillRect(i * cw + 1, j * cw + 1, cw - 2, cw - 2);
-    g.fillStyle = 'rgba(170,180,200,0.22)'; g.fillRect(i * cw + 1.5, j * cw + cw * 0.5, cw - 3, 1);
-  }
-  return toTexture(c, { repeat: true });
-}
-// long solar array: cells in a w×h grid
-export function arrayTexture(cols = 16, rows = 8, seed = 6) {
-  const r = rng(seed), W = 512, H = 256, c = mkCanvas(W, H), g = c.getContext('2d');
-  g.fillStyle = '#8e939c'; g.fillRect(0, 0, W, H);
-  const cw = W / cols, ch = H / rows;
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-    const l = r() * 10;
-    g.fillStyle = `rgb(${20 + l},${28 + l},${70 + l * 1.5})`; g.fillRect(i * cw + 1.2, j * ch + 1.2, cw - 2.4, ch - 2.4);
-  }
-  g.strokeStyle = '#c4c8cf'; g.lineWidth = 4; g.strokeRect(2, 2, W - 4, H - 4);
-  return toTexture(c);
-}
-// gold MLI foil: large soft panels, crinkle glints, a couple of taped seams (near-white: the material sets the gold)
-export function foilTexture(seed = 29) {
-  const S = 256, r = rng(seed), c = mkCanvas(S), g = c.getContext('2d');
-  g.fillStyle = '#efe6d2'; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 26; i++) {
-    const x = r() * S, y = r() * S, rad = 30 + r() * 90, l = r() > 0.5 ? 255 : 196;
-    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(${l},${l - 12},${l - 40},0.12)`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, S, S);
-  }
-  for (let i = 0; i < 140; i++) {
-    const x = r() * S, y = r() * S, a = r() * TAU, len = 6 + r() * 30;
-    g.strokeStyle = r() > 0.5 ? 'rgba(255,250,230,0.45)' : 'rgba(120,96,60,0.3)'; g.lineWidth = 0.6 + r() * 1.2;
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
-  }
-  g.fillStyle = 'rgba(150,120,70,0.35)'; g.fillRect(S * 0.5 - 1.5, 0, 3, S); g.fillRect(0, S * 0.62 - 1.5, S, 3);
-  return toTexture(c, { repeat: true });
-}
-
-// tyre-tread dents for the rover tracks (r = depth)
 export function treadTexture() {
   const c = mkCanvas(64, 256), g = c.getContext('2d');
   g.fillStyle = '#000'; g.fillRect(0, 0, 64, 256);
   for (let i = 0; i < 16; i++) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(6, i * 16 + 3, 52, 6); }
   return toTexture(c, { srgb: false, repeat: true });
-}
-
-// ------------------------------------------------------------------ shared materials
-export function isroMaterials(env = null) {
-  const crinkle = crinkleTexture(7, 256);
-  const mli = mliTexture(256, 23); mli.repeat.set(2, 2);
-  const cells = cellTexture();
-  const foil = foilTexture();
-  const std = (o) => { const m = new THREE.MeshStandardMaterial(o); if (env) m.envMap = env; return m; };
-  return {
-    white: std({ color: '#e8e6e1', roughness: 0.42, metalness: 0, vertexColors: true, envMapIntensity: 0.7 }),
-    paint: std({ color: '#ffffff', roughness: 0.5, metalness: 0.05, vertexColors: true, envMapIntensity: 0.6 }),
-    alu: std({ color: '#b2b5ba', roughness: 0.5, metalness: 0.6, envMapIntensity: 0.6 }),
-    dark: std({ color: '#1c1d21', roughness: 0.55, metalness: 0.4, envMapIntensity: 0.5 }),
-    nozzle: std({ color: '#3a3836', roughness: 0.45, metalness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    gold: std({ color: '#f2bc46', map: foil, metalness: 0.45, roughness: 0.34, bumpMap: crinkle, bumpScale: 0.6, envMapIntensity: 1.0 }),
-    goldDeep: std({ color: '#b07a2c', map: mli, metalness: 0.6, roughness: 0.42, bumpMap: crinkle, bumpScale: 2, envMapIntensity: 0.9 }),
-    silver: std({ color: '#c9cdd3', metalness: 0.7, roughness: 0.34, bumpMap: crinkle, bumpScale: 1.8, envMapIntensity: 0.9 }),
-    cells: std({ map: cells, color: '#ffffff', metalness: 0.3, roughness: 0.3, envMapIntensity: 1.2 }),
-    array: std({ map: arrayTexture(), color: '#ffffff', metalness: 0.4, roughness: 0.3, envMapIntensity: 1.2, side: THREE.DoubleSide }),
-    dish: std({ color: '#ecebe6', roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide, envMapIntensity: 0.6 }),
-    bay: std({ color: '#141416', roughness: 0.8, metalness: 0.2 }),
-    concrete: std({ color: '#8a8780', roughness: 0.92, metalness: 0, envMapIntensity: 0.4 }),
-    steel: std({ color: '#6c6f74', roughness: 0.55, metalness: 0.6, envMapIntensity: 0.5 }),
-    wheel: std({ color: '#9a9ca0', roughness: 0.45, metalness: 0.8, envMapIntensity: 0.7 }),
-    ramp: std({ color: '#b4b3ae', roughness: 0.55, metalness: 0.25, envMapIntensity: 0.6 }),
-  };
 }
 
 // ------------------------------------------------------------------ exhaust plume (open cone along −Y from its apex, additive)
@@ -218,7 +147,11 @@ void main(){
     vec3 n = normalize(vec3(g.x * 0.09 * fade, 1.0, g.y * 0.09 * fade));
     vec3 r = reflect(d, n); r.y = abs(r.y);
     float fr = 0.03 + 0.97 * pow(1.0 - max(dot(-d, n), 0.0), 5.0);
-    col = sky(r) * fr * 0.85 + (uMode == 0 ? vec3(0.008, 0.012, 0.02) : vec3(0.003, 0.006, 0.012));
+    // blue-green water body under the reflection, and a glitter path toward the (low) sun
+    col = sky(r) * fr * 0.85 + (uMode == 0 ? vec3(0.012, 0.045, 0.05) : vec3(0.006, 0.024, 0.03)) * (1.0 - fr);
+    vec3 Lr = normalize(vec3(uSun.x, abs(uSun.y) + 0.03, uSun.z));
+    float gl = pow(max(dot(r, Lr), 0.0), 260.0) * (0.6 + 0.4 * snoise(vec3(p * 6.0, uTime * 2.0)));
+    col += (uMode == 0 ? vec3(1.3, 0.6, 0.25) : vec3(0.35, 0.3, 0.3)) * gl * 1.4;
     col = mix(col, sky(vec3(d.x, 0.004, d.z)), exp(-(-d.y) * 140.0) * 0.8);
   }
   gl_FragColor = vec4(col * uGain, 1.0);
@@ -233,6 +166,62 @@ export function makeSky() {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), m);
   mesh.renderOrder = -1000; mesh.frustumCulled = false; mesh.userData.u = u;
   return mesh;
+}
+
+// a water surface (lagoon / sea) drawn with the sky's own sea: the fragment shader sees a downward view ray,
+// so the plane shows the same blue-green mirror of the sky, its waves and the sun's glitter path.
+export function makeWaterSurface(sky, geo) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: sky.userData.u, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    vertexShader: 'varying vec3 vDir; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vDir = w.xyz - cameraPosition; gl_Position = projectionMatrix * viewMatrix * w; }',
+    fragmentShader: skyFrag,
+  });
+  const mesh = new THREE.Mesh(geo, m); mesh.receiveShadow = false; return mesh;
+}
+
+// ------------------------------------------------------------------ vegetation (instanced; colours per vertex, tinted per instance)
+// a grass tuft: thin tapering blades fanned out (double-sided)
+export function grassTuftGeometry(seed = 3, blades = 7) {
+  const R = rng(seed), pos = [], col = [], c0 = new THREE.Color('#3b5a1f'), c1 = new THREE.Color('#8aa64a'), c = new THREE.Color();
+  for (let i = 0; i < blades; i++) {
+    const a = R() * TAU, lean = 0.15 + R() * 0.35, h = 0.55 + R() * 0.45, w = 0.025 + R() * 0.015;
+    const dx = Math.cos(a), dz = Math.sin(a), sx = -dz * w, sz = dx * w;
+    const tip = [dx * lean * h, h, dz * lean * h];
+    pos.push(-sx, 0, -sz, sx, 0, sz, ...tip);
+    c.copy(c0); col.push(c.r, c.g, c.b, c.r, c.g, c.b); c.copy(c0).lerp(c1, 0.6 + R() * 0.4); col.push(c.r, c.g, c.b);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  // normals pointing up-ish read better for thin blades lit from any side
+  const n = g.attributes.normal; for (let i = 0; i < n.count; i++) { const y = n.getY(i); n.setXYZ(i, n.getX(i) * 0.4, Math.abs(y) * 0.4 + 0.8, n.getZ(i) * 0.4); }
+  g.attributes.normal.needsUpdate = true; g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n.count * 2), 2));
+  return g;
+}
+// a lumpy shrub (darker inside, lighter crown)
+export function shrubGeometry(seed = 5, detail = 1) {
+  const R = rng(seed), g = new THREE.IcosahedronGeometry(1, detail), p = g.attributes.position, v = new THREE.Vector3();
+  const bumps = Array.from({ length: 7 }, () => new THREE.Vector3(R() - 0.5, R() * 0.6, R() - 0.5).normalize());
+  const col = new Float32Array(p.count * 3), c0 = new THREE.Color('#1c3214'), c1 = new THREE.Color('#47662a'), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize(); let k = 0.8; bumps.forEach((b) => { k += Math.max(0, v.dot(b) - 0.55) * 0.9; });
+    v.multiplyScalar(k); v.y = v.y * 0.7 + 0.45; p.setXYZ(i, v.x, Math.max(0, v.y), v.z);
+    c.copy(c0).lerp(c1, Math.max(0, Math.min(1, v.y / 1.2)) * 0.8 + R() * 0.2); col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // soft, rounded shading (normals from the crown's centre, not the facets)
+  const nn = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i) - 0.35, p.getZ(i)).normalize(); nn.set([v.x, v.y, v.z], i * 3); }
+  g.setAttribute('normal', new THREE.BufferAttribute(nn, 3));
+  return g;
+}
+// a casuarina (the island's shelter-belt tree): slim trunk, stacked drooping feathery cones
+export function casuarinaGeometry(seed = 9) {
+  const R = rng(seed), geos = [], h = 1;
+  geos.push(tint(cyl(0.012, 0.025, 0.55, 5, [0, 0.275, 0]), '#4a3a2c'));
+  for (let i = 0; i < 4; i++) {
+    const y = 0.3 + i * 0.17, r = 0.2 - i * 0.04 + R() * 0.03;
+    const c = new THREE.ConeGeometry(r, 0.32, 7, 1, true); c.translate(0, y + 0.16, 0);
+    geos.push(tint(c, ['#1e3219', '#243c1e', '#2a4423', '#304c28'][i]));
+  }
+  return merge(geos).scale(1, h, 1);
 }
 
 // camera-centred stars that can fade toward (and below) the horizon
@@ -439,53 +428,7 @@ export function marsMesh(radius, sun, segs = 128) {
   return g;
 }
 
-// ================================================================== HARDWARE (metres)
-
-// Nike-Apache two-stage sounding rocket, ~8.3 m: fat Nike booster with four big fins, slim Apache upper stage.
-export function buildNikeApache(M) {
-  const g = new THREE.Group();
-  const W = '#e9e6df', GR = '#9c9c98', BK = '#26262a';
-  const body = [];
-  body.push(tint(lathe([[0.15, 0], [0.19, 0.1], [0.21, 0.16], [0.21, 3.5], [0.17, 3.62], [0.1, 3.75], [0.09, 3.78]], 24), W));
-  body.push(tint(cyl(0.212, 0.212, 0.22, 24, [0, 1.2, 0]), BK));                // roll band
-  body.push(tint(cyl(0.212, 0.212, 0.08, 24, [0, 3.0, 0]), GR));
-  body.push(tint(lathe([[0.0825, 3.76], [0.0825, 7.35], [0.075, 7.55], [0.06, 7.8], [0.038, 8.05], [0.015, 8.26], [0.001, 8.3]], 20), W));
-  body.push(tint(cyl(0.084, 0.084, 0.5, 20, [0, 6.95, 0]), '#c8c6c0'));         // payload section
-  body.push(tint(cyl(0.084, 0.084, 0.12, 20, [0, 5.4, 0]), BK));
-  // fins: clipped deltas on the booster, small ones on the Apache
-  const fin = (root, tip, span, sweep, th) => {
-    const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(0, root); s.lineTo(span, sweep + tip); s.lineTo(span, sweep); s.closePath();
-    const geo = new THREE.ExtrudeGeometry(s, { depth: th, bevelEnabled: false }); geo.translate(0, 0, -th / 2); return geo;
-  };
-  for (let i = 0; i < 4; i++) {
-    const a = i * Math.PI / 2 + Math.PI / 4;
-    body.push(tint(bake(fin(1.05, 0.38, 0.62, 0.05, 0.02), [Math.cos(a) * 0.2, 0.12, -Math.sin(a) * 0.2], [0, a, 0]), W));
-    body.push(tint(bake(fin(0.42, 0.14, 0.2, 0.06, 0.012), [Math.cos(a) * 0.08, 3.86, -Math.sin(a) * 0.08], [0, a, 0]), W));
-  }
-  const mesh = new THREE.Mesh(merge(body), M.paint); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh);
-  const noz = new THREE.Mesh(lathe([[0.15, 0.02], [0.13, -0.06], [0.11, -0.1]], 20), M.nozzle); g.add(noz);
-  return { group: g, exit: V3(0, -0.1, 0), length: 8.3 };
-}
-
-// rail launcher: pedestal, trunnion, a long box-girder rail at the launch elevation
-export function buildLauncher(M, elev) {
-  const g = new THREE.Group();
-  const parts = [];
-  parts.push(box(2.2, 0.35, 2.2, [0, 0.175, 0]));
-  parts.push(box(1.1, 0.9, 1.1, [0, 0.8, 0]));
-  parts.push(box(0.3, 0.6, 0.9, [0, 1.45, 0]));
-  const rail = new THREE.Group();
-  const rparts = [box(0.22, 9.2, 0.18, [0, 4.0, -0.32])];
-  for (let i = 0; i < 12; i++) rparts.push(box(0.36, 0.05, 0.36, [0, -0.3 + i * 0.75, -0.32]));
-  rparts.push(beam(V3(0, -0.4, -0.32), V3(0, 2.2, -1.3), 0.08));
-  const rmesh = new THREE.Mesh(merge(rparts), M.dark); rmesh.castShadow = true; rail.add(rmesh);
-  rail.position.set(0, 1.6, 0); rail.rotation.x = -(Math.PI / 2 - elev); g.add(rail);
-  // A-frame brace from the pedestal to the rail
-  const top = V3(0, 1.6, 0).add(V3(0, 3.0, -0.32).applyAxisAngle(V3(1, 0, 0), rail.rotation.x));
-  parts.push(beam(V3(-0.8, 0.35, -0.9), top, 0.07), beam(V3(0.8, 0.35, -0.9), top, 0.07));
-  const pm = new THREE.Mesh(merge(parts), M.dark); pm.castShadow = true; pm.receiveShadow = true; g.add(pm);
-  return { group: g, rail };
-}
+// ================================================================== set dressing (metres); the hero hardware is in isro-hardware.js
 
 // coconut palm (silhouette-grade: tapered ringed trunk, drooping pinnate fronds, a nut cluster)
 export function palmGeometry(seed = 1, h = 9) {
@@ -519,8 +462,14 @@ export function palmGeometry(seed = 1, h = 9) {
     }
   }
   const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); fg.computeVertexNormals();
+  // colours: ringed grey-brown trunk, fronds from deep green to sun-yellowed tips (older, lower fronds drier), green nuts
+  tint(geos[0], '#6a5a48');
+  { const cA = new THREE.Color('#2f6a1e'), cB = new THREE.Color('#7fa33a'), cD = new THREE.Color('#a0903e'), c = new THREE.Color(), n = pos.length / 3, colA = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const y = pos[i * 3 + 1], dy = Math.max(0, Math.min(1, (top.y - y) / 3)), j = Math.floor(i / 9);
+      c.copy(cA).lerp(cB, ((j * 7919) % 13) / 13 * 0.6 + (i % 3 === 2 ? 0.25 : 0)).lerp(cD, dy * dy * 0.7); colA.set([c.r, c.g, c.b], i * 3); }
+    fg.setAttribute('color', new THREE.BufferAttribute(colA, 3)); }
   geos.push(fg);
-  for (let i = 0; i < 7; i++) { const a = R() * TAU; geos.push(bake(new THREE.SphereGeometry(0.13, 8, 6), [top.x + Math.cos(a) * 0.22, top.y - 0.3 - R() * 0.2, top.z + Math.sin(a) * 0.22])); }
+  for (let i = 0; i < 7; i++) { const a = R() * TAU; geos.push(tint(bake(new THREE.SphereGeometry(0.13, 8, 6), [top.x + Math.cos(a) * 0.22, top.y - 0.3 - R() * 0.2, top.z + Math.sin(a) * 0.22]), '#6f7d2c')); }
   return merge(geos);
 }
 
@@ -551,240 +500,6 @@ export function bicycleGeometry() {
   g.push(box(0.4, 0.03, 0.18, [-0.42, 0.74, 0]), rod(V3(-0.6, 0.74, 0), RH, 0.01, 3));
   g.push(bake(lathe([[0.1, 0], [0.1, 0.3], [0.07, 0.55], [0.03, 0.72], [0.001, 0.78]], 14), [-0.35, 0.86, 0], [0, 0, Math.PI / 2]));
   return merge(g);
-}
-
-// Aryabhata: a 26-faced polyhedron (rhombicuboctahedron), ~1.4 m across, solar cells on every face but top and bottom
-export function buildAryabhata(M) {
-  const g = new THREE.Group();
-  const k = 1 + Math.SQRT2, verts = [];
-  const perms = [[1, 1, k], [1, k, 1], [k, 1, 1]];
-  for (const [a, b, c] of perms) for (const sa of [-1, 1]) for (const sb of [-1, 1]) for (const sc of [-1, 1]) verts.push(V3(a * sa, b * sb, c * sc));
-  const normals = [];
-  for (const ax of [V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, 1)]) { normals.push(ax.clone(), ax.clone().negate()); }
-  for (const [i, j] of [[0, 1], [0, 2], [1, 2]]) for (const si of [-1, 1]) for (const sj of [-1, 1]) { const n = V3(); n.setComponent(i, si); n.setComponent(j, sj); normals.push(n.normalize()); }
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) normals.push(V3(sx, sy, sz).normalize());
-  const S = 0.7 / Math.sqrt(2 + k * k);
-  const shell = [], cells = [], caps = [];
-  for (const n of normals) {
-    let mx = -1e9; for (const v of verts) mx = Math.max(mx, v.dot(n));
-    const face = verts.filter((v) => Math.abs(v.dot(n) - mx) < 1e-4);
-    const c = face.reduce((a, v) => a.add(v), V3()).multiplyScalar(1 / face.length);
-    const u = V3().subVectors(face[0], c).normalize(), w = V3().crossVectors(n, u);
-    face.sort((a, b) => Math.atan2(V3().subVectors(a, c).dot(w), V3().subVectors(a, c).dot(u)) - Math.atan2(V3().subVectors(b, c).dot(w), V3().subVectors(b, c).dot(u)));
-    const poly = (scale, lift, uvK) => {
-      const pos = [], uv = [], nn = [];
-      for (let i = 0; i < face.length; i++) {
-        const a = face[i], b = face[(i + 1) % face.length];
-        for (const p of [c, a, b]) {
-          const q = V3().subVectors(p, c).multiplyScalar(scale).add(c).addScaledVector(n, lift).multiplyScalar(S);
-          pos.push(q.x, q.y, q.z); nn.push(n.x, n.y, n.z);
-          const d = V3().subVectors(p, c).multiplyScalar(scale);
-          uv.push(0.5 + d.dot(u) * uvK, 0.5 + d.dot(w) * uvK);
-        }
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      return geo;
-    };
-    shell.push(poly(1, 0, 0.3));
-    if (Math.abs(n.y) > 0.99) caps.push(poly(0.82, 0.03, 0.3));
-    else cells.push(poly(0.86, 0.025, 0.36));
-  }
-  const add = (geos, mat) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-  add(shell, M.alu); add(cells, M.cells); add(caps, M.dark);
-  // a few small whip antennas round the base and a short mast on top
-  const ant = [];
-  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4; ant.push(rod(V3(Math.cos(a) * 0.3, -0.62, Math.sin(a) * 0.3), V3(Math.cos(a) * 0.62, -0.95, Math.sin(a) * 0.62), 0.006, 4)); }
-  ant.push(cyl(0.04, 0.04, 0.12, 10, [0, 0.74, 0]));
-  add(ant, M.alu);
-  return { group: g };
-}
-
-// PSLV-XL (44 m): four-stage core, six strap-ons, the bulbous payload fairing; white with grey stage bands.
-export function buildPSLV(M) {
-  const g = new THREE.Group();
-  const W = '#ecebe6', G1 = '#a9a8a4', DK = '#3a3a3c';
-  const prof = [[0.9, 0], [1.4, 0.4], [1.4, 20.2], [1.4, 33.4], [1.0, 34.2], [1.0, 37.4], [1.6, 38.4], [1.6, 41.4], [1.45, 42.4], [1.15, 43.3], [0.6, 44.1], [0.15, 44.4], [0.001, 44.42]];
-  const core = lathe(prof, 40);
-  const pos = core.attributes.position, col = new Float32Array(pos.count * 3), cw = new THREE.Color(W), cg = new THREE.Color(G1), cd = new THREE.Color(DK), tc = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    tc.copy(cw);
-    if ((y > 19.9 && y < 21.0) || (y > 33.3 && y < 34.3)) tc.copy(cg);
-    if (y > 37.3 && y < 37.55) tc.copy(cd);
-    if (y < 0.5) tc.copy(cd);
-    col.set([tc.r, tc.g, tc.b], i * 3);
-  }
-  core.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const parts = [core];
-  parts.push(tint(cyl(1.415, 1.415, 0.16, 40, [0, 8.0, 0]), G1), tint(cyl(1.415, 1.415, 0.16, 40, [0, 27.5, 0]), G1), tint(cyl(1.615, 1.615, 0.1, 40, [0, 40.2, 0]), G1));
-  const strapR = 1.4 + 0.52;
-  const straps = [];
-  for (let i = 0; i < 6; i++) {
-    const a = i * Math.PI / 3 + Math.PI / 6;
-    const x = Math.cos(a) * strapR, z = Math.sin(a) * strapR;
-    const s = lathe([[0.42, 0], [0.5, 0.35], [0.5, 12.0], [0.45, 12.7], [0.3, 13.4], [0.12, 13.85], [0.001, 13.95]], 20);
-    const sp = s.attributes.position, sc = new Float32Array(sp.count * 3);
-    for (let k = 0; k < sp.count; k++) { const y = sp.getY(k); tc.copy(y < 0.4 ? cd : (y > 5.9 && y < 6.15) ? cg : cw); sc.set([tc.r, tc.g, tc.b], k * 3); }
-    s.setAttribute('color', new THREE.BufferAttribute(sc, 3));
-    parts.push(bake(s, [x, 0.5, z]));
-    parts.push(tint(beam(V3(x * 0.84, 2.0, z * 0.84), V3(x * 0.74, 2.0, z * 0.74), 0.12), G1), tint(beam(V3(x * 0.84, 11.0, z * 0.84), V3(x * 0.74, 11.0, z * 0.74), 0.12), G1));
-    straps.push(V3(x, 0.45, z));
-  }
-  const mesh = new THREE.Mesh(merge(parts), M.white); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh);
-  const nz = [bake(lathe([[0.55, 0.2], [0.7, -0.4], [0.85, -1.0]], 24), [0, 0, 0])];
-  for (const s of straps) nz.push(bake(lathe([[0.3, 0.1], [0.36, -0.3], [0.42, -0.7]], 16), [s.x, s.y, s.z]));
-  g.add(new THREE.Mesh(merge(nz), M.nozzle));
-  return { group: g, coreExit: V3(0, -1.0, 0), strapExits: straps.map((s) => V3(s.x, s.y - 0.7, s.z)) };
-}
-
-// launch complex: deck, umbilical tower with swing arms, lightning masts
-export function buildPad(M) {
-  const g = new THREE.Group();
-  const deck = [box(34, 2.2, 30, [0, -1.1 - 1.0, 0])];
-  deck.push(box(8, 0.6, 8, [0, -0.7, 0]));
-  const dm = new THREE.Mesh(merge(deck), M.concrete); dm.receiveShadow = true; dm.castShadow = true; g.add(dm);
-  // umbilical tower: a 6 × 6 m lattice, 52 m tall, west of the vehicle
-  const T = [], TX = -9.5, S = 3, H = 52;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) T.push(beam(V3(TX + sx * S, -1, sz * S), V3(TX + sx * S, H, sz * S), 0.35));
-  for (let y = 0; y < H; y += 3.25) {
-    const c = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-    for (let i = 0; i < 4; i++) {
-      const [ax, az] = c[i], [bx, bz] = c[(i + 1) % 4];
-      T.push(beam(V3(TX + ax * S, y, az * S), V3(TX + bx * S, y, bz * S), 0.2));
-      T.push(beam(V3(TX + ax * S, y, az * S), V3(TX + bx * S, y + 3.25, bz * S), 0.12));
-    }
-    if (Math.round(y / 3.25) % 3 === 1) T.push(box(7, 0.25, 7, [TX, y, 0]));
-  }
-  T.push(box(7.4, 3, 7.4, [TX, H + 1.5, 0]));
-  for (const y of [12, 26, 36, 41]) T.push(box(6.2, 0.5, 1.4, [TX + 5.4, y, 0]), beam(V3(TX + 3, y - 2.2, 0), V3(TX + 6.5, y - 0.2, 0), 0.18));
-  const tm = new THREE.Mesh(merge(T), M.steel); tm.castShadow = true; tm.receiveShadow = true; g.add(tm);
-  // lightning masts
-  const L = [];
-  for (const [x, z, h] of [[-52, -34, 76], [50, -46, 76]]) {
-    L.push(cyl(0.3, 0.85, h, 8, [x, h / 2 - 1, z]));
-    L.push(cyl(0.06, 0.06, 6, 4, [x, h + 2, z]));
-  }
-  const lm = new THREE.Mesh(merge(L), M.steel); lm.castShadow = true; g.add(lm);
-  const lamps = [];
-  for (let y = 6; y < H; y += 9.75) lamps.push(V3(TX + S + 0.2, y, -S - 0.2), V3(TX + S + 0.2, y, S + 0.2));
-  return { group: g, lamps, towerX: TX };
-}
-
-// a dish antenna (paraboloid + rim + feed on a tripod), opening toward +Y, base at y = 0
-export function dishGeometry(r, depth) {
-  const pts = []; for (let i = 0; i <= 14; i++) { const u = i / 14; pts.push([r * u, depth * u * u]); }
-  return lathe(pts, 36);
-}
-function feedGeos(r, depth, f) {
-  const g = [];
-  for (let i = 0; i < 3; i++) { const a = i * TAU / 3; g.push(rod(V3(Math.cos(a) * r * 0.9, depth * 0.85, Math.sin(a) * r * 0.9), V3(0, f, 0), r * 0.012, 4)); }
-  g.push(cyl(r * 0.07, r * 0.05, r * 0.14, 12, [0, f, 0]));
-  return g;
-}
-
-// Chandrayaan-1 orbiter: a ~1.5 m cuboid bus in gold foil, one solar wing on a yoke, a boom-mounted dish
-export function buildChandrayaan1(M) {
-  const g = new THREE.Group();
-  const add = (geos, mat) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-  add([box(1.5, 1.5, 1.5, [0, 0, 0])], M.gold);
-  add([box(1.52, 0.04, 1.52, [0, 0.77, 0]), box(0.5, 0.25, 0.4, [-0.3, 0.9, 0.3]), box(0.35, 0.3, 0.35, [0.35, 0.92, -0.25]), cyl(0.12, 0.12, 0.35, 12, [0.4, 0.95, 0.4])], M.silver);
-  add([box(0.04, 1.0, 0.9, [-0.77, 0.05, 0])], M.dark);
-  // solar wing on +x
-  const wing = new THREE.Group(); wing.position.set(0.76, 0, 0); g.add(wing);
-  const wy = new THREE.Mesh(merge([rod(V3(0, 0, 0), V3(0.9, 0, 0), 0.03, 6), rod(V3(0.9, 0, -0.5), V3(0.9, 0, 0.5), 0.02, 4)]), M.alu); wing.add(wy);
-  const panel = new THREE.Mesh(box(2.15, 0.035, 1.8, [0.9 + 1.075, 0, 0]), M.array); panel.castShadow = true; wing.add(panel);
-  // high-gain dish on a boom from −x
-  const boom = new THREE.Mesh(merge([rod(V3(-0.75, -0.2, 0), V3(-1.5, -0.6, 0), 0.025, 6)]), M.alu); g.add(boom);
-  const dish = new THREE.Group(); dish.position.set(-1.55, -0.62, 0); dish.rotation.z = Math.PI / 2 + 0.4; g.add(dish);
-  dish.add(new THREE.Mesh(dishGeometry(0.36, 0.1), M.dish), new THREE.Mesh(merge(feedGeos(0.36, 0.1, 0.25)), M.alu));
-  return { group: g, wing };
-}
-
-// Mars Orbiter Mission: a gold-foil cuboid bus, a 2.2 m dish on top, one three-panel solar wing, the main engine below
-export function buildMOM(M) {
-  const g = new THREE.Group();
-  const add = (geos, mat, parent = g) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  add([box(1.5, 1.5, 1.5, [0, 0, 0])], M.gold);
-  add([box(1.52, 0.04, 1.52, [0, 0.77, 0]), box(1.52, 0.04, 1.52, [0, -0.77, 0]), box(0.3, 0.3, 0.3, [0.5, -0.9, 0.5]), box(0.04, 0.9, 1.0, [0, 0, 0.77])], M.silver);
-  add([cyl(0.16, 0.2, 0.12, 16, [0, -0.83, 0]), box(0.05, 0.6, 0.6, [-0.77, 0.2, 0])], M.dark);
-  // dish (2.2 m) on a short pedestal on top
-  const dish = new THREE.Group(); dish.position.set(0, 0.95, 0); g.add(dish);
-  dish.add(new THREE.Mesh(dishGeometry(1.1, 0.28), M.dish));
-  add(feedGeos(1.1, 0.28, 0.82), M.alu, dish);
-  add([cyl(0.12, 0.16, 0.2, 12, [0, 0.83, 0])], M.alu);
-  // single solar wing (+x): three panels
-  const wing = new THREE.Group(); wing.position.set(0.76, 0, 0); g.add(wing);
-  add([rod(V3(0, 0, 0), V3(0.5, 0, 0), 0.03, 6)], M.alu, wing);
-  for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(box(1.4, 0.035, 1.75, [0.5 + 0.72 + i * 1.44, 0, 0]), M.array); m.castShadow = true; wing.add(m); }
-  // main engine (liquid apogee motor) and a few thrusters
-  const noz = new THREE.Mesh(lathe([[0.07, 0], [0.1, -0.12], [0.16, -0.32], [0.2, -0.46]], 20), M.nozzle); noz.position.y = -0.88; g.add(noz);
-  add([0, 1, 2, 3].map((i) => { const a = i * Math.PI / 2 + Math.PI / 4; return cyl(0.03, 0.05, 0.1, 8, [Math.cos(a) * 0.68, -0.82, Math.sin(a) * 0.68]); }), M.nozzle);
-  return { group: g, exit: V3(0, -1.34, 0), wing, dish };
-}
-
-// Vikram lander (Chandrayaan-3): 2 × 2 × 1.17 m gold-foil box, four legs, four engines below, a side solar panel,
-// and a ramp (two hinged segments) folded across the rover bay on +x. Origin: centre of the body's underside.
-export const VIKRAM = { legDrop: 0.875, bayFloor: 0.02, rampLen: 0.95 };
-export function buildVikram(M) {
-  const g = new THREE.Group();
-  const add = (geos, mat, parent = g) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  const BH = 1.17, BY = 0.02, BT = 0.79;   // body height; bay floor; bay top
-  // body around the bay (x 0.15…1, z ±0.47, y 0.02…0.79)
-  add([
-    box(1.15, BH, 2, [-0.425, BH / 2, 0]),
-    box(0.85, BH - BT, 2, [0.575, (BH + BT) / 2, 0]),
-    box(0.85, BT, 0.53, [0.575, BT / 2, 0.735]), box(0.85, BT, 0.53, [0.575, BT / 2, -0.735]),
-  ], M.gold);
-  add([box(0.85, 0.02, 0.94, [0.575, 0.01, 0]), box(0.02, BT, 0.94, [0.16, BT / 2, 0]), box(0.85, 0.02, 0.94, [0.575, BT - 0.01, 0])], M.bay);
-  // top deck: silver foil, a radiator, instrument boxes, a small dish on a mast
-  add([box(2.02, 0.04, 2.02, [0, BH + 0.02, 0]), box(0.5, 0.18, 0.4, [-0.5, BH + 0.13, 0.5]), box(0.36, 0.26, 0.3, [0.45, BH + 0.17, -0.55])], M.silver);
-  add([cyl(0.12, 0.12, 0.2, 12, [0.55, BH + 0.14, 0.55])], M.dish);
-  add([box(0.9, 0.05, 0.7, [-0.4, BH + 0.065, -0.45])], M.dish);
-  add([cyl(0.03, 0.03, 0.35, 8, [-0.6, BH + 0.2, -0.65])], M.alu);
-  const dsh = new THREE.Mesh(dishGeometry(0.22, 0.06), M.dish); dsh.position.set(-0.6, BH + 0.38, -0.65); dsh.rotation.set(0.4, 0, 0.5); g.add(dsh);
-  // side solar panel on −z, and one on −x
-  add([box(1.8, 0.95, 0.04, [0, 0.62, -1.03]), box(0.04, 0.95, 1.6, [-1.03, 0.62, 0])], M.array);
-  // engines: four nozzles near the corners of the underside
-  const nz = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) nz.push(bake(lathe([[0.06, 0], [0.08, -0.08], [0.12, -0.2], [0.14, -0.26]], 16), [sx * 0.55, 0, sz * 0.55]));
-  add(nz, M.nozzle);
-  add([box(1.6, 0.06, 1.6, [0, -0.03, 0])], M.silver);
-  // legs
-  const L = [], pads = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const foot = V3(sx * 1.42, -0.85, sz * 1.42), knee = V3(sx * 1.25, -0.35, sz * 1.25);
-    L.push(rod(V3(sx * 0.98, 0.45, sz * 0.98), foot, 0.045, 8));
-    L.push(rod(V3(sx * 0.98, 0.02, sz * 0.4), knee, 0.025, 6), rod(V3(sx * 0.4, 0.02, sz * 0.98), knee, 0.025, 6));
-    pads.push(cyl(0.21, 0.17, 0.05, 18, [foot.x, -0.85, foot.z]));
-  }
-  add(L, M.alu); add(pads, M.silver);
-  // ramp: segment A hinged at the bay floor edge (axis z), segment B hinged at A's far end
-  const rampSeg = () => [box(VIKRAM.rampLen, 0.03, 0.86, [VIKRAM.rampLen / 2, 0.015, 0]), box(VIKRAM.rampLen, 0.06, 0.03, [VIKRAM.rampLen / 2, 0.06, 0.43]), box(VIKRAM.rampLen, 0.06, 0.03, [VIKRAM.rampLen / 2, 0.06, -0.43])];
-  const rampA = new THREE.Group(); rampA.position.set(1.0, BY, 0); g.add(rampA);
-  add(rampSeg(), M.ramp, rampA);
-  const rampB = new THREE.Group(); rampB.position.set(VIKRAM.rampLen, 0, 0); rampA.add(rampB);
-  add(rampSeg(), M.ramp, rampB);
-  return { group: g, rampA, rampB, engines: [[-0.55, -0.55], [-0.55, 0.55], [0.55, -0.55], [0.55, 0.55]].map(([x, z]) => V3(x, -0.26, z)) };
-}
-
-// Pragyan rover: six wheels on rocker-bogies, a gold-foil body, one tilted solar panel, a navigation-camera mast.
-// Origin: centre of the wheel contact patch; drives along +x.
-export function buildPragyan(M) {
-  const g = new THREE.Group();
-  const add = (geos, mat, parent = g) => { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  add([box(0.8, 0.24, 0.52, [0, 0.33, 0])], M.gold);
-  add([box(0.82, 0.02, 0.54, [0, 0.46, 0])], M.silver);
-  const panel = new THREE.Group(); panel.position.set(-0.38, 0.47, 0); panel.rotation.z = 0.42; g.add(panel);
-  add([box(0.78, 0.02, 0.56, [0.39, 0.012, 0])], M.array, panel);
-  add([cyl(0.015, 0.015, 0.24, 6, [0.34, 0.58, 0]), box(0.05, 0.03, 0.3, [0.34, 0.7, 0]), box(0.06, 0.06, 0.06, [0.36, 0.7, 0.12]), box(0.06, 0.06, 0.06, [0.36, 0.7, -0.12])], M.dark);
-  const W = [], links = [];
-  for (const sz of [-1, 1]) {
-    for (const x of [-0.3, 0, 0.3]) W.push(bake(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 18), [x, 0.1, sz * 0.34], [Math.PI / 2, 0, 0]));
-    links.push(beam(V3(-0.3, 0.1, sz * 0.3), V3(-0.08, 0.27, sz * 0.3), 0.025), beam(V3(-0.08, 0.27, sz * 0.3), V3(0.3, 0.1, sz * 0.3), 0.025), beam(V3(0, 0.1, sz * 0.3), V3(0.12, 0.2, sz * 0.3), 0.02));
-  }
-  add(W, M.wheel); add(links, M.alu);
-  return { group: g, gauge: 0.34 };
 }
 
 // ------------------------------------------------------------------ lunar south-polar terrain (CPU heightfield, metres)
