@@ -201,9 +201,12 @@ export function create(ctx, segment) {
           refl = mix(refl, uBankCol, (1.0 - smoothstep(bh * 0.7, bh, Rn.y)) * 0.85); }
         float fres = 0.02 + 0.98 * pow(1.0 - max(dot(-V, N), 0.0), 5.0);
         // the Ganga's body: blue-green, catching the dawn light where the water is seen from above
-        vec3 body = vec3(0.03, 0.085, 0.08) * (0.75 + 0.5 * uBodyK) + vec3(0.04, 0.06, 0.03) * uGlitter * 0.25;
+        vec3 body = vec3(0.045, 0.15, 0.14) * (0.7 + 0.5 * uBodyK) + vec3(0.05, 0.08, 0.04) * uGlitter * 0.3;
         body *= 0.85 + 0.3 * snoise(vec3(vW.xz * 0.05, 4.0));
-        vec3 col = mix(body, refl, fres);
+        // away from the glitter path the reflection takes the river's own blue-green
+        float toSun = pow(max(dot(normalize(R.xz + 1e-4), normalize(uSunDir.xz + 1e-4)), 0.0), 6.0);
+        refl *= mix(vec3(0.62, 1.0, 0.98), vec3(1.0), toSun);
+        vec3 col = mix(body, refl, fres * mix(0.55, 0.85, toSun));
         float s = max(dot(normalize(R), uSunDir), 0.0);
         float pw = mix(1400.0, 60.0, clamp(dist / 160.0, 0.0, 1.0));
         col += uSunCol * (pow(s, pw) * 26.0 + pow(s, 40.0) * 0.28) * uGlitter;
@@ -237,12 +240,12 @@ export function create(ctx, segment) {
   const bankHaze = { color: new THREE.Color(), k: { value: 0.4 } };
   const farTrees = (() => {
     const items = [], r = rng(77);
-    for (let i = 0; i < (lite ? 150 : 300); i++) {
+    for (let i = 0; i < (lite ? 140 : 400); i++) {
       const a = (r() - 0.5) * 2.3;
       if (Math.abs(a + 0.105) < 0.2 + 0.08 * r()) continue;             // the low sandbank under the sun
       const d = 505 + r() * 40, x = Math.sin(a) * d, z = -Math.cos(a) * d + 40, q = r();
       const kind = q < 0.3 ? 'peepal' : q < 0.55 ? 'neem' : q < 0.75 ? 'mango' : q < 0.88 ? 'banyan' : 'palm';
-      items.push({ kind, x, y: -0.6, z, s: 1.3 + r() * 0.7, lite: true, tint: 0.85 + r() * 0.3 });
+      items.push({ kind, x, y: -0.6, z, s: (0.7 + r() * 0.5) * (lite ? 1.15 : 1), lite: true, tint: 0.75 + r() * 0.3 });
     }
     return NK.plantForest(items, { sun: leafSun, lite: true, variants: 2, seed: 21, wind: 0.4, haze: bankHaze, castShadow: false, receiveShadow: false });
   })();
@@ -612,7 +615,7 @@ export function create(ctx, segment) {
       waterU.uGlitter.value = 0.2 + 0.6 * crest + flash * 0.5;
       const wv = t - tEx; waterU.uWave.value = wv > 0 ? Math.exp(-wv * 2.6) * sat(wv * 8) : 0; waterU.uWaveR.value = 0.9 + Math.max(0, wv) * 3.2;
       bankM.color.setRGB(0.15, 0.1, 0.1).lerp(scene.fog.color, 0.35 + 0.5 * mist);
-      bankHaze.color.copy(skyU.uHor.value).multiplyScalar(0.55).lerp(scene.fog.color, mist); bankHaze.k.value = 0.3 + 0.6 * mist;
+      bankHaze.color.copy(skyU.uHor.value).multiplyScalar(0.55).lerp(scene.fog.color, mist); bankHaze.k.value = 0.52 + 0.45 * mist;
       waterU.uBankCol.value.setRGB(0.025, 0.05, 0.03).lerp(bankHaze.color, bankHaze.k.value * 0.8); waterU.uBodyK.value = dawn;
       leafSun.dir.copy(sunDir); leafSun.color.copy(skyU.uSunCol.value).multiplyScalar(1.2 + 1.6 * crest);
       farTrees.update(t); ghatTrees.update(t);
