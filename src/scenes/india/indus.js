@@ -207,8 +207,10 @@ export function create(ctx, segment) {
     const blk = [cx, cz, delay + r() * 0.12, baseY + h + 3.4];
     const jit = [(r() - 0.5) * 3.4, (r() - 0.5) * 3.4, (r() - 0.5) * 0.18];
     const Y0 = baseY, Y1 = baseY + h;
-    const seed = r(), plaster = r() < 0.55 ? 0 : 0.15 + r() * 0.55;
+    const seed = r(); let plaster = r() < 0.55 ? 0 : 0.15 + r() * 0.55;
     const parapet = r() < 0.82, ch = 0.12 + r() * 0.08;
+    const onDrainSt = Math.abs(z0 - ST_HW) < 0.01 || Math.abs(z1 + ST_HW) < 0.01;
+    if (onDrainSt) plaster = Math.min(plaster, 0.3);   // the drain street shows its brick
     const court = w >= 9 && d >= 9 && r() < 0.85;
     const rr = court ? clamp(Math.min(w, d) * 0.3, 2.6, 4.2) : 0;
     const hole = court ? [x0 + rr, x1 - rr, z0 + rr, z1 - rr] : null;
@@ -343,6 +345,17 @@ export function create(ctx, segment) {
       continue;
     }
     house(lot, 0, riseDelay((lot[0] + lot[1]) / 2, (lot[2] + lot[3]) / 2), { near: onDrain || Math.abs((lot[0] + lot[1]) / 2 - 72) < 12 });
+  }
+
+  // public wells along the main north–south street: a brick ring on a low paved platform
+  for (const [x, z] of [[72 - 5 + 1.4, -22], [72 + 5 - 1.4, 31], [72 - 5 + 1.4, 74], [134 + 4 - 1.3, -30]]) {
+    const blk = [x, z, riseDelay(x, z) + 0.05, 2];
+    walls.tag = [0, 0, 0.2, 0.6];
+    walls.prism(x - 1.2, x + 1.2, 0, 0.18, z - 1.2, z + 1.2, { c: 0.15, bev: 0.04, blk });
+    walls.tag = [0, 0.18, 0.9, 0.6];
+    walls.geo(wellOut.clone().translate(x, 0.18 + 0.36, z), blk); walls.geo(wellIn.clone().translate(x, 0.18 + 0.36, z), blk); walls.geo(wellTop.clone().translate(x, 0.9, z), blk);
+    voids.geo(wellWater.clone().translate(x, 0.7, z), blk);
+    pot(pots, x + 0.95, 0.18, z + 0.6, 0.9, 0.1, 1);
   }
 
   // citadel mound: a battered brick platform with bastions, its top open over the Great Bath's pool
@@ -976,6 +989,5 @@ export function create(ctx, segment) {
     : t >= T_BATH - 0.2 ? { centre: V(-40, CIT_Y, 0), radius: 32 }
     : t >= T_DRAIN - 0.1 ? { centre: V(60, 0, 0), radius: 40 }
     : { centre: V(30, 5, 0), radius: 170 });
-  { let n = 0; scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); console.warn('INDUS TRIS', Math.round(n), lite, 'walls', walls.tris, 'roof', roof.tris, 'wood', wood.tris, 'pots', pots.tris, 'voids', voids.tris, 'leaves', leaves.tris, 'cloth', cloth.tris, 'lots', lots.length); scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; const k = (g.index ? g.index.count : g.attributes.position.count) / 3; if (k > 5000) console.warn('MESH', o.material.type, Math.round(k)); } }); }
   return api;
 }

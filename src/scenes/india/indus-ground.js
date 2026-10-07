@@ -50,7 +50,7 @@ export function groundMasks({ riverPts, riverW, lots, citadel, streets, town }) 
     gb.fillStyle = `rgba(255,255,255,${0.2 + r() * 0.8})`; gb.fillRect(px, py, fw * k, fd * k);
   }
   // blotches of scrub over the dry plain
-  for (let i = 0; i < 260; i++) { const [px, py] = P(-1200 + r() * 2400, -1200 + r() * 2400); gr.fillStyle = `rgba(255,255,255,${0.1 + r() * 0.25})`; gr.beginPath(); gr.ellipse(px, py, (8 + r() * 30) * k * 3, (8 + r() * 30) * k * 2, r() * 3, 0, 7); gr.fill(); }
+  for (let i = 0; i < 900; i++) { const [px, py] = P(-1200 + r() * 2400, -1200 + r() * 2400); gr.fillStyle = `rgba(255,255,255,${0.15 + r() * 0.35})`; gr.beginPath(); gr.ellipse(px, py, (6 + r() * 24) * k * 3, (6 + r() * 24) * k * 2, r() * 3, 0, 7); gr.fill(); }
   // cart tracks: from the town out to the river and across the plain, wandering
   gg.lineCap = gg.lineJoin = 'round';
   const track = (x0, z0, x1, z1, wd) => {
@@ -115,16 +115,16 @@ export function groundPatch(sh, masks) {
         float det = 1.0 - smoothstep(0.02, 0.12, w), det2 = 1.0 - smoothstep(0.15, 0.8, w);
         float n4 = mix(0.5, iN2(q * 1.7), det2), n5 = mix(0.5, iN2(q * 9.0), det);
         vec3 silt = vec3(0.235, 0.172, 0.112), dark = vec3(0.15, 0.105, 0.068), pale = vec3(0.33, 0.28, 0.21);
-        vec3 col = mix(silt, dark, smoothstep(0.38, 0.72, n2) * 0.75);
+        vec3 col = mix(silt, dark, smoothstep(0.34, 0.7, n2) * 0.9);
         col = mix(col, pale, smoothstep(0.55, 0.78, n1) * 0.6);                                     // salt-crusted flats
-        col = mix(col, pale * 1.05, smoothstep(0.62, 0.7, n2 * 0.6 + n3 * 0.5) * 0.35 * (1.0 - pm.r));   // salt crust patches
+        col = mix(col, pale * 1.05, smoothstep(0.6, 0.68, n2 * 0.6 + n3 * 0.5) * 0.5 * (1.0 - pm.r));   // salt crust patches
         col *= 0.8 + 0.36 * n3;
         // moist river belt and fields: darker earth, crops, scrub
         float green = pm.r * smoothstep(0.25, 0.65, n2 * 0.7 + n3 * 0.5);
         col = mix(col, mix(vec3(0.13, 0.095, 0.06), vec3(0.085, 0.10, 0.04), pm.b), pm.r * 0.55);
         col = mix(col, vec3(0.07, 0.085, 0.032) * (0.8 + 0.4 * n4), green * 0.7);
         float grass = smoothstep(0.55, 0.8, n3 * 0.7 + n2 * 0.45) * (1.0 - pm.r * 0.5);
-        col = mix(col, mix(vec3(0.19, 0.16, 0.07), vec3(0.11, 0.11, 0.045), n4) , grass * 0.6);   // dry grass and scrub
+        col = mix(col, mix(vec3(0.19, 0.16, 0.07), vec3(0.1, 0.105, 0.04), n4), grass * 0.8);   // dry grass and scrub
         // cart tracks: paler packed earth
         col = mix(col, vec3(0.30, 0.245, 0.18) * (0.9 + 0.2 * n4), pm.g * 0.65);
         // the town: dust aprons, contact shadow, packed streets with wheel ruts

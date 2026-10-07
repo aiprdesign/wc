@@ -63,13 +63,15 @@ vec3 brickBond(vec2 uv, float seed, float w, bool paving, out float h, out float
   // grain on the face: sand, pits, a worn lighter centre
   float g = iN2(uv * 140.0 + id) * 0.6 + iN2(uv * 33.0 - id) * 0.4;
   col *= 0.88 + 0.22 * g;
+  col *= 0.84 + 0.32 * iFbm(uv * 11.0 + id * 1.7);         // fire clouds across the face
   // macro close-ups: sand grains, pits and fire-cracks resolve (sub-millimetre)
   float micro = 1.0 - smoothstep(0.0004, 0.002, aa);
   if (micro > 0.0){
     float gr = iN2(uv * 900.0 + id * 3.0) * 0.5 + iN2(uv * 2600.0) * 0.5;
     vec3 pit = iCell(uv * 260.0 + id);
-    float pm = (1.0 - smoothstep(0.06, 0.16, pit.x)) * step(0.7, pit.z);
-    col *= 1.0 - micro * (0.16 * (gr - 0.5) * 2.0 * 0.5 + 0.45 * pm);
+    float pm = (1.0 - smoothstep(0.05, 0.13, pit.x)) * step(0.86, pit.z);
+    col *= 1.0 - micro * (0.16 * (gr - 0.5) + 0.3 * pm);
+    col = mix(col, vec3(0.6, 0.52, 0.42), micro * 0.5 * smoothstep(0.82, 0.95, iN2(uv * 1500.0 + 7.0)));   // pale sand grains
     col = mix(col, vec3(0.62, 0.5, 0.36), micro * 0.25 * step(0.97, pit.z) * (1.0 - smoothstep(0.1, 0.25, pit.x)));   // lime nodules
     g += micro * (gr - 0.5) * 0.3 - micro * pm * 0.8;
   }
@@ -140,19 +142,29 @@ const KIND = {
       if (vTag.x > 0.0 && pm > 0.0){
         vec3 pc = vec3(0.39, 0.29, 0.20) * (0.84 + 0.3 * iFbm(uv * 3.3 + 1.0)) * (0.9 + 0.2 * seed);
         pc *= 0.94 + 0.12 * iN2(uv * 40.0);
+        // hand-smeared: arcs of the palm, re-plastered fresher patches, straw flecks
+        vec2 ru = mat2(0.8, -0.6, 0.6, 0.8) * uv;
+        float smear = iN2(vec2(ru.x * 2.2, ru.y * 9.0) + sin(ru.x * 3.0) * 0.8);
+        pc *= 0.92 + 0.16 * smear * det2;
+        pc = mix(pc, pc * vec3(1.18, 1.14, 1.08), smoothstep(0.6, 0.66, iFbm(uv * 0.6 + seed * 9.0 + 2.0)));
+        float straw = smoothstep(0.78, 0.9, iN2(vec2(ru.x * 90.0, ru.y * 9.0) + 3.0)) * det;
+        pc = mix(pc, vec3(0.5, 0.42, 0.26), straw * 0.5);
+        // a darker band where the plaster meets the ground splash
+        pc *= 1.0 - 0.15 * (1.0 - smoothstep(0.0, 0.9, hb));
         float cr = cracks(uv, 1.8, 0.004, w, 0.45, seed) + 0.6 * cracks(uv, 5.5, 0.0015, w, 0.35, seed + 3.0);
         pc *= 1.0 - 0.45 * cr;
         pc *= 1.0 - 0.25 * st - 0.2 * damp;
         float rim = smoothstep(0.02, 0.05, cov);           // broken edge: thin, slightly darker
         pc *= 0.8 + 0.2 * rim;
         col = mix(col, pc, pm);
-        hB = mix(hB, 1.15 + 0.12 * iN2(uv * 18.0) - 0.4 * cr, pm);
+        hB = mix(hB, 1.15 + 0.12 * iN2(uv * 18.0) + 0.2 * smear - 0.4 * cr, pm);
         rough = mix(rough, 0.97, pm);
       }
     } else {
       // paving and wall tops: trodden smooth in the middle, dust settled
-      float dust = smoothstep(0.4, 0.8, iFbm(P.xz * 0.6 + 5.0));
-      col = mix(col, vec3(0.42, 0.34, 0.25), dust * 0.45);
+      float dust = smoothstep(0.4, 0.8, iFbm(P.xz * 0.6 + 5.0)) * 0.7 + 0.5 * smoothstep(0.45, 0.85, iFbm(P.xz * 9.0 + 1.0));
+      col = mix(col, vec3(0.42, 0.34, 0.25), clamp(dust, 0.0, 1.0) * 0.45);
+      col = mix(col, vec3(0.45, 0.37, 0.29) * (0.9 + 0.2 * iN2(P.xz * 60.0)), (1.0 - smoothstep(0.0005, 0.003, w)) * 0.3);   // a film of dust, up close
       rough = mix(rough, 0.82, 0.3);
     }
     iAlb = col; bumpH = hB * 0.008; roughK = rough;
