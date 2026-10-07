@@ -240,7 +240,7 @@ export function create(ctx, segment) {
   const bankHaze = { color: new THREE.Color(), k: { value: 0.4 } };
   const farTrees = (() => {
     const items = [], r = rng(77);
-    for (let i = 0; i < (lite ? 140 : 400); i++) {
+    for (let i = 0; i < (lite ? 100 : 400); i++) {
       const a = (r() - 0.5) * 2.3;
       if (Math.abs(a + 0.105) < 0.2 + 0.08 * r()) continue;             // the low sandbank under the sun
       const d = 505 + r() * 40, x = Math.sin(a) * d, z = -Math.cos(a) * d + 40, q = r();

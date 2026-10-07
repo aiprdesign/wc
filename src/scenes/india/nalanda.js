@@ -640,7 +640,7 @@ export function create(ctx, segment) {
   const forest = (() => {
     const items = [], rf = rng(512);
     const clearOf = (x, z) => x > -150 && x < 150 && z > -108 && z < 40;
-    for (let k = 0; k < 4000 && items.length < (lite ? 150 : 330); k++) {
+    for (let k = 0; k < 4000 && items.length < (lite ? 100 : 180); k++) {
       const x = -420 + rf() * 840, z = -480 + rf() * 620;
       if (clearOf(x, z)) continue;
       if (Math.hypot(x + 30, z - 30) < 70) continue;                    // the opening camera's own lawn
@@ -648,7 +648,7 @@ export function create(ctx, segment) {
       if (!grove && rf() < 0.75) continue;
       const q = rf(), kind = q < 0.45 ? 'mango' : q < 0.7 ? 'neem' : q < 0.84 ? 'peepal' : q < 0.92 ? 'banyan' : 'ashoka';
       const d = Math.min(Math.abs(x) - 150, Math.abs(z + 34) - 74);
-      items.push({ kind, x, y: -0.1, z, s: 0.85 + rf() * 0.4, lite: lite || Math.hypot(x + 20, z - 10) > 190, tint: 0.85 + rf() * 0.3 });
+      items.push({ kind, x, y: -0.1, z, s: 0.85 + rf() * 0.4, lite: true, tint: 0.85 + rf() * 0.3 });
       void d;
     }
     return NK.plantForest(items, { sun: leafSun, lite, variants: 3, seed: 9, wind: 0.7 });
@@ -1038,7 +1038,7 @@ export function create(ctx, segment) {
     const mapK = ramp(Math.log(r), Math.log(600), Math.log(6000));
     map.group.visible = mapK > 0;
     GU.uMapMix.value = ramp(Math.log(r), Math.log(400), Math.log(5000));
-    forest.group.visible = GU.uMapMix.value < 0.35; forest.update(t);
+    forest.group.visible = t < tSch + 0.35; forest.update(t);   // (once the camera is down in the dusk courtyard the groves are out of sight)
     GU.uMapK.value = 1;
     MU.uMap.value = mapK;
     MU.uR.value = lerp(0.0, 75, ramp(t, 3.5, 4.25, ease.inOutSine));
