@@ -26,7 +26,7 @@ export function labMaterials() {
   const kn = knurlMaps(40, 5);
   const knurlSteel = new THREE.MeshPhysicalMaterial({ color: '#b9c1cc', metalness: 1, roughness: 0.35, roughnessMap: kn.r, normalMap: kn.n, normalScale: new THREE.Vector2(1, 1), envMapIntensity: 1.0 });
   knurlSteel.userData.detail = { grime: 0.05, scratch: 0.2, scale: 4 };
-  const knurlBlack = knurlSteel.clone(); knurlBlack.color.set('#202328'); knurlBlack.metalness = 0.85;
+  const knurlBlack = knurlSteel.clone(); knurlBlack.color.set('#202328'); knurlBlack.metalness = 0.85; knurlBlack.roughness = 0.6; knurlBlack.envMapIntensity = 0.5;
   const cork = (() => {
     const S = 256, H = field(S, S, (u, v) => Math.max(0, tnoise(u, v, 40, 40, 31) - 0.2) * -1 + tnoise(u, v, 90, 90, 32) * 0.3);
     const m = new THREE.MeshStandardMaterial({ color: '#ffffff', map: colorTex(S, S, (u, v) => { const l = 0.85 + 0.2 * tnoise(u, v, 30, 30, 33) - Math.max(0, tnoise(u, v, 40, 40, 31) - 0.3) * 0.6; return [176 * l, 128 * l, 82 * l]; }), normalMap: normalTex(H, S, S, 3), roughness: 0.9 });

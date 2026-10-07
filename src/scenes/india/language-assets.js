@@ -222,10 +222,10 @@ export function coverRelief(W = 1024, Hh = 160, holeU = []) {
       h += (1 - smooth(40, 52, rr)) * (0.55 + 0.35 * Math.pow(Math.abs(Math.cos(ang * 6)), 2));   // lotus petals
       h += (1 - smooth(10, 14, rr)) * 0.3;
       for (const hu of holeU) { const r2 = Math.hypot(px - hu * W, py - cy); h -= (1 - smooth(22, 30, r2)) * 0.25; }   // cord wear round the holes
-      h += tnoise(u, v, 6, 120, 21) * 0.08 + tnoise(u, v, 60, 12, 22) * 0.05;   // grain under lacquer
+      h += tnoise(u, v, 6, 120, 21) * 0.03 + tnoise(u, v, 60, 12, 22) * 0.012;   // grain under lacquer
       return h;
     });
-    return { n: normalTex(H, W, Hh, 3.0), r: greyTex(W, Hh, (u, v) => 0.4 + 0.18 * tnoise(u, v, 4, 2, 23) + 0.12 * Math.max(0, tnoise(u, v, 30, 6, 24))) };
+    return { n: normalTex(H, W, Hh, 3.0), r: greyTex(W, Hh, (u, v) => 0.55 + 0.15 * tnoise(u, v, 4, 2, 23) + 0.12 * Math.max(0, tnoise(u, v, 30, 6, 24))) };
   });
 }
 function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
@@ -351,7 +351,7 @@ export function buildStylus({ lite = false } = {}) {
 
 // ============================================================================ language: wrapped bundles
 // Shelf bundles: cloth-wrapped stacks with rounded ends, two ties each, a few with a wooden cover peeking
-// out. Returns { geo (vertex-coloured cloth), ties, covers } geometries merged; R is the scene's seeded rng.
+// out. Returns the cloth geometry (the caller colours it and adds the ties).
 export function wrappedBundle(L, h, d, { seg = 6 } = {}) {
   // a box with rounded long edges (the cloth pulled over the folios) — rounded rectangle extruded along x
   const s = new THREE.Shape(), r = Math.min(h, d) * 0.3, w2 = d / 2, h2 = h / 2;

@@ -126,7 +126,7 @@ export function groundPatch(sh, masks) {
         // fields of wheat, barley, mustard and cotton in parcels along the river, bare earth here and there
         vec2 tdd = max(max(uTownR.xy - q, q - (uTownR.xy + uTownR.zw)), 0.0);
         float dTown = length(tdd);
-        float apron = 1.0 - smoothstep(4.0, 22.0 + 16.0 * n2, dTown);
+        float apron = (1.0 - smoothstep(2.0, 14.0 + 12.0 * n2, dTown)) * uTownK;   // the town site greens over until the city rises
         float dry = (1.0 - pm.r) * 0.7;
         vec3 grassC = nkPasture(q, w, dry);
         float cover = smoothstep(0.22, 0.5, n2 * 0.55 + n1 * 0.35 + pm.r * 0.45 + 0.2) * (1.0 - apron * 0.85);
@@ -151,7 +151,7 @@ export function groundPatch(sh, masks) {
         vec3 pc = c.z > 0.95 ? vec3(0.33, 0.12, 0.06) : mix(vec3(0.2, 0.18, 0.15), vec3(0.36, 0.3, 0.24), fract(c.z * 13.0));
         col = mix(col, pc, peb);
         col *= 0.9 + 0.2 * n5;
-        diffuseColor.rgb *= col; diffuseColor.rgb = vec3(cover, apron, fld);
+        diffuseColor.rgb *= col;
         gBump = (peb * (0.2 - c.x) * 0.06 + n5 * 0.004 - rut * 0.02 + n4 * 0.01) * det2;
         gRough = 1.0 - 0.15 * peb;
       }`)

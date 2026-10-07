@@ -420,7 +420,7 @@ export function hwMaterials(env = null, lite = false) {
     dark: std({ color: '#222326', ...br, normalScale: N(0.25), roughness: 1.4, metalness: 0.4, envMapIntensity: 0.5 }),
     nozzle: std({ color: '#ffffff', ...regen, metalness: 0.75, roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.7 }),
     nozzleRad: std({ color: '#ffffff', ...rad, metalness: 0.8, roughness: 1, side: THREE.DoubleSide, envMapIntensity: 0.8 }),
-    gold: std({ color: '#f2b84c', ...foil, normalScale: N(0.5), roughness: 1.4, metalness: 0.75, envMapIntensity: 1.4 }),
+    gold: std({ color: '#f6c05a', ...foil, normalScale: N(0.5), roughness: 1.4, metalness: 0.55, envMapIntensity: 1.5 }),
     silver: std({ color: '#e2e5ea', ...foil, normalScale: N(0.5), roughness: 1.6, metalness: 0.55, envMapIntensity: 1.3 }),
     kapton: std({ color: '#3a2a20', ...foil, normalScale: N(0.7), roughness: 1.3, metalness: 0.35, envMapIntensity: 0.8 }),
     cells: std({ color: '#ffffff', ...cells, normalScale: N(0.2), roughness: 2.0, metalness: 0.3, envMapIntensity: 1.3 }),

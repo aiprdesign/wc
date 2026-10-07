@@ -397,7 +397,7 @@ export function create(ctx, segment) {
   const leafMaps = [0, 1, 2].map((i) => leafTexture(3 + i * 7));
   const scripts = [0, 1, 2, 3].map((i) => scriptTexture(5 + i));
   const coverRel = coverRelief(1024, 160, [0.5 - HOLE_X / COVER_L, 0.5 + HOLE_X / COVER_L]);
-  const coverMat = new THREE.MeshPhysicalMaterial({ map: coverTexture(1), roughness: 0.42, metalness: 0, normalMap: coverRel.n, roughnessMap: coverRel.r, normalScale: new THREE.Vector2(0.8, 0.8), clearcoat: 0.55, clearcoatRoughness: 0.28 });
+  const coverMat = new THREE.MeshPhysicalMaterial({ map: coverTexture(1), roughness: 0.42, metalness: 0, normalMap: coverRel.n, roughnessMap: coverRel.r, normalScale: new THREE.Vector2(0.45, 0.45), clearcoat: 0.2, clearcoatRoughness: 0.4 });
   coverMat.userData.detail = { grime: 0.1, albedo: 0.08, scratch: 0.2, scale: 3 };
   const leafRel = [0, 1, 2].map((i) => folioRelief(11 + i));
   const fan = new THREE.Group(); fan.rotation.order = 'YXZ'; scene.add(fan);
@@ -428,7 +428,7 @@ export function create(ctx, segment) {
   const cord = new THREE.Mesh(cordGeo(new THREE.LineCurve3(V(0, 0, 0), V(0, 1, 0)), 0.016, 2, 10, 1), cordMat);
   const knotBead = (() => {
     const P = new Parts();
-    const bead = metalMat('#b98a3c', { rough: 0.3, maps: brushedMaps(9), nScale: 0.4 });
+    const bead = metalMat('#9c7434', { rough: 0.55, maps: brushedMaps(9), nScale: 0.4, env: 0.6 });
     P.add(bead, latheK([[0.014, -0.045], [0.034, -0.04], [0.05, -0.02], [0.053, 0], [0.05, 0.02], [0.034, 0.04], [0.014, 0.045]], 28));
     P.add(bead, beadRing(0.052, 0.004, 0, 28));
     P.add(cordMat, new THREE.TorusGeometry(0.03, 0.014, 8, 16).rotateX(Math.PI / 2).translate(0, -0.055, 0));   // the knot that holds it

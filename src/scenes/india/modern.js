@@ -659,7 +659,6 @@ export function create(ctx, segment) {
   {
     const platMat = new THREE.MeshStandardMaterial({ color: '#0a0c11', roughness: 0.48, metalness: 0.5, envMapIntensity: 0.4 });
     platMat.userData.detail = { albedo: 0.04, rough: 0.25, grime: 0.03, scratch: 0.15, scale: 4 };
-    { const sp = mats.anod.roughnessMap.clone(); sp.repeat.set(6, 6); sp.needsUpdate = true; platMat.roughnessMap = sp; }
     const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.9, 0.06, 96), platMat);
     plat.position.copy(CB).add(V(0, -0.03, 0)); becRig.add(plat);
     const rimR = new THREE.Mesh(new THREE.TorusGeometry(1.875, 0.012, 8, 160), steelM); rimR.rotation.x = Math.PI / 2; rimR.position.copy(CB); becRig.add(rimR);

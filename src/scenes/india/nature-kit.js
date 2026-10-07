@@ -36,7 +36,7 @@ export const NK_GROUND = /* glsl */ `
 vec3 nkPasture(vec2 q, float w, float dry){
   float n1 = nkF(q * 0.013 + 3.1), n2 = nkF(q * 0.07 + 7.7), n3 = nkN(q * 0.45 + 1.3);
   float det = 1.0 - smoothstep(0.05, 0.35, w), n4 = mix(0.5, nkN(q * 3.1 + 9.0), det);
-  vec3 sunG = vec3(0.115, 0.20, 0.035), deepG = vec3(0.04, 0.095, 0.035), straw = vec3(0.26, 0.21, 0.09);
+  vec3 sunG = vec3(0.16, 0.27, 0.045), deepG = vec3(0.06, 0.15, 0.05), straw = vec3(0.3, 0.25, 0.11);
   vec3 c = mix(sunG, deepG, smoothstep(0.35, 0.75, n2 * 0.7 + n3 * 0.4));
   c = mix(c, c * vec3(1.15, 1.08, 0.7), smoothstep(0.5, 0.8, n1));                         // yellower drifts
   c = mix(c, straw, smoothstep(0.62, 0.85, n1 * 0.6 + n2 * 0.5) * (0.35 + 0.6 * dry));      // dry patches
@@ -46,7 +46,7 @@ vec3 nkPasture(vec2 q, float w, float dry){
 vec3 nkLawn(vec2 q, float w, vec2 dir){
   float n1 = nkF(q * 0.05 + 1.1), n2 = nkN(q * 0.6 + 4.2);
   float det = 1.0 - smoothstep(0.03, 0.25, w), n3 = mix(0.5, nkN(q * 6.0 + 2.0), det);
-  vec3 c = mix(vec3(0.085, 0.175, 0.04), vec3(0.05, 0.125, 0.04), smoothstep(0.3, 0.8, n1));
+  vec3 c = mix(vec3(0.12, 0.24, 0.05), vec3(0.07, 0.17, 0.05), smoothstep(0.3, 0.8, n1));
   float band = dot(q, dir);
   c *= 1.0 + 0.07 * sign(sin(band * 0.75)) * (1.0 - smoothstep(0.4, 2.0, w));             // mowing bands
   c = mix(c, vec3(0.16, 0.17, 0.06), smoothstep(0.7, 0.9, n1 * 0.7 + n2 * 0.4) * 0.35);
