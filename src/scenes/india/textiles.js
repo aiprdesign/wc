@@ -24,7 +24,9 @@ import { MorphParticles, Dust } from '../../lib/particles.js';
 import { progressLine, progressTube, segmentsLine, circlePoints } from '../../lib/lines.js';
 import { Callout } from '../../lib/hud.js';
 import { glowSprite } from '../../lib/materials.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import * as AS from './textiles-assets.js';
+import { buildCourtyard } from './textiles-set.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const CLOTH_Y = 0.14;                 // the cloth plane (a pit loom: the warp runs just above the floor)
@@ -170,6 +172,9 @@ export function create(ctx, segment) {
   scene.fog = new THREE.FogExp2('#1a120e', 0.05);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.02, 200);
   const R = rng(4250);
+  const lite = ctx.engine?.quality === 'lite';
+  const DBGCAM = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('texcam') : null;   // TEMP debug
+  AS.setDetail(lite);
 
   // timing of the weave
   const P0 = tL - 0.08, PER = 0.11, CROSS = 0.095;
@@ -178,11 +183,13 @@ export function create(ctx, segment) {
   // ---------------------------------------------------------------- lights
   const key = new THREE.DirectionalLight('#ffcf98', 3.2);
   key.position.set(-3.6, 2.5, -2.6); key.target.position.set(0, 0, 0.2);
-  key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+  key.castShadow = true; key.shadow.mapSize.set(lite ? 1024 : 2048, lite ? 1024 : 2048);
   Object.assign(key.shadow.camera, { left: -3.6, right: 3.6, top: 3.6, bottom: -3.6, near: 0.5, far: 12 });
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
   scene.add(key, key.target);
   const hemi = new THREE.HemisphereLight('#7f92c4', '#3a2216', 0.5); scene.add(hemi);
+  // cool skylight from the open (camera) side: the shaded faces of the walls read blue against the warm key
+  const skyFill = new THREE.DirectionalLight('#8fa6d8', 0.55); skyFill.position.set(3, 4, 6); scene.add(skyFill);
   const boardSpot = new THREE.SpotLight('#fff0da', 0, 0, 0.55, 0.6, 2);
   boardSpot.position.set(2.4, 4.6, 3.6); boardSpot.target.position.set(0, 0, 0);
   scene.add(boardSpot, boardSpot.target);
@@ -201,6 +208,12 @@ export function create(ctx, segment) {
       void main(){ vec3 d = normalize(vDir); float h = d.y;
         vec3 c = mix(uHor, uTop, smoothstep(0.0, 0.32, h));
         c = mix(c, c * vec3(1.0, 0.75, 1.15), smoothstep(0.02, 0.12, h) * (1.0 - smoothstep(0.12, 0.3, h)));
+        // thin dawn cloud streaks low over the horizon, lit from beneath on the sun side
+        { vec2 cp = d.xz / max(h + 0.06, 0.02); float cn = sin(cp.x * 0.9 + sin(cp.y * 0.7) * 1.3) * 0.5 + 0.5; cn *= sin(cp.y * 2.3 + cp.x * 0.4) * 0.5 + 0.5;
+          float band = smoothstep(0.02, 0.06, h) * (1.0 - smoothstep(0.1, 0.24, h));
+          float sd = max(dot(d, normalize(uSunDir)), 0.0);
+          vec3 cc = mix(uTop * 0.7, uSunCol * (0.25 + 0.9 * uHalo), pow(sd, 6.0) * 0.8 + 0.1);
+          c = mix(c, cc, smoothstep(0.55, 0.9, cn) * band * 0.55); }
         c = mix(c, uGround, smoothstep(0.0, -0.08, h));
         float s = max(dot(d, normalize(uSunDir)), 0.0);
         float disc = smoothstep(0.99935, 0.99955, s);
@@ -209,31 +222,30 @@ export function create(ctx, segment) {
   }));
   sky.renderOrder = -10; sky.frustumCulled = false;
   scene.add(sky);
-  const floorTex = AS.courtyardTexture(); floorTex.repeat.set(36, 36);
-  const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, color: '#a08a7c', roughness: 0.86 });
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(70, 64), floorMat);
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.userData.worldFloor = true;
-  scene.add(floor);
-  const dust = new Dust({ count: 1400, size: [6, 2.2, 5], center: [-0.6, 0.9, 0.8], color: '#ffd9a8', particleSize: 0.012, opacity: 0.5, intensity: 1.4, seed: 31 });
+  const dust = new Dust({ count: lite ? 600 : 1400, size: [6, 2.2, 5], center: [-0.6, 0.9, 0.8], color: '#ffd9a8', particleSize: 0.012, opacity: 0.5, intensity: 1.4, seed: 31 });
   dust.u.noise = 0.12; dust.u.noiseSpeed = 0.05;
   scene.add(dust);
 
   // ---------------------------------------------------------------- materials
   const woodTex = AS.woodTexture(); woodTex.repeat.set(2, 1);
-  const wood = new THREE.MeshStandardMaterial({ map: woodTex, color: '#e0b890', roughness: 0.62 });
+  const woodTex2 = AS.woodTexture({ seed: 5, base: [190, 128, 78], dark: [112, 64, 32] }); woodTex2.repeat.set(2, 1);
+  const wood = new THREE.MeshStandardMaterial({ map: woodTex2, color: '#d2bca6', roughness: 0.56 });
   const woodDark = new THREE.MeshStandardMaterial({ map: woodTex, color: '#7a5038', roughness: 0.55 });
   const blockTex = AS.woodTexture({ seed: 9, base: [200, 142, 88], dark: [118, 70, 34] });
   const blockWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#ffffff', roughness: 0.55 });
   const brass = new THREE.MeshStandardMaterial({ color: '#d8a656', metalness: 1, roughness: 0.32 });
   const cottonMat = new THREE.MeshPhysicalMaterial({ color: '#efe6d2', roughness: 0.95, sheen: 1, sheenRoughness: 0.5, sheenColor: new THREE.Color('#fff4e0') });
-  const yarnMat = new THREE.MeshStandardMaterial({ color: '#e9dcc0', roughness: 0.8 });
+  const yarnMat = new THREE.MeshPhysicalMaterial({ color: '#efe2c4', roughness: 0.62, sheen: 1, sheenRoughness: 0.35, sheenColor: new THREE.Color('#fff0d0'), emissive: new THREE.Color('#2a2014') });
   const lobeMat = new THREE.MeshPhysicalMaterial({ color: '#f4f0e8', roughness: 1, sheen: 1, sheenRoughness: 0.35, sheenColor: new THREE.Color('#fff6ea'), emissive: new THREE.Color('#2a2420') });
   const burMat = new THREE.MeshStandardMaterial({ color: '#8a5a34', roughness: 0.6, side: THREE.DoubleSide });
   const bractMat = new THREE.MeshStandardMaterial({ color: '#4d5a26', roughness: 0.7, side: THREE.DoubleSide });
   const leafMat = new THREE.MeshStandardMaterial({ color: '#3f6e2a', roughness: 0.55, side: THREE.DoubleSide });
   const stemMat = new THREE.MeshStandardMaterial({ color: '#5a3a24', roughness: 0.7 });
   const petalMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, side: THREE.DoubleSide, emissive: new THREE.Color('#1a1008') });
+  const loomWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#d4b49a', roughness: 0.5 });
   const shadowAll = (o) => o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const dyeFace = new THREE.MeshPhysicalMaterial({ color: '#6a1208', roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.35 });
+  const court = buildCourtyard(scene, { lite, keyLight: key, cottonMat, leafMat, wood, woodDark, blockWood, dyeFace });
 
   // ---------------------------------------------------------------- cotton plants and the hero boll
   const lobeGeos = [0, 1, 2, 3].map((k) => AS.lobeGeometry(k * 3.1 + 1));
@@ -327,19 +339,35 @@ export function create(ctx, segment) {
 
   // ---------------------------------------------------------------- the pit loom
   const loom = new THREE.Group(); scene.add(loom);
-  const beam = (x0, x1, y, z, r, mat) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, x1 - x0, 20).rotateZ(Math.PI / 2), mat); m.position.set((x0 + x1) / 2, y, z); loom.add(m); return m; };
+  const LP = AS.loomParts();
+  const beam = (x0, x1, y, z, r, mat) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, x1 - x0, 24).rotateZ(Math.PI / 2), mat); m.position.set((x0 + x1) / 2, y, z); loom.add(m); return m; };
+  const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); loom.add(m); return m; };
   beam(-1.55, 1.55, 0.07, 1.4, 0.07, cottonMat);             // breast beam, wound with finished cloth
-  for (const sx of [-1, 1]) beam(sx * 1.55, sx * 1.72, 0.07, 1.4, 0.045, wood);
+  for (const sx of [-1, 1]) { beam(sx * 1.55, sx * 1.8, 0.07, 1.4, 0.045, loomWood); part(LP.boss, loomWood, sx * 1.585, 0.07, 1.4); }
+  part(LP.ratchet, woodDark, 1.68, 0.07, 1.4); part(LP.pawl, woodDark, 1.68, 0.15, 1.47).rotation.x = -0.5;
   beam(-1.5, 1.5, BACK_Y - 0.03, BACK_Z, 0.05, yarnMat);       // back beam with the warp wound on it
-  for (const sx of [-1, 1]) beam(sx * 1.5, sx * 1.72, BACK_Y - 0.03, BACK_Z, 0.04, wood);
-  for (const [x, z, h] of [[-1.76, 1.4, 0.16], [1.76, 1.4, 0.16], [-1.76, BACK_Z, 0.32], [1.76, BACK_Z, 0.32]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, h, 0.08), woodDark); m.position.set(x, h / 2, z); loom.add(m); }
-  // overhead frame for the heddles
-  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 1.7, 12), woodDark); m.position.set(sx * 1.78, 0.85, HEDDLE_Z - 0.04); loom.add(m); }
-  { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 3.8, 14).rotateZ(Math.PI / 2), woodDark); m.position.set(0, 1.68, HEDDLE_Z - 0.04); loom.add(m); }
+  for (const sx of [-1, 1]) { beam(sx * 1.5, sx * 1.8, BACK_Y - 0.03, BACK_Z, 0.04, loomWood); part(LP.boss, loomWood, sx * 1.535, BACK_Y - 0.03, BACK_Z).scale.setScalar(0.8); }
+  part(LP.ratchet, woodDark, -1.66, BACK_Y - 0.03, BACK_Z).scale.setScalar(0.8);
+  for (const [x, z, h] of [[-1.86, 1.4, 0.24], [1.86, 1.4, 0.24], [-1.86, BACK_Z, 0.4], [1.86, BACK_Z, 0.4]]) {
+    part(LP.post(h, 0.042), loomWood, x, 0, z);
+    part(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10).rotateZ(Math.PI / 2), woodDark, x * 0.985, h - 0.12, z);    // the peg the beam end rests on
+  }
+  // overhead frame for the heddles: turned uprights with finials and a crossbar with collars
+  for (const sx of [-1, 1]) {
+    part(LP.upright, loomWood, sx * 1.84, 0, HEDDLE_Z - 0.04);
+    part(new THREE.CylinderGeometry(0.05, 0.05, 0.05, 16).rotateZ(Math.PI / 2), wood, sx * 1.72, 1.68, HEDDLE_Z - 0.04);
+  }
+  part(new THREE.CylinderGeometry(0.032, 0.032, 3.86, 16).rotateZ(Math.PI / 2), loomWood, 0, 1.68, HEDDLE_Z - 0.04);
+  // a low weaver's plank at the pit edge and a bobbin winder beside it
+  part(new RoundedBoxGeometry(0.9, 0.05, 0.3, 2, 0.015), wood, 0.1, 0.28, 2.05);
+  for (const sx of [-1, 1]) part(LP.post(0.26, 0.03), loomWood, 0.1 + sx * 0.36, 0, 2.05);
+  // the beater hangs from the crossbar on two swords (posed every frame)
+  const swords = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.011, 0.014, 1, 8, 1).translate(0, 0.5, 0), wood, 2);
+  swords.castShadow = true; swords.frustumCulled = false; scene.add(swords);
   // the two heddle shafts (bars and string heddles), each hung from the crossbar
   const shafts = [0, 1].map((k) => {
     const g = new THREE.Group(); g.position.z = HEDDLE_Z - k * 0.07; scene.add(g);
-    for (const y of [0.31, -0.04]) { const m = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.022, 0.022), wood); m.position.y = CLOTH_Y + y; g.add(m); }
+    for (const y of [0.31, -0.04]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 2.9, 10).rotateZ(Math.PI / 2), wood); m.position.y = CLOTH_Y + y; g.add(m); }
     const segs = [];
     for (let i = k; i < N_WARP; i += 2) { const x = -HALF + PITCH * (i + 0.5); segs.push([V3(x, CLOTH_Y - 0.03, 0), V3(x, CLOTH_Y + 0.3, 0)]); }
     for (const sx of [-1.2, 1.2]) segs.push([V3(sx, CLOTH_Y + 0.31, 0), V3(sx, 1.66 - (CLOTH_Y), 0)]);
@@ -350,8 +378,8 @@ export function create(ctx, segment) {
   });
   // the reed in its beater
   const reed = new THREE.Group(); scene.add(reed);
-  for (const y of [0.0, 0.25]) { const m = new THREE.Mesh(new THREE.BoxGeometry(2.86, 0.03, 0.04), wood); m.position.y = CLOTH_Y - 0.06 + y; reed.add(m); }
-  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.05), wood); m.position.set(sx * 1.43, CLOTH_Y + 0.06, 0); reed.add(m); }
+  for (const y of [0.0, 0.25]) { const m = new THREE.Mesh(new RoundedBoxGeometry(2.9, y ? 0.04 : 0.05, y ? 0.05 : 0.07, 2, 0.014), wood); m.position.y = CLOTH_Y - 0.06 + y; reed.add(m); }
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new RoundedBoxGeometry(0.05, 0.32, 0.06, 2, 0.012), wood); m.position.set(sx * 1.43, CLOTH_Y + 0.06, 0); reed.add(m); }
   { const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.22), new THREE.MeshStandardMaterial({ map: AS.reedTexture(N_WARP), alphaTest: 0.4, roughness: 0.4, metalness: 0.3, side: THREE.DoubleSide })); m.position.y = CLOTH_Y + 0.065; reed.add(m); }
   // warp threads: fell → heddles → back beam, opening and closing the shed every pick
   const warpGeo = new THREE.CylinderGeometry(0.0032, 0.0032, 1, 5, 1, true).translate(0, 0.5, 0);
@@ -393,10 +421,17 @@ export function create(ctx, segment) {
 
   // print blocks (16 impressions)
   const blk = AS.blockGeometry(0.46);
-  const dyeFace = new THREE.MeshStandardMaterial({ color: '#7a1a10', roughness: 0.6 });
-  const blocks = new THREE.InstancedMesh(blk.box, [blockWood, blockWood, blockWood, dyeFace, blockWood, blockWood], 16);
+  const blocks = new THREE.InstancedMesh(blk.box, blockWood, 16);
+  const reliefs = new THREE.InstancedMesh(blk.relief, dyeFace, 16);
   const knobs = new THREE.InstancedMesh(blk.knob, wood, 16);
-  for (const m of [blocks, knobs]) { m.castShadow = true; m.frustumCulled = false; scene.add(m); }
+  for (const m of [blocks, reliefs, knobs]) { m.castShadow = true; m.frustumCulled = false; scene.add(m); }
+  // spare blocks resting on the print table (one turned over to show its relief)
+  {
+    const tg = court.tray;
+    const put = (x, z, ry, flip, s) => { const g = new THREE.Group(); g.position.set(x, flip ? 0.33 + 0.08 * s : 0.305 + 0.035 * s, z); g.rotation.set(flip ? Math.PI : 0, ry, 0); g.scale.setScalar(s); tg.add(g);
+      for (const [geo, mat] of [[blk.box, blockWood], [blk.relief, dyeFace], [blk.knob, wood]]) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; g.add(m); } };
+    put(0.22, 0.12, 0.3, false, 0.5); put(0.15, -0.18, -0.4, true, 0.45);
+  }
 
   // ---------------------------------------------------------------- chess
   const sets = AS.chessSets();
@@ -417,6 +452,7 @@ export function create(ctx, segment) {
     m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
     scene.add(m);
     list.forEach((p, i) => { (p.slots ??= [])[e] = [m, i]; });
+    m.userData.n = list.length; m.userData.on = false;
     inst.push(m);
   }
   pieces.forEach((p) => {
@@ -602,6 +638,7 @@ export function create(ctx, segment) {
       key.intensity = 3.2 * (1 - 0.45 * dawn);
       key.color.setRGB(1, lerp(0.81, 0.62, dawn), lerp(0.6, 0.42, dawn));
       sunLight.intensity = 2.2 * dawn;
+      court.update(t, { dawn, keyDir: wC.copy(key.position).sub(key.target.position).normalize(), keyCol: key.color, keyI: key.intensity });
       hemi.intensity = 0.5 + 0.25 * dawn;
       boardSpot.intensity = 34 * envelope(t, tC - 0.25, tY + 0.4, 0.3, 0.4);
       bollFill.intensity = 0.4 * macro;
@@ -643,6 +680,8 @@ export function create(ctx, segment) {
       const reedOpen = W.active && t < P0 + NP * PER ? (frac < 0.86 ? ramp(frac, 0, 0.2) : 1 - ramp(frac, 0.86, 1.0, ease.inCubic)) : 0;
       const loomOut = ramp(t, tC + 0.05, tC + 0.5, ease.inOutCubic);   // the beater swings back to the heddles once the cloth is done
       reed.position.z = lerp(zf - 0.05 - 0.13 * reedOpen, HEDDLE_Z + 0.16, loomOut);
+      for (const k of [0, 1]) { const sx = k ? 1 : -1; seg(swords, k, wA.set(sx * 1.43, CLOTH_Y + 0.2, reed.position.z), wB.set(sx * 1.55, 1.66, HEDDLE_Z + 0.1)); }
+      swords.instanceMatrix.needsUpdate = true;
       const shY = CLOTH_Y + 0.022;
       shuttle.position.set(W.sx, shY, zf - 0.035);
       shuttle.rotation.set(0, 0, W.active && W.ph < 1 ? -W.dir * 0.04 : 0);
@@ -664,14 +703,15 @@ export function create(ctx, segment) {
         const i = cz * 4 + cx, ts = PRINT0 + (cx + (3 - cz)) * 0.05;
         const down = ramp(t, ts - 0.075, ts, ease.inQuad), up = ramp(t, ts + 0.02, ts + 0.09, ease.inCubic);
         const vis = t > ts - 0.08 && t < ts + 0.095;
-        if (!vis) { blocks.setMatrixAt(i, ZERO); knobs.setMatrixAt(i, ZERO); continue; }
+        if (!vis) { blocks.setMatrixAt(i, ZERO); reliefs.setMatrixAt(i, ZERO); knobs.setMatrixAt(i, ZERO); continue; }
         const y = CLOTH_Y + 0.04 + (1 - down) * 0.36 + up * 0.5;
         p4.set(-HALF + 0.65 * (cx + 0.5), y, -HALF + 0.65 * (cz + 0.5));
         e4.set((1 - down) * 0.12 - up * 0.18, (i % 3) * 0.02, (1 - down) * -0.08);
         q4.setFromEuler(e4); s4.setScalar(1 - up * 0.5);
-        m4.compose(p4, q4, s4); blocks.setMatrixAt(i, m4); knobs.setMatrixAt(i, m4);
+        m4.compose(p4, q4, s4); blocks.setMatrixAt(i, m4); reliefs.setMatrixAt(i, m4); knobs.setMatrixAt(i, m4);
       }
-      blocks.instanceMatrix.needsUpdate = true; knobs.instanceMatrix.needsUpdate = true;
+      blocks.instanceMatrix.needsUpdate = true; reliefs.instanceMatrix.needsUpdate = true; knobs.instanceMatrix.needsUpdate = true;
+      { const on = t > PRINT0 - 0.09 && t < PRINT0 + 0.4; for (const m of [blocks, reliefs, knobs]) { m.count = on ? 16 : 0; m.visible = on; } }
       clothU.uIndigo.value = t < tC + 0.2 ? -9 : lerp(-1.65, 1.75, ramp(t, tC + 0.25, tC + 0.66, ease.inOutSine));
 
       // -------- chess: the board draws, the pieces rise, then change as the light passes west
@@ -680,6 +720,7 @@ export function create(ctx, segment) {
       const sw1 = ramp(t, tS + 0.03, tS + 0.27, ease.linear), sw2 = ramp(t, tS + 0.31, tS + 0.55, ease.linear);
       clothU.uSweep.value = sw1 > 0 && sw1 < 1 ? lerp(1.4, -1.4, sw1) : 9;
       clothU.uSweep2.value = sw2 > 0 && sw2 < 1 ? lerp(1.4, -1.4, sw2) : 9;
+      for (const m of inst) m.userData.on = false;
       for (let k = 0; k < pieces.length; k++) {
         const p = pieces[k];
         const rp = ramp(t, p.rise, p.rise + 0.34, ease.outCubic);
@@ -690,6 +731,7 @@ export function create(ctx, segment) {
           const [m, i] = p.slots[e];
           const v = sc[e];
           if (v < 0.002) { m.setMatrixAt(i, ZERO); continue; }
+          m.userData.on = true;
           const y = e === 0 ? CLOTH_Y - (1 - rp) * (H + 0.02) : CLOTH_Y;
           p4.set(p.x, y, p.z); q4.setFromAxisAngle(yAxis, p.rotY + (e === 0 ? (1 - rp) * 0.6 : 0));
           s4.set(e === 0 ? 1 : Math.max(0.001, v), e === 0 ? 1 : Math.max(0.001, v), e === 0 ? 1 : Math.max(0.001, v));
@@ -703,7 +745,7 @@ export function create(ctx, segment) {
         rings.setMatrixAt(k, m4.compose(p4.set(p.x, CLOTH_Y + 0.006, p.z), q4.identity(), s4.setScalar(0.8 + age * 0.9)));
         rings.setColorAt(k, col.setRGB(1.0, 0.7, 0.35).multiplyScalar(fl * 1.6));
       }
-      for (const m of inst) m.instanceMatrix.needsUpdate = true;
+      for (const m of inst) { m.instanceMatrix.needsUpdate = true; m.count = m.userData.on ? m.userData.n : 0; m.visible = m.userData.on; }   // hidden eras cost nothing
       rings.instanceMatrix.needsUpdate = true; if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
 
       // -------- the route west
@@ -756,6 +798,7 @@ export function create(ctx, segment) {
       api.dof.amount = lerp(lerp(0.85, 0.35, kL), 0.25, kB);
       api.bloom.strength = 0.7 + 0.12 * envelope(t, tC, tC + 0.5, 0.1, 0.3) + 0.15 * dawn;
       api.exposure = 1.0 + 0.05 * envelope(t, tK, tK + 0.4, 0.1, 0.3);
+      if (DBGCAM) { const v = DBGCAM.split(',').map(Number); camera.position.set(v[0], v[1], v[2]); camera.lookAt(v[3], v[4], v[5]); camera.fov = v[6] || 40; camera.updateProjectionMatrix(); camera.updateMatrixWorld(); api.dof.amount = 0; }
     },
   };
   function placeHud() {

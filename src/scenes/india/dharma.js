@@ -17,8 +17,9 @@ import { Dust } from '../../lib/particles.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { glowSprite } from '../../lib/materials.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
-import { GLSL_NOISE, fbm2 } from '../../lib/noise.js';
+import { GLSL_NOISE } from '../../lib/noise.js';
 import { progressLine } from '../../lib/lines.js';
+import { buildLand, SHORE_GLSL } from './dharma-land.js';
 import {
   V3, CAP, CHARKHA, capitalGeometries, wheelParts, charkhaGeometries, charkhaFrame,
   inscriptionCanvas, flagTexture, marcherGeometry,
@@ -71,6 +72,71 @@ function withDissolve(mat, U, edge = '#ffb35a', freq = 7) {
 const disU = () => ({ uIn: { value: 1.2 }, uOut: { value: -0.2 } });
 const setDis = (U, pin, pout) => { U.uIn.value = pin * 1.25 - 0.12; U.uOut.value = pout * 1.25 - 0.13; };
 
+// Polished Chunar sandstone (the Mauryan "mirror" finish): buff stone mottled in object space, fine dark
+// speckles, faint rain streaks and duller weathered patches; on the shaft, an incised inscription — the
+// grooves bend the normal (lit lower wall, shadowed upper wall, a bright lip), hold grime, and glow when lit.
+const STONE_NOISE = /* glsl */ `
+float stH(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float stN(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(stH(i), stH(i + vec3(1,0,0)), f.x), mix(stH(i + vec3(0,1,0)), stH(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(stH(i + vec3(0,0,1)), stH(i + vec3(1,0,1)), f.x), mix(stH(i + vec3(0,1,1)), stH(i + vec3(1,1,1)), f.x), f.y), f.z); }`;
+function sandstone(mat, { ins = null, band = null } = {}) {
+  mat.onBeforeCompile = (sh) => {
+    if (ins) Object.assign(sh.uniforms, ins);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSP; varying vec3 vST; varying vec3 vSB;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vSP = position;
+        vST = normalize(normalMatrix * normalize(vec3(position.z, 0.0, -position.x) + vec3(1e-6)));
+        vSB = normalize(normalMatrix * vec3(0.0, 1.0, 0.0));`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vSP; varying vec3 vST; varying vec3 vSB;
+      ${ins ? 'uniform sampler2D uIns; uniform float uP, uGlow;' : ''}
+      ${STONE_NOISE}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float stM = stN(vSP * 3.1) * 0.5 + stN(vSP * 9.3) * 0.3 + stN(vSP * 31.0) * 0.2;
+        float stAz = atan(vSP.x, vSP.z);
+        float stStreak = smoothstep(0.58, 0.9, stN(vec3(stAz * 22.0, vSP.y * 0.9, 3.0))) * (0.6 + 0.4 * stN(vSP * 6.0));
+        float stSpeck = smoothstep(0.82, 0.9, stN(vSP * 190.0)) * 0.8 + smoothstep(0.9, 0.96, stN(vSP * 70.0 + 9.0));
+        float stWeather = clamp(stStreak * 0.7 + smoothstep(0.62, 0.8, stN(vSP * 1.7 + 4.0)) * 0.5, 0.0, 1.0);
+        diffuseColor.rgb *= mix(vec3(0.88, 0.87, 0.85), vec3(1.05, 1.02, 0.97), stM);
+        diffuseColor.rgb *= 1.0 - 0.3 * stSpeck;
+        diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.76, 0.72), stWeather);
+        float insD = 0.0; vec3 insT = vec3(0.0); float insIn = 0.0; vec2 insG = vec2(0.0);
+        ${ins ? `{
+          vec2 iuv = vec2((stAz + ${band.a.toFixed(4)}) / ${(2 * band.a).toFixed(4)}, (vSP.y - (${band.y1.toFixed(4)})) / ${(band.y0 - band.y1).toFixed(4)});
+          insIn = (iuv.x > 0.0 && iuv.x < 1.0 && iuv.y > 0.0 && iuv.y < 1.0) ? 1.0 : 0.0;
+          if (insIn > 0.5) {
+            const float E = 1.25 / 1024.0;
+            insT = texture2D(uIns, iuv).rgb;
+            float wear = 0.65 + 0.35 * stN(vSP * 40.0);
+            insD = insT.r * wear;
+            insG = vec2(texture2D(uIns, iuv + vec2(E, 0.0)).r - texture2D(uIns, iuv - vec2(E, 0.0)).r,
+                        texture2D(uIns, iuv + vec2(0.0, E)).r - texture2D(uIns, iuv - vec2(0.0, E)).r) * wear;
+            diffuseColor.rgb *= 1.0 - 0.6 * smoothstep(0.05, 0.8, insD);        // grime and shade down in the cut
+            float wl = dot(insG, normalize(vec2(-0.45, 1.0))) * 3.0;             // walls facing the low sun / turned away
+            diffuseColor.rgb *= 1.0 + 0.9 * clamp(wl, 0.0, 1.0) - 0.6 * clamp(-wl, 0.0, 1.0);
+          }
+        }` : ''}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor * mix(0.55, 1.5, stWeather) + 0.25 * stSpeck + 0.5 * smoothstep(0.1, 0.6, insD), 0.08, 1.0);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        ${ins ? `if (insIn > 0.5) {
+          // groove depth ~3.5 mm; slope = Δdepth / Δworld across the 2.5-texel central difference
+          vec2 slope = insG * vec2(0.0035 / (2.5 / 1024.0 * ${band.w.toFixed(4)}), 0.0035 / (2.5 / 1024.0 * ${band.h.toFixed(4)}));
+          normal = normalize(normal + (slope.x * vST + slope.y * vSB) * faceDirection);
+        }` : ''}`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        ${ins ? `if (insIn > 0.5 && insT.b > 0.04) {
+          float ord = insT.g / max(insT.b, 1e-3);
+          float lit = step(ord, uP) * smoothstep(0.04, 0.5, insT.b);
+          float front = exp(-max(uP - ord, 0.0) * 28.0);
+          totalEmissiveRadiance += vec3(1.0, 0.6, 0.26) * lit * (front * 6.0 * (0.3 + 0.7 * smoothstep(0.1, 0.8, insD)) + uGlow * smoothstep(0.4, 1.0, insD));
+        }` : ''}`);
+  };
+  mat.customProgramCacheKey = () => `dharma-sandstone-${ins ? 1 : 0}`;
+  return mat;
+}
+
 // Hermite spline through timed keys [[t, Vector3], …] (C1: tangents from the neighbours).
 function spline(keys, t, out) {
   const n = keys.length;
@@ -98,7 +164,7 @@ export function create(ctx, segment) {
   const scene = new THREE.Scene();
   scene.environment = ctx.env;
   scene.environmentIntensity = 0.2;
-  const FOG_D = 0.0012;
+  const FOG_D = 0.0026, FOG_DAY = new THREE.Color().setRGB(0.62, 0.45, 0.34);
   scene.fog = new THREE.FogExp2(new THREE.Color().setRGB(0.44, 0.3, 0.25), FOG_D);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.05, 4000);
 
@@ -144,43 +210,29 @@ export function create(ctx, segment) {
   scene.add(wheelLight);
 
   // ------------------------------------------------------------------------------------------- the pillar & capital
-  const stone = new THREE.MeshPhysicalMaterial({ color: '#cdbd9f', roughness: 0.36, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.3, sheen: 0.1, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5 });
-  stone.userData.detail = { albedo: 0.25, rough: 0.5 };
+  const stone = new THREE.MeshPhysicalMaterial({ color: '#cbbfa8', roughness: 0.32, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.14, sheen: 0.08, sheenColor: new THREE.Color('#ffe6c0'), sheenRoughness: 0.5, envMapIntensity: 1.1 });
+  stone.userData.detail = { albedo: 0.12, rough: 0.35, grime: 0.15 };
+  sandstone(stone);
   const geos = capitalGeometries(lite);
   const capital = new THREE.Group();
   scene.add(capital);
   for (const g of [geos.bell, geos.neck, geos.reliefs, geos.lions]) {
     const m = new THREE.Mesh(g, stone); m.castShadow = m.receiveShadow = true; capital.add(m);
   }
+  // the shaft carries the inscription band (incised into the stone itself): glyphs ignite one by one, then
+  // hold a warm glow down in the cut
+  const INS_Y0 = -0.14, INS_Y1 = -0.98, INS_A = 1.15;
   const shaftR = (y) => CAP.shaftR + (-y) * 0.007;
-  const shaft = new THREE.Mesh(new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(CAP.shaftR, 0), new THREE.Vector2(CAP.shaftR, -0.002), new THREE.Vector2(shaftR(GROUND_Y - 1), GROUND_Y - 1)], 96), stone);
+  const insTex = toTexture(inscriptionCanvas({}), { srgb: false });
+  const insU = { uIns: { value: insTex }, uP: { value: -0.05 }, uGlow: { value: 0 } };
+  const rMid = shaftR((INS_Y0 + INS_Y1) / 2);
+  const shaftMat = sandstone(stone.clone(), { ins: insU, band: { a: INS_A, y0: INS_Y0, y1: INS_Y1, w: 2 * INS_A * rMid, h: INS_Y0 - INS_Y1 } });
+  shaftMat.userData.detail = { albedo: 0.1, rough: 0.3, grime: 0.12 };
+  const shaftPts = [new THREE.Vector2(0, 0), new THREE.Vector2(CAP.shaftR - 0.004, 0), new THREE.Vector2(CAP.shaftR, -0.004)];
+  for (let i = 1; i <= 6; i++) { const y = -0.004 - (i / 6) * (-(GROUND_Y - 1) - 0.004); shaftPts.push(new THREE.Vector2(shaftR(y), y)); }
+  const shaft = new THREE.Mesh(new THREE.LatheGeometry(shaftPts.reverse(), 128), shaftMat);   // bottom → top: outward faces
   shaft.castShadow = shaft.receiveShadow = true;
   capital.add(shaft);
-
-  // the inscription band on the shaft: glyphs ignite one by one, then hold a warm glow inside the cut
-  const INS_Y0 = -0.14, INS_Y1 = -0.98, INS_A = 1.15;
-  const insTex = toTexture(inscriptionCanvas({ lines: 8, perLine: 11 }), { srgb: false });
-  const insU = { uMap: { value: insTex }, uP: { value: 0 }, uGlow: { value: 0.4 }, uOpacity: { value: 1 } };
-  const insc = new THREE.Mesh(new THREE.CylinderGeometry(shaftR(INS_Y0) + 0.0016, shaftR(INS_Y1) + 0.0016, INS_Y0 - INS_Y1, 96, 1, true, -INS_A, 2 * INS_A), new THREE.ShaderMaterial({
-    uniforms: insU,
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D uMap; uniform float uP, uGlow, uOpacity; varying vec2 vUv;
-      void main(){
-        vec4 t = texture2D(uMap, vUv);
-        float m = t.r; if (m < 0.04) discard;
-        float ord = t.g / max(t.r, 1e-3);
-        if (ord > uP) discard;
-        float age = uP - ord;
-        float front = exp(-age * 28.0);
-        vec3 cut = vec3(0.09, 0.05, 0.025);
-        vec3 glow = vec3(1.0, 0.66, 0.32) * (front * 7.0 + uGlow);
-        gl_FragColor = vec4(cut + glow, m * uOpacity);
-      }`,
-    transparent: true, depthWrite: false,
-  }));
-  insc.position.y = (INS_Y0 + INS_Y1) / 2;
-  insc.renderOrder = 2;
-  capital.add(insc);
 
   // ------------------------------------------------------------------------------------------- the gold chakra
   const W = V3(0, 1.22, 2.05);                              // where the wheel comes to rest, between camera and capital
@@ -242,94 +294,18 @@ export function create(ctx, segment) {
   charkha.add(cotton);
 
   // ------------------------------------------------------------------------------------------- the land
-  const fieldTex = (() => {
-    const N = 1024, c = mkCanvas(N, N), g = c.getContext('2d'), r = rng(47);
-    g.fillStyle = '#6a6238'; g.fillRect(0, 0, N, N);
-    const tones = ['#7a7440', '#8a7744', '#5e6a34', '#988650', '#6c7438', '#7e643a', '#8e8a50', '#627034', '#a08a58'];
-    for (let i = 0; i < 260; i++) {
-      g.save(); g.translate(r() * N, r() * N); g.rotate((r() - 0.5) * 0.25);
-      g.fillStyle = tones[Math.floor(r() * tones.length)];
-      const w = 40 + r() * 160, h = 30 + r() * 110;
-      g.fillRect(-w / 2, -h / 2, w, h);
-      g.strokeStyle = 'rgba(40,36,20,0.35)'; g.lineWidth = 3; g.strokeRect(-w / 2, -h / 2, w, h);
-      g.restore();
-    }
-    const img = g.getImageData(0, 0, N, N);
-    for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) {
-      const k = (y * N + x) * 4, n = 1 + fbm2(x * 0.02, y * 0.02, 3) * 0.18 + (r() - 0.5) * 0.08;
-      img.data[k] *= n; img.data[k + 1] *= n; img.data[k + 2] *= n;
-    }
-    g.putImageData(img, 0, 0);
-    const t = toTexture(c, { repeat: true });
-    t.repeat.set(32, 12);
-    return t;
-  })();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 1300 + (-SEA_Z - 8)), new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 1, color: '#d8c8a8' }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, GROUND_Y, (1300 + SEA_Z + 8) / 2);
-  ground.receiveShadow = false;
-  scene.add(ground);
-
-  // the road: a pale dust track from the pillar's foot to the sea
+  // fields, the dusty road at ground level, trees, villages, the beach (dharma-land.js); the road runs from
+  // the pillar's foot to the sea
   const ROAD_O = V3(2.2, GROUND_Y, 6), ROAD_D = V3(-0.1, 0, -1).normalize();
-  const roadLen = (ROAD_O.z - SEA_Z) / -ROAD_D.z + 4;
-  const roadAlpha = (() => {
-    const c = mkCanvas(64, 256), g = c.getContext('2d');
-    const gr = g.createLinearGradient(0, 0, 64, 0);
-    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.22, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.5, 'rgba(255,255,255,1)');
-    gr.addColorStop(0.78, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, 64, 256);
-    return toTexture(c, { srgb: false });
-  })();
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(8, roadLen), new THREE.MeshStandardMaterial({ color: '#b48e66', roughness: 1, alphaMap: roadAlpha, transparent: true, depthWrite: false }));
-  road.rotation.x = -Math.PI / 2;
-  road.rotation.z = Math.atan2(ROAD_D.x, -ROAD_D.z) * -1;
-  road.position.copy(ROAD_O).addScaledVector(ROAD_D, roadLen / 2 - 2).add(V3(0, 0.04, 0));
-  road.renderOrder = 1;
-  scene.add(road);
-
-  // trees and groves, scattered by a noise density (kept off the road and the pillar's foot)
-  const colorize = (g, c) => {
-    const gg = g.index ? g.toNonIndexed() : g; gg.deleteAttribute('uv');
-    const cc = new Float32Array(gg.attributes.position.count * 3);
-    for (let i = 0; i < cc.length; i += 3) cc.set(c, i);
-    gg.setAttribute('color', new THREE.BufferAttribute(cc, 3));
-    return gg;
-  };
-  {
-    const r = rng(1930), parts = [];
-    const canopy = new THREE.SphereGeometry(1, 7, 4), trunk = new THREE.CylinderGeometry(0.1, 0.15, 1, 5);
-    const n = lite ? 300 : 560;
-    let placed = 0;
-    for (let k = 0; k < n * 8 && placed < n; k++) {
-      const x = (r() - 0.5) * 700, z = 40 - r() * (40 - SEA_Z - 14);
-      const off = Math.abs((x - ROAD_O.x) * -ROAD_D.z + (z - ROAD_O.z) * ROAD_D.x);
-      if (off < 9 + r() * 5 || Math.hypot(x, z) < 45) continue;
-      const dens = fbm2(x * 0.012, z * 0.012, 3);
-      if (dens < 0.05 + r() * 0.25 && r() > 0.1) continue;
-      const s = 1.1 + r() * 1.0, h = 1.0 + r() * 1.2, shade = 0.75 + r() * 0.45, coastal = sat((-z - 380) / 80);
-      const leaf = [0.075 * shade, 0.11 * shade + coastal * 0.02, 0.045 * shade];
-      const blobs = [[0, 0, 0, 1], [(r() - 0.5) * s, -s * 0.25, (r() - 0.5) * s, 0.75]];
-      for (const [bx, by, bz, bs] of blobs) {
-        const g = canopy.clone().scale(s * bs, s * bs * (0.7 + r() * 0.3), s * bs).translate(x + bx, GROUND_Y + h + s * 0.55 + by, z + bz);
-        parts.push(colorize(g, leaf));
-      }
-      parts.push(colorize(trunk.clone().scale(1, h + s * 0.3, 1).translate(x, GROUND_Y + (h + s * 0.3) / 2, z), [0.09, 0.06, 0.04]));
-      placed++;
-    }
-    const trees = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
-    scene.add(trees);
-  }
+  const land = buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite });
+  scene.add(land.group);
 
   // the shore and the sea (sky reflection, wave normals, a glow that rises at the end)
-  const sand = new THREE.Mesh(new THREE.PlaneGeometry(5000, 34), new THREE.MeshStandardMaterial({ color: '#d9c29a', roughness: 1 }));
-  sand.rotation.x = -Math.PI / 2; sand.position.set(0, GROUND_Y + 0.02, SEA_Z + 4);
-  scene.add(sand);
   const seaU = { ...skyU, uGlow: { value: 0 }, uFogCol: { value: scene.fog.color }, uFogD: { value: FOG_D } };
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(6000, 2600), new THREE.ShaderMaterial({
     uniforms: seaU,
     vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
-    fragmentShader: `${GLSL_NOISE}${SKY_GLSL} uniform float uTime, uGlow, uFogD; uniform vec3 uFogCol; varying vec3 vW;
+    fragmentShader: `${GLSL_NOISE}${SKY_GLSL}${SHORE_GLSL(SEA_Z)} uniform float uTime, uGlow, uFogD; uniform vec3 uFogCol; varying vec3 vW;
       void main(){
         vec3 V = normalize(vW - cameraPosition);
         vec2 q = vW.xz * vec2(0.06, 0.11);
@@ -339,10 +315,20 @@ export function create(ctx, segment) {
         float fr = 0.03 + 0.97 * pow(1.0 - max(dot(-V, n), 0.0), 5.0);
         vec3 c = mix(vec3(0.03, 0.05, 0.08), skyCol(R), fr);
         float sp = pow(max(snoise(vec3(vW.xz * 0.35, uTime * 1.5)), 0.0), 6.0);
+        // the shallows and the surf: sandy water near the beach, lines of breakers rolling in, a swash of foam
+        float sh = shoreZ(vW.x) - 1.5 - vW.z;
+        float sn = snoise(vec3(vW.xz * 0.06, 2.0));
+        c = mix(vec3(0.16, 0.15, 0.11) * uLift * (0.8 + 0.6 * fr), c, smoothstep(0.0, 22.0, sh + sn * 4.0));
+        float wph = sh * 0.21 + sn * 1.6 + uTime * 1.3;
+        float crest = smoothstep(0.86, 0.99, sin(wph)) * exp(-max(sh, 0.0) / 45.0) * smoothstep(1.0, 6.0, sh);
+        crest *= smoothstep(-0.3, 0.4, snoise(vec3(vW.xz * vec2(0.05, 0.3), uTime * 0.3)));
+        float swash = (1.0 - smoothstep(0.0, 3.0 + 1.5 * sin(uTime * 0.9 + vW.x * 0.02), sh)) * (0.55 + 0.45 * snoise(vec3(vW.xz * 0.5, uTime * 0.6)));
+        float foam = clamp(crest * 0.85 + swash, 0.0, 1.0) * step(-0.5, sh);
+        c = mix(c, vec3(0.78, 0.66, 0.58) * uLift * (1.0 + 0.4 * uGlow), foam * 0.85);
         c *= 1.0 + 0.35 * uGlow;
         c += vec3(1.0, 0.72, 0.38) * uGlow * (0.06 + sp * 0.9) * (0.3 + fr);
         float d = length(vW - cameraPosition), f = 1.0 - exp(-pow(d * uFogD, 2.0));
-        c = mix(c, uFogCol * uLift, f);
+        c = mix(c, uFogCol, f);
         gl_FragColor = vec4(c, 1.0);
       }`,
   }));
@@ -377,9 +363,9 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------------- the march
   const WALK_SPEED = 1.3;
-  const mg = marcherGeometry({ count: lite ? 130 : 200, origin: ROAD_O, dir: ROAD_D, sStart: 8, sEnd: 104, shadowDir: V3(-SUN_DIR.x, 0, -SUN_DIR.z).normalize() });
+  const mg = marcherGeometry({ count: lite ? 110 : 200, origin: ROAD_O, dir: ROAD_D, sStart: 8, sEnd: 104, shadowDir: V3(-SUN_DIR.x, 0, -SUN_DIR.z).normalize() });
   const walkU = { uTime: { value: 0 }, uDir: { value: ROAD_D.clone() }, uSide: { value: mg.side.clone() }, uSpeed: { value: WALK_SPEED } };
-  const walkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+  const walkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });   // (the carried flags are single sheets)
   walkMat.userData.noBatch = true;
   walkMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, walkU);
@@ -405,7 +391,7 @@ export function create(ctx, segment) {
     g.globalCompositeOperation = 'destination-out'; g.fillStyle = gx; g.fillRect(0, 0, 64, 128);
     return toTexture(c, { srgb: false });
   })();
-  const shMat = new THREE.MeshBasicMaterial({ color: '#1a0f08', alphaMap: shAlpha, transparent: true, opacity: 0.55, depthWrite: false });
+  const shMat = new THREE.MeshBasicMaterial({ color: '#1a0f08', alphaMap: shAlpha, transparent: true, opacity: 0.26, depthWrite: false });
   shMat.userData.noBatch = true;
   shMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, walkU);
@@ -515,12 +501,13 @@ export function create(ctx, segment) {
     mistU.uTime.value = t;
     mistU.uOp.value = 1 - ramp(t, tSM - 0.25, tSM + 0.35);
     for (const m of mists) m.visible = mistU.uOp.value > 0.002;
-    scene.fog.density = FOG_D;
+    scene.fog.density = lerp(0.0095, 0.0036, lift);                         // morning haze over the plain
+    seaU.uFogD.value = scene.fog.density;
+    scene.fog.color.setRGB(0.5, 0.35, 0.28).lerp(FOG_DAY, lift).multiplyScalar(skyU.uLift.value);
 
     // --------------------------------------------------------------- the inscription (the hush)
-    insU.uP.value = lerp(-0.02, 1.02, ramp(t, tEd - 0.05, tEd + 0.72, ease.inOutSine));
-    insU.uGlow.value = 0.8 + 0.4 * swell;
-    insc.visible = t > tEd - 0.1;
+    insU.uP.value = t < tEd - 0.1 ? -0.05 : lerp(-0.02, 1.02, ramp(t, tEd - 0.05, tEd + 0.72, ease.inOutSine));
+    insU.uGlow.value = 0.45 + 0.35 * swell;
 
     // --------------------------------------------------------------- the wheel lifts off in gold and turns
     const fly = ramp(t, tWh - 0.02, tWh + 0.5, ease.inOutCubic);
@@ -606,5 +593,6 @@ export function create(ctx, segment) {
     arSubject: () => subject,
     exploreLimits: { yaw: 1.0, pitchDown: 0.4, pitchUp: 0.6, zoomIn: 0.4, zoomOut: 2.5 },
   };
+  { let n = 0; scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3; } }); console.warn('DHARMA_TRIS ' + Math.round(n) + (lite ? ' lite' : '')); const L = []; scene.traverse((o) => { if (o.isMesh && o.geometry) { const g = o.geometry; L.push([Math.round((g.index ? g.index.count : g.attributes.position.count) / 3), o.material.type]); } }); L.sort((a, b) => b[0] - a[0]); console.warn('DHARMA_TOP ' + JSON.stringify(L.slice(0, 10))); }
   return api;
 }

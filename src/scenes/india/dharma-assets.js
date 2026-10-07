@@ -310,55 +310,96 @@ export function charkhaFrame() {
 // --------------------------------------------------------------------------------------- the inscription
 // Abstract Brahmi-like script: strokes, crosses, arcs and hooks with little vowel ticks — no real text.
 // R: stroke coverage, G: coverage × reveal order (line by line, left to right). order = G / R.
-export function inscriptionCanvas({ W = 1024, H = 1024, lines = 8, perLine = 14, seed = 9 } = {}) {
-  const c = mkCanvas(W, H), g = c.getContext('2d'), r = rng(seed);
-  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  g.lineCap = 'round'; g.lineJoin = 'round';
-  const lh = H / lines, gw = W / (perLine + 1), sz = Math.min(lh * 0.62, gw * 0.85);
-  const glyphs = [
-    (s) => { s.m(0.5, 0); s.l(0.5, 1); s.m(0.15, 0.4); s.l(0.85, 0.4); },                 // +  (ka)
-    (s) => { s.m(0.1, 1); s.l(0.5, 0); s.l(0.9, 1); },                                    // Λ  (ga)
-    (s) => { s.arc(0.5, 0.55, 0.38, Math.PI, 0); s.m(0.12, 0.55); s.l(0.12, 1); },        // ⊓-ish
-    (s) => { s.m(0.15, 0); s.l(0.15, 0.6); s.arc(0.5, 0.6, 0.35, Math.PI, 0, true); s.l(0.85, 0); },   // U  (pa)
-    (s) => { s.circ(0.5, 0.62, 0.3); s.m(0.2, 0.32); s.l(0.5, 0); s.l(0.8, 0.32); },     // circle + V (ma)
-    (s) => { s.m(0.5, 0); s.q(0.15, 0.3, 0.5, 0.5); s.q(0.85, 0.7, 0.5, 1); },            // wavy (ra)
-    (s) => { s.m(0.75, 0); s.l(0.75, 0.75); s.q(0.75, 1, 0.45, 1); s.q(0.2, 1, 0.2, 0.75); },   // J (la)
-    (s) => { s.m(0.15, 0.1); s.l(0.15, 0.6); s.arc(0.5, 0.6, 0.35, Math.PI, 0, true); s.l(0.85, 0.1); s.m(0.5, 0.95); s.l(0.5, 0.15); },   // ψ (ya)
-    (s) => { s.m(0.3, 0); s.l(0.3, 1); s.m(0.3, 0); s.q(0.95, 0.5, 0.3, 1); },            // D (da)
-    (s) => { s.circ(0.5, 0.5, 0.36); s.dot(0.5, 0.5); },                                   // ⊙ (tha)
-    (s) => { s.m(0.15, 0.1); s.l(0.85, 0.1); s.m(0.5, 0.1); s.l(0.5, 1); },               // T
-    (s) => { s.circ(0.5, 0.3, 0.22); s.m(0.5, 0.52); s.l(0.5, 1); s.m(0.2, 0.78); s.l(0.8, 0.78); },   // ♀-like (circle on a cross)
-    (s) => { s.m(0.1, 0.2); s.q(0.3, 1.0, 0.5, 0.45); s.q(0.7, 1.0, 0.9, 0.2); },        // double loop (ha)
-    (s) => { s.m(0.5, 0); s.l(0.5, 0.55); s.arc(0.5, 0.75, 0.2, -Math.PI / 2, Math.PI * 1.5); },   // stem on a ring
-    (s) => { s.m(0.5, 0); s.l(0.5, 1); s.m(0.5, 0.35); s.l(0.85, 0.15); s.m(0.5, 0.65); s.l(0.15, 0.85); },   // forked
-  ];
+// An abstract inscription in the manner of Ashokan Brahmi (not a readable text): letters built from straight
+// strokes, right angles, dots, circles and half-circles at one stroke weight, with vowel ticks at the head
+// or the foot, in neat horizontal lines without word gaps. Returns a canvas whose channels are
+//   R = groove depth (a V-section, deepest along the stroke centre), G = reveal order × mask, B = mask.
+const BRAHMI = [
+  // [strokes, top anchor u, bottom anchor u]; strokes: ['l', u0,v0,u1,v1] | ['c', u,v,r] | ['a', u,v,r,a0,a1] | ['d', u,v]
+  [[['l', .5, 0, .5, 1], ['l', .1, .42, .9, .42]], .5, .5],                                   // ka  +
+  [[['l', .12, 1, .5, 0], ['l', .5, 0, .88, 1]], .5, .88],                                     // ga  Λ
+  [[['l', .25, 0, .25, 1], ['l', .25, 0, .82, 0], ['l', .25, .5, .74, .5], ['l', .25, 1, .82, 1]], .25, .25],   // ja
+  [[['a', .62, .5, .44, Math.PI / 2, Math.PI * 1.5]], .62, .62],                               // ṭa  ⊂
+  [[['c', .5, .5, .4], ['d', .5, .5]], .5, .5],                                                // tha ⊙
+  [[['l', .5, 0, .5, 1], ['l', .12, 1, .88, 1]], .5, .88],                                     // na  ⊥
+  [[['l', .14, 0, .14, 1], ['l', .14, 1, .86, 1], ['l', .86, 1, .86, 0]], .86, .86],           // pa  ⊔
+  [[['l', .14, 0, .14, 1], ['l', .14, 1, .86, 1], ['l', .86, 1, .86, 0], ['l', .86, 0, .14, 0]], .5, .5],   // ba  □
+  [[['l', .16, 0, .5, .44], ['l', .84, 0, .5, .44], ['c', .5, .72, .28]], .84, .5],            // ma
+  [[['l', .12, 0, .12, 1], ['l', .12, 1, .88, 1], ['l', .88, 1, .88, 0], ['l', .5, .3, .5, 1]], .88, .5],   // ya
+  [[['l', .5, 0, .5, 1]], .5, .5],                                                             // ra  |
+  [[['l', .72, 0, .72, 1], ['l', .72, 1, .26, 1], ['l', .26, 1, .26, .62]], .72, .72],         // la
+  [[['l', .5, 0, .5, .42], ['c', .5, .7, .28]], .5, .5],                                       // va
+  [[['l', .76, 0, .76, 1], ['l', .76, .42, .24, .42], ['l', .24, .42, .24, 1]], .76, .76],     // sa
+  [[['l', .26, 0, .26, 1], ['a', .55, 1, .29, Math.PI, Math.PI * 1.55]], .26, .26],             // ha
+  [[['a', .38, .5, .46, -Math.PI / 2, Math.PI / 2]], .38, .38],                                // da  ⊃
+  [[['l', .2, 0, .2, 1], ['a', .2, .5, .5, -Math.PI / 2, Math.PI / 2]], .2, .2],               // dha D
+  [[['a', .5, .5, .36, 0, Math.PI], ['l', .86, .5, .86, 0], ['l', .14, .5, .14, .2]], .86, .5],  // ca
+  [[['l', .72, 0, .72, 1], ['l', .72, .14, .26, .14], ['l', .26, .14, .26, .52], ['l', .26, .52, .72, .52]], .72, .72],   // a
+  [[['d', .5, .12], ['d', .16, .86], ['d', .84, .86]], .5, .5],                                // i  ∴
+  [[['l', .24, 0, .24, 1], ['l', .24, 1, .82, 1]], .24, .82],                                  // u  L
+  [[['l', .5, 0, .12, 1], ['l', .12, 1, .88, 1], ['l', .88, 1, .5, 0]], .5, .5],               // e  △
+  [[['l', .5, 0, .5, .46], ['l', .5, .46, .14, 1], ['l', .5, .46, .86, 1]], .5, .5],           // ta  λ
+  [[['l', .12, 1, .5, 0], ['l', .5, 0, .88, 1], ['l', .5, 0, .5, 1]], .5, .5],                 // śa
+  [[['l', .16, 0, .84, 0], ['l', .5, 0, .5, 1], ['l', .5, 1, .16, 1], ['l', .16, 1, .16, .74]], .5, .5],  // ṇa
+  [[['l', .16, 1, .16, 0], ['l', .16, 0, .84, 0], ['l', .84, 0, .84, 1], ['l', .84, 1, .58, 1]], .84, .84],  // bha
+  [[['l', .5, 0, .5, .56], ['c', .5, .78, .22]], .5, .5],                                      // kha
+  [[['l', .14, 0, .14, 1], ['l', .14, 1, .86, 1], ['l', .86, 1, .86, 0], ['l', .86, 0, .62, .22]], .86, .86],   // pha
+];
+export function inscriptionCanvas({ W = 1024, H = 1024, lines = 9, perLine = 13, seed = 9 } = {}) {
+  const r = rng(seed);
+  const mk = () => { const c = mkCanvas(W, H), g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'miter'; g.miterLimit = 3; return [c, g]; };
+  const [hc, hg] = mk(), [oc, og] = mk();
+  const lh = H / (lines + 0.4), sz = lh * 0.56, sw = sz * 0.12, gap = sz * 0.36;
+  const glyphs = [];
   for (let li = 0; li < lines; li++) {
-    let x = gw * (0.6 + r() * 0.3);
-    const y0 = li * lh + (lh - sz) / 2 + (r() - 0.5) * lh * 0.04;
-    for (let k = 0; k < perLine; k++) {
-      const order = (li + x / W) / lines;
-      const col = `rgb(255,${Math.round(order * 255)},0)`;
-      g.strokeStyle = col; g.fillStyle = col; g.lineWidth = sz * (0.09 + r() * 0.02);
-      const w = sz * (0.62 + r() * 0.2), ox = x, oy = y0;
-      const X = (u) => ox + u * w, Y = (v) => oy + v * sz;
-      const s = {
-        m: (u, v) => { g.moveTo(X(u), Y(v)); }, l: (u, v) => { g.lineTo(X(u), Y(v)); },
-        q: (cu, cv, u, v) => { g.quadraticCurveTo(X(cu), Y(cv), X(u), Y(v)); },
-        arc: (u, v, rr, a0, a1, ccw = false) => { g.arc(X(u), Y(v), rr * w, a0, a1, ccw); },
-        circ: (u, v, rr) => { g.moveTo(X(u) + rr * w, Y(v)); g.arc(X(u), Y(v), rr * w, 0, TAU); },
-        dot: (u, v) => { g.moveTo(X(u) + 1, Y(v)); g.arc(X(u), Y(v), sz * 0.05, 0, TAU); },
-      };
-      g.beginPath(); glyphs[Math.floor(r() * glyphs.length)](s); g.stroke();
-      // vowel marks: a tick at the head or the foot, sometimes
-      const vm = r();
-      if (vm < 0.35) { g.beginPath(); g.moveTo(X(0.5), Y(0)); g.lineTo(X(0.95), Y(-0.16)); g.stroke(); }
-      else if (vm < 0.5) { g.beginPath(); g.moveTo(X(0.5), Y(1)); g.lineTo(X(0.5), Y(1.14)); g.lineTo(X(0.8), Y(1.14)); g.stroke(); }
-      else if (vm < 0.62) { g.beginPath(); g.moveTo(X(0.0), Y(0.2)); g.lineTo(X(-0.22), Y(0.2)); g.stroke(); }
-      x += w + sz * (0.38 + r() * 0.25) + (r() < 0.12 ? sz * 0.5 : 0);
-      if (x > W - gw * 0.8) break;
+    const y0 = (li + 0.3) * lh + (lh - sz) / 2 + (r() - 0.5) * lh * 0.03;
+    let x = sz * (0.5 + r() * 0.2) + (li % 3 === 1 ? sz * 0.15 : 0);
+    while (x < W - sz * 1.2) {
+      const [strokes, ta, ba] = BRAHMI[Math.floor(r() * BRAHMI.length)];
+      const w = sz * (0.62 + r() * 0.12);
+      const ox = x, oy = y0 + (r() - 0.5) * sz * 0.05, X = (u) => ox + u * w, Y = (v) => oy + v * sz, rr = (w + sz) / 2;
+      const path = new Path2D();
+      for (const s of strokes) {
+        if (s[0] === 'l') { path.moveTo(X(s[1]), Y(s[2])); path.lineTo(X(s[3]), Y(s[4])); }
+        else if (s[0] === 'c') { path.moveTo(X(s[1]) + s[3] * rr, Y(s[2])); path.arc(X(s[1]), Y(s[2]), s[3] * rr, 0, TAU); }
+        else if (s[0] === 'a') { path.moveTo(X(s[1]) + Math.cos(s[4]) * s[3] * rr, Y(s[2]) + Math.sin(s[4]) * s[3] * rr); path.arc(X(s[1]), Y(s[2]), s[3] * rr, s[4], s[5]); }
+      }
+      const dots = strokes.filter((s) => s[0] === 'd');
+      // vowel signs: a tick right at the head (ā), up-hooked (i), left (e), both (o), at the foot (u), a dot (ṃ)
+      const vm = r(), L = sz * 0.3;
+      if (vm < 0.22) { path.moveTo(X(ta), Y(0)); path.lineTo(X(ta) + L, Y(0)); }
+      else if (vm < 0.32) { path.moveTo(X(ta), Y(0)); path.lineTo(X(ta) + L, Y(0)); path.lineTo(X(ta) + L, Y(0) - L * 0.7); }
+      else if (vm < 0.42) { path.moveTo(X(ta), Y(0)); path.lineTo(X(ta) - L, Y(0)); }
+      else if (vm < 0.48) { path.moveTo(X(ta) - L, Y(0)); path.lineTo(X(ta) + L, Y(0)); }
+      else if (vm < 0.58) { path.moveTo(X(ba), Y(1)); path.lineTo(X(ba), Y(1) + L * 0.55); path.lineTo(X(ba) + L * 0.8, Y(1) + L * 0.55); }
+      else if (vm < 0.64) dots.push(['d', 1.2, 0.5]);
+      glyphs.push({ path, dots: dots.map((d) => [X(d[1]), Y(d[2])]), order: (li + (x / W) * 0.92) / lines, wear: r() });
+      x += w + gap * (0.85 + r() * 0.35);
     }
   }
-  return c;
+  // depth: stacked strokes, narrower ones deeper (a chisel's V-section); worn letters are shallower
+  const PASSES = 6;
+  hg.globalCompositeOperation = 'lighter';
+  for (const gl of glyphs) {
+    const depth = gl.wear < 0.12 ? 0.55 : 0.85 + gl.wear * 0.15;
+    for (let k = 0; k < PASSES; k++) {
+      const v = Math.round(255 / PASSES * depth);
+      hg.strokeStyle = hg.fillStyle = `rgb(${v},${v},${v})`;
+      const wk = sw * (1.25 - k / PASSES * 1.0);
+      hg.lineWidth = wk; hg.stroke(gl.path);
+      for (const [dx, dy] of gl.dots) { hg.beginPath(); hg.arc(dx, dy, sw * 0.9 * (1.25 - k / PASSES) , 0, TAU); hg.fill(); }
+    }
+    og.strokeStyle = og.fillStyle = `rgb(0,${Math.round(gl.order * 255)},255)`;
+    og.lineWidth = sw * 1.25; og.stroke(gl.path);
+    for (const [dx, dy] of gl.dots) { og.beginPath(); og.arc(dx, dy, sw * 1.15, 0, TAU); og.fill(); }
+  }
+  // soften the steps; then pack depth into R
+  const soft = mkCanvas(W, H), sg = soft.getContext('2d');
+  sg.filter = `blur(${Math.max(1, sw * 0.12).toFixed(1)}px)`; sg.drawImage(hc, 0, 0); sg.filter = 'none';
+  const hd = sg.getImageData(0, 0, W, H).data, od = og.getImageData(0, 0, W, H);
+  for (let i = 0; i < od.data.length; i += 4) od.data[i] = hd[i];
+  og.putImageData(od, 0, 0);
+  return oc;
 }
 
 // ---------------------------------------------------------------------------------------------- the flag
@@ -402,43 +443,79 @@ export function marcherGeometry({ count, origin, dir, sStart, sEnd, shadowDir = 
     }
   };
   const basis = new THREE.Matrix4().makeBasis(side, new THREE.Vector3(0, 1, 0), dir.clone().negate());   // local −z = forward
-  const parts = (lead) => {
-    const torso = new THREE.CylinderGeometry(0.2, 0.16, 0.6, 7); torso.translate(0, 1.18, 0); torso.scale(1, 1, 0.72);
-    const head = new THREE.SphereGeometry(0.1, 6, 4); head.translate(0, 1.6, lead ? -0.04 : 0);
-    const wrap = new THREE.CylinderGeometry(0.17, 0.22, 0.4, 7); wrap.translate(0, 0.7, 0); wrap.scale(1, 1, 0.8);   // dhoti
-    const neck = new THREE.CylinderGeometry(0.045, 0.05, 0.1, 5); neck.translate(0, 1.5, 0);
-    return { torso, head, wrap, neck };
-  };
-  const leg = new THREE.CylinderGeometry(0.055, 0.045, 0.62, 5); leg.translate(0, -0.31, 0);
-  const arm = new THREE.CylinderGeometry(0.045, 0.04, 0.6, 5); arm.translate(0, -0.3, 0);
-  const staff = new THREE.CylinderGeometry(0.018, 0.018, 1.75, 5);
-  const cap = new THREE.CylinderGeometry(0.085, 0.1, 0.07, 6); cap.translate(0, 1.69, 0);
+  const C = (r0, g0, b0, k = 1) => new THREE.Color(r0 * k, g0 * k, b0 * k);
+  const cyl = (rt, rb, h, y, seg = 6, open = false) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open).translate(0, y, 0);
+  // the 1921 Swaraj flag the marchers carried: white, green and red with the charkha (a dark disc at this size)
+  const flagQuad = (y0, h, w, c) => { const g = new THREE.PlaneGeometry(w, h, 2, 1); g.translate(w / 2, y0 - h / 2, 0); return [g, c]; };
   for (let i = 0; i < count; i++) {
     const lead = i === 0;
-    const row = Math.floor((i - 1) / 2), s = lead ? sEnd + 2.6 : sEnd - (row + 0.5) * (sEnd - sStart) / Math.ceil(count / 2) + (r() - 0.5) * 0.7;
-    const lane = lead ? 0 : (i % 2 ? -0.5 : 0.5) + (r() - 0.5) * 0.3;
+    // rows of two or three abreast, loosely kept
+    const row = Math.floor((i - 1) / 2), s = lead ? sEnd + 2.6 : sEnd - (row + 0.5) * (sEnd - sStart) / Math.ceil(count / 2) + (r() - 0.5) * 0.9;
+    const three = (row % 7) === 3 && i % 2 === 0;
+    const lane = lead ? 0 : three ? 0.05 + (r() - 0.5) * 0.2 : (i % 2 ? -0.55 : 0.55) + (r() - 0.5) * 0.35;
     const base = origin.clone().addScaledVector(dir, s).addScaledVector(side, lane);
     const m = basis.clone().setPosition(base);
-    const phase = r() * TAU, tone = 0.82 + r() * 0.18;
-    const shawl = r() < 0.18, cloth = new THREE.Color(0.62 * tone, 0.58 * tone, 0.51 * tone), skin = new THREE.Color(0.2, 0.11, 0.07);
-    const top = shawl ? new THREE.Color(0.42 * tone, 0.3 * tone, 0.18 * tone) : cloth;
-    const { torso, head, wrap, neck } = parts(lead);
-    const P = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(m);
-    const scale = lead ? 0.96 : 0.92 + r() * 0.14;
-    const ms = m.clone().multiply(new THREE.Matrix4().makeScale(scale, scale, scale));
-    add(torso, top, P(0, 0, 0), 0, phase, ms);
-    add(head, skin, P(0, 0, 0), 0, phase, ms);
-    add(neck, skin, P(0, 0, 0), 0, phase, ms);
-    add(wrap, cloth, P(0, 0, 0), 0, phase, ms);
-    if (!lead && r() < 0.7) add(cap, new THREE.Color(0.7, 0.68, 0.62), P(0, 0, 0), 0, phase, ms);
-    for (const sd of [-1, 1]) {
-      add(leg.clone().translate(sd * 0.09, 0.9, 0), skin, P(sd * 0.09 * scale, 0.9 * scale, 0), sd * 0.42, phase, ms);
-      add(arm.clone().translate(sd * 0.23, 1.45, 0), lead && sd > 0 ? skin : top, P(sd * 0.23 * scale, 1.45 * scale, 0), -sd * (lead && sd > 0 ? 0.12 : 0.32), phase, ms);
+    const phase = r() * TAU;
+    const kind = lead ? 'lead' : r() < 0.1 ? 'woman' : 'man';
+    const flagger = !lead && kind === 'man' && r() < 0.045;
+    const k = 0.9 + r() * 0.15;
+    const khadi = r() < 0.75 ? C(0.74, 0.72, 0.66, k) : C(0.66, 0.6, 0.49, k);
+    const skin = C(0.2, 0.11, 0.07, 0.75 + r() * 0.45);
+    const scale = lead ? 0.95 : (kind === 'woman' ? 0.88 : 0.92) + r() * 0.14, girth = lead ? 0.82 : 0.88 + r() * 0.25;
+    const ms = m.clone().multiply(new THREE.Matrix4().makeScale(scale * girth, scale, scale * girth));
+    const P = (x, y, z) => new THREE.Vector3(x * girth, y, z).multiplyScalar(scale).applyMatrix4(m);
+    const body = (g, c) => add(g, c, P(0, 0, 0), 0, phase, ms);
+    let top = khadi;
+    if (kind === 'woman') {
+      const sari = [C(0.74, 0.72, 0.67), C(0.74, 0.72, 0.67), C(0.13, 0.14, 0.3), C(0.36, 0.08, 0.06), C(0.75, 0.36, 0.08)][Math.floor(r() * 5)];
+      top = sari;
+      body(cyl(0.16, 0.15, 0.55, 1.17).scale(1, 1, 0.75), sari);
+      body(cyl(0.15, 0.27, 0.98, 0.5, 8).scale(1, 1, 0.85), sari);                                  // the sari's fall
+      body(new THREE.SphereGeometry(0.115, 6, 4).translate(0, 1.58, 0.01), sari);                    // the pallu over the head
+      body(new THREE.SphereGeometry(0.085, 6, 4).translate(0, 1.56, -0.04), skin);                   // the face
+    } else {
+      const shawl = lead || r() < 0.25;
+      body(cyl(0.2, 0.16, 0.6, 1.18).scale(1, 1, 0.72), lead ? skin : khadi);                         // kurta / bare chest
+      body(cyl(0.18, 0.22, 0.42, 0.72).scale(1, 1, 0.8), khadi);                                      // dhoti
+      if (shawl) {
+        const sc = lead ? C(0.78, 0.76, 0.7) : r() < 0.5 ? C(0.56, 0.47, 0.34, k) : C(0.7, 0.66, 0.56, k);
+        body(cyl(0.215, 0.2, 0.34, 1.3, 6, true).scale(1, 1, 0.76).rotateZ(0.32 * (r() < 0.5 ? 1 : -1)), sc);   // draped across one shoulder
+        if (lead) top = skin;
+      }
+      body(new THREE.SphereGeometry(0.1, 6, 4).translate(0, 1.6, lead ? -0.05 : 0), skin);
+      const hat = r();
+      if (!lead && hat < 0.5) body(new THREE.BoxGeometry(0.19, 0.07, 0.24).translate(0, 1.69, 0), C(0.8, 0.79, 0.75));   // Gandhi cap
+      else if (!lead && hat < 0.72) {                                                                   // a turban
+        const tc = [C(0.78, 0.76, 0.7), C(0.75, 0.36, 0.08), C(0.6, 0.42, 0.12), C(0.72, 0.7, 0.62)][Math.floor(r() * 4)];
+        body(cyl(0.125, 0.11, 0.12, 1.7, 8).scale(1, 1, 1.08), tc);
+      }
+      if (!lead && r() < 0.08) body(new THREE.BoxGeometry(0.34, 0.16, 0.28).translate(0, 1.78, 0), C(0.55, 0.45, 0.32, k));   // a bundle on the head
+      if (!lead && r() < 0.18) body(new THREE.BoxGeometry(0.16, 0.22, 0.08).translate(-0.22, 0.98, 0.02), C(0.42, 0.33, 0.2, k));   // a cloth bag
     }
-    if (!lead && r() < 0.14) add(staff.clone().scale(1, 0.85, 1).rotateX(0.12).translate(0.27, 0.8, -0.12), new THREE.Color(0.24, 0.16, 0.1), P(0.23 * scale, 1.45 * scale, 0), -0.3, phase, ms);
-    if (lead) add(staff.clone().rotateX(0.18).translate(0.3, 0.95, -0.22), new THREE.Color(0.3, 0.2, 0.12), P(0.23, 1.45, 0), -0.12, phase, m);
+    body(cyl(0.045, 0.05, 0.1, 1.5, 5, true), skin);
+    for (const sd of [-1, 1]) {
+      const hip = P(sd * 0.09, 0.9, 0), sh = P(sd * 0.23, 1.45, 0);
+      add(cyl(0.06, 0.055, 0.34, 0.9 - 0.17, 5, true).translate(sd * 0.09, 0, 0), kind === 'woman' ? top : khadi, hip, sd * 0.42, phase, ms);   // thigh in the dhoti
+      add(cyl(0.05, 0.04, 0.5, 0.56 - 0.25, 5, true).translate(sd * 0.09, 0, 0), skin, hip, sd * 0.42, phase, ms);                            // bare shin
+      const bareArm = lead && sd > 0;
+      add(cyl(0.048, 0.042, 0.42, 1.45 - 0.21, 5, true).translate(sd * 0.23, 0, 0), bareArm ? skin : top, sh, -sd * (bareArm ? 0.12 : flagger && sd > 0 ? 0.05 : 0.32), phase, ms);
+      add(cyl(0.04, 0.035, 0.2, 1.45 - 0.5, 5, true).translate(sd * 0.23, 0, 0), skin, sh, -sd * (bareArm ? 0.12 : flagger && sd > 0 ? 0.05 : 0.32), phase, ms);
+    }
+    const staff = (len, rx, z, c, amp, mm) => add(new THREE.CylinderGeometry(0.018, 0.018, len, 5).rotateX(rx).translate(0.29, len / 2 - 0.02 + 0.0, z), c, P(0.23, 1.45, 0), amp, phase, mm);
+    if (lead) staff(1.75, 0.18, -0.22, C(0.3, 0.2, 0.12), -0.12, m);
+    else if (flagger) {
+      add(new THREE.CylinderGeometry(0.016, 0.016, 2.7, 5).translate(0.27, 1.35, -0.08), C(0.28, 0.2, 0.12), P(0.23, 1.45, 0), -0.05, phase, ms);
+      const fw = 0.95, fh = 0.21;
+      for (const [g, c] of [flagQuad(2.68, fh, fw, C(0.8, 0.79, 0.74)), flagQuad(2.68 - fh, fh, fw, C(0.06, 0.3, 0.07)), flagQuad(2.68 - 2 * fh, fh, fw, C(0.55, 0.06, 0.04))]) {
+        g.translate(0.28, 0, -0.08); const pa = g.attributes.position;
+        for (let j = 0; j < pa.count; j++) { const u = (pa.getX(j) - 0.28) / fw; pa.setZ(j, pa.getZ(j) + Math.sin(u * 4.5) * 0.08 * u); pa.setY(j, pa.getY(j) - u * u * 0.06); }
+        g.computeVertexNormals();
+        add(g, c, P(0.23, 1.45, 0), -0.05, phase, ms);
+      }
+      add(new THREE.CircleGeometry(0.06, 8).translate(0.28 + fw / 2, 2.68 - 1.5 * fh, -0.05), C(0.12, 0.07, 0.04), P(0.23, 1.45, 0), -0.05, phase, ms);
+    } else if (r() < 0.14) staff(1.5, 0.12, -0.12, C(0.24, 0.16, 0.1), -0.3, ms);
     // long morning shadow, falling ahead of the walker down the road (a tapering quad on the ground)
-    const len = 6.5 * scale, wd = 0.42 * scale, sside = V3(-shadowDir.z, 0, shadowDir.x);
+    const len = (flagger ? 9 : 6.5) * scale, wd = 0.42 * scale, sside = V3(-shadowDir.z, 0, shadowDir.x);
     const c0 = base.clone().addScaledVector(sside, -wd / 2).add(V3(0, 0.08, 0)), c1 = base.clone().addScaledVector(sside, wd / 2).add(V3(0, 0.08, 0));
     const c2 = c1.clone().addScaledVector(shadowDir, len).addScaledVector(sside, -wd * 0.25), c3 = c0.clone().addScaledVector(shadowDir, len).addScaledVector(sside, wd * 0.25);
     for (const [v, u, w] of [[c0, 0, 0], [c1, 1, 0], [c2, 1, 1], [c0, 0, 0], [c2, 1, 1], [c3, 0, 1]]) shadow.push(v.x, v.y, v.z, u, w);

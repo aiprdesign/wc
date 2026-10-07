@@ -22,6 +22,8 @@ import { Dust } from '../../lib/particles.js';
 import { GLSL_NOISE, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { surfaceTexture } from '../industrial-gear.js';
+import { buildQutb, buildIronPillar } from './metallurgy-qutb.js';
+import { masonry } from './metallurgy-stone.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -47,11 +49,11 @@ vec3 hotCol(float k){
 
 // Unlit glowing material for coals, crucibles, retorts: cracked crust over a hot core, per-piece seed.
 // Discards the cut-away front (z > 0 above uCutY, in set-local space); heat can fall off below uY0..uY1.
-function hotMaterial({ origin, scale = 18, crack = 1, heat = 1, base = [0.02, 0.015, 0.012], y0 = -100, y1 = -99 } = {}) {
+function hotMaterial({ origin, scale = 18, crack = 1, heat = 1, base = [0.02, 0.015, 0.012], y0 = -100, y1 = -99, cells = 0 } = {}) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 }, uHeat: { value: heat }, uCrack: { value: crack }, uScale: { value: scale }, uFlick: { value: 1 },
-      uCutY: { value: 99 }, uOrigin: { value: origin.clone() }, uY0: { value: y0 }, uY1: { value: y1 }, uBase: { value: new THREE.Vector3(...base) },
+      uCutY: { value: 99 }, uOrigin: { value: origin.clone() }, uY0: { value: y0 }, uY1: { value: y1 }, uBase: { value: new THREE.Vector3(...base) }, uCells: { value: cells },
     },
     vertexShader: /* glsl */ `
       attribute float aSeed;
@@ -64,8 +66,19 @@ function hotMaterial({ origin, scale = 18, crack = 1, heat = 1, base = [0.02, 0.
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: /* glsl */ `${GLSL_NOISE}${HOT_GLSL}
-      uniform float uTime, uHeat, uCrack, uScale, uFlick, uCutY, uY0, uY1; uniform vec3 uBase;
+      uniform float uTime, uHeat, uCrack, uScale, uFlick, uCutY, uY0, uY1, uCells; uniform vec3 uBase;
       varying vec3 vL; varying vec3 vN; varying vec3 vV; varying float vSeed;
+      // packed lumps: 3D cells (F1, F2, cell id); the gaps between them glow, their crusts are black / ashen
+      vec3 hvor(vec3 p){
+        vec3 b = floor(p), f = fract(p); float d1 = 9.0, d2 = 9.0, id = 0.0;
+        for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+          vec3 o = vec3(float(i), float(j), float(k)), c = b + o;
+          vec3 h = fract(sin(vec3(dot(c, vec3(127.1, 311.7, 74.7)), dot(c, vec3(269.5, 183.3, 246.1)), dot(c, vec3(113.5, 271.9, 124.6)))) * 43758.5453);
+          vec3 r = o + h - f; float d = dot(r, r);
+          if (d < d1) { d2 = d1; d1 = d; id = h.x; } else if (d < d2) d2 = d;
+        }
+        return vec3(sqrt(d1), sqrt(d2), id);
+      }
       void main(){
         if (vL.z > 0.004 && vL.y > uCutY) discard;
         vec3 q = vL * uScale + vec3(vSeed * 37.0, vSeed * 11.0, 0.0);
@@ -76,8 +89,19 @@ function hotMaterial({ origin, scale = 18, crack = 1, heat = 1, base = [0.02, 0.
         heat *= smoothstep(uY0, uY1, vL.y);
         float k = heat * mix(0.85 + 0.2 * n2, mix(0.5 + 0.2 * n2, 1.12, crack), uCrack);
         float ash = uCrack * (1.0 - crack) * smoothstep(0.1, 0.7, n2) * 0.7;
+        if (uCells > 0.5) {
+          vec3 wq = q * 0.55 + snoise3(q * 0.4 + vSeed * 5.0) * 0.45;
+          vec3 vo = hvor(wq);
+          float edge = vo.y - vo.x;
+          float gap = (1.0 - smoothstep(0.0, 0.07 + 0.08 * (0.5 + 0.5 * n2), edge)) * (0.35 + 0.65 * smoothstep(-0.6, 0.5, n2));
+          float fine = 1.0 - smoothstep(0.0, 0.12, abs(n));
+          float lump = 0.65 + 0.7 * vo.z;
+          k = heat * lump * mix(0.18 + 0.22 * smoothstep(-0.4, 0.8, n2) + 0.35 * fine * smoothstep(0.2, 0.6, n2), 1.18, gap);
+          // a grey ash bloom on the cooler, upward faces of each lump
+          ash = (1.0 - gap) * smoothstep(0.15, 0.55, edge) * smoothstep(-0.2, 0.7, n2 + normalize(vN).y * 0.5) * 0.75;
+        }
         float facing = 0.55 + 0.45 * abs(dot(normalize(vN), normalize(vV)));
-        vec3 c = hotCol(k) * (1.0 - ash) * facing + (uBase + vec3(0.02) * ash) * facing;
+        vec3 c = hotCol(k) * (1.0 - ash) * facing + (uBase + vec3(0.05, 0.045, 0.04) * ash + hotCol(k) * 0.25 * ash) * facing;
         gl_FragColor = vec4(c, 1.0);
       }`,
     side: THREE.DoubleSide,
@@ -212,18 +236,6 @@ function lumps(n, place, seed, sMin, sMax) {
   return mergeGeometries(parts);
 }
 
-// Lathe with angular modulation (flutes, reeds): mod(y, angle) → radius factor.
-function latheMod(pts, seg, mod) {
-  const g = new THREE.LatheGeometry(lathe2(pts), seg);
-  const p = g.attributes.position, np = pts.length;
-  for (let i = 0; i < p.count; i++) {
-    const a = Math.floor(i / np) / seg * TAU, f = mod(p.getY(i), a);
-    p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-
 // box-projected UVs in metres (non-indexed), so brick / stone textures keep their scale across parts
 function worldUV(g, s = 1) {
   g = g.index ? g.toNonIndexed() : g;
@@ -244,65 +256,6 @@ const boxAt = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, 
 // ---------------------------------------------------------------------------------------------------------
 // procedural textures
 
-function pavingTexture() {
-  const c = mkCanvas(1024), g = c.getContext('2d'), r = rng(61);
-  g.fillStyle = '#3d362e'; g.fillRect(0, 0, 1024, 1024);
-  for (let y = 0; y < 1024;) {
-    const h = Math.min(90 + Math.floor(r() * 80), 1024 - y);
-    for (let x = -Math.floor(r() * 120); x < 1024;) {
-      const w = 110 + Math.floor(r() * 170), l = 150 + r() * 45, warm = r() * 16;
-      g.fillStyle = `rgb(${l + warm | 0},${l + warm * 0.5 - 6 | 0},${l - 14 | 0})`;
-      g.fillRect(x + 3, y + 3, w - 6, h - 6);
-      for (let k = 0; k < 26; k++) { const dk = r() < 0.5; g.fillStyle = dk ? 'rgba(50,40,30,0.07)' : 'rgba(235,225,205,0.06)'; g.beginPath(); g.arc(x + r() * w, y + r() * h, 3 + r() * 20, 0, TAU); g.fill(); }
-      x += w;
-    }
-    y += h;
-  }
-  return toTexture(c, { repeat: true });
-}
-
-// buff / red sandstone in coursed ashlar with low-relief carved bands (1 tile = 8 m)
-function sandstoneTexture(seed = 5, tint = [176, 140, 106]) {
-  const c = mkCanvas(1024), g = c.getContext('2d'), r = rng(seed);
-  g.fillStyle = `rgb(${tint})`; g.fillRect(0, 0, 1024, 1024);
-  // grain and weathering: many faint blotches at several scales
-  for (const [n, s0, s1, a0] of [[500, 30, 90, 0.035], [2500, 4, 18, 0.05], [9000, 0.8, 3, 0.08]]) {
-    for (let k = 0; k < n; k++) { const dk = r() < 0.55; g.fillStyle = dk ? `rgba(70,48,30,${a0 * r()})` : `rgba(255,238,210,${a0 * r()})`; g.beginPath(); g.arc(r() * 1024, r() * 1024, s0 + r() * (s1 - s0), 0, TAU); g.fill(); }
-  }
-  const course = 58;
-  for (let y = 0, row = 0; y < 1024; y += course, row++) {
-    // each block its own tone
-    for (let x = (row % 2) * 70 - 140; x < 1024; x += 140) { const l = (r() - 0.5) * 0.12; g.fillStyle = l < 0 ? `rgba(60,40,25,${-l})` : `rgba(255,240,215,${l})`; g.fillRect(x, y, 140, course); }
-    g.fillStyle = 'rgba(55,38,26,0.38)'; g.fillRect(0, y, 1024, 1.5);
-    g.fillStyle = 'rgba(255,240,215,0.12)'; g.fillRect(0, y + 1.5, 1024, 1);
-    g.fillStyle = 'rgba(55,38,26,0.3)';
-    for (let x = (row % 2) * 70; x < 1024; x += 140) g.fillRect(x, y, 1.5, course);
-    if (row % 6 === 3) {
-      // a carved band: fillets and a running scroll in low relief (shadowed below, lit above)
-      for (const [dy, a] of [[6, 0.3], [course - 8, 0.3]]) { g.fillStyle = `rgba(50,34,22,${a})`; g.fillRect(0, y + dy, 1024, 1.5); g.fillStyle = 'rgba(255,240,215,0.14)'; g.fillRect(0, y + dy - 1.5, 1024, 1.2); }
-      g.strokeStyle = 'rgba(50,34,22,0.2)'; g.lineWidth = 1.1;
-      for (let x = 0; x < 1024; x += 14) { g.beginPath(); g.moveTo(x, y + 12); g.lineTo(x + 7, y + course / 2); g.lineTo(x, y + course - 12); g.moveTo(x + 7, y + 12); g.lineTo(x, y + course / 2); g.lineTo(x + 7, y + course - 12); g.stroke(); }
-    }
-  }
-  for (let k = 0; k < 120; k++) { const x = r() * 1024; const y0 = r() * 700; const grd = g.createLinearGradient(x, y0, x, y0 + 320); grd.addColorStop(0, 'rgba(40,30,22,0.07)'); grd.addColorStop(1, 'rgba(40,30,22,0)'); g.fillStyle = grd; g.fillRect(x, y0, 2 + r() * 7, 320); }
-  return toTexture(c, { repeat: true });
-}
-
-function brickTexture() {
-  const c = mkCanvas(512), g = c.getContext('2d'), r = rng(17);
-  g.fillStyle = '#4a3a30'; g.fillRect(0, 0, 512, 512);
-  const bh = 42, bw = 120;
-  for (let y = 0, row = 0; y < 512; y += bh, row++) {
-    for (let x = -(row % 2) * bw / 2; x < 512; x += bw) {
-      const l = 0.75 + r() * 0.35, soot = r() < 0.15 ? 0.6 : 1;
-      g.fillStyle = `rgb(${150 * l * soot | 0},${78 * l * soot | 0},${52 * l * soot | 0})`;
-      g.fillRect(x + 3, y + 3, bw - 6, bh - 6);
-      for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(30,18,12,0.12)'; g.fillRect(x + r() * bw, y + r() * bh, 4 + r() * 10, 2 + r() * 4); }
-    }
-  }
-  return toTexture(c, { repeat: true });
-}
-
 export function create(ctx, segment) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.1, 400);
@@ -310,6 +263,8 @@ export function create(ctx, segment) {
   const tF = cue('forge'), tC = cue('crucible'), tW = cue('wootzPattern'), tP = cue('ironPillar'), tZ = cue('zinc');
   const dur = segment.end - segment.start;
   scene.environment = ctx.env;
+  const lite = ctx.engine?.quality === 'lite';   // phones: fewer lumps, a coarser blade, a lighter courtyard
+  const LQ = (n) => (lite ? Math.round(n * 0.4) : n);
   scene.environmentIntensity = 0.1;
   scene.fog = new THREE.FogExp2(0x0a0604, 0.05);
 
@@ -423,9 +378,9 @@ export function create(ctx, segment) {
   for (const m of [furFront, furBack]) { m.castShadow = true; m.receiveShadow = true; }
 
   // the charge: a bed of glowing charcoal, sealed crucibles standing in it
-  const coalMat = hotMaterial({ origin: OA, scale: 22, crack: 1, heat: 1 });
+  const coalMat = hotMaterial({ origin: OA, scale: 22, crack: 1, heat: 1, cells: 1 });
   const CRU_AT = [[0, 0], [-0.3, -0.17], [0.3, -0.17], [-0.13, -0.38], [0.15, -0.37], [-0.44, 0.0], [0.44, -0.02], [-0.3, 0.22], [0.3, 0.22], [0.0, 0.34]];
-  const coalBed = new THREE.Mesh(lumps(900, (r) => {
+  const coalBed = new THREE.Mesh(lumps(LQ(900), (r) => {
     const a = r() * TAU, rr = Math.sqrt(r()) * 0.5, y = 0.37 + r() * 0.08;
     if (rr > furIn(y) - 0.04) return null;
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
@@ -433,7 +388,7 @@ export function create(ctx, segment) {
     return V(x, y, z);
   }, 7, 0.016, 0.032), coalMat);
   groupA.add(coalBed);
-  const bedMat = hotMaterial({ origin: OA, scale: 30, crack: 1, heat: 0.8 });
+  const bedMat = hotMaterial({ origin: OA, scale: 30, crack: 1, heat: 0.8, cells: 1 });
   {
     const rb = furIn(0.1) - 0.01;
     const body = new THREE.CylinderGeometry(rb - 0.02, rb, 0.28, 40, 1, false, Math.PI / 2, Math.PI).translate(0, 0.24, 0);
@@ -531,7 +486,7 @@ export function create(ctx, segment) {
     groupA.add(new THREE.Mesh(mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g; })), timber));
     const roof = new THREE.Mesh(new THREE.PlaneGeometry(12, 12).rotateX(Math.PI / 2).translate(0, 3.45, 0), new THREE.MeshStandardMaterial({ color: '#2a2018', roughness: 1, bumpMap: surfaceTexture('walnut', 512, 5), bumpScale: 4 }));
     groupA.add(roof);
-    const char = new THREE.Mesh(lumps(260, (r) => { const a = r() * TAU, rr = Math.sqrt(r()) * 0.55; return V(1.75 + Math.cos(a) * rr, Math.max(0.02, 0.38 * (1 - rr / 0.55)) * r(), 0.55 + Math.sin(a) * rr); }, 41, 0.035, 0.07), new THREE.MeshStandardMaterial({ color: '#17140f', roughness: 0.55, metalness: 0 }));
+    const char = new THREE.Mesh(lumps(LQ(260), (r) => { const a = r() * TAU, rr = Math.sqrt(r()) * 0.55; return V(1.75 + Math.cos(a) * rr, Math.max(0.02, 0.38 * (1 - rr / 0.55)) * r(), 0.55 + Math.sin(a) * rr); }, 41, 0.035, 0.07), new THREE.MeshStandardMaterial({ color: '#17140f', roughness: 0.55, metalness: 0 }));
     groupA.add(char);
     const spare = [], r = rng(43);
     for (let i = 0; i < 9; i++) { const g = cru.full.clone(); g.translate(-1.55 + (i % 3) * 0.17 + (r() - 0.5) * 0.02, Math.floor(i / 3) === 2 ? 0 : 0, 0.55 + Math.floor(i / 3) * 0.17); spare.push(g); }
@@ -554,7 +509,7 @@ export function create(ctx, segment) {
   const bladeC = (u) => 0.06 * u * u;                       // the curve of the sabre (in the blade plane)
   const bladeT = (u, v) => 0.0062 * (1 - 0.55 * u) * Math.pow(0.5 + 0.5 * v, 0.75) - (v > 0.3 && v < 0.7 && u < 0.72 ? 0.0011 * Math.sin(Math.PI * (v - 0.3) / 0.4) * smoothstep(0.72, 0.6, u) : 0);
   const bladeGeo = (() => {
-    const NU = 240, NV = 30, pos = [], uv = [], idx = [];
+    const NU = lite ? 110 : 240, NV = lite ? 14 : 30, pos = [], uv = [], idx = [];
     const vert = (u, v, side) => { const w = bladeW(u); pos.push(u * BL, side * bladeT(u, v) / 2, bladeC(u) + v * w / 2); uv.push(u * BL, v * w / 2); };
     for (const side of [1, -1]) {
       const b = pos.length / 3;
@@ -638,47 +593,9 @@ export function create(ctx, segment) {
   // =========================================================================================================
   // SET C — the Iron Pillar of Delhi, Qutb complex, in daylight
   const PH = 7.21;
-  const pillarProfile = (() => {
-    const p = [[0, 0], [0.214, 0], [0.209, 0.03]];
-    for (let i = 1; i <= 24; i++) { const y = 0.03 + (6.08 - 0.03) * i / 24; p.push([0.209 - (0.209 - 0.153) * (y / 6.08), y]); }
-    p.push([0.162, 6.095], [0.172, 6.115], [0.165, 6.14], [0.268, 6.15]);
-    for (let i = 1; i <= 12; i++) { const u = i / 12; p.push([0.155 + 0.115 * Math.pow(1 - u, 1.7), 6.15 + u * 0.47]); }
-    p.push([0.165, 6.63], [0.19, 6.64], [0.19, 6.665], [0.172, 6.68], [0.2, 6.69], [0.2, 6.71], [0.172, 6.72]);
-    for (let i = 0; i <= 14; i++) { const a = -Math.PI / 2 + Math.PI * i / 14; p.push([0.172 + 0.09 * Math.cos(a), 6.82 + 0.1 * Math.sin(a)]); }
-    p.push([0.15, 6.93], [0.15, 6.96], [0, 6.96]);
-    return p;
-  })();
-  const pillarGeo = mergeGeometries([
-    latheMod(pillarProfile, 96, (y, a) => {
-      if (y > 6.15 && y < 6.62) return 0.975 + 0.07 * Math.pow(0.5 + 0.5 * Math.cos(16 * a), 0.7);            // inverted-lotus bell: reeded petals
-      if (y > 6.725 && y < 6.915) return 0.965 + 0.08 * Math.pow(0.5 + 0.5 * Math.cos(28 * a), 0.5);           // amalaka: ribbed
-      return 1;
-    }),
-    new THREE.BoxGeometry(0.42, 0.25, 0.42).translate(0, 6.96 + 0.125, 0).toNonIndexed(),
-  ].map((g) => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); return n; }));
-  const pillarMat = new THREE.MeshStandardMaterial({ color: '#3a302a', roughness: 0.42, metalness: 0 });
-  pillarMat.userData.detail = { albedo: 0.12, rough: 0.6, bump: 0.00004, scratch: 0.2, grime: 0.15 };
-  pillarMat.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPl;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvPl = transformed;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>
-        varying vec3 vPl;
-        float pHash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
-        float pNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-          return mix(mix(pHash(i), pHash(i + vec2(1, 0)), f.x), mix(pHash(i + vec2(0, 1)), pHash(i + vec2(1, 1)), f.x), f.y); }`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-        float pa = atan(vPl.z, vPl.x);
-        vec2 pq = vec2(pa * 3.0, vPl.y * 6.0);
-        float pn = pNoise(pq) * 0.55 + pNoise(pq * 3.1) * 0.3 + pNoise(pq * 9.0) * 0.15;
-        float rust = smoothstep(0.95, 0.05, vPl.y + (pn - 0.5) * 0.5) * smoothstep(0.35, 0.65, pn + 0.15);
-        diffuseColor.rgb = mix(diffuseColor.rgb * (0.85 + 0.3 * pn), vec3(0.2, 0.075, 0.03), rust * 0.85);`)
-      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.85, rust);`);
-  };
-  pillarMat.customProgramCacheKey = () => 'mpillar';
-  const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+  const ironP = buildIronPillar({ lite });
+  const pillarProfile = ironP.profile;
+  const pillar = new THREE.Mesh(ironP.geo, ironP.mat);
   pillar.position.y = 0.12; pillar.castShadow = true; pillar.receiveShadow = true;
   groupC.add(pillar);
   // the protective film (misawite): a thin-film shimmer that climbs the shaft
@@ -698,99 +615,10 @@ export function create(ctx, segment) {
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
-  const film = new THREE.Mesh(new THREE.LatheGeometry(lathe2(pillarProfile.slice(0, 27).map(([r, y]) => [r * 1.02 + 0.002, y])), 64), filmMat);
+  const film = new THREE.Mesh(new THREE.LatheGeometry(lathe2(pillarProfile.slice(0, 33).map(([r, y]) => [r * 1.02 + 0.002, y])), 64), filmMat);
   film.position.y = 0.12; film.renderOrder = 6;
   groupC.add(film);
-
-  // paving, plinth, a low railing
-  const paveTex = pavingTexture(); paveTex.repeat.set(12, 12);
-  const paving = new THREE.Mesh(new THREE.PlaneGeometry(96, 96).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: paveTex, bumpMap: paveTex, bumpScale: 1.2, roughness: 0.82, color: '#ffffff' }));
-  paving.receiveShadow = true; groupC.add(paving);
-  const stoneTex = sandstoneTexture(5, [178, 150, 118]); stoneTex.repeat.set(1 / 8, 1 / 8);
-  const stoneMat = new THREE.MeshStandardMaterial({ map: stoneTex, bumpMap: stoneTex, bumpScale: 2.5, roughness: 0.88, color: '#e8ddd0' });
-  const plinth = new THREE.Mesh(worldUV(boxAt(2.2, 0.12, 2.2, 0, 0.06, 0), 1 / 8), stoneMat); plinth.receiveShadow = true; plinth.castShadow = true; groupC.add(plinth);
-  {
-    const rail = [], h = 0.95, s = 1.55;
-    for (const [x, z] of [[-s, -s], [0, -s], [s, -s], [s, 0], [s, s], [0, s], [-s, s], [-s, 0]]) rail.push(new THREE.BoxGeometry(0.05, h, 0.05).translate(x, h / 2, z));
-    for (const y of [0.35, h - 0.03]) { rail.push(new THREE.BoxGeometry(2 * s, 0.03, 0.03).translate(0, y, s), new THREE.BoxGeometry(2 * s, 0.03, 0.03).translate(0, y, -s), new THREE.BoxGeometry(0.03, 0.03, 2 * s).translate(s, y, 0), new THREE.BoxGeometry(0.03, 0.03, 2 * s).translate(-s, y, 0)); }
-    const railM = new THREE.Mesh(mergeGeometries(rail), new THREE.MeshStandardMaterial({ color: '#2a2725', metalness: 1, roughness: 0.6 }));
-    railM.castShadow = true; groupC.add(railM);
-  }
-  // the arched stone screen of the mosque behind (pointed arches, ruined crest), cloisters, the Minar far off
-  {
-    const arch = (cx, w, hs) => {
-      // pointed arch: two arcs of radius 0.85 w struck from the springing line
-      const R = w * 0.85, th = Math.acos((R - w / 2) / R), cL = cx - w / 2 + R, cR = cx + w / 2 - R, pts = [];
-      pts.push(new THREE.Vector2(cx - w / 2, 0.35));
-      for (let i = 0; i <= 12; i++) { const a = Math.PI - th * i / 12; pts.push(new THREE.Vector2(cL + Math.cos(a) * R, hs + Math.sin(a) * R)); }
-      for (let i = 1; i <= 12; i++) { const a = th - th * i / 12; pts.push(new THREE.Vector2(cR + Math.cos(a) * R, hs + Math.sin(a) * R)); }
-      pts.push(new THREE.Vector2(cx + w / 2, 0.35));
-      return new THREE.Path(pts.reverse());
-    };
-    const r = rng(81), crest = [];
-    for (let x = 17; x >= -17; x -= 0.8) { const c = Math.abs(x) < 5 ? 15.2 : Math.abs(x) < 10 ? 11.5 : 9.8; crest.push(new THREE.Vector2(x, c - r() * (r() < 0.2 ? 1.6 : 0.4))); }
-    const sh = new THREE.Shape([new THREE.Vector2(-17, 0), new THREE.Vector2(17, 0), ...crest]);
-    // (holes cut a little above the paving: the screen stands on a low base)
-    sh.holes.push(arch(0, 6.8, 8.2), arch(-7.6, 3.8, 5.0), arch(7.6, 3.8, 5.0), arch(-12.9, 3.0, 3.8), arch(12.9, 3.0, 3.8));
-    const scr = new THREE.ExtrudeGeometry(sh, { depth: 2.4, bevelEnabled: false, curveSegments: 4 });
-    scr.translate(0, 0, -15.5);
-    const screen = new THREE.Mesh(worldUV(scr, 1 / 8), stoneMat); screen.castShadow = true; screen.receiveShadow = true; groupC.add(screen);
-    // raised arch surrounds (a U of stone standing proud of the face), pilasters, a string course
-    const archPts = (cx, w, hs) => { const R = w * 0.85, th = Math.acos((R - w / 2) / R), cL = cx - w / 2 + R, cR = cx + w / 2 - R, pts = [new THREE.Vector2(cx - w / 2, 0.35)];
-      for (let i = 0; i <= 12; i++) { const a = Math.PI - th * i / 12; pts.push(new THREE.Vector2(cL + Math.cos(a) * R, hs + Math.sin(a) * R)); }
-      for (let i = 1; i <= 12; i++) { const a = th - th * i / 12; pts.push(new THREE.Vector2(cR + Math.cos(a) * R, hs + Math.sin(a) * R)); }
-      pts.push(new THREE.Vector2(cx + w / 2, 0.35)); return pts; };
-    const frames = [];
-    for (const [cx, w, hs, b] of [[0, 6.8, 8.2, 0.9], [-7.6, 3.8, 5.0, 0.55], [7.6, 3.8, 5.0, 0.55], [-12.9, 3.0, 3.8, 0.45], [12.9, 3.0, 3.8, 0.45]]) {
-      const outer = archPts(cx, w + 2 * b, hs), inner = archPts(cx, w, hs).reverse();
-      const g = new THREE.ExtrudeGeometry(new THREE.Shape([...outer, ...inner]), { depth: 0.28, bevelEnabled: false, curveSegments: 2 });
-      g.translate(0, 0, -13.1); frames.push(g.index ? g.toNonIndexed() : g);
-    }
-    for (const x of [-10.4, -4.6, 4.6, 10.4]) frames.push(boxAt(0.9, Math.abs(x) < 5 ? 10.2 : 8.4, 0.22, x, Math.abs(x) < 5 ? 5.1 : 4.2, -13.0).toNonIndexed());
-    for (const [x0, x1, y] of [[-17, -5.2, 8.6], [5.2, 17, 8.6]]) frames.push(boxAt(x1 - x0, 0.32, 0.36, (x0 + x1) / 2, y, -12.98).toNonIndexed());
-    const frm = new THREE.Mesh(worldUV(mergeGeometries(frames.map((g) => { g.deleteAttribute('uv'); if (g.attributes.normal === undefined) g.computeVertexNormals(); return g; })), 1 / 8), stoneMat);
-    frm.castShadow = true; frm.receiveShadow = true; groupC.add(frm);
-    // the cloisters either side: stacked square piers carrying a flat stone roof, a back wall
-    const cl = [];
-    for (const sx of [-1, 1]) {
-      for (let k = 0; k < 9; k++) {
-        const x = sx * 12.5, z = -11 + k * 2.4;
-        cl.push(boxAt(0.5, 0.5, 0.5, x, 0.25, z), boxAt(0.42, 3.0, 0.42, x, 2.0, z), boxAt(0.6, 0.35, 0.6, x, 3.65, z));
-        cl.push(boxAt(0.5, 0.5, 0.5, x + sx * 2.4, 0.25, z), boxAt(0.42, 3.0, 0.42, x + sx * 2.4, 2.0, z), boxAt(0.6, 0.35, 0.6, x + sx * 2.4, 3.65, z));
-      }
-      cl.push(boxAt(4.0, 0.45, 23, sx * 13.7, 4.05, -1.4), boxAt(0.6, 4.3, 23, sx * 15.6, 2.15, -1.4));
-    }
-    const cloister = new THREE.Mesh(worldUV(mergeGeometries(cl.map((g) => { const n = g.toNonIndexed(); n.deleteAttribute('uv'); return n; })), 1 / 8), stoneMat);
-    cloister.castShadow = true; cloister.receiveShadow = true; groupC.add(cloister);
-    // Qutb Minar: fluted red sandstone shaft, projecting balconies
-    const mp = [[0, 0]];
-    const balc = [29.5, 45.5, 54.5, 63.5];
-    for (let i = 0; i <= 60; i++) {
-      const y = 72.5 * i / 60, rr = 7.15 - (7.15 - 1.5) * (y / 72.5);
-      let bump = 0; for (const b of balc) bump = Math.max(bump, 0.9 * sat(1 - Math.abs(y - b) / 0.9));
-      mp.push([rr + bump, y]);
-    }
-    mp.push([0, 72.5]);
-    const minar = new THREE.Mesh(latheMod(mp, 72, (y, a) => (y < 29 ? 0.97 + 0.06 * Math.abs(Math.cos(12 * a)) : y < 45 ? 0.975 + 0.05 * Math.pow(Math.abs(Math.cos(12 * a)), 0.5) : 1)), new THREE.MeshStandardMaterial({ color: '#a8603e', roughness: 0.85, map: sandstoneTexture(9, [170, 96, 66]) }));
-    minar.material.map.repeat.set(4, 6);
-    minar.position.set(30, 0, -52); groupC.add(minar);
-  }
-  // sky dome: hazy Delhi daylight
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(180, 32, 16), new THREE.ShaderMaterial({
-    uniforms: { uSun: { value: V(-14, 11, 5).normalize() } },
-    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: /* glsl */ `uniform vec3 uSun; varying vec3 vP;
-      void main(){
-        float h = max(vP.y, -0.05);
-        vec3 zen = vec3(0.07, 0.27, 0.66), hor = vec3(0.7, 0.76, 0.78);
-        vec3 c = mix(hor, zen, pow(smoothstep(-0.02, 0.75, h), 0.55));
-        float s = max(0.0, dot(vP, uSun));
-        c += vec3(1.0, 0.85, 0.6) * (pow(s, 8.0) * 0.5 + pow(s, 300.0) * 6.0);
-        gl_FragColor = vec4(c, 1.0);
-      }`,
-    side: THREE.BackSide, depthWrite: false, fog: false,
-  }));
-  groupC.add(sky);
+  const qutb = buildQutb(groupC, { lite });
   const calloutC1 = new Callout('IRON PILLAR · c. AD 400', { dx: 1.6, dy: -0.35, size: 0.3, color: '#fff3e0', sub: '~6 TONNES · 7.2 m · QUTB COMPLEX, DELHI', intensity: 1.25 });
   const calloutC2 = new Callout('A THIN PROTECTIVE FILM (MISAWITE) KEEPS RUST AWAY', { dx: -1.4, dy: -0.5, size: 0.24, color: '#fff3e0', sub: 'PHOSPHORUS-RICH IRON · A PASSIVE LAYER', intensity: 1.25 });
   const dimRig = new THREE.Group(); groupC.add(dimRig);
@@ -800,8 +628,19 @@ export function create(ctx, segment) {
 
   // =========================================================================================================
   // SET D — Zawar: downward distillation of zinc, in section
-  const brick = brickTexture();
-  const brickMat = new THREE.MeshStandardMaterial({ map: brick, bumpMap: brick, bumpScale: 1.5, roughness: 0.9, color: '#ffffff' });
+  // fired brick, laid in world space: per-brick tone, split and chipped bricks, dirty mortar, soot climbing from
+  // the fire bed (no texture, so no repeat)
+  const brickOpts = (tag, extra = {}) => ({
+    course: 0.062, block: 0.19, split: 0.12, bevel: 0.007, joint: 0.007, relief: 0.9, tone: 0.45, macro: 0.9, streak: 0.4, grime: 0.6, chips: 1.3, grain: 0.0006,
+    colA: [0.3, 0.085, 0.04], colB: [0.46, 0.17, 0.08], colM: [0.09, 0.07, 0.055], ground: OD.y, tag,
+    color: /* glsl */ `
+      {
+        float sootY = smoothstep(0.9, 2.2, vMsW.y + 0.3 * snoise(vMsW * 2.1));
+        float burnt = step(0.86, msC.w);
+        diffuseColor.rgb *= mix(1.0, 0.28, sootY * 0.85) * mix(1.0, 0.45, burnt);
+      }`, ...extra,
+  });
+  const brickMat = masonry(new THREE.MeshStandardMaterial({ roughness: 0.9 }), brickOpts('mbrick'));
   {
     const walls = [boxAt(3.4, 0.15, 1.7, 0, 0.075, -0.85), boxAt(3.4, 2.5, 0.2, 0, 1.25, -1.6), boxAt(0.2, 2.5, 1.7, -1.6, 1.25, -0.85), boxAt(0.2, 2.5, 1.7, 1.6, 1.25, -0.85)];
     const m = new THREE.Mesh(worldUV(mergeGeometries(walls.map((g) => { const n = g.toNonIndexed(); n.deleteAttribute('uv'); return n; })), 2.2), brickMat);
@@ -817,7 +656,7 @@ export function create(ctx, segment) {
     const plate = [];
     const edges = [-1.5, ...RX.flatMap((x) => [x - 0.055, x + 0.055]), 1.5];
     for (let i = 0; i < edges.length; i += 2) plate.push(boxAt(edges[i + 1] - edges[i], 0.12, 1.5, (edges[i] + edges[i + 1]) / 2, 1.06, -0.75));
-    const pm = new THREE.Mesh(worldUV(mergeGeometries(plate.map((g) => { const n = g.toNonIndexed(); n.deleteAttribute('uv'); return n; })), 2.2), new THREE.MeshStandardMaterial({ color: '#8a6450', roughness: 0.9, map: brick }));
+    const pm = new THREE.Mesh(worldUV(mergeGeometries(plate.map((g) => { const n = g.toNonIndexed(); n.deleteAttribute('uv'); return n; })), 2.2), masonry(new THREE.MeshStandardMaterial({ roughness: 0.92 }), brickOpts('mplate', { colA: [0.36, 0.2, 0.12], colB: [0.44, 0.27, 0.16], course: 0.2, block: 0.3, split: 0.3 })));
     groupD.add(pm);
   }
   // retorts (brinjal-shaped, inverted: bulb up in the fire, neck down through the plate into a receiver)
@@ -837,13 +676,13 @@ export function create(ctx, segment) {
   }
   // charge in the front bulbs (roasted ore + charcoal), fuel packed round the retorts
   const chargeMat = hotMaterial({ origin: OD, scale: 50, crack: 0.15, heat: 0.66, base: [0.08, 0.05, 0.035] });
-  groupD.add(new THREE.Mesh(lumps(240, (r) => {
+  groupD.add(new THREE.Mesh(lumps(LQ(240), (r) => {
     const x = RX[Math.floor(r() * RX.length)], y = 1.36 + r() * 0.32, rr = 0.1 * Math.sqrt(r()), a = Math.PI + (r() - 0.5) * Math.PI;
     const z = Math.cos(a) * rr; if (z > -0.004) return null;
     return V(x + Math.sin(a) * rr * 1.1, y, z);
   }, 93, 0.009, 0.016), chargeMat));
-  const fuelMat = hotMaterial({ origin: OD, scale: 14, crack: 1, heat: 0.8, base: [0.03, 0.02, 0.015] });
-  groupD.add(new THREE.Mesh(lumps(420, (r) => {
+  const fuelMat = hotMaterial({ origin: OD, scale: 14, crack: 1, heat: 0.8, base: [0.03, 0.02, 0.015], cells: 1 });
+  groupD.add(new THREE.Mesh(lumps(LQ(420), (r) => {
     const x = -1.45 + r() * 2.9, y = 1.14 + r() * 0.85, z = -1.45 + r() * 1.3;
     for (const rx of RX) for (const rz of [0, -0.5, -0.95]) if (Math.hypot(x - rx - (rz < -0.6 ? 0.2 : 0), z - rz) < 0.17 && y < 1.85) return null;
     return V(x, y, z);
@@ -1056,11 +895,15 @@ export function create(ctx, segment) {
       cp.set(OC.x + Math.sin(a) * R, lerp(1.2, 1.55, u), Math.cos(a) * R);
       ct.set(OC.x, 4.7, 0);
       camera.fov = 37;
-      key.color.set('#ffe2bf'); key.intensity = 4.6; key.position.set(OC.x - 14, 11, 5); key.target.position.set(OC.x, 0, -3); setKeyShadow(18, 1, 70);
-      hemi.intensity = 0.3; hemi.color.set('#a8c2e6'); hemi.groundColor.set('#7a6048');
-      fire.intensity = 0; fill.intensity = 0; spot.intensity = 0;
-      scene.environmentIntensity = 0.35;
-      scene.fog.color.set(0xb9ae9c); scene.fog.density = 0.0045;
+      // late-afternoon sun low from the front left (long shadows), sky fill, a warm bounce off the paving,
+      // and a rim from behind on the iron
+      key.color.set('#ffc890'); key.intensity = 5.2; key.position.set(OC.x + qutb.sunDir.x * 30, qutb.sunDir.y * 30, qutb.sunDir.z * 30 - 3); key.target.position.set(OC.x, 0, -3); setKeyShadow(22, 1, 80);
+      hemi.intensity = 0.42; hemi.color.set('#9fb4d6'); hemi.groundColor.set('#8a6446');
+      fire.intensity = 0;
+      fill.position.set(OC.x + 2, -1.2, 6); fill.intensity = 2.2; fill.color.set('#ffb27a');   // (below the paving: an up-light bounce that never glints on the floor)
+      spot.position.set(OC.x + 5, 8.5, -7); spot.target.position.set(OC.x, 4, 0); spot.intensity = 60; spot.angle = 0.22; spot.penumbra = 0.8; spot.color.set('#ffd9b0');
+      scene.environmentIntensity = 0.32;
+      scene.fog.color.setRGB(0.56, 0.45, 0.35); scene.fog.density = 0.0085;
       filmMat.uniforms.uTime.value = T;
       filmMat.uniforms.uReveal.value = lerp(-0.2, 6.3, ramp(t, tP + 0.14, tP + 0.6, ease.inOutSine));
       filmMat.uniforms.uOpacity.value = 0.55 * (1 - ramp(t, tZ - 0.1, tZ));

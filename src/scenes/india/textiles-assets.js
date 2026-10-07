@@ -4,6 +4,7 @@
 // Build-time only; every function returns plain geometry / textures / data.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { rng, TAU } from '../../lib/math.js';
 import { noise2, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
@@ -20,11 +21,16 @@ function prep(g) {
   return n;
 }
 export const merge = (list) => mergeGeometries(list.map(prep));
+// the same, keeping UVs (for textured wood)
+export const mergeUV = (list) => mergeGeometries(list.map((g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'uv'].includes(k)) n.deleteAttribute(k); return n; }));
 
 // smooth lathe profile through [r, y] knots (a Catmull-Rom spline), revolved
-function lathe(knots, { seg = 20, n = 0, smooth = true } = {}) {
+// detail level (the 'lite' quality builds coarser revolutions)
+const DETAIL = { seg: 20, k: 1 };
+export function setDetail(lite) { DETAIL.seg = lite ? 10 : 18; DETAIL.k = lite ? 0.5 : 0.85; }
+function lathe(knots, { seg = DETAIL.seg, n = 0, smooth = true } = {}) {
   let pts = knots.map(([r, y]) => V2(Math.max(0, r), y));
-  if (smooth) pts = new THREE.SplineCurve(pts).getPoints(n || knots.length * 3).map((p) => V2(Math.max(0, p.x), p.y));
+  if (smooth) pts = new THREE.SplineCurve(pts).getPoints(n || Math.max(knots.length + 2, Math.round(knots.length * 3 * DETAIL.k))).map((p) => V2(Math.max(0, p.x), p.y));
   return new THREE.LatheGeometry(pts, seg);
 }
 const at = (g, x, y, z) => g.translate(x, y, z);
@@ -91,7 +97,7 @@ export function reedTexture(dents = 104) {
 // ------------------------------------------------------------------------------------------------ cotton
 // A fibre lobe of the open boll: a lumpy, puffed sphere (noise-displaced), ~unit radius.
 export function lobeGeometry(seed = 1) {
-  const g = new THREE.SphereGeometry(1, 18, 12), p = g.attributes.position, v = new THREE.Vector3();
+  const g = new THREE.SphereGeometry(1, DETAIL.k < 0.6 ? 11 : 18, DETAIL.k < 0.6 ? 8 : 12), p = g.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
     const n = 0.16 * noise3(v.x * 2.2 + seed, v.y * 2.2, v.z * 2.2) + 0.07 * noise3(v.x * 6 - seed, v.y * 6, v.z * 6) + 0.035 * noise3(v.x * 15, v.y * 15 + seed, v.z * 15);
@@ -142,7 +148,7 @@ export function bractGeometry(len = 0.07, width = 0.05) {
 
 // Palmate cotton leaf (three to five lobes), lying in xz with its tip along +x, gently cupped.
 export function cottonLeafGeometry(size = 0.12, seed = 1) {
-  const sh = new THREE.Shape(), N = 90;
+  const sh = new THREE.Shape(), N = DETAIL.k < 0.6 ? 40 : 90;
   for (let i = 0; i <= N; i++) {
     const a = (i / N) * TAU - Math.PI;
     const lobes = 0.55 + 0.45 * Math.pow(Math.abs(Math.cos(a * 1.5)), 0.7);
@@ -203,11 +209,54 @@ export function shuttleGeometry() {
   return { wood: merge([body]), brass: merge([tipA, tipB]), pirn: merge([pirn]) };
 }
 
-// Print block: a carved teak block with a turned knob (bottom face is the dyed relief).
-export function blockGeometry(size = 0.5) {
-  const box = new THREE.BoxGeometry(size, 0.07, size);
-  const knob = merge([at(new THREE.CylinderGeometry(0.035, 0.045, 0.06, 16), 0, 0.065, 0), at(new THREE.SphereGeometry(0.05, 16, 10), 0, 0.12, 0)]);
-  return { box, knob };
+// Print block: a carved teak block (chamfered body, a stepped top) with a turned handle, and the
+// relief carved on its face (y < 0): the rosette, four diagonal leaves and a ring of dots, the
+// impression the cloth shader prints. Body / relief / handle are separate geometries (three
+// materials), all in the same block space: the relief face sits at y = -0.035.
+export function blockGeometry(size = 0.46) {
+  const h = size / 2, rr = 0.03;
+  const sq = new THREE.Shape();
+  sq.moveTo(-h + rr, -h); sq.lineTo(h - rr, -h); sq.quadraticCurveTo(h, -h, h, -h + rr); sq.lineTo(h, h - rr); sq.quadraticCurveTo(h, h, h - rr, h);
+  sq.lineTo(-h + rr, h); sq.quadraticCurveTo(-h, h, -h, h - rr); sq.lineTo(-h, -h + rr); sq.quadraticCurveTo(-h, -h, -h + rr, -h);
+  const body = new THREE.ExtrudeGeometry(sq, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 2, curveSegments: 3 });
+  body.rotateX(-Math.PI / 2).translate(0, -0.019, 0);              // y from -0.025 to 0.031 (+bevel)
+  const top = new RoundedBoxGeometry(size * 0.78, 0.022, size * 0.78, 2, 0.008).translate(0, 0.046, 0);
+  // relief: a ring of motifs at the motif scale of the cloth shader (q = 1 ↔ 0.325 m)
+  const S = 0.325, parts = [];
+  const ros = new THREE.Shape(), N = 48;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * TAU, r = 0.5 * S * (0.66 + 0.34 * Math.pow(Math.abs(Math.cos(4 * a)), 0.8));
+    if (i === 0) ros.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ros.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const eye = new THREE.Path(); for (let i = 0; i <= 12; i++) { const a = -(i / 12) * TAU, r = 0.1 * S; if (i === 0) eye.moveTo(Math.cos(a) * r, Math.sin(a) * r); else eye.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  ros.holes.push(eye);
+  parts.push(new THREE.ExtrudeGeometry(ros, { depth: 0.011, bevelEnabled: false }));
+  parts.push(new THREE.CylinderGeometry(0.04 * S, 0.04 * S, 0.011, 10).rotateX(Math.PI / 2).translate(0, 0, 0.0055));
+  for (let k = 0; k < 4; k++) {
+    const lf = new THREE.Shape(), M = 8;
+    for (let i = 0; i <= M; i++) { const lt = -1 + (2 * i) / M, w = 0.12 * S * Math.max(0, 1 - lt * lt) * (1 - 0.25 * lt); const u = (0.74 + 0.22 * lt) * S; if (i === 0) lf.moveTo(u, w); else lf.lineTo(u, w); }
+    for (let i = M; i >= 0; i--) { const lt = -1 + (2 * i) / M, w = 0.12 * S * Math.max(0, 1 - lt * lt) * (1 - 0.25 * lt); lf.lineTo((0.74 + 0.22 * lt) * S, -w); }
+    parts.push(new THREE.ExtrudeGeometry(lf, { depth: 0.011, bevelEnabled: false }).rotateZ(Math.PI / 4 + (k * Math.PI) / 2));
+  }
+  const nd = DETAIL.k < 0.6 ? 0 : 10;
+  for (let k = 0; k < nd; k++) { const a = (k / nd) * TAU + 0.2, r = 0.62 * S; parts.push(new THREE.CylinderGeometry(0.035 * S, 0.035 * S, 0.011, 5).rotateX(Math.PI / 2).translate(Math.cos(a) * r, Math.sin(a) * r, 0.0055)); }
+  const relief = merge(parts).rotateX(Math.PI / 2).translate(0, -0.024, 0);   // faces down, bottom at -0.035
+  const knob = lathe([[0.05, 0], [0.05, 0.008], [0.032, 0.016], [0.026, 0.04], [0.034, 0.05], [0.022, 0.06], [0.024, 0.08], [0.042, 0.1], [0.05, 0.12], [0.04, 0.14], [0.012, 0.152], [0, 0.154]], { seg: 12, n: 20 }).translate(0, 0.057, 0);
+  return { box: mergeUV([body, top]), relief, knob };
+}
+
+// Loom parts: turned posts and uprights (with a lotus finial), carved beam-end bosses, a ratchet wheel.
+export function loomParts() {
+  const seg = DETAIL.k < 0.6 ? 10 : 16;
+  const post = (hh, r) => lathe([[r * 1.3, 0], [r * 1.3, hh * 0.06], [r * 1.05, hh * 0.09], [r * 1.2, hh * 0.13], [r * 0.95, hh * 0.18], [r * 0.82, hh * 0.45], [r * 1.18, hh * 0.56], [r * 0.82, hh * 0.66], [r * 0.85, hh * 0.86], [r * 1.15, hh * 0.92], [r * 1.25, hh]], { seg, n: 40 });
+  const upright = (
+    lathe([[0.075, 0], [0.075, 0.06], [0.055, 0.09], [0.065, 0.12], [0.045, 0.16], [0.038, 0.5], [0.052, 0.56], [0.036, 0.62], [0.034, 1.2], [0.05, 1.26], [0.036, 1.32], [0.034, 1.6], [0.05, 1.64], [0.054, 1.74], [0.04, 1.77], [0.028, 1.8], [0.05, 1.84], [0.055, 1.88], [0.03, 1.94], [0.012, 1.99], [0, 2.0]], { seg, n: 90 }));
+  const boss = lathe([[0, -0.035], [0.075, -0.035], [0.09, -0.025], [0.085, -0.012], [0.095, 0.0], [0.09, 0.015], [0.07, 0.03], [0.04, 0.035], [0, 0.036]], { seg: seg + 4, n: 30 });
+  const teeth = [];
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU; teeth.push(new THREE.BoxGeometry(0.03, 0.02, 0.022).translate(0.1, 0, 0).rotateY(a)); }
+  const ratchet = mergeUV([new THREE.CylinderGeometry(0.1, 0.1, 0.022, 24), ...teeth]);
+  const pawl = new THREE.BoxGeometry(0.02, 0.15, 0.02);
+  return { post, upright, boss: boss.rotateZ(Math.PI / 2), ratchet: ratchet.rotateZ(Math.PI / 2), pawl };
 }
 
 // ------------------------------------------------------------------------------------------------ chess

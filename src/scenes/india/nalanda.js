@@ -28,7 +28,7 @@ import { glowSprite } from '../../lib/materials.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
 import { TextPlane, FONTS } from '../../lib/text.js';
 import { pulse } from '../../lib/rhythm.js';
-import { brickMaterial, groundMaterial, skyMaterial, monkGeometries, buildMap, ribbon, proj, DEG } from './nalanda-assets.js';
+import { brickMaterial, groundMaterial, skyMaterial, monkGeometries, buildMap, ribbon, proj, DEG, debrisMaterial, grassTuftGeometry } from './nalanda-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffcf85', LABEL = '#ffe3b3';
@@ -71,7 +71,7 @@ export function create(ctx, segment) {
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.1, 3000);
 
   // ------------------------------------------------------------------------------------- materials
-  const U = { uRise: { value: -50 }, uDelayK: { value: 0.26 }, uCentre: { value: new THREE.Vector2(0, -8) }, uHot: { value: 0 } };
+  const U = { uRise: { value: -50 }, uDelayK: { value: 0.26 }, uCentre: { value: new THREE.Vector2(0, -8) }, uHot: { value: 0 }, uAge: { value: 1 } };
   const vihMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.6, jag: 5 });
   const temMat = brickMaterial(U, { ruinLo: 8.0, ruinHi: 12.0, jag: 3, tint: [0.96, 0.9, 0.86] });
   const libMat = brickMaterial(U, { ruinLo: 0.3, ruinHi: 2.2, jag: 5 });
@@ -79,19 +79,37 @@ export function create(ctx, segment) {
   const woodMat = new THREE.MeshStandardMaterial({ color: '#3a2214', roughness: 0.75 });
   const voidMat = new THREE.MeshStandardMaterial({ color: '#0b0705', roughness: 1 });
   const waterMat = new THREE.MeshStandardMaterial({ color: '#05080a', roughness: 0.08, metalness: 0 });
+  const stoneMat = new THREE.MeshStandardMaterial({ color: '#8a7559', roughness: 0.8, side: THREE.DoubleSide });   // Chunar-like sandstone
+  const potMat = new THREE.MeshStandardMaterial({ color: '#6e2e16', roughness: 0.7 });                             // terracotta
+  const doorMat = new THREE.MeshStandardMaterial({ color: '#7a4a28', roughness: 0.7 });                            // sal-wood door leaves
+  const cellGlowMat = new THREE.MeshStandardMaterial({ color: '#0b0705', roughness: 1, emissive: new THREE.Color(1.0, 0.4, 0.12), emissiveIntensity: 0 });   // a lamp lit inside the cell
   // parts that are not brick (shelves, dark doorways) exist only once the build front has passed them
-  const frontClip = (mat, key) => {
+  // (grain: 'wood' = streaks along the long axis of each piece, 'stone' = speckle and weathering)
+  const frontClip = (mat, key, grain) => {
     mat.userData.noDetail = true;
+    mat.userData.noAntiTile = true;
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW;')
-        .replace('#include <project_vertex>', '#include <project_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW; uniform float uRise, uDelayK; uniform vec2 uCentre;')
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFW; varying vec3 vFN;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvFW = (modelMatrix * vec4(transformed, 1.0)).xyz; vFN = normalize(mat3(modelMatrix) * objectNormal);');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+          varying vec3 vFW; varying vec3 vFN; uniform float uRise, uDelayK; uniform vec2 uCentre;
+          float fh(vec3 p){ p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
+          float fn3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(mix(fh(i), fh(i + vec3(1,0,0)), f.x), mix(fh(i + vec3(0,1,0)), fh(i + vec3(1,1,0)), f.x), f.y),
+                       mix(mix(fh(i + vec3(0,0,1)), fh(i + vec3(1,0,1)), f.x), mix(fh(i + vec3(0,1,1)), fh(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
         .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vFW.y > uRise - uDelayK * length(vFW.xz - uCentre) - 0.3) discard;');
+      if (grain === 'wood') sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+          { vec3 q = vFW * vec3(1.0, 1.0, 1.0); vec3 an = abs(normalize(vFN));
+            float g = fn3(q * vec3(3.0, 40.0, 3.0)) * 0.5 + fn3(q * vec3(40.0, 3.0, 3.0)) * an.z * 0.5 + fn3(q * vec3(3.0, 3.0, 40.0)) * an.x * 0.5;
+            diffuseColor.rgb *= 0.7 + 0.45 * g + 0.25 * (fn3(vFW * 1.7) - 0.5); }`);
+      if (grain === 'stone') sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+          { float g = fn3(vFW * 9.0) * 0.5 + fn3(vFW * 31.0) * 0.3 + fn3(vFW * 2.3) * 0.2;
+            diffuseColor.rgb *= 0.72 + 0.5 * g; diffuseColor.rgb *= mix(0.65, 1.0, smoothstep(0.0, 0.5, vFW.y - 0.1 + fn3(vFW * 4.0) * 0.3)); }`);
     };
     mat.customProgramCacheKey = () => 'nalanda-clip-' + key;
   };
-  frontClip(woodMat, 'wood'); frontClip(voidMat, 'void');
+  frontClip(woodMat, 'wood', 'wood'); frontClip(voidMat, 'void'); frontClip(stoneMat, 'stone', 'stone'); frontClip(potMat, 'pot', 'stone'); frontClip(doorMat, 'door', 'wood'); frontClip(cellGlowMat, 'cellglow');
   const GU = { uEarth: { value: 0 }, uMapMix: { value: 0 }, uMapK: { value: 1 } };
   const groundMat = groundMaterial(GU);
 
@@ -123,10 +141,40 @@ export function create(ctx, segment) {
     }
   }
 
+  // geometry in a local frame on one face of a square court: u along the face, n out from the face (towards
+  // the centre for inner faces), y up. side 0..3 = south / north / east / west; F = the face's distance
+  // from the centre (cx, cz). The basis is right-handed (U = Y × N) so nothing is mirrored.
+  const _fm = new THREE.Matrix4(), _fu = new THREE.Vector3(), _fn = new THREE.Vector3();
+  const frame = (cx, cz, side, F, inward = true) => {
+    const sg = inward ? 1 : -1;
+    const N = [V(0, 0, -1), V(0, 0, 1), V(-1, 0, 0), V(1, 0, 0)][side].multiplyScalar(sg);
+    const O = [V(cx, 0, cz + F), V(cx, 0, cz - F), V(cx + F, 0, cz), V(cx - F, 0, cz)][side];
+    const Uv = V(0, 1, 0).cross(N);
+    return new THREE.Matrix4().makeBasis(Uv, V(0, 1, 0), N).setPosition(O);
+  };
+  const fgeo = (mat, M, g) => { g.applyMatrix4(M); acc(mat).push(g); };
+  const fbox = (mat, M, u0, u1, y0, y1, n0, n1) => {
+    const g = new THREE.BoxGeometry(Math.abs(u1 - u0), Math.abs(y1 - y0), Math.abs(n1 - n0));
+    g.translate((u0 + u1) / 2, (y0 + y1) / 2, (n0 + n1) / 2);
+    fgeo(mat, M, g);
+  };
+  // a moulded band round a square court: [[out, y0, y1], …] stacked profiles (out = offset from the face)
+  const moulding = (mat, cx, cz, face, steps, inward) => {
+    for (const [o, y0, y1] of steps) {
+      if (inward) ring(mat, cx, cz, face - o, face, y0, y1);
+      else ring(mat, cx, cz, face, face + o, y0, y1);
+    }
+  };
+  const lathe = (pts, seg) => { const g = new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg); return g; };
+  const PLINTH = [[0.22, 0, 0.1], [0.14, 0.1, 0.2], [0.2, 0.2, 0.26], [0.1, 0.26, 0.36], [0.16, 0.36, 0.42]];   // foot, dado, torus, neck, lip
+  const CORNICE = [[0.08, -0.62, -0.5], [0.16, -0.5, -0.4], [0.26, -0.4, -0.3], [0.36, -0.3, -0.18], [0.3, -0.18, 0]];
+
   // ---- vihara: two-storey cells round a courtyard, verandah on pillars, a well, a raised platform
   const CELL = 3.04, IN0 = 14.4, IN1 = 15.2, OUT = 20, OW = 1.2;
+  const niches = [];                                  // lamp niches (positions, for the lamp cloud)
   function vihara(cx, cz, hero) {
-    const M = vihMat;
+    const M = vihMat, rr = rng(911 + cx);
+    const DH = hero ? 2.5 : 2.24;                     // door openings: corbelled tops on the hero
     // outer walls; gate in the south wall
     wall(M, 'x', cx - OUT, cx + OUT, cz + OUT - OW, cz + OUT, VH, [{ a: cx - 2, b: cx + 2, h: 3.36 }]);
     wall(M, 'x', cx - OUT, cx + OUT, cz - OUT, cz - OUT + OW, VH);
@@ -138,14 +186,14 @@ export function create(ctx, segment) {
       for (let k = 0; k < 10; k++) {
         const c = c0 - IN1 + (k + 0.5) * CELL;
         if (entrance && (k === 4 || k === 5)) continue;
-        o.push({ a: c - 0.5, b: c + 0.5, h: 2.24 });
+        o.push({ a: c - 0.5, b: c + 0.5, h: DH });
       }
       if (entrance) o.push({ a: c0 - 1.6, b: c0 + 1.6, h: 3.36 });
       return o;
     };
     wall(M, 'x', cx - IN1, cx + IN1, cz + IN0, cz + IN1, VH, doors(cx, true));
     wall(M, 'x', cx - IN1, cx + IN1, cz - IN1, cz - IN0, VH, doors(cx, false));
-    wall(M, 'z', cz - IN0, cz + IN0, cx - IN1, cx - IN0, VH, doors(cz, false).map((o) => ({ ...o })));
+    wall(M, 'z', cz - IN0, cz + IN0, cx - IN1, cx - IN0, VH, doors(cz, false));
     wall(M, 'z', cz - IN0, cz + IN0, cx + IN0, cx + IN1, VH, doors(cz, false));
     // cell partitions
     for (let k = 0; k <= 10; k++) {
@@ -155,47 +203,187 @@ export function create(ctx, segment) {
       box(M, cx - OUT + OW, cx - IN1, 0, VH, cz + p - 0.25, cz + p + 0.25);                              // west
       box(M, cx + IN1, cx + OUT - OW, 0, VH, cz + p - 0.25, cz + p + 0.25);                              // east
     }
-    // verandah: plinth, two storeys of pillars, the gallery floor with its parapet, the roof
-    ring(M, cx, cz, 11.9, IN0, 0, 0.3);
+    // verandah: a moulded plinth, two storeys of piers, the gallery floor with its parapet, the roof
+    moulding(M, cx, cz, 11.9, PLINTH.map(([o, y0, y1]) => [o, y0 * 0.75, y1 * 0.75]), true);
+    ring(M, cx, cz, 11.9, IN0, 0, 0.32);
     const PL = 12.2, pil = [];
     for (let k = 0; k <= 8; k++) { const p = -PL + k * PL / 4; pil.push([p, PL], [p, -PL]); if (k > 0 && k < 8) pil.push([PL, p], [-PL, p]); }
+    const oct = (r, h) => { const g = new THREE.CylinderGeometry(r, r, h, 8, 1, true); g.rotateY(Math.PI / 8); return g; };
     for (const [px, pz] of pil) {
-      box(M, cx + px - 0.32, cx + px + 0.32, 0.3, 4.0, cz + pz - 0.32, cz + pz + 0.32);
-      box(M, cx + px - 0.42, cx + px + 0.42, 3.84, 4.0, cz + pz - 0.42, cz + pz + 0.42);                 // capital block
-      box(M, cx + px - 0.24, cx + px + 0.24, 5.0, VH, cz + pz - 0.24, cz + pz + 0.24);
+      const x = cx + px, z = cz + pz;
+      box(M, x - 0.44, x + 0.44, 0.3, 0.62, z - 0.44, z + 0.44);                                         // pier base
+      if (lite && !hero) { box(M, x - 0.3, x + 0.3, 0.62, 3.64, z - 0.3, z + 0.3); box(M, x - 0.22, x + 0.22, 5.0, VH - 0.3, z - 0.22, z + 0.22); continue; }
+      box(M, x - 0.38, x + 0.38, 0.62, 0.8, z - 0.38, z + 0.38);
+      if (hero) put(M, oct(0.3, 2.84), x, 0.8 + 1.42, z); else box(M, x - 0.3, x + 0.3, 0.8, 3.64, z - 0.3, z + 0.3);
+      box(M, x - 0.38, x + 0.38, 3.36, 3.5, z - 0.38, z + 0.38);                                         // capital: necking, abacus
+      box(M, x - 0.46, x + 0.46, 3.5, 3.64, z - 0.46, z + 0.46);
+      box(M, x - 0.26, x + 0.26, 5.0, 5.18, z - 0.26, z + 0.26);
+      if (hero) put(M, oct(0.21, VH - 5.6), x, 5.18 + (VH - 5.6) / 2, z); else box(M, x - 0.22, x + 0.22, 5.18, VH - 0.42, z - 0.22, z + 0.22);
+      box(M, x - 0.3, x + 0.3, VH - 0.42, VH - 0.3, z - 0.3, z + 0.3);
     }
-    ring(M, cx, cz, 11.85, IN0, 4.0, 4.32);
-    ring(M, cx, cz, 11.85, 12.2, 4.32, 5.0);
-    ring(M, cx, cz, 11.85, OUT + 0.25, VH, VH + 0.32);                                                    // roof
-    ring(M, cx, cz, OUT - 0.4, OUT + 0.25, VH + 0.32, VH + 1.1);                                          // parapets
+    // timber: a lintel beam on the piers, brackets, joist ends under the gallery, the upper storey's beam
+    if (hero) {
+      for (const s of [1, -1]) {
+        box(woodMat, cx - PL - 0.3, cx + PL + 0.3, 3.64, 3.98, cz + s * PL - 0.22, cz + s * PL + 0.22);
+        box(woodMat, cx + s * PL - 0.22, cx + s * PL + 0.22, 3.64, 3.98, cz - PL - 0.3, cz + PL + 0.3);
+        box(woodMat, cx - PL - 0.2, cx + PL + 0.2, VH - 0.3, VH - 0.04, cz + s * PL - 0.16, cz + s * PL + 0.16);
+        box(woodMat, cx + s * PL - 0.16, cx + s * PL + 0.16, VH - 0.3, VH - 0.04, cz - PL - 0.2, cz + PL + 0.2);
+      }
+      for (const [px, pz] of pil) {
+        const along = Math.abs(Math.abs(pz) - PL) < 0.01 ? 'x' : 'z';
+        if (Math.abs(px) === PL && Math.abs(pz) === PL) continue;
+        if (along === 'x') box(woodMat, cx + px - 0.62, cx + px + 0.62, 3.4, 3.64, cz + pz - 0.14, cz + pz + 0.14);
+        else box(woodMat, cx + px - 0.14, cx + px + 0.14, 3.4, 3.64, cz + pz - 0.62, cz + pz + 0.62);
+      }
+      for (let a = -PL + 0.3; a <= PL - 0.3; a += lite ? 1.24 : 0.62) for (const s of [1, -1]) {
+        box(woodMat, cx + a - 0.07, cx + a + 0.07, 3.98, 4.12, cz + s * (PL - 0.5), cz + s * (PL - 0.22));
+        box(woodMat, cx + s * (PL - 0.5), cx + s * (PL - 0.22), 3.98, 4.12, cz + a - 0.07, cz + a + 0.07);
+      }
+    }
+    ring(M, cx, cz, 11.85, IN0, 4.12, 4.32);                                                               // gallery floor
+    ring(M, cx, cz, 11.7, 11.92, 4.18, 4.3);                                                               // its nosing
+    ring(M, cx, cz, 11.85, 12.2, 4.32, 4.96);                                                              // parapet
+    ring(M, cx, cz, 11.75, 12.3, 4.96, 5.06);                                                              // its coping
+    ring(M, cx, cz, 11.85, OUT + 0.25, VH, VH + 0.32);                                                     // roof
+    ring(M, cx, cz, 11.7, 11.88, VH + 0.02, VH + 0.26);                                                    // eave fascia
+    ring(M, cx, cz, OUT - 0.4, OUT + 0.25, VH + 0.32, VH + 1.1);                                           // parapets
+    ring(M, cx, cz, OUT - 0.5, OUT + 0.35, VH + 1.1, VH + 1.2);
+    // merlons on the outer parapet, corner pavilions with little domes, rain spouts
+    for (let side = 0; side < 4; side++) {
+      const Mf = frame(cx, cz, side, OUT, false);
+      if (!lite || hero) for (let u = -OUT + 1.2; u <= OUT - 1.2; u += 1.25) if (!(side === 0 && Math.abs(u) < 3.6)) fbox(M, Mf, u - 0.3, u + 0.3, VH + 1.2, VH + 1.62, -0.45, 0.25);
+      for (let u = -OUT + 4; u < OUT - 3; u += 8) fbox(woodMat, Mf, u - 0.08, u + 0.08, VH + 0.1, VH + 0.24, 0.2, 0.75);
+    }
+    if (!lite || hero) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const x = cx + sx * (OUT - 1.6), z = cz + sz * (OUT - 1.6);
+      box(M, x - 1.3, x + 1.3, VH + 0.32, VH + 0.6, z - 1.3, z + 1.3);
+      for (const a of [-1, 1]) for (const b of [-1, 1]) box(M, x + a * 0.95 - 0.16, x + a * 0.95 + 0.16, VH + 0.6, VH + 2.3, z + b * 0.95 - 0.16, z + b * 0.95 + 0.16);
+      box(M, x - 1.25, x + 1.25, VH + 2.3, VH + 2.5, z - 1.25, z + 1.25);
+      box(M, x - 1.4, x + 1.4, VH + 2.5, VH + 2.62, z - 1.4, z + 1.4);
+      put(M, stupaGeo(0.9, lite ? 8 : 12, 5), x, VH + 2.62, z);
+      put(M, new THREE.CylinderGeometry(0.03, 0.05, 0.6, 5), x, VH + 2.62 + 1.1 + 0.3, z);
+    }
     ring(M, cx, cz, 11.85, 12.25, VH + 0.32, VH + 0.9);
-    // outer face: plinth moulding, string course, pilasters
-    ring(M, cx, cz, OUT, OUT + 0.6, 0, 0.6);
+    ring(M, cx, cz, 11.78, 12.32, VH + 0.9, VH + 0.98);
+    // inner (courtyard) faces of the cell ranges: plinth, cornice, string course at the gallery
+    moulding(M, cx, cz, IN0, CORNICE.map(([o, y0, y1]) => [o * 0.7, VH + y0 * 0.7, VH + y1 * 0.7]), true);
+    // outer face: moulded plinth, string course, pilasters with bases and capitals, a stepped cornice
+    moulding(M, cx, cz, OUT, PLINTH.map(([o, y0, y1]) => [o * 2.4, y0 * 1.6, y1 * 1.6]), false);
     ring(M, cx, cz, OUT, OUT + 0.16, 4.0, 4.32);
+    ring(M, cx, cz, OUT, OUT + 0.26, 4.06, 4.2);
+    moulding(M, cx, cz, OUT, CORNICE.map(([o, y0, y1]) => [o, VH + y0, VH + y1]), false);
     for (let k = 0; k <= 12; k++) {
       const p = -OUT + 0.4 + k * (2 * OUT - 0.8) / 12;
-      if (Math.abs(p) > 3.4) box(M, cx + p - 0.35, cx + p + 0.35, 0.6, VH, cz + OUT, cz + OUT + 0.18);
-      box(M, cx + p - 0.35, cx + p + 0.35, 0.6, VH, cz - OUT - 0.18, cz - OUT);
-      box(M, cx - OUT - 0.18, cx - OUT, 0.6, VH, cz + p - 0.35, cz + p + 0.35);
-      box(M, cx + OUT, cx + OUT + 0.18, 0.6, VH, cz + p - 0.35, cz + p + 0.35);
+      for (let side = 0; side < 4; side++) {
+        if (side === 0 && Math.abs(p) <= 3.4) continue;
+        const Mf = frame(cx, cz, side, OUT, false);
+        fbox(M, Mf, p - 0.35, p + 0.35, 0.6, VH - 0.62, 0, 0.18);
+        if (lite && !hero) continue;
+        fbox(M, Mf, p - 0.45, p + 0.45, 0.67, 0.95, 0, 0.3);
+        fbox(M, Mf, p - 0.45, p + 0.45, VH - 0.95, VH - 0.62, 0, 0.26);
+      }
     }
-    // gate porch and steps
+    // gate porch: piers, a lintel, a corbelled arch over the gate, steps
     box(M, cx - 3.4, cx - 2.0, 0, VH + 0.9, cz + OUT, cz + OUT + 2.6); box(M, cx + 2.0, cx + 3.4, 0, VH + 0.9, cz + OUT, cz + OUT + 2.6);
     box(M, cx - 3.4, cx + 3.4, 3.36, VH + 0.9, cz + OUT + 1.6, cz + OUT + 2.6);
-    for (let s = 0; s < 3; s++) box(M, cx - 2.8, cx + 2.8, 0, 0.6 - s * 0.2, cz + OUT + 2.6, cz + OUT + 3.2 + s * 0.6);
-    // courtyard: paving, a well, the raised platform with its steps
-    box(M, cx - 11.9, cx + 11.9, 0, 0.1, cz - 11.9, cz + 11.9);
-    const well = new THREE.CylinderGeometry(0.95, 1.0, 0.8, 18); put(M, well, cx - 6.5, 0.4, cz + 6.5);
-    const water = new THREE.CircleGeometry(0.72, 18); water.rotateX(-Math.PI / 2); put(waterMat, water, cx - 6.5, 0.62, cz + 6.5);
-    box(M, cx + 5.6, cx + 10.6, 0, 1.0, cz - 2.6, cz + 2.6);
-    box(M, cx + 4.8, cx + 5.6, 0, 0.5, cz - 1.2, cz + 1.2);
-    // dark doorways of the cells (seen from the courtyard)
-    if (hero) for (const s of [1, -1]) for (let k = 0; k < 10; k++) {
-      const c = -IN1 + (k + 0.5) * CELL;
-      if (s > 0 && (k === 4 || k === 5)) continue;
-      box(voidMat, cx + c - 0.5, cx + c + 0.5, 0.3, 2.24, cz + s * (IN0 + 0.05), cz + s * (IN1 - 0.05));
-      box(voidMat, cx + s * (IN0 + 0.05), cx + s * (IN1 - 0.05), 0.3, 2.24, cz + c - 0.5, cz + c + 0.5);
+    box(M, cx - 3.6, cx + 3.6, VH + 0.9, VH + 1.2, cz + OUT - 0.1, cz + OUT + 2.8);
+    for (const s of [-1, 1]) {
+      box(M, cx + s * 3.4, cx + s * 3.62, 0, 1.0, cz + OUT, cz + OUT + 2.8);
+      box(M, cx + s * 3.36, cx + s * 3.56, VH - 0.6, VH + 0.9, cz + OUT, cz + OUT + 2.7);
     }
+    box(woodMat, cx - 2.15, cx + 2.15, 3.1, 3.36, cz + OUT + 1.55, cz + OUT + 2.65);
+    for (let s = 0; s < 3; s++) box(M, cx - 2.8, cx + 2.8, 0, 0.6 - s * 0.2, cz + OUT + 2.6, cz + OUT + 3.2 + s * 0.6);
+    for (const s of [-1, 1]) box(M, cx + s * 2.8, cx + s * 3.1, 0, 0.75, cz + OUT + 2.6, cz + OUT + 4.6);
+    // courtyard: paving (herringbone in the shader), the platform, the well
+    box(M, cx - 11.9, cx + 11.9, 0, 0.1, cz - 11.9, cz + 11.9);
+    box(M, cx + 5.6, cx + 10.6, 0, 1.0, cz - 2.6, cz + 2.6);
+    ring(M, cx + 8.1, cz, 2.5, 2.7, 0, 0.18); ring(M, cx + 8.1, cz, 2.5, 2.62, 0.18, 0.3);
+    ring(M, cx + 8.1, cz, 2.5, 2.66, 0.84, 0.92); ring(M, cx + 8.1, cz, 2.5, 2.74, 0.92, 1.04);
+    for (let s = 0; s < 3; s++) box(M, cx + 4.7 + s * 0.3, cx + 5.6, 0, 0.34 * (s + 1), cz - 1.2, cz + 1.2);
+    box(M, cx + 4.6, cx + 5.6, 0, 0.5, cz - 1.45, cz - 1.2); box(M, cx + 4.6, cx + 5.6, 0, 0.5, cz + 1.2, cz + 1.45);
+    // the well: a brick shaft, a carved stone ring, a stone apron, a timber frame with a pulley
+    put(M, new THREE.CylinderGeometry(0.95, 1.0, 0.7, hero ? 24 : 14, 1, hero), cx - 6.5, 0.35, cz + 6.5);
+    const water = new THREE.CircleGeometry(0.74, 18); water.rotateX(-Math.PI / 2); put(waterMat, water, cx - 6.5, 0.45, cz + 6.5);
+    if (hero) {
+      const prof = [[0.74, 0.6], [0.74, 0.98], [0.82, 1.02], [1.02, 1.02], [1.08, 0.98], [1.08, 0.94], [1.02, 0.9], [1.04, 0.84], [1.12, 0.8], [1.12, 0.72], [1.04, 0.68], [1.04, 0.6]];
+      put(stoneMat, lathe(prof.slice().reverse(), 32), cx - 6.5, 0, cz + 6.5);
+      put(stoneMat, lathe([[1.0, 0.1], [1.9, 0.1], [1.95, 0.13], [1.9, 0.16], [1.0, 0.16]].reverse(), 32), cx - 6.5, 0, cz + 6.5);
+      for (const s of [-1, 1]) {
+        box(woodMat, cx - 6.5 + s * 1.3 - 0.08, cx - 6.5 + s * 1.3 + 0.08, 0.16, 2.3, cz + 6.42, cz + 6.58);
+        box(stoneMat, cx - 6.5 + s * 1.3 - 0.14, cx - 6.5 + s * 1.3 + 0.14, 0.12, 0.28, cz + 6.36, cz + 6.64);
+      }
+      box(woodMat, cx - 8.0, cx - 5.0, 2.22, 2.36, cz + 6.43, cz + 6.57);
+      const wheel = new THREE.CylinderGeometry(0.2, 0.2, 0.08, 14); wheel.rotateX(Math.PI / 2); put(woodMat, wheel, cx - 6.5, 2.05, cz + 6.5);
+      put(woodMat, new THREE.CylinderGeometry(0.008, 0.008, 1.5, 4), cx - 6.31, 1.3, cz + 6.5);
+      const pot = lathe([[0.0, 0], [0.1, 0.02], [0.15, 0.1], [0.14, 0.2], [0.08, 0.26], [0.09, 0.3], [0, 0.3]], 12); put(potMat, pot, cx - 6.31, 0.4, cz + 6.5);
+      for (const [dx, dz] of [[1.4, 1.2], [1.65, 1.0], [-1.5, 1.3]]) put(potMat, lathe([[0.0, 0], [0.12, 0.02], [0.18, 0.14], [0.16, 0.28], [0.09, 0.34], [0.1, 0.39], [0, 0.39]], 12), cx - 6.5 + dx, 0.15, cz + 6.5 + dz);
+    }
+    // the courtyard faces of the cell ranges (hero): moulded plinth, pilasters at the partitions, timber-framed
+    // doorways under corbelled tops, half-open doors, lamp niches; steps down from the verandah
+    if (hero) for (let side = 0; side < 4; side++) {
+      const Mf = frame(cx, cz, side, IN0, true);
+      for (const [o, y0, y1] of [[0.12, 0.32, 0.44], [0.08, 0.44, 0.56], [0.13, 0.56, 0.62]]) {
+        for (let k = 0; k < 10; k++) {
+          const c = -IN1 + (k + 0.5) * CELL;
+          if (side === 0 && (k === 4 || k === 5)) continue;
+          fbox(M, Mf, c - CELL / 2, c - 0.5, y0, y1, 0, o); fbox(M, Mf, c + 0.5, c + CELL / 2, y0, y1, 0, o);
+        }
+      }
+      for (let k = 0; k <= 10; k++) {
+        const p = -IN1 + k * CELL;
+        if (k === 0 || k === 10 || (side === 0 && k === 5)) continue;
+        fbox(M, Mf, p - 0.26, p + 0.26, 0.32, 3.9, 0, 0.12);
+        fbox(M, Mf, p - 0.34, p + 0.34, 3.6, 3.76, 0, 0.18);
+        fbox(M, Mf, p - 0.2, p + 0.2, 4.32, VH - 0.5, 0, 0.1);
+        fbox(M, Mf, p - 0.28, p + 0.28, VH - 0.7, VH - 0.5, 0, 0.16);
+      }
+      for (let k = 0; k < 10; k++) {
+        const c = -IN1 + (k + 0.5) * CELL;
+        if (side === 0 && (k === 4 || k === 5)) continue;
+        // corbelled top: brick steps closing over the opening
+        fbox(M, Mf, c - 0.5, c - 0.36, 2.24, 2.37, -0.8, 0); fbox(M, Mf, c + 0.36, c + 0.5, 2.24, 2.37, -0.8, 0);
+        fbox(M, Mf, c - 0.5, c - 0.2, 2.37, 2.5, -0.8, 0); fbox(M, Mf, c + 0.2, c + 0.5, 2.37, 2.5, -0.8, 0);
+        // timber frame: jambs, lintel, sill (threshold)
+        fbox(woodMat, Mf, c - 0.58, c - 0.44, 0.32, 2.12, -0.06, 0.05); fbox(woodMat, Mf, c + 0.44, c + 0.58, 0.32, 2.12, -0.06, 0.05);
+        fbox(woodMat, Mf, c - 0.74, c + 0.74, 2.0, 2.2, -0.08, 0.07);
+        fbox(stoneMat, Mf, c - 0.6, c + 0.6, 0.3, 0.37, -0.3, 0.1);
+        // dark cell beyond, two leaves (one ajar, one wide open) hung on the jambs
+        fbox(rr() < 0.3 ? cellGlowMat : voidMat, Mf, c - 0.5, c + 0.5, 0.3, 2.5, -0.8, -0.74);              // the dark cell beyond the reveal
+        const a1 = 0.2 + rr() * 0.9, a2 = 1.1 + rr() * 0.4;
+        for (const [hx, sgn, ang] of [[c - 0.44, 1, a1], [c + 0.44, -1, a2]]) {
+          const parts = [new THREE.BoxGeometry(0.44, 1.78, 0.045).translate(sgn * 0.22, 0.34 + 0.89, 0)];
+          if (!lite) for (const yb of [0.55, 1.2, 1.85]) parts.push(new THREE.BoxGeometry(0.42, 0.06, 0.03).translate(sgn * 0.22, yb, -0.035));
+          const g = mergeGeometries(parts);
+          g.rotateY(sgn * ang); g.translate(hx, 0, -0.08);
+          fgeo(doorMat, Mf, g);
+        }
+        // lamp niche between this door and the next pilaster (alternate sides)
+        const nu = c + (k % 2 ? 0.98 : -0.98);
+        fbox(voidMat, Mf, nu - 0.14, nu + 0.14, 1.32, 1.64, -0.02, 0.012);
+        fbox(M, Mf, nu - 0.22, nu + 0.22, 1.24, 1.32, 0, 0.09);
+        fbox(M, Mf, nu - 0.2, nu - 0.14, 1.32, 1.7, 0, 0.05); fbox(M, Mf, nu + 0.14, nu + 0.2, 1.32, 1.7, 0, 0.05);
+        fbox(M, Mf, nu - 0.2, nu + 0.2, 1.64, 1.72, 0, 0.06); fbox(M, Mf, nu - 0.12, nu + 0.12, 1.72, 1.8, 0, 0.04);
+        niches.push(V(nu, 1.4, 0.04).applyMatrix4(Mf));
+        // the upper storey's cell door, on the gallery: dark opening, timber frame, a stepped brick hood
+        fbox(rr() < 0.25 ? cellGlowMat : voidMat, Mf, c - 0.42, c + 0.42, 4.32, 6.2, -0.01, 0.012);
+        fbox(woodMat, Mf, c - 0.52, c - 0.42, 4.32, 6.2, 0, 0.06); fbox(woodMat, Mf, c + 0.42, c + 0.52, 4.32, 6.2, 0, 0.06);
+        fbox(woodMat, Mf, c - 0.66, c + 0.66, 6.2, 6.36, 0, 0.08);
+        fbox(M, Mf, c - 0.6, c + 0.6, 6.36, 6.5, 0, 0.1); fbox(M, Mf, c - 0.4, c + 0.4, 6.5, 6.64, 0, 0.07); fbox(M, Mf, c - 0.2, c + 0.2, 6.64, 6.78, 0, 0.04);
+      }
+      // steps from the courtyard up onto the verandah (centre of each side)
+      const Mv = frame(cx, cz, side, 11.9, true);
+      for (let s = 0; s < 2; s++) fbox(M, Mv, -1.3, 1.3, 0, 0.11 * (s + 1) + 0.1, 0, 0.32 * (2 - s));
+      fbox(M, Mv, -1.5, -1.3, 0, 0.42, 0, 0.7); fbox(M, Mv, 1.3, 1.5, 0, 0.42, 0, 0.7);
+    }
+  }
+
+  // a stupa of revolution on a base at y = 0: moulded drum (base torus, dado, two bands), a hemispherical dome
+  // (R = dome radius; everything scales with it), built from the bottom up so its faces look outwards
+  function stupaGeo(R, seg, steps = 10) {
+    const k = R / 4.0;
+    const pts = [[0.001, 0], [4.6, 0], [4.6, 0.18], [4.42, 0.26], [4.42, 0.6], [4.56, 0.66], [4.56, 0.8], [4.3, 0.86], [4.3, 1.1], [4.5, 1.16], [4.5, 1.3], [4.08, 1.36]];
+    for (let i = 1; i <= steps; i++) { const a = (i / steps) * Math.PI / 2; pts.push([Math.max(0.001, 4.0 * Math.cos(a)), 1.36 + 3.6 * Math.sin(a)]); }
+    return lathe(pts.map(([r, y]) => [r * k, y * k]), seg);
   }
 
   // ---- chaitya: a stepped brick temple with corner towers, a great stair to the south, a stupa on top
@@ -216,7 +404,7 @@ export function create(ctx, segment) {
       box(M, cx + h, cx + h + PJ + 0.3, yt, y1, cz - pr - 0.2, cz + pr + 0.2); box(M, cx - h - PJ - 0.3, cx - h, yt, y1, cz - pr - 0.2, cz + pr + 0.2);
       // pilasters
       const n = Math.max(3, Math.round(h * 2 / 2.3));
-      for (let k = 0; k <= n; k++) {
+      if (!lite) for (let k = 0; k <= n; k++) {
         const p = -h + 0.5 + k * (2 * h - 1) / n;
         const f = Math.abs(p) < pr - 0.3 ? h + PJ : h;
         if (Math.abs(Math.abs(p) - pr) < 0.35) continue;
@@ -228,9 +416,10 @@ export function create(ctx, segment) {
     }
     // shrine door and the stupa: drum, dome, harmika, mast and parasols
     box(voidMat, cx - 1.3, cx + 1.3, 15.4, 18.6, cz + 5.4, cz + 5.5);
-    put(M, new THREE.CylinderGeometry(4.2, 4.4, 1.2, 28), cx, 21.0, cz);
-    put(M, new THREE.SphereGeometry(4.0, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), cx, 21.6, cz);
-    box(M, cx - 0.9, cx + 0.9, 25.4, 26.4, cz - 0.9, cz + 0.9);
+    put(M, stupaGeo(4.0, lite ? 18 : 28), cx, 20.4, cz);
+    box(M, cx - 1.1, cx + 1.1, 25.3, 25.5, cz - 1.1, cz + 1.1);
+    box(M, cx - 0.9, cx + 0.9, 25.5, 26.2, cz - 0.9, cz + 0.9);
+    box(M, cx - 1.15, cx + 1.15, 26.2, 26.4, cz - 1.15, cz + 1.15);
     put(M, new THREE.CylinderGeometry(0.14, 0.14, 3.4, 8), cx, 27.9, cz);
     for (const [r, y] of [[1.3, 27.0], [1.0, 27.8], [0.7, 28.5]]) put(M, new THREE.CylinderGeometry(r, r, 0.14, 16), cx, y, cz);
     // corner towers
@@ -257,10 +446,14 @@ export function create(ctx, segment) {
     for (let k = 0; k < 8; k++) {
       const x = cx + (k - 3.5) * 4.4, z = cz + 17 + 12 + (k % 2) * 2.2;
       if (Math.abs(x - cx) < 4.2) continue;
-      box(M, x - 1.1, x + 1.1, 0, 0.6, z - 1.1, z + 1.1);
-      put(M, new THREE.CylinderGeometry(0.9, 0.95, 0.7, 16), x, 0.95, z);
-      put(M, new THREE.SphereGeometry(0.9, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), x, 1.3, z);
-      box(M, x - 0.3, x + 0.3, 2.15, 2.6, z - 0.3, z + 0.3);
+      box(M, x - 1.25, x + 1.25, 0, 0.12, z - 1.25, z + 1.25);
+      box(M, x - 1.12, x + 1.12, 0.12, 0.5, z - 1.12, z + 1.12);
+      box(M, x - 1.22, x + 1.22, 0.5, 0.6, z - 1.22, z + 1.22);
+      put(M, stupaGeo(0.85, lite ? 8 : 12, 5), x, 0.6, z);
+      box(M, x - 0.24, x + 0.24, 1.6, 1.86, z - 0.24, z + 0.24);
+      box(M, x - 0.32, x + 0.32, 1.86, 1.94, z - 0.32, z + 0.32);
+      put(M, new THREE.CylinderGeometry(0.035, 0.035, 0.6, 5), x, 2.2, z);
+      for (const [rr2, yy] of [[0.32, 2.16], [0.22, 2.34]]) put(M, new THREE.CylinderGeometry(rr2 * 0.8, rr2, 0.05, 10), x, yy, z);
     }
   }
 
@@ -283,9 +476,9 @@ export function create(ctx, segment) {
       // palm-leaf bundles lying along the shelf, in stacks of one to three
       let a = -w / 2 + 0.12;
       while (a < w / 2 - 0.5) {
-        const L = 0.36 + r() * 0.1, n = 1 + Math.floor(r() * 3), dd = 0.12 + r() * 0.14;
+        const L = lite ? 1.0 + r() * 0.3 : 0.36 + r() * 0.1, n = lite ? 1 : 1 + Math.floor(r() * 3), dd = 0.12 + r() * 0.14;
         for (let j = 0; j < n; j++) {
-          const th = 0.055, bw = 0.075 + r() * 0.02;
+          const th = lite ? 0.1 : 0.055, bw = lite ? 0.24 : 0.075 + r() * 0.02;
           const g = new THREE.BoxGeometry(alongZ ? bw : L, th, alongZ ? L : bw);
           const cxx = alongZ ? x + s * (dd + bw / 2) : x + a + L / 2, czz = alongZ ? z + a + L / 2 : z + s * (dd + bw / 2);
           g.translate(cxx, yb + th / 2 + j * (th + 0.004), czz);
@@ -330,7 +523,7 @@ export function create(ctx, segment) {
       const y0 = y;
       for (const zc of [-9.0, -4.6, 4.6, 9.0]) shelfUnit(x0 + 6.5, zc, -1, 4.0, y0, r);
       if (!lite) for (const zc of [-8.0, -3.0, 3.0, 8.0]) shelfUnit(x0 + 12.5, zc, -1, 4.6, y0, r);
-      for (const zc of [-10.4, -6.8, -3.2, 0.4, 4.0, 7.6, 11.0]) if (Math.abs(zc) < 12) shelfUnit(x1 - 1, Math.min(zc, 11.1), -1, 3.4, y0, r);
+      if (!lite) for (const zc of [-10.4, -6.8, -3.2, 0.4, 4.0, 7.6, 11.0]) if (Math.abs(zc) < 12) shelfUnit(x1 - 1, Math.min(zc, 11.1), -1, 3.4, y0, r);
       for (const xc of [x0 + 4, x0 + 8, x0 + 12, x0 + 16]) { shelfUnit(xc, z0 + 1, 2, 3.8, y0, r); shelfUnit(xc, z1 - 1, -2, 3.8, y0, r); }
       // low reading desks near the opening
       for (const zc of [-3.2, 3.2]) box(woodMat, x0 + 2.2, x0 + 3.0, y0, y0 + 0.45, zc - 1.2, zc + 1.2);
@@ -350,11 +543,75 @@ export function create(ctx, segment) {
   const meshes = [];
   for (const [mat, list] of accs) {
     const m = new THREE.Mesh(mergeGeometries(list), mat);
-    m.castShadow = mat !== waterMat && mat !== woodMat && mat !== voidMat; m.receiveShadow = true;
+    m.castShadow = mat === vihMat || mat === temMat || mat === libMat || mat === facadeMat; m.receiveShadow = true;
     if (mat.userData.depth) m.customDepthMaterial = mat.userData.depth;
     m.frustumCulled = false;
     scene.add(m); meshes.push(m);
   }
+  // ruin dressing: brickbats and low rubble heaps at the feet of the walls, grass tufts; each one clears as
+  // the build front reaches it. Sampled near the walls of the monasteries (denser where the camera looks).
+  const rd = rng(1206);
+  const wallDist = (lx, lz) => {           // distance (m) from a point to the nearest wall of a vihara at the origin
+    const m = Math.max(Math.abs(lx), Math.abs(lz)), tg = Math.abs(lx) >= Math.abs(lz) ? lz : lx;
+    let d = Math.min(Math.max(IN0 - m, m - IN1), Math.max(OUT - OW - m, m - OUT));
+    if (m > IN1 && m < OUT - OW) { const q = ((tg + IN1) % CELL + CELL) % CELL; d = Math.min(d, Math.min(q, CELL - q) - 0.25); }
+    return d;
+  };
+  const nearWall = (cx, cz, spread) => {
+    for (let tries = 0; tries < 40; tries++) {
+      const m = lerp(IN0 - 2.6, OUT + 3.0, rd()), tg = (rd() * 2 - 1) * m, side = Math.floor(rd() * 4);
+      const lx = side < 2 ? tg : (side === 2 ? m : -m), lz = side < 2 ? (side === 0 ? m : -m) : tg;
+      const d = wallDist(lx, lz);
+      if (d < 0.06 || rd() > Math.exp(-d / spread)) continue;
+      const mm = Math.max(Math.abs(lx), Math.abs(lz));
+      return V(cx + lx, mm < 11.9 ? 0.1 : mm < IN0 ? 0.32 : 0, cz + lz);
+    }
+    return null;
+  };
+  const templeFoot = (cx, cz) => { const a = rd() * 4, tg = (rd() * 2 - 1) * 18, m = 17.4 + Math.pow(rd(), 2) * 3.5; const sd = Math.floor(a);
+    return V(cx + (sd < 2 ? tg : sd === 2 ? m : -m), 0, cz + (sd < 2 ? (sd === 0 ? m : -m) : tg)); };
+  const pickSite = () => { const u = rd(); return u < 0.42 ? [0, 0, 'v'] : u < 0.72 ? [-55, 0, 'v'] : u < 0.8 ? [-110, 0, 'v'] : u < 0.84 ? [110, 0, 'v'] : [TEM_X[Math.floor(rd() * 4)], TEM_Z, 't']; };
+  const debris = (geo, mat, n, place) => {
+    const im = new THREE.InstancedMesh(geo, mat, n);
+    const col = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      let p = null;
+      while (!p) { const [cx, cz, k] = pickSite(); p = k === 'v' ? nearWall(cx, cz, place.spread) : templeFoot(cx, cz); }
+      place.set(p, i, col);
+      im.setMatrixAt(i, _dm.compose(p, _dq.setFromEuler(_de.set(place.tilt * (rd() - 0.5), rd() * 6.28, place.tilt * (rd() - 0.5))), _ds.set(...place.scale())));
+      if (place.color) im.setColorAt(i, col);
+    }
+    im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
+    scene.add(im);
+    return im;
+  };
+  const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _ds = new THREE.Vector3(), _de = new THREE.Euler();
+  const batMat = debrisMaterial(U, 'bat'), heapMat = debrisMaterial(U, 'heap'), grassMat = debrisMaterial(U, 'grass');
+  const clay = [[0.34, 0.1, 0.05], [0.43, 0.16, 0.075], [0.26, 0.07, 0.04], [0.45, 0.24, 0.12], [0.2, 0.09, 0.05]];
+  debris(new THREE.BoxGeometry(0.24, 0.075, 0.12), batMat, lite ? 400 : 2600, {
+    spread: 0.35, tilt: 0.6, color: true, scale: () => [0.5 + rd() * 0.6, 1, 0.6 + rd() * 0.5],
+    set: (p, i, c) => { p.y += 0.03; c.setRGB(...clay[Math.floor(rd() * 5)]).multiplyScalar(0.85 + rd() * 0.3); },
+  });
+  debris(new THREE.IcosahedronGeometry(1, 0), heapMat, lite ? 80 : 260, {
+    spread: 0.4, tilt: 0.25, color: true, scale: () => [0.25 + rd() * 0.5, 0.1 + rd() * 0.16, 0.25 + rd() * 0.5],
+    set: (p, i, c) => { p.y -= 0.03; c.setRGB(...clay[Math.floor(rd() * 5)]).lerp(new THREE.Color(0.12, 0.08, 0.045), 0.3 + rd() * 0.4).multiplyScalar(0.6); },
+  });
+  // (the lawn in front of the opening shot gets its own scatter, thinning with distance)
+  const lawnGeo = grassTuftGeometry(rng(78));
+  const lawn = new THREE.InstancedMesh(lawnGeo, grassMat, lite ? 500 : 2400);
+  for (let i = 0; i < lawn.count; i++) {
+    let x, z;
+    do { if (rd() < 0.6) { x = -50 + rd() * 45; z = 14 + rd() * 32; } else { x = -75 + rd() * 75; z = -2 + Math.pow(rd(), 0.7) * 50; } } while (Math.max(Math.abs(x), Math.abs(z)) < 23 || Math.max(Math.abs(x + 55), Math.abs(z)) < 23);
+    const k = 0.45 + rd() * 0.8;
+    lawn.setMatrixAt(i, _dm.compose(V(x, 0, z), _dq.setFromEuler(_de.set(0, rd() * 6.28, 0)), _ds.set(k, k * (0.6 + rd() * 0.7), k)));
+  }
+  lawn.receiveShadow = true; lawn.frustumCulled = false;
+  scene.add(lawn);
+  const grassTufts = debris(grassTuftGeometry(rng(77)), grassMat, lite ? 650 : 3600, {
+    spread: 0.8, tilt: 0.3, color: false, scale: () => { const k = 0.6 + rd() * 0.9; return [k, k * (0.7 + rd() * 0.6), k]; },
+    set: () => {},
+  });
+
   // manuscripts: one mesh, vertex colours, an emissive glow that climbs the floors
   const GL = { uGlowY: { value: -10 }, uGlowK: { value: 0 }, uTime: { value: 0 } };
   const bundleMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
@@ -386,7 +643,7 @@ export function create(ctx, segment) {
   scene.add(sky);
 
   // ------------------------------------------------------------------------------------- figures
-  const MG = monkGeometries();
+  const MG = monkGeometries(lite);
   const robeCols = [[0.62, 0.24, 0.035], [0.55, 0.32, 0.07], [0.4, 0.1, 0.035], [0.3, 0.055, 0.035], [0.66, 0.36, 0.08]];
   const robeMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
   const headMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.3, 0.16, 0.095), roughness: 0.6 });
@@ -438,6 +695,7 @@ export function create(ctx, segment) {
   const lamp = (p, size, group) => { lampPos.push(p.x, p.y, p.z); lampSize.push(size); lampSeed.push(rm()); lampGroup.push(group); };
   GROUPS.forEach((g, gi) => lamp(g.clone().add(V(gi === 4 ? -1.2 : 0.55, 0.35, gi === 4 ? 0 : 0.4)), 0.9, 0));
   for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; const r = 12.9 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a))); lamp(V(Math.cos(a) * r, 1.0, Math.sin(a) * r), 0.55, 0); }
+  for (const p of niches) lamp(p, 0.32, 0);                              // a ghee lamp in every wall niche
   for (const x of VIH_X) if (x !== 0) { for (let k = 0; k < 6; k++) lamp(V(x - 8 + rm() * 16, 0.8, -8 + rm() * 16), 0.8, 1); }
   for (const x of VIH_X) for (const s of [-1, 1]) lamp(V(x + s * 2.7, 3.0, 22.8), 0.9, 1);
   for (let x = -160; x <= 160; x += 11) { lamp(V(x, 2.6, AVE.z1 + 0.3), 0.6, 1); lamp(V(x + 5.5, 2.6, AVE.z0 - 0.3), 0.6, 1); }
@@ -652,6 +910,7 @@ export function create(ctx, segment) {
     // ---- build: ruins → living campus
     U.uRise.value = t < tRise - 0.08 ? -50 : timeWarp(t, [[tRise - 0.08, -0.6], [tRise + 0.55, 9.8], [tRise + 1.1, 64]]);
     U.uHot.value = envelope(t, tRise - 0.1, tRise + 1.9, 0.1, 0.5);
+    U.uAge.value = lerp(1, 0.22, ramp(t, tRise + 0.1, tRise + 0.9));      // the weathering of the ruins washes away as the campus stands
     GU.uEarth.value = ramp(t, tRise + 0.1, tRise + 1.0);
 
     // ---- camera
@@ -701,10 +960,12 @@ export function create(ctx, segment) {
     lampMat.uniforms.uG.value.set(lampK * 1.0, ramp(t, tSch - 0.25, tSch + 0.4) * 0.8, Math.max(libK, lampK * 0.4) * 1.1).multiplyScalar(fadeUp * (1 + 0.12 * pulse(T, { decay: 6 }) * lampK));
     lampMat.uniforms.uTime.value = t;
     lampMat.uniforms.uVP.value = info?.height ?? 800;
+    cellGlowMat.emissiveIntensity = lampK * 0.22;
     yardLights.forEach((l, i) => { l.intensity = lampK * (9 + 2 * Math.sin(t * 9 + i * 2)) * (1 - ramp(t, 3.0, 3.4)); });
     GL.uGlowY.value = lerp(-2, 22, ramp(t, tLib - 0.36, tLib + 0.25, ease.inOutSine));
     GL.uGlowK.value = libK * 1.1;
     GL.uTime.value = t;
+    grassMat.userData.u.uTime.value = t;
     libLight.position.set(LIB.x0 + 6, Math.min(GL.uGlowY.value, 12) + 1.5, 0);
     libLight.intensity = libK * 26 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));
     libGlow.intensity = libK * 40 * (1 - ramp(Math.log(r), Math.log(300), Math.log(3000)));

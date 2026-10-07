@@ -178,14 +178,78 @@ export function sealTextures({ size = 512, mirror = false, raised = false, base 
 // aBlk = (centre x, centre z, rise delay, rise depth) and aJit = (dx, dz, yaw) the pre-grid offset.
 // UVs are world-projected (metres / uvTile), so brick courses run on unbroken across parts.
 export class Acc {
-  constructor(uvTile = 1.12) { this.p = []; this.n = []; this.uv = []; this.b = []; this.j = []; this.k = 1 / uvTile; }
-  quad(a, b, c, d, blk, jit) {
-    const e1 = new THREE.Vector3().subVectors(b, a), e2 = new THREE.Vector3().subVectors(c, a);
-    const n = e1.cross(e2).normalize(), ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z), k = this.k;
+  constructor(uvTile = 1.12) { this.p = []; this.n = []; this.uv = []; this.b = []; this.j = []; this.t = []; this.k = 1 / uvTile; this.tag = [0, 0, 0, 0.5]; }
+  tri(a, b, c, blk, jit, n = null) {
+    if (!n) n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+    const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z), k = this.k;
     const uvOf = (v) => (ay > ax && ay > az ? [v.x * k, v.z * k] : ax > az ? [v.z * k, v.y * k] : [v.x * k, v.y * k]);
-    for (const v of [a, b, c, a, c, d]) {
+    for (const v of [a, b, c]) {
       this.p.push(v.x, v.y, v.z); this.n.push(n.x, n.y, n.z); this.uv.push(...uvOf(v));
-      this.b.push(...blk); this.j.push(...jit);
+      this.b.push(...blk); this.j.push(...jit); this.t.push(...this.tag);
+    }
+  }
+  quad(a, b, c, d, blk = STATIC, jit = NOJIT) {
+    const n = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+    this.tri(a, b, c, blk, jit, n); this.tri(a, c, d, blk, jit, n);
+  }
+  // a convex planar polygon (fan), wound so that its normal points along `want`
+  poly(pts, want, blk = STATIC, jit = NOJIT) {
+    // (convex: order the corners by angle round the centroid in the plane ⟂ want)
+    const cx = pts.reduce((s, p) => s.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    const ax = Math.abs(want.x) > 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    const e1 = new THREE.Vector3().crossVectors(want, ax).normalize(), e2 = new THREE.Vector3().crossVectors(want, e1);
+    pts = pts.map((p) => [p, Math.atan2(new THREE.Vector3().subVectors(p, cx).dot(e2), new THREE.Vector3().subVectors(p, cx).dot(e1))]).sort((a, b) => a[1] - b[1]).map((a) => a[0]);
+    const n = new THREE.Vector3().subVectors(pts[1], pts[0]).cross(new THREE.Vector3().subVectors(pts[2], pts[0]));
+    if (n.dot(want) < 0) pts = pts.slice().reverse();
+    for (let i = 1; i < pts.length - 1; i++) this.tri(pts[0], pts[i], pts[i + 1], blk, jit);
+  }
+  // A brick prism on an axis-aligned footprint, with chamfered vertical arrises (c: per corner
+  // [x0z0, x1z0, x1z1, x0z1]) and a bevel round the top edge (bev). `hole` = [x0, x1, z0, z1] cuts an
+  // open courtyard through it (inner walls face inwards; floor paving at y0 + 0.04).
+  // `top` receives the top face(s) (e.g. the roof plaster); `sides` false omits the outer walls.
+  prism(x0, x1, y0, y1, z0, z1, { c = 0.12, bev = 0.08, top = null, hole = null, blk = STATIC, jit = NOJIT, floor = this, topY = y1 } = {}) {
+    const cc = Array.isArray(c) ? c : [c, c, c, c];
+    const ring = (d) => {   // the chamfered rectangle, inset by d (corners keep 45°)
+      const k = d * (Math.SQRT2 - 1), X0 = x0 + d, X1 = x1 - d, Z0 = z0 + d, Z1 = z1 - d;
+      const q = cc.map((v) => (v > 0 ? Math.max(0.001, v - k) : 0));
+      const pts = [];
+      const add = (x, z) => { const l = pts[pts.length - 1]; if (!l || Math.abs(l[0] - x) + Math.abs(l[1] - z) > 1e-5) pts.push([x, z]); };
+      add(X0 + q[0], Z0); add(X1 - q[1], Z0); add(X1, Z0 + q[1]); add(X1, Z1 - q[2]); add(X1 - q[2], Z1); add(X0 + q[3], Z1); add(X0, Z1 - q[3]); add(X0, Z0 + q[0]);
+      if (Math.abs(pts[0][0] - pts[pts.length - 1][0]) + Math.abs(pts[0][1] - pts[pts.length - 1][1]) < 1e-5) pts.pop();
+      return pts;
+    };
+    const o = ring(0), yb = y1 - bev;
+    const P = (p, y) => new THREE.Vector3(p[0], y, p[1]);
+    // the ring runs clockwise seen from above (+y): x right, z down → outward normal is to the left of travel
+    for (let i = 0; i < o.length; i++) {
+      const a = o[i], b = o[(i + 1) % o.length];
+      this.quad(P(a, y0), P(a, yb), P(b, yb), P(b, y0), blk, jit);
+    }
+    const tp = top ?? this;
+    let inner = o;
+    if (bev > 0) {
+      inner = ring(bev);
+      for (let i = 0; i < o.length; i++) {
+        const a = o[i], b = o[(i + 1) % o.length], ia = inner[i % inner.length], ib = inner[(i + 1) % inner.length];
+        if (inner.length === o.length) this.quad(P(a, yb), P(ia, y1), P(ib, y1), P(b, yb), blk, jit);
+      }
+    }
+    const up = new THREE.Vector3(0, 1, 0);
+    if (!hole) tp.poly(inner.map((p) => P(p, y1)), up, blk, jit);
+    else {
+      const [hx0, hx1, hz0, hz1] = hole;
+      // inset rectangle bounds
+      const ix0 = Math.min(...inner.map((p) => p[0])), ix1 = Math.max(...inner.map((p) => p[0]));
+      const iz0 = Math.min(...inner.map((p) => p[1])), iz1 = Math.max(...inner.map((p) => p[1]));
+      const north = inner.filter((p) => p[1] < hz0).map((p) => P(p, y1));
+      tp.poly([...north, P([ix1, hz0], y1), P([ix0, hz0], y1)], up, blk, jit);
+      const south = inner.filter((p) => p[1] > hz1).map((p) => P(p, y1));
+      tp.poly([P([ix1, hz1], y1), ...south, P([ix0, hz1], y1)], up, blk, jit);
+      tp.quad(P([ix0, hz1], y1), P([hx0, hz1], y1), P([hx0, hz0], y1), P([ix0, hz0], y1), blk, jit);
+      tp.quad(P([hx1, hz1], y1), P([ix1, hz1], y1), P([ix1, hz0], y1), P([hx1, hz0], y1), blk, jit);
+      this.pit(hx0, hx1, y0, y1, hz0, hz1, blk, jit, null);
+      if (floor) floor.quad(P([hx0, hz1], y0 + 0.04), P([hx1, hz1], y0 + 0.04), P([hx1, hz0], y0 + 0.04), P([hx0, hz0], y0 + 0.04), blk, jit);
+      void iz0; void iz1;
     }
   }
   // axis-aligned box; `faces` picks sides: 'px nx pz nz py ny'. `top` (another Acc) receives the top face.
@@ -207,12 +271,12 @@ export class Acc {
     this.quad(V(x1, y0, z1), V(x0, y0, z1), V(x0, y1, z1), V(x1, y1, z1), blk, jit);   // south wall, facing -z
     if (floor) floor.quad(V(x0, y0, z1), V(x1, y0, z1), V(x1, y0, z0), V(x0, y0, z0), blk, jit);
   }
-  // any non-indexed geometry (trees in courtyards), placed already
+  // any non-indexed geometry (trees, wells, pots, rubble), placed already
   geo(g, blk = STATIC, jit = NOJIT) {
     const p = g.attributes.position, n = g.attributes.normal;
     for (let i = 0; i < p.count; i++) {
       this.p.push(p.getX(i), p.getY(i), p.getZ(i)); this.n.push(n.getX(i), n.getY(i), n.getZ(i)); this.uv.push(0, 0);
-      this.b.push(...blk); this.j.push(...jit);
+      this.b.push(...blk); this.j.push(...jit); this.t.push(...this.tag);
     }
   }
   geometry() {
@@ -222,6 +286,7 @@ export class Acc {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('aBlk', new THREE.Float32BufferAttribute(this.b, 4));
     g.setAttribute('aJit', new THREE.Float32BufferAttribute(this.j, 3));
+    g.setAttribute('aTag', new THREE.Float32BufferAttribute(this.t, 4));
     g.computeBoundingSphere();
     return g;
   }
@@ -244,7 +309,7 @@ vec3 riseP(vec3 p){
   return p;
 }
 vec3 riseN(vec3 n){ float a = aJit.z * (1.0 - uSettle), ca = cos(a), sa = sin(a); return vec3(ca * n.x - sa * n.z, n.y, sa * n.x + ca * n.z); }`;
-function patchRise(sh, U) {
+export function patchRise(sh, U) {
   Object.assign(sh.uniforms, U);
   sh.vertexShader = sh.vertexShader
     .replace('#include <common>', `#include <common>\n${RISE_GLSL}`)
