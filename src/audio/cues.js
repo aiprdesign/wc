@@ -409,7 +409,7 @@ function finale(S) {
 function headings(S) {
   for (const h of headingList()) {
     const t0 = onBeat(h.t0, h.swap ? 2 : 1), t1 = onBeat(h.t1, h.swap ? 2 : 1);
-    const n = h.text.length, k = kickTiming(n, h.swap, h.pace, t0);
+    const n = h.n ?? h.text.length, k = kickTiming(n, h.swap, h.pace, t0);
     const pos = (i) => (n > 1 ? (i / (n - 1)) * 2 - 1 : 0);   // -1 left … +1 right
     const G = h.swap ? 0.8 : 1;
     const tIn = t0 + (n - 1) * k.slot + k.land;               // the last letter lands

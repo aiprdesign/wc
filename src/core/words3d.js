@@ -10,8 +10,8 @@
 import * as THREE from 'three';
 import { addSurfaceDetail } from '../lib/surface.js';
 import { SEGMENTS, CUES, FILM_ASPECT, OUTPUT_ASPECT, BEAT } from '../timeline.js';
-import { WORDS, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
-import { letters3D, getFont3D } from '../lib/text.js';
+import { WORDS, WORDS_HI, SWAPS, onBeat, nextBeat, kickTiming } from '../lib/headings.js';
+import { letters3D, devaLetters3D, getFont3D } from '../lib/text.js';
 import { progressLine } from '../lib/lines.js';
 import { glowSprite } from '../lib/materials.js';
 import { MorphParticles, sampleGeometry } from '../lib/particles.js';
@@ -22,7 +22,9 @@ import { ease, sat, lerp, ramp } from '../lib/math.js';
 
 const DOF_KEYS = ['focus', 'range', 'amount'];
 const HEAD_Y = 0.1;   // every chapter heading sits at this height (fraction of frame height above centre)
-const DOF_RACK_IN = 0.3;   // s of story time for the rack focus onto a heading to engage fully
+const DOF_RACK_IN = 0.3;
+// Hindi headings (the Indian film): the Devanagari word large, the English word small beneath it
+const SUB = { size: 0.27, depth: 0.08, bevel: 0.012, tracking: 0.42, gap: 0.3 };   // s of story time for the rack focus onto a heading to engage fully
 
 // Composition per chapter: alignment varies the rhythm of the film (left / centre / right);
 // 'invert' flips contrast for bright plates — dark lacquered letters over a light halo.
@@ -104,12 +106,24 @@ export class Words3D {
     // ONE STYLE FOR EVERY CHAPTER HEADING: the same letter height on screen (set by a reference word at the
     // 75th percentile of length, so only the longest words shrink a little to fit), the same place in the
     // frame, and the same brightness whatever the scene's exposure (the montage's quick swaps keep theirs)
-    const texts = SEGMENTS.flatMap((seg) => [WORDS[seg.id] ?? []].flat().map((w) => (typeof w === 'string' ? w : w.text)));
-    const widths = texts.map((t) => { const g = letters3D(t, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 2, bevelSegments: 1 }); g.forEach((l) => l.geometry.dispose()); return g.width; }).sort((a, b) => a - b);
+    const texts = SEGMENTS.flatMap((seg) => [WORDS[seg.id] ?? []].flat().map((w, i) => [typeof w === 'string' ? w : w.text, i === 0 ? WORDS_HI[seg.id] : undefined]));
+    const widths = texts.map(([t, hi]) => { const g = this.glyphs(t, hi, true); g.forEach((l) => l.geometry.dispose()); return g.width; }).sort((a, b) => a - b);
     this.refWidth = widths[Math.floor((widths.length - 1) * 0.75)] ?? 1;
     this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     this._k = new THREE.Vector3();
     this._q = [new THREE.Quaternion(), new THREE.Quaternion()];
+  }
+
+  // A heading's 3D letters: the Latin word, or (with a Hindi word) its aksharas; draft = coarse, for measuring.
+  glyphs(text, hi, draft = false) {
+    const q = draft ? { curveSegments: 2, bevelSegments: 1 } : { curveSegments: 10, bevelSegments: 5 };
+    const g = hi && devaLetters3D(hi, { depth: 0.34, bevel: 0.035, ...q });
+    if (!g) return letters3D(text, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, ...q });
+    // the block is as wide as the wider of the two lines (the English line is letter-spaced)
+    const sub = letters3D(text, { size: SUB.size, depth: SUB.depth, bevel: 0, tracking: SUB.tracking, curveSegments: 1, bevelSegments: 1 });
+    sub.forEach((l) => l.geometry.dispose());
+    g.width = Math.max(g.width, sub.width);
+    return g;
   }
 
   // Forget a sequence's headings (the engine frees their GPU resources with the sequence).
@@ -127,10 +141,11 @@ export class Words3D {
     this.trackDof(inst);   // before build(): see trackDof
     const seg = inst.segment, dur = seg.end - seg.start, lay = LAYOUT[seg.id] ?? {};
     // a chapter may carry several headings (e.g. INTELLIGENCE, then AI over the branches)
-    for (const w of [WORDS[seg.id] ?? []].flat()) {
+    for (const [i, w] of [WORDS[seg.id] ?? []].flat().entries()) {
+      const hi = i === 0 ? WORDS_HI[seg.id] : undefined;
       // short and snappy: form quickly, hold a beat, clear — the scene behind is the story
-      if (typeof w === 'string') { const it = this.build(w, inst, seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay); it.pace = 0.8; it.yOff = HEAD_Y; this.items.push(it); continue; }
-      const item = this.build(w.text, inst, w.t0, w.t1, false, lay);
+      if (typeof w === 'string') { const it = this.build(w, inst, seg.start + 0.3, seg.start + Math.min(1.95, dur - 0.65), false, lay, hi); it.pace = 0.8; it.yOff = HEAD_Y; this.items.push(it); continue; }
+      const item = this.build(w.text, inst, w.t0, w.t1, false, lay, hi);
       Object.assign(item, { pace: w.pace ?? 1, yOff: HEAD_Y, noFocus: w.focus === false });   // (every chapter heading at one height)
       this.items.push(item);
     }
@@ -266,7 +281,7 @@ export class Words3D {
     it.t1 = mon.end + 0.1;                              // stays up through the hand-over (no exit animation)
   }
 
-  build(text, inst, t0, t1, swap = false, lay = {}) {
+  build(text, inst, t0, t1, swap = false, lay = {}, hi = undefined) {
     // every heading starts and leaves on the beat
     t0 = onBeat(t0, swap ? 2 : 1); t1 = onBeat(t1, swap ? 2 : 1);
     const invert = !!lay.invert, align = lay.align ?? 'center';
@@ -276,9 +291,9 @@ export class Words3D {
       uSweep: { value: -99 }, uSweepW: { value: 0.45 }, uShine: { value: 0 }, uWordInv: { value: new THREE.Matrix4() }, uCapH: { value: 0.7 }, uExpComp: { value: 1 },
       uTint: { value: new THREE.Color(era.color).lerp(new THREE.Color('#ffffff'), 0.55) },
     };
-    const glyphs = letters3D(text, { size: 1, depth: 0.34, bevel: 0.05, tracking: 0.1, curveSegments: 10, bevelSegments: 5 });
+    const glyphs = this.glyphs(text, hi);
     const group = new THREE.Group();
-    let capH = 0;
+    let capH = glyphs.height ?? 0;   // (a Hindi word: its whole height, matras included, for the gold gradient)
     const letters = glyphs.map((g, i) => {
       g.geometry.computeBoundingBox();
       const h = g.geometry.boundingBox.max.y - g.geometry.boundingBox.min.y;
@@ -294,6 +309,28 @@ export class Words3D {
       return { pivot, mesh, mat, i, x: g.x };
     });
     shared.uCapH.value = capH;
+    // the English word beneath a Hindi heading: small, letter-spaced, the same gold, in its own frame (so its
+    // gold gradient runs up its own letters); it appears once the aksharas have landed
+    let sub = null;
+    if (glyphs.height != null) {
+      const sg = letters3D(text, { size: SUB.size, depth: SUB.depth, bevel: SUB.bevel, tracking: SUB.tracking, curveSegments: 8, bevelSegments: 3 });
+      const sgroup = new THREE.Group();
+      let sh = 0;
+      sg.forEach((g) => { g.geometry.computeBoundingBox(); sh = Math.max(sh, g.geometry.boundingBox.max.y - g.geometry.boundingBox.min.y); });
+      const sShared = { ...shared, uWordInv: { value: new THREE.Matrix4() }, uCapH: { value: sh } };
+      const sl = sg.map((g) => {
+        const mat = letterMaterial(era, this.engine.env, sShared, invert);
+        const mesh = new THREE.Mesh(g.geometry, mat);
+        mesh.position.x = g.x;
+        mesh.castShadow = true;
+        sgroup.add(mesh);
+        return { mesh, mat };
+      });
+      const y0 = -capH / 2 - SUB.gap - sh / 2;
+      sgroup.position.y = y0;
+      group.add(sgroup);
+      sub = { group: sgroup, letters: sl, shared: sShared, y0, h: sh };
+    }
     // glowing plinth line under the word
     const half = glyphs.width / 2 + 0.25;
     const plinthL = progressLine([new THREE.Vector3(0, 0, 0.2), new THREE.Vector3(-half, 0, 0.2)], { color: era.light, intensity: 1.2, head: 0.08 });
@@ -366,7 +403,7 @@ export class Words3D {
     const d = focus * (swap ? 0.55 : 0.62);
     const lockPos = new THREE.Vector3(), lockQuat = new THREE.Quaternion();
     cam.matrixWorld.decompose(lockPos, lockQuat, new THREE.Vector3());
-    return { text, inst, group, letters, plinth, light, shared, back, glint, dust, capH, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
+    return { text, hi, sub, inst, group, letters, plinth, light, shared, back, glint, dust, capH, invert, align, width: glyphs.width, t0, t1, swap, d, lockPos, lockQuat };
   }
 
   // Called by the engine after a sequence's update and before it is rendered.
@@ -475,6 +512,21 @@ export class Words3D {
         l.mat.userData.u.uLShine.value = sh * fade;
         l.mat.opacity = fade * sat(u * 5) * (1 - kout);
       });
+      if (it.sub) {
+        // the English line: rises into place letter by letter as the aksharas land, leaves with them
+        const kg = ease.inCubic(sat((T - outStart) / outDur));
+        const m = it.sub.letters.length;
+        const a0 = Math.max(0, inDur - 0.12);
+        it.sub.group.position.y = it.sub.y0 - 0.12 * (1 - ease.outCubic(sat((t - a0) / 0.4)));
+        it.sub.letters.forEach((l, j) => {
+          const a = sat((t - a0 - j * Math.min(0.035, 0.3 / m)) / 0.22);
+          l.mat.userData.u.uFlash.value = 0;
+          l.mat.userData.u.uLShine.value = 0;
+          l.mat.opacity = fade * a * (1 - kg);
+        });
+        it.sub.group.updateMatrixWorld(true);
+        it.sub.shared.uWordInv.value.copy(it.sub.group.matrixWorld).invert();
+      }
       // formation particles: converge over the entrance, then dissolve into the solid letters
       const formEnd = inDur + 0.1;
       it.dust.tick(t, { height: this.engine.height });

@@ -197,6 +197,12 @@ const WORDS = {
   surgery: 'HEALING', temples: 'STONE', nalanda: 'LEARNING', dharma: 'PEACE', textiles: 'GIFTS', yoga: 'YOGA',
   modern: 'GENIUS', flight: 'FLIGHT', isro: { text: 'SPACE', t0: 57.8, t1: 58.95, pace: 0.8 },
 };
+// the same headings in Hindi (drawn large, the English word small beneath; shaped by tools/deva-headings.py)
+const WORDS_HI = {
+  indus: 'नगर', language: 'भाषा', zero: 'शून्य', astronomy: 'ब्रह्मांड', metallurgy: 'धातु',
+  surgery: 'चिकित्सा', temples: 'शिला', nalanda: 'विद्या', dharma: 'शांति', textiles: 'उपहार', yoga: 'योग',
+  modern: 'प्रतिभा', flight: 'उड़ान', isro: 'अंतरिक्ष',
+};
 // the montage's rapid word swaps, each on its cue (the last word keeps an A: the cut zooms through it)
 const SWAPS = [['mGrid', 'CITIES'], ['mZero', 'ZERO'], ['mWheel', 'DHARMA'], ['mTemple', 'STONE'], ['mOrbit', 'ORBIT'], ['mStars', 'STARS']];
 
@@ -207,7 +213,7 @@ export default {
   slug: 'achievements-of-indian-civilization',
   DURATION: 86,
   MUSIC_DURATION: 78, MUSIC_SPLICES,   // the score's own clock, and how it is laid onto this one
-  SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, SWAPS,
+  SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, WORDS_HI, SWAPS,
   note: "India's achievements grew through exchange with civilizations across Asia, Africa and Europe.",
   sceneDir: './india',                             // src/scenes/india/<id>.js
   soundtrack: 'assets/audio/india/soundtrack.mp3',

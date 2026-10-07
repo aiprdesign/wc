@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Font } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import DEVA from './deva-headings.js';
 
 export const FONTS = {
   display: 'Cinzel',               // Roman inscriptional capitals — titles
@@ -219,6 +220,29 @@ export function textGeometry3D(text, { size = 1, depth = 0.25, bevel = 0.02, cur
   geo.translate(-(bb.max.x + bb.min.x) / 2, -(bb.max.y + bb.min.y) / 2, -(bb.max.z + bb.min.z) / 2);
   return geo;
 }
+
+// Hindi headings: per-akshara 3D glyphs for a word shaped offline (tools/deva-headings.py), in the same
+// layout as letters3D. Each akshara keeps its place on the shared baseline (only x is centred), so the
+// headline bar runs on unbroken from one to the next. `size` puts the headline at ~0.8 (Latin caps ≈ 0.7).
+// Returns null for a word that was not shaped. .height / .bottom: the word's extent (centred on y = 0).
+export function devaLetters3D(word, { size = 1.29, depth = 0.25, bevel = 0.02, curveSegments = 6, bevelSegments = 3 } = {}) {
+  const w = DEVA.words[word];
+  if (!w) return null;
+  const k = size / DEVA.resolution, yMid = ((w.top + w.bottom) / 2) * k, total = w.width * k;
+  const out = w.clusters.map((c, i) => {
+    const font = new Font({ glyphs: { '\uE000': { ha: 0, x_min: 0, x_max: 0, o: c.o } }, resolution: DEVA.resolution, boundingBox: { yMin: 0, yMax: 0 }, underlineThickness: 0 });
+    const geo = new THREE.ExtrudeGeometry(font.generateShapes('\uE000', size), {
+      depth, curveSegments, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.7, bevelSegments,
+    });
+    const cx = ((c.x0 + c.x1) / 2) * k;
+    geo.translate(-cx, -yMid, -depth / 2);
+    return { geometry: geo, char: `${word}:${i}`, x: cx - total / 2 };
+  });
+  out.width = total;
+  out.height = (w.top - w.bottom) * k;
+  return out;
+}
+export const devaClusters = (word) => DEVA.words[word]?.clusters.length ?? 0;
 
 // Per-letter 3D glyphs laid out as a line: [{ geometry, char, x }] (x = centre offset).
 export function letters3D(text, { size = 1, depth = 0.25, bevel = 0.02, tracking = 0.08, curveSegments = 6, bevelSegments = 3 } = {}) {
