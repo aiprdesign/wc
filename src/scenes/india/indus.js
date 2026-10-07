@@ -165,7 +165,7 @@ export function create(ctx, segment) {
     tmpQ.setFromEuler(tmpE.set(rx, ry, rz)); tmpM.compose(tmpP.set(x, y, z), tmpQ, tmpS.set(s, s, s));
     return g.clone().applyMatrix4(tmpM);
   };
-  const r = rng(1931);
+  const r = rng(1931), rd = rng(5150);   // (rd: details the phone path leaves out, so both paths build the same town)
   const fronts = [];                                         // houses fronting the drain street → house drains
   const riseDelay = (x, z) => T_DUST + 0.6 * sat(Math.hypot(x - 70, (z + 10) * 0.9) / 190) + 0.06 * Math.sin(z * 0.07 + x * 0.03) ** 2;
 
@@ -222,7 +222,7 @@ export function create(ctx, segment) {
       if (court && r() < 0.6) walls.prism(hole[0] - t, hole[1] + t, Y1, Y1 + 0.3, hole[2] - t, hole[3] + t, { c: 0, bev: 0.04, top: roof, hole, blk, jit, floor: null });
       // drain spouts through the parapet, out over the street
       for (const F of sides) if (r() < 0.45 && !lite) {
-        const u = lerp(F.u0, F.u1, 0.2 + r() * 0.6);
+        const u = lerp(F.u0, F.u1, 0.2 + rd() * 0.6);
         wood.tag = [0, Y1, Y1 + 0.2, seed];
         fbox(wood, F, u - 0.09, u + 0.09, Y1 + 0.02, Y1 + 0.13, -0.05, 0.55, blk, jit);
       }
@@ -250,7 +250,7 @@ export function create(ctx, segment) {
         walls.tag = [0.3, Y0, Y1, seed];
         for (let k = 0; k < n; k++) walls.box(sx + k * run, hx1, Y0 + k * rise, Y0 + (k + 1) * rise, hz0, hz0 + 0.95, blk, jit, { faces: 'nx py pz' });
       } else if (!lite) {
-        const lx = lerp(hx0, hx1, 0.3 + r() * 0.4), lz = hz1 - 0.35;
+        const lx = lerp(hx0, hx1, 0.3 + rd() * 0.4), lz = hz1 - 0.35;
         wood.tag = [1, Y0, Y1, seed];
         for (const e of [-0.24, 0.24]) wood.box(lx + e - 0.035, lx + e + 0.035, Y0, Y1 + 0.7, lz - 0.035, lz + 0.035, blk, jit, { faces: 'px nx pz nz py' });
         wood.tag = [0, Y0, Y1, seed];
@@ -295,25 +295,25 @@ export function create(ctx, segment) {
     if (!lite) {
       const free = (fx) => { const x = lerp(x0 + 0.8, x1 - 0.8, fx); return x; };
       const onRoofZ = (fz) => (court ? (fz < 0.5 ? lerp(z0 + 0.6, hole[2] - 0.6, fz * 2) : lerp(hole[3] + 0.6, z1 - 0.6, fz * 2 - 1)) : lerp(z0 + 0.8, z1 - 0.8, fz));
-      if (r() < 0.3) {
-        const x = free(r()), z = onRoofZ(r()), a = 0.7 + r() * 0.9, b = 0.5 + r() * 0.6;
-        cloth.tag = [0, Y1, Y1, r()];
+      if (rd() < 0.3) {
+        const x = free(rd()), z = onRoofZ(rd()), a = 0.7 + rd() * 0.9, b = 0.5 + rd() * 0.6;
+        cloth.tag = [0, Y1, Y1, rd()];
         cloth.box(x - a / 2, x + a / 2, Y1 + 0.005, Y1 + 0.025, z - b / 2, z + b / 2, blk, jit, { faces: 'py px nx pz nz' });
       }
-      if (r() < 0.14 && !upper) {
-        const x = free(0.3 + r() * 0.4), z = onRoofZ(r() < 0.5 ? 0.25 : 0.75), a = 1.2, b = 1.0, ph = 1.9;
+      if (rd() < 0.14 && !upper) {
+        const x = free(0.3 + rd() * 0.4), z = onRoofZ(rd() < 0.5 ? 0.25 : 0.75), a = 1.2, b = 1.0, ph = 1.9;
         wood.tag = [1, Y1, Y1 + ph, seed];
         for (const [px, pz] of [[-a, -b], [a, -b], [a, b], [-a, b]]) wood.box(x + px - 0.04, x + px + 0.04, Y1, Y1 + ph, z + pz - 0.04, z + pz + 0.04, blk, jit, { faces: 'px nx pz nz' });
-        cloth.tag = [0, Y1, Y1, 0.1 + r() * 0.15];
+        cloth.tag = [0, Y1, Y1, 0.1 + rd() * 0.15];
         cloth.box(x - a - 0.15, x + a + 0.15, Y1 + ph, Y1 + ph + 0.04, z - b - 0.15, z + b + 0.15, blk, jit, { faces: 'py px nx pz nz ny' });
       }
-      for (let k = 0, m = r() < 0.35 ? 1 + Math.floor(r() * 3) : 0; k < m; k++) pot(pots, free(r()), Y1, onRoofZ(r()), 0.8 + r() * 0.4, r(), r() * 6);
+      for (let k = 0, m = rd() < 0.35 ? 1 + Math.floor(rd() * 3) : 0; k < m; k++) pot(pots, free(rd()), Y1, onRoofZ(rd()), 0.8 + rd() * 0.4, rd(), rd() * 6);
       // brick rubble and broken bricks along the foot of the walls
-      for (let k = 0, m = near ? 4 + Math.floor(r() * 6) : Math.floor(r() * 3); k < m; k++) {
-        const F = sides[Math.floor(r() * 4)], u = lerp(F.u0, F.u1, r()), dd = 0.25 + r() * 0.9;
+      for (let k = 0, m = near ? 4 + Math.floor(rd() * 6) : Math.floor(rd() * 3); k < m; k++) {
+        const F = sides[Math.floor(rd() * 4)], u = lerp(F.u0, F.u1, rd()), dd = 0.25 + rd() * 0.9;
         const px = F.ax === 'z' ? u : F.at + F.out * dd, pz = F.ax === 'z' ? F.at + F.out * dd : u;
-        walls.tag = [0, Y0 - 1, Y0, r()];
-        walls.geo(placed(r() < 0.5 ? bitG : half, px, Y0 + 0.03, pz, r() * 6.3, 1, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5), blk, jit);
+        walls.tag = [0, Y0 - 1, Y0, rd()];
+        walls.geo(placed(rd() < 0.5 ? bitG : half, px, Y0 + 0.03, pz, rd() * 6.3, 1, (rd() - 0.5) * 0.5, (rd() - 0.5) * 0.5), blk, jit);
       }
     }
     // façades on the drain street: a doorway, and a drain chute down the wall to the street drain
@@ -472,18 +472,18 @@ export function create(ctx, segment) {
   if (!lite) {
     const mound = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
     for (let k = 0; k < 70; k++) {
-      const edge = Math.floor(r() * 4);
-      const x = edge === 0 ? 4 + r() * 3 : edge === 1 ? 197 + r() * 6 : 10 + r() * 185;
-      const z = edge < 2 ? -118 + r() * 232 : edge === 2 ? -124 - r() * 5 : 118 + r() * 6;
+      const edge = Math.floor(rd() * 4);
+      const x = edge === 0 ? 4 + rd() * 3 : edge === 1 ? 197 + rd() * 6 : 10 + rd() * 185;
+      const z = edge < 2 ? -118 + rd() * 232 : edge === 2 ? -124 - rd() * 5 : 118 + rd() * 6;
       const blk = [x, z, riseDelay(x, z) + 0.1, 2.5];
-      if (r() < 0.5) {
-        const s = 1 + r() * 2.2;
-        roof.tag = [0, 0, 0, r()];
-        roof.geo(mound.clone().scale(s * (1 + r()), s * 0.5, s * (0.8 + r() * 0.6)).translate(x, -s * 0.12, z), blk);
+      if (rd() < 0.5) {
+        const s = 1 + rd() * 2.2;
+        roof.tag = [0, 0, 0, rd()];
+        roof.geo(mound.clone().scale(s * (1 + rd()), s * 0.5, s * (0.8 + rd() * 0.6)).translate(x, -s * 0.12, z), blk);
       } else {
-        walls.tag = [0, 0, 1, r()];
-        for (let m = 0, M = 1 + Math.floor(r() * 3); m < M; m++) { const xx = x + (r() - 0.5) * 4, zz = z + (r() - 0.5) * 4; walls.prism(xx, xx + 0.9 + r() * 0.4, 0, 0.5 + r() * 0.6, zz, zz + 0.7 + r() * 0.4, { c: 0.01, bev: 0.015, blk }); }
-        for (let m = 0; m < 10; m++) walls.geo(placed(r() < 0.6 ? bitG : half, x + (r() - 0.5) * 5, 0.03, z + (r() - 0.5) * 5, r() * 6.3, 1, (r() - 0.5) * 0.6, (r() - 0.5) * 0.6), blk);
+        walls.tag = [0, 0, 1, rd()];
+        for (let m = 0, M = 1 + Math.floor(rd() * 3); m < M; m++) { const xx = x + (rd() - 0.5) * 4, zz = z + (rd() - 0.5) * 4; walls.prism(xx, xx + 0.9 + rd() * 0.4, 0, 0.5 + rd() * 0.6, zz, zz + 0.7 + rd() * 0.4, { c: 0.01, bev: 0.015, blk }); }
+        for (let m = 0; m < 10; m++) walls.geo(placed(rd() < 0.6 ? bitG : half, x + (rd() - 0.5) * 5, 0.03, z + (rd() - 0.5) * 5, rd() * 6.3, 1, (rd() - 0.5) * 0.6, (rd() - 0.5) * 0.6), blk);
       }
     }
   }
@@ -713,7 +713,7 @@ export function create(ctx, segment) {
   // weights in a row on a baked-brick sill: ratios 1, 2, 4 … 64, then decimal multiples 160, 320.
   // Chert is ~2.6 g/cm³ and the 16-unit weight ≈ 13.7 g, so the unit cube is ≈ 0.69 cm and side ∝ ∛ratio.
   // the same procedural baked brick as the city, resolving sand grains, pits and lime nodules at this scale
-  const sillMat = cityMaterial('brick', null, { color: '#f4e4d2' });
+  const sillMat = cityMaterial('brick', null, { color: '#e2d0c4' });
   const sill = new THREE.Mesh(new THREE.PlaneGeometry(8, 3).rotateX(-Math.PI / 2), sillMat);
   sill.position.set(0.05, 0, 1.08); sill.receiveShadow = true;
   const backMat = cityMaterial('brick', null, { color: '#e2cdb6' });

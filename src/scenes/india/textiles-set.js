@@ -335,8 +335,9 @@ function weaveTexture() {
 }
 
 // ------------------------------------------------------------------------------------------------ geometry helpers
+let LK = 1;   // lite: coarser profiles
 function lathe(knots, seg = 24, n = 0) {
-  const pts = new THREE.SplineCurve(knots.map(([r, y]) => V2(Math.max(0, r), y))).getPoints(n || knots.length * 3).map((p) => V2(Math.max(0, p.x), p.y));
+  const pts = new THREE.SplineCurve(knots.map(([r, y]) => V2(Math.max(0, r), y))).getPoints(Math.max(knots.length + 1, Math.round((n || knots.length * 3) * LK))).map((p) => V2(Math.max(0, p.x), p.y));
   return new THREE.LatheGeometry(pts, seg);
 }
 let RB_SEG = 2;
@@ -359,7 +360,7 @@ function turned(h, r, seg = 16) {
 // ------------------------------------------------------------------------------------------------ the courtyard
 export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafMat, wood, woodDark, blockWood, dyeFace } = {}) {
   const R = rng(9907);
-  RB_SEG = lite ? 1 : 2;
+  RB_SEG = lite ? 1 : 2; LK = lite ? 0.45 : 1;
   const set = new THREE.Group(); set.name = 'courtyard'; scene.add(set);
   const shadowRecv = (m) => { m.receiveShadow = true; return m; };
   const add = (geo, mat, { cast = false, parent = set } = {}) => { const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = cast; parent.add(m); return m; };
