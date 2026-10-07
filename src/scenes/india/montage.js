@@ -564,7 +564,7 @@ export function create(ctx, segment) {
   const hud = ctx.makeHUD();
   const SQ = OUTPUT_ASPECT < 1.5, HH = FILM_ASPECT / OUTPUT_ASPECT, UI = SQ ? Math.sqrt(HH) * 1.25 : 1;
   const HX = (dx) => -FILM_ASPECT + dx * UI, HY = (y) => (SQ ? -HH + (1 + y) * UI + 0.3 : y);
-  const LABELS = [['I · HARAPPA', 'c. 2600 BC'], ['III · SHUNYA', 'ZERO · AD 628'], ['IX · DHARMA CHAKRA', '24 SPOKES'], ['VII · VIMANA', 'THANJAVUR · 1010'], ['XII · MANGALYAAN', 'MARS ORBIT · 2014'], ['IV · TARA · STARS', '']];
+  const LABELS = [['I · HARAPPA', 'c. 2600 BC'], ['III · SHUNYA', 'ZERO · AD 628'], ['IX · DHARMA CHAKRA', '24 SPOKES'], ['VII · VIMANA', 'THANJAVUR · 1010'], ['XIV · MANGALYAAN', 'MARS ORBIT · 2014'], ['IV · TARA · STARS', '']];
   const labels = LABELS.map(([a, b]) => {
     const tp = new TextPlane(a, { font: FONTS.mono, weight: 400, height: 0.042 * UI, letterSpacing: 0.32, color: '#f4ecdf', intensity: 1.1 });
     tp.position.set(HX(0.16) + tp.worldWidth / 2, HY(-0.84), 0);

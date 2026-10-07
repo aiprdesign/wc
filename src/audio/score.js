@@ -33,7 +33,7 @@
 //   then, on the rendered buffer: loudness trim → tape/console saturation →
 //   two-band glue compressor → room tone → limiter at -1 dBFS
 
-import { DURATION, FILM_DURATION, TIME_SCALE, MUSIC_CUES as C } from '../timeline.js';
+import { DURATION, FILM_DURATION, TIME_SCALE, MUSIC_CUES as C, CUES as CN, MUSIC_DURATION, MUSIC_SPLICES } from '../timeline.js';
 import { FILM_ID } from '../film.js';
 import { Studio, mulberry32 } from './core.js';
 import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
@@ -53,7 +53,10 @@ const CEILING = 0.891;         // -1 dBFS
 const TARGET_LOUD_RMS = 0.16;  // ≈ -16 dBFS RMS through industrial → montage
 
 // hallUntil: when this studio's film bus (and its hall) has nothing more to play.
-function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.finalImpact } = {}) {
+// cues / end: the clock this studio plays on — the score's (C, MUSIC_DURATION) or, for a film whose music is
+// spliced onto a longer picture, the film's own (CN, DURATION) for the sound design and the narration
+function buildMixer(S, { space: withSpace = true, stage = true, cues = C, end = MUSIC_DURATION, hallUntil = cues.finalImpact } = {}) {
+  const C = cues;
   const { ctx } = S;
 
   // Master: subsonic high-pass only; compression, loudness and limiting happen
@@ -83,7 +86,7 @@ function buildMixer(S, { space: withSpace = true, stage = true, hallUntil = C.fi
   finale.gain.setValueAtTime(0, C.finalImpact - 0.003);
   finale.gain.linearRampToValueAtTime(1, C.finalImpact);
   finale.gain.setValueAtTime(1, C.fadeOut + 0.4);
-  finale.gain.linearRampToValueAtTime(0, DURATION + 0.3);   // silence by story ~78.3 s (film ~108.75 s)
+  finale.gain.linearRampToValueAtTime(0, end + 0.3);   // silence by story ~78.3 s (film ~108.75 s)
 
   // Reverbs are only wired into the graph while they can be heard (a connected
   // ConvolverNode costs CPU even when silent). Sends are high-passed so the low
@@ -164,6 +167,36 @@ function duckStrings(S, kicks) {
   }
 }
 
+/** Story time of music time tm (past each splice's seam, the later offset). */
+const toStory = (tm) => { let o = 0; for (const [at, off] of MUSIC_SPLICES) if (tm >= at - off) o = off; return tm + o; };
+
+/**
+ * Lay the music (rendered on the score's clock) onto the film's clock: from each splice's story time on,
+ * the film plays the music `offset` story seconds earlier — whole bars, so the beat never stumbles — with a
+ * short equal-power crossfade across each seam. `like` gives the output's length and channels.
+ */
+function spliceMusic(src, like, splices) {
+  const sr = src.sampleRate, out = new AudioBuffer({ length: like.length, numberOfChannels: like.numberOfChannels, sampleRate: sr });
+  const seams = [[0, 0], ...splices].map(([at, off]) => [Math.round(at * TIME_SCALE * sr), Math.round(off * TIME_SCALE * sr)]);
+  const X = Math.round(0.04 * sr);   // crossfade length (film samples)
+  for (let c = 0; c < out.numberOfChannels; c++) {
+    const s = src.getChannelData(Math.min(c, src.numberOfChannels - 1)), o = out.getChannelData(c);
+    const at = (i, off) => { const j = i - off; return j >= 0 && j < s.length ? s[j] : 0; };
+    for (let k = 0; k < seams.length; k++) {
+      const [a, off] = seams[k], b = k + 1 < seams.length ? seams[k + 1][0] : o.length;
+      for (let i = a; i < b; i++) o[i] = at(i, off);
+    }
+    for (let k = 1; k < seams.length; k++) {
+      const [a, off] = seams[k], prev = seams[k - 1][1];
+      for (let i = Math.max(0, a - X / 2); i < Math.min(o.length, a + X / 2); i++) {
+        const u = (i - (a - X / 2)) / X, g0 = Math.cos(u * Math.PI / 2), g1 = Math.sin(u * Math.PI / 2);
+        o[i] = at(i, prev) * g0 + at(i, off) * g1;
+      }
+    }
+  }
+  return out;
+}
+
 /** Sum `src` into `dst` (same length / channel count). */
 function mixInto(dst, src) {
   for (let c = 0; c < dst.numberOfChannels; c++) {
@@ -182,33 +215,42 @@ export async function renderScore(sampleRate = 48000, { voiceOver = true, only =
   //   B — rhythm section, hits, transitions, finale and the sound design.
   // (B's film bus has nothing after the pullBack's hall tail: the coda it plays is all on
   // the finale buses, so its hall is switched off early.)
-  const A = new Studio(sampleRate, FILM_DURATION + TAIL, 1492, null, { timeScale: TIME_SCALE });
-  const B = new Studio(sampleRate, FILM_DURATION + TAIL, 1815, A);
+  const MUSIC_FILM = MUSIC_DURATION * TIME_SCALE;
+  const A = new Studio(sampleRate, MUSIC_FILM + TAIL, 1492, null, { timeScale: TIME_SCALE });
+  const B = new Studio(sampleRate, MUSIC_FILM + TAIL, 1815, A);
   buildMixer(A, { space: false });
   buildMixer(B, { stage: false, hallUntil: C.earthReveal + 3.5 });
   // the Indian film: the same score architecture under an Indian layer (tanpura, sitar, bansuri,
   // santoor, tabla, temple bells) and its own sound design (src/audio/india/)
   const india = FILM_ID === 'india' ? await import('./india/layer.js') : null;
+  // a longer picture than the score (MUSIC_SPLICES): the music renders on its own clock and is laid onto
+  // the film's afterwards; the sound design (pinned to the picture) renders on the film's clock (studio D)
+  const spliced = MUSIC_SPLICES.length > 0;
+  const D = spliced ? new Studio(sampleRate, FILM_DURATION + TAIL, 2047, A) : null;
+  if (D) buildMixer(D, { stage: false, cues: CN, end: DURATION, hallUntil: CN.earthReveal + 3.5 });
   let kicks = [];
   if (only !== 'india') {
     ({ kicks } = arrangeMusic(A, 'orchestra'));
     arrangeMusic(B, 'rhythm');
-    arrangeCues(B, india?.chapterCues);
+    arrangeCues(D ?? B, india?.chapterCues);
   }
   if (india && only !== 'score') { india.arrangeIndia(A, 'melody'); india.arrangeIndia(B, 'rhythm'); }
   warmSfx(B);
   warmPercussion(B);
+  if (D) { warmSfx(D); warmPercussion(D); }
   duckStrings(A, kicks);
 
-  const [buffer, b2] = await Promise.all([A.render(), B.render()]);
-  mixInto(buffer, b2);
+  const [music, b2, d2] = await Promise.all([A.render(), B.render(), D?.render()]);
+  mixInto(music, b2);
+  let buffer = music;
+  if (D) { buffer = spliceMusic(music, d2, MUSIC_SPLICES); mixInto(buffer, d2); }
 
   if (only) return buffer;   // (diagnostics: the raw mix, unmastered, so the parts compare)
   // Master: set the loud body of the film to a consistent level, glue it with a
   // gentle compressor, then brickwall-limit to -1 dBFS.
   // (the buffer is in film time)
   const film = (t) => t * TIME_SCALE;
-  const loud = rmsBetween(buffer, film(C.gear), film(C.pullBack));
+  const loud = rmsBetween(buffer, film(toStory(C.gear)), film(CN.pullBack));
   const gain = loud > 0 ? Math.min(8, TARGET_LOUD_RMS / loud) : 1;
   applyGain(buffer, gain);
   // console / tape colour, then a gentle two-band glue compressor
@@ -217,7 +259,7 @@ export async function renderScore(sampleRate = 48000, { voiceOver = true, only =
   // the hall never goes digitally silent (fades in with the opening, out at the end)
   const end = film(DURATION + 0.3);
   roomTone(buffer, mulberry32(7), { level: 0.00045, env: (t) => Math.min(1, t / 0.6, Math.max(0, (end - t) / 1.5)) });
-  const glued = rmsBetween(buffer, film(C.gear), film(C.pullBack));
+  const glued = rmsBetween(buffer, film(toStory(C.gear)), film(CN.pullBack));
   limit(buffer, { gain: Math.min(4, TARGET_LOUD_RMS / glued), ceiling: CEILING, lookahead: 0.004, release: 0.15 });
   // the British narrator: the music ducks under each line
   const vo = await voP;

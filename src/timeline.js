@@ -37,6 +37,11 @@ export const CUES = FILM.CUES;
 export const WARMTH_KEYS = FILM.WARMTH_KEYS;
 // the beat names the trailer score (audio/music.js) is written against, pinned to this film's picture
 export const MUSIC_CUES = FILM.MUSIC_CUES ?? CUES;
+// The score's own clock (story seconds) and how its music is laid onto the film's: from each splice's
+// story time on, music time = story time − offset (the Indian film hears two bars again under each of
+// its two extra chapters). The Western film's score runs on its own clock: no splices.
+export const MUSIC_DURATION = FILM.MUSIC_DURATION ?? DURATION;
+export const MUSIC_SPLICES = FILM.MUSIC_SPLICES ?? [];
 
 export function segmentById(id) {
   return SEGMENTS.find((s) => s.id === id);

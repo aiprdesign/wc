@@ -1,9 +1,12 @@
 // THE INDIAN FILM — "Achievements of Indian Civilization": its timeline, chapter cards and headings.
 // Pure data (no three.js): the score and the tools read it too. src/film.js picks the film a page plays.
 //
-// It runs on the Western film's clock and grid (the same 78 s story, 120 BPM, the same chapter slots),
-// so the shared machinery (the opening's title, the montage's word swaps, the finale's coda, the
-// chapter rail) lines up unchanged. Facts and sources: docs/FACTS-INDIA.md.
+// It runs on the Western film's clock and grid (120 BPM, the same chapter slots up to Gifts to the
+// World), then two chapters of its own — Yoga & Pranayama and Flight — make it 8 s (four bars) longer:
+// 86 s of story, 1:59 of film. The shared machinery (the opening, the montage's word swaps, the finale's
+// coda, the chapter rail) reads the cues, so it follows. The score is written on the 78 s clock: its
+// music is laid onto this one by MUSIC_SPLICES (two bars of the build heard again under each new
+// chapter; see audio/score.js). Facts and sources: docs/FACTS-INDIA.md.
 
 // transition: how this segment hands over to the NEXT one.
 //   dissolve | luma | zoom | flash | spectrum | iris | letter
@@ -19,15 +22,17 @@ const SEGMENTS = [
   { id: 'nalanda',    title: 'The First Universities',      start: 34.5, end: 39.0, transition: 'dissolve' },
   { id: 'dharma',     title: 'The Path of Peace',           start: 38.5, end: 43.0, transition: 'dissolve' },
   { id: 'textiles',   title: 'Gifts to the World',          start: 42.5, end: 47.0, transition: 'zoom' },
-  { id: 'modern',     title: 'The Modern Mind',             start: 46.5, end: 50.0, transition: 'flash' },
-  { id: 'isro',       title: 'To the Moon & Mars',          start: 49.5, end: 56.0, transition: 'zoom' },
-  { id: 'montage',    title: 'Legacy',                      start: 55.5, end: 60.5, transition: 'letter' },   // zoom through the A of STARS
-  { id: 'finale',     title: 'Ideas Build Upon Ideas',      start: 60.0, end: 78.0, transition: null, scene: './finale.js' },
+  { id: 'yoga',       title: 'Yoga & Pranayama',            start: 46.5, end: 51.0, transition: 'dissolve' },
+  { id: 'modern',     title: 'The Modern Mind',             start: 50.5, end: 54.0, transition: 'flash' },
+  { id: 'flight',     title: 'Flight',                      start: 53.5, end: 58.0, transition: 'zoom' },
+  { id: 'isro',       title: 'To the Moon & Mars',          start: 57.5, end: 64.0, transition: 'zoom' },
+  { id: 'montage',    title: 'Legacy',                      start: 63.5, end: 68.5, transition: 'letter' },   // zoom through the A of STARS
+  { id: 'finale',     title: 'Ideas Build Upon Ideas',      start: 68.0, end: 86.0, transition: null, scene: './finale.js' },
 ];
 
-// Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`;
-// the score places its hits on exactly the same numbers.
-const CUES = {
+// Key story beats (GLOBAL seconds). Scenes convert with `cue - segment.start`; the score places its hits
+// on exactly the same numbers. Written first on the 78 s clock the score is composed on (BASE) …
+const BASE = {
   // opening (the shared cold open: the same beats as the Western film)
   ignition: 0.125, flashForward: 0.375, pointAppears: 1.5, gridStart: 1.5, layersStart: 2.125, gridDone: 2.5,
   flyThrough: 2.625, titleAssemble: 2.75, titleLocked: 3.5, subtitle: 3.875, letters3D: 5.3, lettersFly: 5.8,
@@ -115,24 +120,49 @@ const CUES = {
   sunrise: 69.6, finalImpact: 71.0, closingLine: 72.8, fadeOut: 76.0,
 };
 
+// … then laid on this film's own 86 s clock: the four bars of Yoga & Pranayama (from 46.5) and of Flight
+// (from 53.5) push everything after them on.
+const MUSIC_SPLICES = [[46.5, 4], [53.5, 8]];   // [story time, offset]: from there on, music time = story − offset
+const fromBase = (t) => (t >= 49.5 ? t + 8 : t >= 46.5 ? t + 4 : t);
+const toMusic = (t) => { let off = 0; for (const [at, o] of MUSIC_SPLICES) if (t >= at) off = o; return t - off; };
+const CUES = {
+  ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, fromBase(v)])),
+  // yoga & pranayama (its music: the bars of 42.5–46.5 heard again — the calculator hit lands on the
+  // sunrise, the A-major tension under the held breath, the release on the exhale)
+  yogaSunrise: 46.8,    // dawn over the river ghats
+  suryaNamaskar: 47.3,  // the twelve positions of the sun salutation flow, figure by figure
+  pranayama: 48.4,      // the breath made visible: inhale …
+  nadiShodhana: 49.0,   // … alternate-nostril breathing, the two channels
+  exhale: 49.6,         // the long exhale (the orchestra's release)
+  eightLimbs: 50.1,     // Patanjali's eight limbs, pranayama the fourth
+  yogaDay: 50.5,        // 21 June, the International Day of Yoga
+  // flight (its music: the bars of 45.5–49.5, the build that lands on the ISRO launch)
+  pushpaka: 53.6,       // the dream: the Pushpaka Vimana of the Ramayana (legend)
+  airmail: 54.6,        // 18 February 1911: the first official airmail, Allahabad → Naini
+  tataMail: 55.8,       // 15 October 1932: J. R. D. Tata flies the mail Karachi → Bombay
+  marut: 56.6,          // 1961: the HF-24 Marut, the first Indian-designed jet fighter
+  tejas: 57.1,          // 2001: Tejas, first flight
+};
+
 // The score: the trailer score's architecture (src/audio/music.js) is written against the Western
 // film's beat names; here each of those names is pinned to the Indian picture's beat at (nearly) the
-// same moment, so every orchestral hit lands on this film's own picture. The Indian layer
-// (src/audio/india/) plays on top, on this film's own cues.
+// same moment, on the score's 78 s clock, so every orchestral hit lands on this film's own picture. The
+// Indian layer (src/audio/india/) is music too and plays on the same clock; the sound design and the
+// narration play on the film's own clock.
 const MUSIC_CUES = {
-  ...CUES,
-  templeReveal: CUES.greatBath, wordCivic: CUES.sutras, wordLaw: CUES.grammarTree, wordRepresentation: 14.35,
-  goldenRatio: CUES.dotZero, model3D: CUES.brahmagupta, fallStart: CUES.aryabhata, gear: CUES.forge,
-  rocketLaunch: CUES.library, earthWide: CUES.asiaRoutes, moonLanding: CUES.wheel, footprint: CUES.charkha,
-  earthrise: CUES.saltMarch, calculator: CUES.cottonBoll, processorDive: CUES.chessSpread, pageSphere: CUES.ramanBeam,
-  shuttle: CUES.thumba, hubble: CUES.aryabhataSat, genome: CUES.pslv, webb: CUES.chandrayaan1, rover: CUES.mangalyaan,
-  artemis: CUES.chandrayaan3, marsVision: CUES.southPole,
+  ...Object.fromEntries(Object.entries(CUES).map(([k, v]) => [k, toMusic(v)])),
+  templeReveal: BASE.greatBath, wordCivic: BASE.sutras, wordLaw: BASE.grammarTree, wordRepresentation: 14.35,
+  goldenRatio: BASE.dotZero, model3D: BASE.brahmagupta, fallStart: BASE.aryabhata, gear: BASE.forge,
+  rocketLaunch: BASE.library, earthWide: BASE.asiaRoutes, moonLanding: BASE.wheel, footprint: BASE.charkha,
+  earthrise: BASE.saltMarch, calculator: BASE.cottonBoll, processorDive: BASE.chessSpread, pageSphere: BASE.ramanBeam,
+  shuttle: BASE.thumba, hubble: BASE.aryabhataSat, genome: BASE.pslv, webb: BASE.chandrayaan1, rover: BASE.mangalyaan,
+  artemis: BASE.chandrayaan3, marsVision: BASE.southPole,
 };
 
 // Colour temperature of the grade over time: +1 = terracotta/bronze/gold, -1 = steel/electric/cool.
 const WARMTH_KEYS = [
   [0, 0.9], [8, 1.0], [16, 0.85], [20, 0.6], [25, 1.0], [29, 0.6], [32, 0.9], [39, 0.75],
-  [43, 0.7], [47, 0.1], [50, -0.45], [56, -0.6], [60.5, -0.45], [66, -0.1], [70, 0.3], [78, 0.35],
+  [43, 0.7], [47, 0.85], [50.5, 0.6], [51, 0.1], [54, 0.4], [58, -0.45], [64, -0.6], [68.5, -0.45], [74, -0.1], [78, 0.3], [86, 0.35],
 ];
 
 // Chapter cards. `roots` names the exchange each chapter's achievements were part of: what India
@@ -147,23 +177,25 @@ const CHAPTERS = {
   temples:    { n: 'VII',  era: '3RD C. BC — AD 1653',    heading: 'STONE AND SPIRIT',         story: 'From Sanchi to Ellora, where a whole temple was carved down from one rock.', roots: 'Also the Taj Mahal, 1632–1653, raised with Persian and Central Asian masters' },
   nalanda:    { n: 'VIII', era: 'c. AD 427 — 1200',       heading: 'THE FIRST UNIVERSITIES',   story: 'For eight centuries Nalanda drew thousands of students from across Asia.', roots: 'Earlier: Takshashila · Xuanzang came from China to study there in the 630s' },
   dharma:     { n: 'IX',   era: 'c. 260 BC · 1947 · 1950', heading: 'THE PATH OF PEACE',       story: 'From Ashoka to Gandhi: the idea that nonviolence can change the world.', roots: "Buddhism spread across Asia · Gandhi's nonviolence inspired Martin Luther King Jr." },
-  textiles:   { n: 'X',    era: 'c. 5000 BC — TODAY',     heading: 'GIFTS TO THE WORLD',       story: 'Cotton cloth, indigo, chess and yoga travelled from India to every continent.', roots: 'Exchange: chess went on through Persia as shatranj · indigo is named for India' },
-  modern:     { n: 'XI',   era: '1913 — 1930',            heading: 'THE MODERN MIND',          story: 'Ramanujan, Raman and Bose: new mathematics and new physics.', roots: 'Ramanujan worked with G. H. Hardy at Cambridge · bosons are named after S. N. Bose' },
-  isro:       { n: 'XII',  era: '1963 — 2023',            heading: 'TO THE MOON AND MARS',     story: "Mars orbit at the first attempt; then a landing near the Moon's south pole.", roots: 'Roots: first rocket from Thumba, 1963, an American Nike-Apache · first satellite launched by the USSR, 1975' },
+  textiles:   { n: 'X',    era: 'c. 5000 BC — TODAY',     heading: 'GIFTS TO THE WORLD',       story: 'Cotton cloth, indigo and chess travelled from India to every continent.', roots: 'Exchange: chess went on through Persia as shatranj · indigo is named for India' },
+  yoga:       { n: 'XI',   era: 'PATANJALI · YOGA SUTRAS',  heading: 'THE SCIENCE OF BREATH',  story: "Patanjali set out yoga's eight limbs; the fourth, pranayama, is the mastery of breath.", roots: 'Now practised worldwide · UNESCO intangible heritage, 2016 · International Day of Yoga, 21 June' },
+  modern:     { n: 'XII',  era: '1913 — 1930',            heading: 'THE MODERN MIND',          story: 'Ramanujan, Raman and Bose: new mathematics and new physics.', roots: 'Ramanujan worked with G. H. Hardy at Cambridge · bosons are named after S. N. Bose' },
+  flight:     { n: 'XIII', era: '1911 — 2001',            heading: 'THE DREAM OF FLIGHT',      story: 'The epics dreamed of flying chariots; in 1911 the first official airmail flew at Allahabad.', roots: 'Exchange: flown by the French pilot Henri Pequet in a British biplane · HAL founded 1940' },
+  isro:       { n: 'XIV',  era: '1963 — 2023',            heading: 'TO THE MOON AND MARS',     story: "Mars orbit at the first attempt; then a landing near the Moon's south pole.", roots: 'Roots: first rocket from Thumba, 1963, an American Nike-Apache · first satellite launched by the USSR, 1975' },
 };
 
 // Story-only cards between chapters (global seconds).
 const INTERLUDES = [
   { start: 1.5, end: 2.95, text: 'Every achievement begins as an idea.' },
-  { start: 55.9, end: 60.2, text: 'The world is one family.', cite: 'VASUDHAIVA KUTUMBAKAM · MAHA UPANISHAD', low: true },
+  { start: 63.9, end: 68.2, text: 'The world is one family.', cite: 'VASUDHAIVA KUTUMBAKAM · MAHA UPANISHAD', low: true },
 ];
 
 // One defining word per chapter (Cinzel capitals — the film's display face).
 // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
 const WORDS = {
   indus: 'CITIES', language: 'LANGUAGE', zero: 'ZERO', astronomy: 'COSMOS', metallurgy: 'METAL',
-  surgery: 'HEALING', temples: 'STONE', nalanda: 'LEARNING', dharma: 'PEACE', textiles: 'GIFTS',
-  modern: 'GENIUS', isro: { text: 'SPACE', t0: 49.8, t1: 50.95, pace: 0.8 },
+  surgery: 'HEALING', temples: 'STONE', nalanda: 'LEARNING', dharma: 'PEACE', textiles: 'GIFTS', yoga: 'YOGA',
+  modern: 'GENIUS', flight: 'FLIGHT', isro: { text: 'SPACE', t0: 57.8, t1: 58.95, pace: 0.8 },
 };
 // the montage's rapid word swaps, each on its cue (the last word keeps an A: the cut zooms through it)
 const SWAPS = [['mGrid', 'CITIES'], ['mZero', 'ZERO'], ['mWheel', 'DHARMA'], ['mTemple', 'STONE'], ['mOrbit', 'ORBIT'], ['mStars', 'STARS']];
@@ -173,7 +205,8 @@ export default {
   title: 'Achievements of Indian Civilization',
   short: 'Indian Civilization',
   slug: 'achievements-of-indian-civilization',
-  DURATION: 78,
+  DURATION: 86,
+  MUSIC_DURATION: 78, MUSIC_SPLICES,   // the score's own clock, and how it is laid onto this one
   SEGMENTS, CUES, MUSIC_CUES, WARMTH_KEYS, CHAPTERS, INTERLUDES, WORDS, SWAPS,
   note: "India's achievements grew through exchange with civilizations across Asia, Africa and Europe.",
   sceneDir: './india',                             // src/scenes/india/<id>.js

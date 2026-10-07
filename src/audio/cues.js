@@ -1,7 +1,8 @@
 // Sound design, sequence by sequence. Every event is pinned to a CUES number from
 // the shared timeline so picture and sound hit together.
 
-import { CUES as C } from '../timeline.js';
+import { CUES as C, SEGMENTS } from '../timeline.js';
+import { FILM_ID } from '../film.js';
 import * as I from './instruments.js';
 import * as X from './sfx.js';
 import * as O from './orchestra.js';
@@ -438,9 +439,13 @@ function headings(S) {
 }
 
 function transitionAir(S) {
-  for (const [t, p0, lv = 0.05] of [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5],
-    [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4]]) {
-    const tt = groove(t);
+  // the Western film's chapter downbeats (on its tempo map); another film's: its own segment starts,
+  // up to the last chapter before the launch the score lands on (its sound design plays on the film clock)
+  const list = FILM_ID === 'western'
+    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4]]
+    : SEGMENTS.slice(1, -3).map((sg, i) => [sg.start, i % 2 ? -0.5 : 0.5, 0.045]);
+  for (const [t, p0, lv = 0.05] of list) {
+    const tt = FILM_ID === 'western' ? groove(t) : t;
     S.at(tt - 0.35, () => I.whoosh(S, tt - 0.35, 0.9, { level: lv, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
   }
 }

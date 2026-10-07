@@ -630,6 +630,13 @@ addEventListener('appinstalled', () => { const b = $('install-app'); if (b) b.hi
 // (#india / #western: a new film needs a fresh engine, so the hashchange reloads)
 function setupFilmScreen() {
   document.title = FILM.title;
+  // the film's own running time (the Indian film is 8 s of story longer)
+  const runtime = `${Math.floor(DURATION / 60)}:${String(Math.round(DURATION % 60)).padStart(2, '0')}`;
+  const hint = intro.querySelector('.hint');
+  if (hint) hint.textContent = hint.textContent.replace(/\d+ seconds/, `${Math.round(DURATION)} seconds`);
+  const dim = document.querySelector('#controls .time.dim');
+  if (dim) dim.textContent = runtime;
+  $('scrub')?.setAttribute('aria-valuemax', String(Math.round(DURATION)));
   const [a, b] = FILM.title.split(/ (?=[A-Z][a-z]+ Civilization$)/);
   const h1 = intro.querySelector('h1');
   if (h1 && b) h1.innerHTML = `${a}<br />${b}`;

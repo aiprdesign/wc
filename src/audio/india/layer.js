@@ -23,7 +23,9 @@
 //
 // Every time here is STORY time (the Studio's time map plays it on the film clock).
 
-import { CUES as C, MUSIC_CUES as M, DURATION } from '../../timeline.js';
+// the music plays on the score's own clock (MUSIC_CUES: this film's beats mapped onto it), the sound design
+// on the film's (CUES): see MUSIC_SPLICES in src/films/india.js
+import { MUSIC_CUES as C, MUSIC_CUES as M, MUSIC_DURATION as DURATION, CUES as CN } from '../../timeline.js';
 import { groove, chordAt, STEP } from '../music.js';
 import * as I from '../instruments.js';
 import * as X from '../sfx.js';
@@ -210,124 +212,146 @@ export function arrangeIndia(S, part) {
 // The Indian film's chapters (the shared opening, montage and finale sounds live in ../cues.js).
 
 function indus(S) {
-  S.at(C.indusDust - 0.3, () => X.air(S, C.indusDust - 0.3, C.indusGrid + 0.6, { level: 0.03, freq: 1400, attack: 0.6, release: 0.8, bus: 'sfx' }));
+  S.at(CN.indusDust - 0.3, () => X.air(S, CN.indusDust - 0.3, CN.indusGrid + 0.6, { level: 0.03, freq: 1400, attack: 0.6, release: 0.8, bus: 'sfx' }));
   // the city rises: brick by brick
-  for (let k = 0; k < 6; k++) { const t = C.indusDust + 0.12 + k * 0.11; S.at(t, () => X.thud(S, t, { level: 0.07 + 0.01 * k, f: 70 + 6 * k, tone: 1100, decay: 0.22, pan: (k % 2 ? 0.3 : -0.3) })); }
-  S.at(C.indusGrid, () => X.pencil(S, C.indusGrid, C.indusGrid + 0.7, { level: 0.03, pan: 0.1, vigor: 1.2 }));
+  for (let k = 0; k < 6; k++) { const t = CN.indusDust + 0.12 + k * 0.11; S.at(t, () => X.thud(S, t, { level: 0.07 + 0.01 * k, f: 70 + 6 * k, tone: 1100, decay: 0.22, pan: (k % 2 ? 0.3 : -0.3) })); }
+  S.at(CN.indusGrid, () => X.pencil(S, CN.indusGrid, CN.indusGrid + 0.7, { level: 0.03, pan: 0.1, vigor: 1.2 }));
   // the drains: water running under the streets
-  S.at(C.indusDrains, () => X.air(S, C.indusDrains, C.greatBath + 0.4, { level: 0.022, freq: 900, q: 1.4, attack: 0.25, release: 0.4, bus: 'sfx', drift: 1.2 }));
+  S.at(CN.indusDrains, () => X.air(S, CN.indusDrains, CN.greatBath + 0.4, { level: 0.022, freq: 900, q: 1.4, attack: 0.25, release: 0.4, bus: 'sfx', drift: 1.2 }));
   // the Great Bath fills
-  S.at(C.greatBath, () => X.air(S, C.greatBath, C.indusWeights, { level: 0.03, freq: 600, q: 0.9, attack: 0.3, release: 0.4, bus: 'sfx', drift: 0.8 }));
+  S.at(CN.greatBath, () => X.air(S, CN.greatBath, CN.indusWeights, { level: 0.03, freq: 600, q: 0.9, attack: 0.3, release: 0.4, bus: 'sfx', drift: 0.8 }));
   // the weights: stone on stone, each a little larger (a little lower)
-  for (let k = 0; k < 7; k++) { const t = C.indusWeights + k * 0.09; S.at(t, () => I.stoneTap(S, t, { level: 0.12, pan: -0.45 + k * 0.15, f0: 900 - k * 70 })); }
+  for (let k = 0; k < 7; k++) { const t = CN.indusWeights + k * 0.09; S.at(t, () => I.stoneTap(S, t, { level: 0.12, pan: -0.45 + k * 0.15, f0: 900 - k * 70 })); }
 }
 
 function language(S) {
-  S.at(C.palmLeaf, () => X.paperSwish(S, C.palmLeaf, 0.5, { level: 0.07, pan0: -0.4, pan1: 0.4 }));
-  S.at(C.palmLeaf + 0.2, () => X.crinkle(S, C.palmLeaf + 0.2, 0.5, { level: 0.04, pan: 0.2 }));
-  S.at(C.sutras, () => X.pencil(S, C.sutras, C.grammarTree - 0.05, { level: 0.04, pan: -0.15, vigor: 1.5 }));
+  S.at(CN.palmLeaf, () => X.paperSwish(S, CN.palmLeaf, 0.5, { level: 0.07, pan0: -0.4, pan1: 0.4 }));
+  S.at(CN.palmLeaf + 0.2, () => X.crinkle(S, CN.palmLeaf + 0.2, 0.5, { level: 0.04, pan: 0.2 }));
+  S.at(CN.sutras, () => X.pencil(S, CN.sutras, CN.grammarTree - 0.05, { level: 0.04, pan: -0.15, vigor: 1.5 }));
   // the rules branch: glints climbing the tree
-  [0, 0.12, 0.24, 0.36, 0.5].forEach((d, i) => S.at(C.grammarTree + d, () => I.bell(S, C.grammarTree + d, [81, 84, 86, 88, 93][i], { level: 0.015, pan: -0.4 + i * 0.2, bus: 'far', decay: 1.4 })));
-  S.at(C.scripts - 0.15, () => I.whoosh(S, C.scripts - 0.15, 0.6, { level: 0.04, f0: 500, f1: 4000, pan0: -0.5, pan1: 0.5, peak: 0.3 }));
+  [0, 0.12, 0.24, 0.36, 0.5].forEach((d, i) => S.at(CN.grammarTree + d, () => I.bell(S, CN.grammarTree + d, [81, 84, 86, 88, 93][i], { level: 0.015, pan: -0.4 + i * 0.2, bus: 'far', decay: 1.4 })));
+  S.at(CN.scripts - 0.15, () => I.whoosh(S, CN.scripts - 0.15, 0.6, { level: 0.04, f0: 500, f1: 4000, pan0: -0.5, pan1: 0.5, peak: 0.3 }));
 }
 
 function zero(S) {
-  S.at(C.dotZero, () => I.bell(S, C.dotZero, 98, { level: 0.02, decay: 2.5, bus: 'far' }));
-  for (let k = 0; k < 6; k++) { const t = C.placeValue + k * 0.125; S.at(t, () => X.click(S, t, { level: 0.04, freq: 3000, body: 1200, decay: 0.02, pan: -0.5 + k * 0.2 })); }
-  S.at(C.brahmagupta, () => I.bell(S, C.brahmagupta, 86, { level: 0.018, pan: 0.2, decay: 2 }));
-  S.at(C.numeralsTravel - 0.1, () => I.whoosh(S, C.numeralsTravel - 0.1, 0.9, { level: 0.05, f0: 300, f1: 5000, pan0: 0.6, pan1: -0.6, peak: 0.5 }));
-  S.at(C.zeroRing - 0.3, () => I.swellIn(S, C.zeroRing + 0.3, 0.6, { level: 0.04 }));
+  S.at(CN.dotZero, () => I.bell(S, CN.dotZero, 98, { level: 0.02, decay: 2.5, bus: 'far' }));
+  for (let k = 0; k < 6; k++) { const t = CN.placeValue + k * 0.125; S.at(t, () => X.click(S, t, { level: 0.04, freq: 3000, body: 1200, decay: 0.02, pan: -0.5 + k * 0.2 })); }
+  S.at(CN.brahmagupta, () => I.bell(S, CN.brahmagupta, 86, { level: 0.018, pan: 0.2, decay: 2 }));
+  S.at(CN.numeralsTravel - 0.1, () => I.whoosh(S, CN.numeralsTravel - 0.1, 0.9, { level: 0.05, f0: 300, f1: 5000, pan0: 0.6, pan1: -0.6, peak: 0.5 }));
+  S.at(CN.zeroRing - 0.3, () => I.swellIn(S, CN.zeroRing + 0.3, 0.6, { level: 0.04 }));
 }
 
 function astronomy(S) {
-  S.at(C.aryabhata, () => X.air(S, C.aryabhata, C.piDigits, { level: 0.025, freq: 500, q: 0.8, attack: 0.5, release: 0.5, bus: 'sfx', drift: 0.3 }));
-  S.at(C.piDigits, () => [86, 91, 93].forEach((m, i) => I.bell(S, C.piDigits + i * 0.06, m, { level: 0.014, pan: -0.3 + i * 0.3, bus: 'far' })));
-  for (let k = 0; k < 8; k++) { const t = C.sineTable + k * 0.1; S.at(t, () => X.click(S, t, { level: 0.03, freq: 2200 + k * 150, body: 900, decay: 0.015, pan: 0.4 - k * 0.1 })); }
-  S.at(C.jantarMantar, () => X.stoneGrind(S, C.jantarMantar, C.jantarMantar + 0.8, { level: 0.1, grow: true }));
-  S.at(C.samratShadow, () => I.whoosh(S, C.samratShadow, 0.8, { level: 0.03, f0: 200, f1: 1200, pan0: -0.6, pan1: 0.6, peak: 0.5 }));
+  S.at(CN.aryabhata, () => X.air(S, CN.aryabhata, CN.piDigits, { level: 0.025, freq: 500, q: 0.8, attack: 0.5, release: 0.5, bus: 'sfx', drift: 0.3 }));
+  S.at(CN.piDigits, () => [86, 91, 93].forEach((m, i) => I.bell(S, CN.piDigits + i * 0.06, m, { level: 0.014, pan: -0.3 + i * 0.3, bus: 'far' })));
+  for (let k = 0; k < 8; k++) { const t = CN.sineTable + k * 0.1; S.at(t, () => X.click(S, t, { level: 0.03, freq: 2200 + k * 150, body: 900, decay: 0.015, pan: 0.4 - k * 0.1 })); }
+  S.at(CN.jantarMantar, () => X.stoneGrind(S, CN.jantarMantar, CN.jantarMantar + 0.8, { level: 0.1, grow: true }));
+  S.at(CN.samratShadow, () => I.whoosh(S, CN.samratShadow, 0.8, { level: 0.03, f0: 200, f1: 1200, pan0: -0.6, pan1: 0.6, peak: 0.5 }));
 }
 
 function metallurgy(S) {
   // the furnace roars, the bellows breathe on the beat
-  S.at(C.forge - 0.2, () => X.distantRoar(S, C.forge - 0.2, C.wootzPattern, { level: 0.06, attack: 0.3, release: 0.5 }));
+  S.at(CN.forge - 0.2, () => X.distantRoar(S, CN.forge - 0.2, CN.wootzPattern, { level: 0.06, attack: 0.3, release: 0.5 }));
   for (let k = 0; k < 4; k++) { const t = groove(25.0 + k * 0.5); S.at(t, () => X.thud(S, t, { level: 0.06, f: 55, tone: 500, decay: 0.3 })); }
-  S.at(C.crucible, () => X.sparks(S, C.crucible, 0.7, { level: 0.06, bursts: 1.2 }));
+  S.at(CN.crucible, () => X.sparks(S, CN.crucible, 0.7, { level: 0.06, bursts: 1.2 }));
   // the blade: a long steel shing
-  S.at(C.wootzPattern, () => { I.metal(S, C.wootzPattern, 1320, { level: 0.04, decay: 1.4, pan: 0.2 }); I.whoosh(S, C.wootzPattern, 0.5, { level: 0.04, f0: 2500, f1: 9000, pan0: -0.4, pan1: 0.5, peak: 0.3, kind: 'white' }); });
+  S.at(CN.wootzPattern, () => { I.metal(S, CN.wootzPattern, 1320, { level: 0.04, decay: 1.4, pan: 0.2 }); I.whoosh(S, CN.wootzPattern, 0.5, { level: 0.04, f0: 2500, f1: 9000, pan0: -0.4, pan1: 0.5, peak: 0.3, kind: 'white' }); });
   // the Iron Pillar: a deep, dark ring
-  S.at(C.ironPillar, () => I.metal(S, C.ironPillar, 98, { level: 0.08, decay: 2.2, pan: -0.1 }));
+  S.at(CN.ironPillar, () => I.metal(S, CN.ironPillar, 98, { level: 0.08, decay: 2.2, pan: -0.1 }));
   // zinc: drops condensing below the retort
-  [0, 0.17, 0.29, 0.45].forEach((d, i) => S.at(C.zinc + d, () => I.bell(S, C.zinc + d, [93, 91, 95, 90][i], { level: 0.012, decay: 0.6, pan: 0.2 - i * 0.1 })));
+  [0, 0.17, 0.29, 0.45].forEach((d, i) => S.at(CN.zinc + d, () => I.bell(S, CN.zinc + d, [93, 91, 95, 90][i], { level: 0.012, decay: 0.6, pan: 0.2 - i * 0.1 })));
 }
 
 function surgery(S) {
-  for (let k = 0; k < 3; k++) { const t = C.herbs + k * 0.22; S.at(t, () => I.stoneTap(S, t, { level: 0.09, pan: -0.2, f0: 420 })); }
+  for (let k = 0; k < 3; k++) { const t = CN.herbs + k * 0.22; S.at(t, () => I.stoneTap(S, t, { level: 0.09, pan: -0.2, f0: 420 })); }
   // the instruments fan out: steel tings
-  for (let k = 0; k < 7; k++) { const t = C.instruments + k * 0.06; S.at(t, () => I.metal(S, t, 1700 + k * 130, { level: 0.022, decay: 0.5, pan: -0.6 + k * 0.2 })); }
-  S.at(C.rhinoplasty, () => I.bell(S, C.rhinoplasty, 88, { level: 0.016, pan: 0.2 }));
-  for (let k = 0; k < 4; k++) { const t = C.surgeryHud + k * 0.08; S.at(t, () => X.click(S, t, { level: 0.03, freq: 3400, body: 1500, decay: 0.012, pan: 0.3 })); }
+  for (let k = 0; k < 7; k++) { const t = CN.instruments + k * 0.06; S.at(t, () => I.metal(S, t, 1700 + k * 130, { level: 0.022, decay: 0.5, pan: -0.6 + k * 0.2 })); }
+  S.at(CN.rhinoplasty, () => I.bell(S, CN.rhinoplasty, 88, { level: 0.016, pan: 0.2 }));
+  for (let k = 0; k < 4; k++) { const t = CN.surgeryHud + k * 0.08; S.at(t, () => X.click(S, t, { level: 0.03, freq: 3400, body: 1500, decay: 0.012, pan: 0.3 })); }
 }
 
 function temples(S) {
-  S.at(C.stupa - 0.2, () => X.stoneGrind(S, C.stupa - 0.2, C.stupa + 0.5, { level: 0.08, grow: true }));
+  S.at(CN.stupa - 0.2, () => X.stoneGrind(S, CN.stupa - 0.2, CN.stupa + 0.5, { level: 0.08, grow: true }));
   // Kailasa: carved down from the rock — chisels
-  for (let k = 0; k < 8; k++) { const t = C.kailasa + k * 0.07; S.at(t, () => I.stoneTap(S, t, { level: 0.07, pan: -0.5 + (k % 4) * 0.33, f0: 1100 + (k % 3) * 160 })); }
-  S.at(C.taj, () => X.air(S, C.taj, C.taj + 0.9, { level: 0.02, freq: 5000, attack: 0.3, release: 0.5, bus: 'sfx' }));
+  for (let k = 0; k < 8; k++) { const t = CN.kailasa + k * 0.07; S.at(t, () => I.stoneTap(S, t, { level: 0.07, pan: -0.5 + (k % 4) * 0.33, f0: 1100 + (k % 3) * 160 })); }
+  S.at(CN.taj, () => X.air(S, CN.taj, CN.taj + 0.9, { level: 0.02, freq: 5000, attack: 0.3, release: 0.5, bus: 'sfx' }));
 }
 
 function nalanda(S) {
-  for (let k = 0; k < 5; k++) { const t = C.nalandaBricks + k * 0.13; S.at(t, () => X.thud(S, t, { level: 0.06, f: 80 + k * 5, tone: 1200, decay: 0.2, pan: -0.4 + k * 0.2 })); }
-  S.at(C.nalandaRise, () => X.stoneGrind(S, C.nalandaRise, C.nalandaRise + 0.6, { level: 0.06, grow: true }));
-  S.at(C.library, () => X.paperSwish(S, C.library, 0.4, { level: 0.05, pan0: 0.3, pan1: -0.3 }));
-  [0, 0.15, 0.3].forEach((d, i) => S.at(C.asiaRoutes + d, () => I.whoosh(S, C.asiaRoutes + d, 0.5, { level: 0.025, f0: 600, f1: 3000, pan0: 0, pan1: [-0.7, 0.7, 0.3][i], peak: 0.4 })));
+  for (let k = 0; k < 5; k++) { const t = CN.nalandaBricks + k * 0.13; S.at(t, () => X.thud(S, t, { level: 0.06, f: 80 + k * 5, tone: 1200, decay: 0.2, pan: -0.4 + k * 0.2 })); }
+  S.at(CN.nalandaRise, () => X.stoneGrind(S, CN.nalandaRise, CN.nalandaRise + 0.6, { level: 0.06, grow: true }));
+  S.at(CN.library, () => X.paperSwish(S, CN.library, 0.4, { level: 0.05, pan0: 0.3, pan1: -0.3 }));
+  [0, 0.15, 0.3].forEach((d, i) => S.at(CN.asiaRoutes + d, () => I.whoosh(S, CN.asiaRoutes + d, 0.5, { level: 0.025, f0: 600, f1: 3000, pan0: 0, pan1: [-0.7, 0.7, 0.3][i], peak: 0.4 })));
 }
 
 function dharma(S) {
-  S.at(C.lionCapital, () => X.thud(S, C.lionCapital, { level: 0.1, f: 58, tone: 900, decay: 0.45 }));
-  for (let k = 0; k < 5; k++) { const t = C.edicts + k * 0.09; S.at(t, () => I.stoneTap(S, t, { level: 0.05, pan: 0.3, f0: 1300 })); }
-  S.at(C.wheel - 0.1, () => I.whoosh(S, C.wheel - 0.1, 0.8, { level: 0.04, f0: 300, f1: 1500, pan0: -0.3, pan1: 0.3, peak: 0.3 }));
+  S.at(CN.lionCapital, () => X.thud(S, CN.lionCapital, { level: 0.1, f: 58, tone: 900, decay: 0.45 }));
+  for (let k = 0; k < 5; k++) { const t = CN.edicts + k * 0.09; S.at(t, () => I.stoneTap(S, t, { level: 0.05, pan: 0.3, f0: 1300 })); }
+  S.at(CN.wheel - 0.1, () => I.whoosh(S, CN.wheel - 0.1, 0.8, { level: 0.04, f0: 300, f1: 1500, pan0: -0.3, pan1: 0.3, peak: 0.3 }));
   // the charkha: a spinning wheel's soft whirr
-  S.at(C.charkha, () => X.rotor(S, C.charkha, C.saltMarch + 0.3, { level: 0.018, f: 6, pan0: -0.2, pan1: 0.2 }));
+  S.at(CN.charkha, () => X.rotor(S, CN.charkha, CN.saltMarch + 0.3, { level: 0.018, f: 6, pan0: -0.2, pan1: 0.2 }));
   // the Salt March: footsteps on the road
-  for (let k = 0; k < 4; k++) { const t = C.saltMarch + k * 0.125; S.at(t, () => X.thud(S, t, { level: 0.03, f: 90, tone: 700, decay: 0.12, pan: k % 2 ? 0.2 : -0.2 })); }
+  for (let k = 0; k < 4; k++) { const t = CN.saltMarch + k * 0.125; S.at(t, () => X.thud(S, t, { level: 0.03, f: 90, tone: 700, decay: 0.12, pan: k % 2 ? 0.2 : -0.2 })); }
 }
 
 function textiles(S) {
-  S.at(C.cottonBoll, () => X.air(S, C.cottonBoll, C.loom, { level: 0.015, freq: 3000, attack: 0.2, release: 0.3, bus: 'sfx' }));
+  S.at(CN.cottonBoll, () => X.air(S, CN.cottonBoll, CN.loom, { level: 0.015, freq: 3000, attack: 0.2, release: 0.3, bus: 'sfx' }));
   // the loom: shuttle swish and beater clack, two picks
   for (let k = 0; k < 2; k++) {
-    const t = C.loom + k * 0.3;
+    const t = CN.loom + k * 0.3;
     S.at(t, () => { I.whoosh(S, t, 0.18, { level: 0.03, f0: 1200, f1: 4500, pan0: -0.6, pan1: 0.6, peak: 0.5 }); X.click(S, t + 0.16, { level: 0.06, freq: 900, body: 300, decay: 0.04 }); });
   }
-  S.at(C.chintz, () => X.paperSwish(S, C.chintz, 0.4, { level: 0.04, pan0: -0.2, pan1: 0.3 }));
-  for (const [k, d] of [0, 0.25, 0.5].entries()) S.at(C.chess + d, () => X.click(S, C.chess + d, { level: 0.07, freq: 1400, body: 500, decay: 0.03, pan: -0.3 + 0.3 * k }));
-  S.at(C.yoga, () => X.air(S, C.yoga, C.yoga + 0.7, { level: 0.02, freq: 800, attack: 0.3, release: 0.4, bus: 'sfx' }));
+  S.at(CN.chintz, () => X.paperSwish(S, CN.chintz, 0.4, { level: 0.04, pan0: -0.2, pan1: 0.3 }));
+  for (const [k, d] of [0, 0.25, 0.5].entries()) S.at(CN.chess + d, () => X.click(S, CN.chess + d, { level: 0.07, freq: 1400, body: 500, decay: 0.03, pan: -0.3 + 0.3 * k }));
+  S.at(CN.yoga, () => X.air(S, CN.yoga, CN.yoga + 0.7, { level: 0.02, freq: 800, attack: 0.3, release: 0.4, bus: 'sfx' }));
+}
+
+function yoga(S) {
+  // dawn on the ghats: water and air; the flow of the sun salutation as soft swishes; the breath itself
+  S.at(CN.yogaSunrise - 0.2, () => X.air(S, CN.yogaSunrise - 0.2, CN.pranayama, { level: 0.02, freq: 900, q: 0.8, attack: 0.4, release: 0.5, bus: 'sfx', drift: 0.6 }));
+  for (let k = 0; k < 6; k++) { const t = CN.suryaNamaskar + k * 0.18; S.at(t, () => I.whoosh(S, t, 0.22, { level: 0.018, f0: 300, f1: 1400, pan0: -0.3 + k * 0.1, pan1: -0.2 + k * 0.1, peak: 0.5 })); }
+  // inhale (rising breath noise), the alternate-nostril breaths left / right, the long exhale
+  S.at(CN.pranayama, () => I.whoosh(S, CN.pranayama, CN.nadiShodhana - CN.pranayama, { level: 0.05, f0: 500, f1: 2600, pan0: 0, pan1: 0, peak: 0.85, q: 0.7, kind: 'pink' }));
+  S.at(CN.nadiShodhana, () => I.whoosh(S, CN.nadiShodhana, 0.3, { level: 0.035, f0: 700, f1: 2000, pan0: -0.6, pan1: -0.6, peak: 0.6, kind: 'pink' }));
+  S.at(CN.nadiShodhana + 0.3, () => I.whoosh(S, CN.nadiShodhana + 0.3, 0.3, { level: 0.035, f0: 700, f1: 2000, pan0: 0.6, pan1: 0.6, peak: 0.6, kind: 'pink' }));
+  S.at(CN.exhale, () => I.whoosh(S, CN.exhale, 0.6, { level: 0.05, f0: 2400, f1: 400, pan0: 0, pan1: 0, peak: 0.15, q: 0.7, kind: 'pink' }));
+  S.at(CN.eightLimbs, () => [74, 77, 81, 86].forEach((m, i) => I.bell(S, CN.eightLimbs + i * 0.06, m + 12, { level: 0.01, pan: -0.3 + i * 0.2, bus: 'far', decay: 1.6 })));
+  S.at(CN.yogaDay, () => ghanta(S, CN.yogaDay, 62, { level: 0.015 }));
+}
+
+function flight(S) {
+  // the dream (a shimmer), then real engines: the 1911 biplane's buzz, Tata's Puss Moth, a jet, Tejas
+  S.at(CN.pushpaka, () => [86, 93, 98].forEach((m, i) => I.bell(S, CN.pushpaka + i * 0.07, m, { level: 0.012, pan: -0.3 + i * 0.3, bus: 'far', decay: 2 })));
+  S.at(CN.airmail - 0.2, () => X.rotor(S, CN.airmail - 0.2, CN.tataMail - 0.1, { level: 0.02, f: 38, pan0: -0.5, pan1: 0.5 }));
+  S.at(CN.tataMail - 0.1, () => X.rotor(S, CN.tataMail - 0.1, CN.marut, { level: 0.02, f: 52, pan0: 0.4, pan1: -0.4 }));
+  S.at(CN.marut - 0.2, () => X.jetPass(S, CN.marut + 0.15, { pre: 0.35, post: 0.5, level: 0.12 }));
+  S.at(CN.tejas - 0.2, () => X.jetPass(S, CN.tejas + 0.2, { pre: 0.3, post: 0.4, level: 0.15 }));
 }
 
 function modern(S) {
-  S.at(C.ramanujan, () => X.pencil(S, C.ramanujan, C.ramanujan + 0.8, { level: 0.04, pan: 0.2, vigor: 1.6 }));
-  S.at(C.ramanBeam, () => X.hum(S, C.ramanBeam, C.boseCondensate, { level: 0.02, freq: 120, cutoff: 1500, attack: 0.05, release: 0.2 }));
-  S.at(C.boseCondensate, () => [93, 98, 100, 105].forEach((m, i) => I.bell(S, C.boseCondensate + i * 0.05, m, { level: 0.01, pan: -0.3 + i * 0.2, bus: 'far' })));
+  S.at(CN.ramanujan, () => X.pencil(S, CN.ramanujan, CN.ramanujan + 0.8, { level: 0.04, pan: 0.2, vigor: 1.6 }));
+  S.at(CN.ramanBeam, () => X.hum(S, CN.ramanBeam, CN.boseCondensate, { level: 0.02, freq: 120, cutoff: 1500, attack: 0.05, release: 0.2 }));
+  S.at(CN.boseCondensate, () => [93, 98, 100, 105].forEach((m, i) => I.bell(S, CN.boseCondensate + i * 0.05, m, { level: 0.01, pan: -0.3 + i * 0.2, bus: 'far' })));
 }
 
 function isro(S) {
   // Thumba, 1963: a small sounding rocket
-  S.at(C.thumba, () => X.rocket(S, C.thumba, 0.7, { level: 0.12 }));
+  S.at(CN.thumba, () => X.rocket(S, CN.thumba, 0.7, { level: 0.12 }));
   // the first satellite: a radio beacon
-  for (let k = 0; k < 3; k++) { const t = C.aryabhataSat + 0.1 + k * 0.18; S.at(t, () => I.blip(S, t, 1760, { level: 0.012, bus: 'sfx' })); }
+  for (let k = 0; k < 3; k++) { const t = CN.aryabhataSat + 0.1 + k * 0.18; S.at(t, () => I.blip(S, t, 1760, { level: 0.012, bus: 'sfx' })); }
   // PSLV: the big launch
-  S.at(C.pslv - 0.1, () => X.rocket(S, C.pslv - 0.1, 1.1, { level: 0.25 }));
-  S.at(C.chandrayaan1, () => I.whoosh(S, C.chandrayaan1, 0.7, { level: 0.03, f0: 300, f1: 2500, pan0: -0.4, pan1: 0.4, peak: 0.4 }));
-  S.at(C.mangalyaan, () => X.air(S, C.mangalyaan, C.chandrayaan3, { level: 0.012, freq: 4000, attack: 0.2, release: 0.3, bus: 'sfx' }));
+  S.at(CN.pslv - 0.1, () => X.rocket(S, CN.pslv - 0.1, 1.1, { level: 0.25 }));
+  S.at(CN.chandrayaan1, () => I.whoosh(S, CN.chandrayaan1, 0.7, { level: 0.03, f0: 300, f1: 2500, pan0: -0.4, pan1: 0.4, peak: 0.4 }));
+  S.at(CN.mangalyaan, () => X.air(S, CN.mangalyaan, CN.chandrayaan3, { level: 0.012, freq: 4000, attack: 0.2, release: 0.3, bus: 'sfx' }));
   // Chandrayaan-3: the powered descent and touchdown near the south pole
-  S.at(C.chandrayaan3, () => X.descentRumble(S, C.chandrayaan3, C.southPole, { level: 0.05, attack: 0.2, release: 0.1 }));
-  S.at(C.southPole, () => X.thud(S, C.southPole, { level: 0.08, f: 60, tone: 700, decay: 0.4 }));
+  S.at(CN.chandrayaan3, () => X.descentRumble(S, CN.chandrayaan3, CN.southPole, { level: 0.05, attack: 0.2, release: 0.1 }));
+  S.at(CN.southPole, () => X.thud(S, CN.southPole, { level: 0.08, f: 60, tone: 700, decay: 0.4 }));
 }
 
 function montageIndia(S) {
-  S.at(C.mGrid, () => X.thud(S, C.mGrid, { level: 0.05, f: 70, tone: 1000, decay: 0.25 }));
-  S.at(C.mWheel, () => I.whoosh(S, C.mWheel, 0.4, { level: 0.03, f0: 400, f1: 2000, pan0: -0.3, pan1: 0.3 }));
-  S.at(C.mTemple, () => ghanta(S, C.mTemple, 57, { level: 0.02 }));
+  S.at(CN.mGrid, () => X.thud(S, CN.mGrid, { level: 0.05, f: 70, tone: 1000, decay: 0.25 }));
+  S.at(CN.mWheel, () => I.whoosh(S, CN.mWheel, 0.4, { level: 0.03, f0: 400, f1: 2000, pan0: -0.3, pan1: 0.3 }));
+  S.at(CN.mTemple, () => ghanta(S, CN.mTemple, 57, { level: 0.02 }));
 }
 
-export const chapterCues = [indus, language, zero, astronomy, metallurgy, surgery, temples, nalanda, dharma, textiles, modern, isro, montageIndia];
+export const chapterCues = [indus, language, zero, astronomy, metallurgy, surgery, temples, nalanda, dharma, textiles, yoga, modern, flight, isro, montageIndia];
