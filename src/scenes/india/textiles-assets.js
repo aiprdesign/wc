@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { rng, TAU } from '../../lib/math.js';
+import { TAU } from '../../lib/math.js';
 import { noise2, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { smin, sdRoundCone2, sdEllipse2 } from '../../lib/sdfmesh.js';
@@ -54,32 +54,6 @@ export function woodTexture({ seed = 3, base = [116, 70, 38], dark = [62, 34, 16
     const i = (y * W + x) * 4;
     for (let ch = 0; ch < 3; ch++) d[i + ch] = base[ch] + (dark[ch] - base[ch]) * Math.min(1, Math.max(0, k));
     d[i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  return toTexture(c, { repeat: true });
-}
-
-// warm sandstone courtyard flags: large slabs, worn joints, a little lichen-dark grime
-export function courtyardTexture() {
-  const N = 1024, c = mkCanvas(N, N), g = c.getContext('2d'), r = rng(71);
-  g.fillStyle = '#4a2e20'; g.fillRect(0, 0, N, N);
-  const rows = 6;
-  for (let j = 0; j < rows; j++) {
-    const h = N / rows; let x = -r() * 200;
-    while (x < N) {
-      const w = 140 + r() * 180;
-      const l = 0.75 + r() * 0.35;
-      g.fillStyle = `rgb(${Math.round(132 * l)},${Math.round(86 * l)},${Math.round(60 * l)})`;
-      g.fillRect(x + 3, j * h + 3, w - 6, h - 6);
-      x += w;
-    }
-  }
-  const img = g.getImageData(0, 0, N, N), d = img.data;
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const i = (y * N + x) * 4;
-    const n = noise2(x * 0.01, y * 0.01) * 0.12 + noise2(x * 0.06, y * 0.06) * 0.06 + noise2(x * 0.4, y * 0.4) * 0.04;
-    const k = 1 + n;
-    d[i] *= k; d[i + 1] *= k * 0.98; d[i + 2] *= k * 0.96;
   }
   g.putImageData(img, 0, 0);
   return toTexture(c, { repeat: true });

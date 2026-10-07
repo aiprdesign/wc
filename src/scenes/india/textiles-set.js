@@ -149,7 +149,7 @@ void surf(vec3 P, vec3 N, inout vec3 col, inout float rough, inout float H){
   c = mix(c, c * vec3(1.25, 1.0, 0.45), tur * 0.6);
   float wet = smoothstep(0.35, 0.75, nearVat + 0.25 * (tfbm3(p * 3.0) - 0.5)) * 0.9;
   c *= 1.0 - 0.38 * wet;
-  col *= c * 0.62;
+  col *= c * 0.52;
   // relief: per-slab tilt, worn edges, pits, joint recesses
   vec2 tilt = (vec2(th21(cid + 1.0), th21(cid + 2.0)) - 0.5) * 0.004;
   H = dot(tilt, vec2(f.z, f.w)) - 0.004 * (1.0 - edgeW) * (1.0 - edgeW) - 0.004 * joint;
@@ -212,7 +212,7 @@ void surf(vec3 P, vec3 N, inout vec3 col, inout float rough, inout float H){
   c *= 1.0 - 0.35 * smoothstep(0.25, 0.6, streak) * tss(1.2, 3.3, y) * (horiz ? 0.0 : 1.0);
   // soot and grime gathered in the lower corners / on ledges
   c *= horiz ? 0.85 + 0.15 * tvn(uv * 4.0) : 1.0;
-  col *= c * 1.35;
+  col *= c * 1.15;
   float fineK = 1.0 - smoothstep(0.003, 0.02, px);
   H = 0.0015 * brush + fineK * 0.0008 * tvn(uv * 70.0) - 0.008 * fall - 0.004 * fall * mort + 0.002 * rim;
   rough = mix(0.92, 0.85, dado * 0.5);
@@ -342,27 +342,17 @@ function lathe(knots, seg = 24, n = 0) {
 }
 let RB_SEG = 2;
 const rbox = (w, h, d, r = 0.02, s = RB_SEG) => new RoundedBoxGeometry(w, h, d, Math.min(s, RB_SEG), Math.min(r, w / 2.01, h / 2.01, d / 2.01));
-const at = (g, x, y, z) => g.translate(x, y, z);
 const uvScale = (g, sx, sy) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy); return g; };
-// a box with UVs in metres on every face (for tiling textures at a physical scale)
-function mbox(w, h, d) {
-  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
-  // face order: +x, -x, +y, -y, +z, -z (4 verts each)
-  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
-  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0], uv.getY(i) * dims[f][1]); }
-  return g;
-}
 // a turned post / baluster (profile in [r, y] from y = 0 to h)
 function turned(h, r, seg = 16) {
   return lathe([[r * 1.35, 0], [r * 1.35, h * 0.05], [r * 1.05, h * 0.07], [r * 1.25, h * 0.11], [r, h * 0.15], [r * 0.85, h * 0.4], [r * 1.25, h * 0.52], [r * 0.8, h * 0.6], [r * 0.82, h * 0.85], [r * 1.2, h * 0.9], [r * 1.3, h * 0.96], [r * 1.35, h]], seg, 40);
 }
 
 // ------------------------------------------------------------------------------------------------ the courtyard
-export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafMat, wood, woodDark, blockWood, dyeFace } = {}) {
+export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark } = {}) {
   const R = rng(9907);
   RB_SEG = lite ? 1 : 2; LK = lite ? 0.45 : 1;
   const set = new THREE.Group(); set.name = 'courtyard'; scene.add(set);
-  const shadowRecv = (m) => { m.receiveShadow = true; return m; };
   const add = (geo, mat, { cast = false, parent = set } = {}) => { const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = cast; parent.add(m); return m; };
 
   // -------- materials
@@ -386,7 +376,7 @@ export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafM
   const dark = new THREE.MeshStandardMaterial({ color: '#0d0806', roughness: 1 });
   const ropeMat = new THREE.MeshStandardMaterial({ color: '#b39a72', roughness: 0.9 });
   const foliage = new THREE.MeshStandardMaterial({ color: '#203a1a', roughness: 0.8, side: THREE.DoubleSide });
-  const treeMat = new THREE.MeshStandardMaterial({ color: '#2c3a24', roughness: 0.95 });
+  const treeMat = new THREE.MeshStandardMaterial({ color: '#34452a', roughness: 0.95 });
   const barkMat = new THREE.MeshStandardMaterial({ color: '#2a1d14', roughness: 0.95 });
 
   // -------- floor
@@ -695,7 +685,7 @@ export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafM
       add(potRim.clone().translate(0, 0.47, L.z), terracotta, { parent: g, cast: true });
       const lm = new THREE.MeshPhysicalMaterial({ color: L.c, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05, metalness: 0 });
       lm.userData.noDetail = true;
-      const disc = add(new THREE.CircleGeometry(0.34, lite ? 20 : 36).rotateX(-Math.PI / 2).translate(0, 0.5, L.z), lm, { parent: g });
+      add(new THREE.CircleGeometry(0.34, lite ? 20 : 36).rotateX(-Math.PI / 2).translate(0, 0.5, L.z), lm, { parent: g });
       if (L.foam) {
         // the coppery 'flower' of a live indigo vat
         const fc = shadeCanvas(128, 128, (u, v) => { const r = Math.hypot(u - 0.5, v - 0.5), n = noise2(u * 18, v * 18) * 0.5 + 0.5; const a = smooth(0.32, 0.12, r) * smooth(0.35, 0.65, n + 0.25); return [0.55 * n + 0.2, 0.3 * n + 0.08, 0.32 * n + 0.18, a]; });
@@ -722,7 +712,7 @@ export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafM
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) add(turned(0.21, 0.022, 8).translate(sx * 0.38, 0.0, sz * 0.25), woodDark, { parent: tray, cast: true });
     // tray with a dye-soaked pad
     add(rbox(0.46, 0.05, 0.36, 0.012).translate(-0.18, 0.295, 0), woodDark, { parent: tray, cast: true });
-    const pad = new THREE.MeshPhysicalMaterial({ color: '#4a0805', roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.3 }); pad.userData.noDetail = true;
+    const pad = new THREE.MeshPhysicalMaterial({ color: '#8a1a0e', roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.3 }); pad.userData.noDetail = true;
     add(new THREE.PlaneGeometry(0.4, 0.3).rotateX(-Math.PI / 2).translate(-0.18, 0.322, 0), pad, { parent: tray });
     // small bowls of turmeric and indigo
     const bowl = lathe([[0.0, 0], [0.05, 0.0], [0.07, 0.02], [0.075, 0.045], [0.07, 0.05], [0.0, 0.03]], 16);
@@ -790,17 +780,45 @@ export function buildCourtyard(scene, { lite = false, keyLight, cottonMat, leafM
 
   // -------- beyond the walls: trees, and a far line of trees under the sunrise
   if (!lite) {
+    // neem: a short trunk forking into branches under a broad, clumped crown
     const tree = (x, z, h, rad, seed) => {
-      const r = rng(seed);
-      add(new THREE.CylinderGeometry(0.12, 0.22, h * 0.55, 7).translate(x, h * 0.275, z), barkMat);
-      const parts = [];
-      for (let i = 0; i < 9; i++) { const a = r() * TAU, rr = r() * rad * 0.6; parts.push(new THREE.IcosahedronGeometry(rad * (0.45 + 0.3 * r()), 2).translate(x + Math.cos(a) * rr, h * (0.62 + 0.3 * r()), z + Math.sin(a) * rr)); }
+      const r = rng(seed), wood = [], parts = [];
+      wood.push(new THREE.CylinderGeometry(0.14, 0.24, h * 0.5, 7).translate(x, h * 0.25, z));
+      for (let i = 0; i < 4; i++) { const a = r() * TAU, l = rad * (0.5 + 0.4 * r()); const tip = V3(x + Math.cos(a) * l, h * (0.72 + 0.12 * r()), z + Math.sin(a) * l); const base = V3(x, h * 0.48, z); const d = tip.clone().sub(base); wood.push(new THREE.CylinderGeometry(0.05, 0.1, d.length(), 5).translate(0, d.length() / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), d.clone().normalize())).translate(base.x, base.y, base.z)); }
+      add(merge(wood), barkMat);
+      for (let i = 0; i < 16; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * rad; parts.push(new THREE.IcosahedronGeometry(rad * (0.28 + 0.2 * r()), 1).scale(1, 0.7, 1).translate(x + Math.cos(a) * rr, h * (0.8 + 0.16 * r()) - 0.25 * rr, z + Math.sin(a) * rr)); }
       const g = merge(parts), p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) { const n = noise3(p.getX(i) * 0.9, p.getY(i) * 0.9, p.getZ(i) * 0.9) * 0.3 + noise3(p.getX(i) * 3.5, p.getY(i) * 3.5, p.getZ(i) * 3.5) * 0.12; p.setXYZ(i, p.getX(i) + n, p.getY(i) + n * 0.8, p.getZ(i) + n); }
+      for (let i = 0; i < p.count; i++) { const n = noise3(p.getX(i) * 1.3, p.getY(i) * 1.3, p.getZ(i) * 1.3) * 0.22; p.setXYZ(i, p.getX(i) + n, p.getY(i) + n * 0.6, p.getZ(i) + n); }
       g.computeVertexNormals();
       add(g, treeMat);
     };
-    tree(-12.5, -12.0, 7.5, 2.6, 1); tree(2.5, -13.5, 8.5, 3.0, 2); tree(8.5, -6.0, 7.0, 2.5, 3); tree(-13.5, -3.0, 6.5, 2.4, 4); tree(-1.5, -15.5, 6.0, 2.2, 5);
+    // a date palm: a leaning, tapering trunk and a crown of arching fronds
+    const palm = (x, z, h, lean, seed) => {
+      const r = rng(seed);
+      const top = V3(x + lean * 0.8, h, z + lean * 0.3);
+      const curve = new THREE.CatmullRomCurve3([V3(x, 0, z), V3(x + lean * 0.15, h * 0.4, z + lean * 0.05), V3(x + lean * 0.5, h * 0.8, z + lean * 0.18), top]);
+      const trunk = new THREE.TubeGeometry(curve, 14, 1, 6, false), tp = trunk.attributes.position, c = V3(0, 0, 0), v = V3(0, 0, 0);
+      for (let i = 0; i <= 14; i++) { curve.getPointAt(i / 14, c); const rr = 0.2 - 0.08 * (i / 14) + 0.015 * Math.sin(i * 3); for (let j = 0; j <= 6; j++) { const k = i * 7 + j; v.fromBufferAttribute(tp, k).sub(c).multiplyScalar(rr).add(c); tp.setXYZ(k, v.x, v.y, v.z); } }
+      trunk.computeVertexNormals(); add(trunk, barkMat);
+      const fr = [];
+      for (let k = 0; k < 13; k++) {
+        const a = (k / 13) * TAU + r() * 0.3, L = 2.2 + r() * 0.9, up = 0.5 + r() * 0.6, N = 9, pos = [], idx = [];
+        const dir = V3(Math.cos(a), 0, Math.sin(a)), side = V3(-dir.z, 0, dir.x);
+        for (let i = 0; i <= N; i++) {
+          const u = i / N, w = 0.32 * Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)) * (1 - 0.3 * u);
+          const pc = top.clone().addScaledVector(dir, u * L).setY(top.y + up * u * 1.6 - (up + 1.6) * u * u);
+          const droop = 0.12 * u;
+          const a1 = pc.clone().addScaledVector(side, w).setY(pc.y - droop), a2 = pc.clone().addScaledVector(side, -w).setY(pc.y - droop);
+          pos.push(a1.x, a1.y, a1.z, pc.x, pc.y + 0.03, pc.z, a2.x, a2.y, a2.z);
+          if (i < N) { const b = i * 3; idx.push(b, b + 3, b + 1, b + 1, b + 3, b + 4, b + 1, b + 4, b + 2, b + 2, b + 4, b + 5); }
+        }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+        fr.push(g);
+      }
+      add(merge(fr), foliage);
+    };
+    tree(-12.5, -12.5, 8.5, 2.6, 1); tree(3.5, -14.0, 9.0, 3.0, 2); tree(-14.0, -2.5, 7.5, 2.4, 4);
+    palm(-10.6, -11.0, 7.6, 0.9, 7); palm(7.6, -7.5, 8.4, -0.7, 8); palm(-1.2, -13.2, 7.0, 0.5, 9);
     // the far tree line (low, so the sun clears it)
     const far = [];
     for (let i = 0; i < 26; i++) { const x = -22 + i * 1.9 + R() * 1.2, z = -34 - R() * 6; far.push(new THREE.IcosahedronGeometry(1.0 + R() * 1.3, 1).scale(1.3, 0.55, 1).translate(x, 0.3 + R() * 0.4, z)); }

@@ -173,7 +173,6 @@ export function create(ctx, segment) {
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.02, 200);
   const R = rng(4250);
   const lite = ctx.engine?.quality === 'lite';
-  const DBGCAM = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('texcam') : null;   // TEMP debug
   AS.setDetail(lite);
 
   // timing of the weave
@@ -245,7 +244,7 @@ export function create(ctx, segment) {
   const loomWood = new THREE.MeshStandardMaterial({ map: blockTex, color: '#d4b49a', roughness: 0.5 });
   const shadowAll = (o) => o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
   const dyeFace = new THREE.MeshPhysicalMaterial({ color: '#6a1208', roughness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.35 });
-  const court = buildCourtyard(scene, { lite, keyLight: key, cottonMat, leafMat, wood, woodDark, blockWood, dyeFace });
+  const court = buildCourtyard(scene, { lite, cottonMat, wood, woodDark });
 
   // ---------------------------------------------------------------- cotton plants and the hero boll
   const lobeGeos = [0, 1, 2, 3].map((k) => AS.lobeGeometry(k * 3.1 + 1));
@@ -798,7 +797,6 @@ export function create(ctx, segment) {
       api.dof.amount = lerp(lerp(0.85, 0.35, kL), 0.25, kB);
       api.bloom.strength = 0.7 + 0.12 * envelope(t, tC, tC + 0.5, 0.1, 0.3) + 0.15 * dawn;
       api.exposure = 1.0 + 0.05 * envelope(t, tK, tK + 0.4, 0.1, 0.3);
-      if (DBGCAM) { const v = DBGCAM.split(',').map(Number); camera.position.set(v[0], v[1], v[2]); camera.lookAt(v[3], v[4], v[5]); camera.fov = v[6] || 40; camera.updateProjectionMatrix(); camera.updateMatrixWorld(); api.dof.amount = 0; }
     },
   };
   function placeHud() {
