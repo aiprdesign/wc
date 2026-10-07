@@ -8,8 +8,8 @@
 //   B_HEIGHT   2.5  pulled back: the 182 m height line, the Statue of Liberty (93 m with its pedestal) drawn
 //                   beside it for scale, visitors on the plaza
 //   B_PULLBACK 3.2  the full monument on its pedestal, the dam across the gorge behind, the river, the hills
-// The figure is a signed-distance sculpture (unity-figure.js); the site, materials and the Liberty
-// silhouette are in unity-assets.js. update(t) is a pure function of t.
+// The figure is a low-poly, flat-shaded bronze (unity-figure.js: a signed-distance sculpture decimated to
+// crisp facets); the site, materials and the Liberty silhouette are in unity-assets.js. update(t) is a pure function of t.
 import * as THREE from 'three';
 import { OUTPUT_ASPECT, FILM_ASPECT } from '../../timeline.js';
 import { sat, ease, ramp, envelope, timeWarp } from '../../lib/math.js';
@@ -129,7 +129,7 @@ export function create(ctx, segment) {
   const bronzeM = AS.bronzeMaterial();
   const statue = new THREE.Group();
   statue.position.set(0, FEET_Y, 0); statue.scale.setScalar(SCALE);
-  for (const g of [fig.body, fig.head, ...fig.hands]) { const o = new THREE.Mesh(g, bronzeM); o.castShadow = o.receiveShadow = true; statue.add(o); }
+  { const o = new THREE.Mesh(fig.geometry, bronzeM); o.castShadow = o.receiveShadow = true; statue.add(o); }
   scene.add(statue);
   const S = (x, y, z) => V3(x * SCALE, FEET_Y + y * SCALE, z * SCALE);   // figure units → world
 
