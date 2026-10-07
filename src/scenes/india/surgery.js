@@ -20,6 +20,7 @@ import { gridTexture } from '../../lib/textures.js';
 import { Callout, RingGauge, BracketFrame } from '../../lib/hud.js';
 import { lightShaft, glowSprite } from '../../lib/materials.js';
 import * as AS from './surgery-assets.js';
+import * as SI from './surgery-instruments.js';
 
 const GOLD = '#ffc978';
 const GOLD_HOT = '#ffe2a6';
@@ -43,6 +44,7 @@ export function create(ctx, segment) {
   scene.fog = new THREE.FogExp2('#0d0805', 0.05);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.03, 200);
   const R = rng(2811);
+  const lite = ctx.engine?.quality === 'lite';
 
   // ---------------------------------------------------------------- lights
   const JALI = V3(-3.3, 2.05, -3.15);
@@ -212,15 +214,24 @@ export function create(ctx, segment) {
   const cloth = new THREE.Mesh(new THREE.CylinderGeometry(CLOTH_R, CLOTH_R + 0.02, CLOTH_Y, 96), velvet);
   cloth.position.y = CLOTH_Y / 2; cloth.receiveShadow = true; display.add(cloth);
   const rimRing = new THREE.Mesh(new THREE.TorusGeometry(CLOTH_R + 0.012, 0.011, 8, 128), brassMat); rimRing.rotation.x = Math.PI / 2; rimRing.position.y = CLOTH_Y; display.add(rimRing);
-  const lotusMat = new THREE.MeshStandardMaterial({ map: AS.lotusTexture(), color: '#f0c470', metalness: 1, roughness: 0.48 });
+  const lotusTex = AS.lotusTexture();
+  const lotusMat = new THREE.MeshStandardMaterial({ map: lotusTex, bumpMap: lotusTex, bumpScale: 2.5, color: '#f0c470', metalness: 1, roughness: 0.48 });
   const medallion = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.285, 0.018, 64), [brassMat, lotusMat, brassMat]);
   medallion.position.y = CLOTH_Y + 0.009; medallion.castShadow = medallion.receiveShadow = true; display.add(medallion);
-  const steelMat = new THREE.MeshStandardMaterial({ color: '#e3e6ea', metalness: 1, roughness: 0.21 });
-  steelMat.userData.detail = { scratch: 0.7, rough: 0.5, albedo: 0.08, bump: 0.00015, scale: 8 };
-  const inst = AS.buildInstruments(5).map((b, i) => {
+  // instruments: forged steel (hammer facets, burnished highs), polished ground edges and shafts,
+  // oiled rosewood handles, cast and hammered brass
+  const FM = SI.forgedMaps(), WM = SI.rosewoodMaps();
+  const steelMat = new THREE.MeshStandardMaterial({ color: '#c6cace', metalness: 1, roughness: 0.52, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6) });
+  steelMat.userData.detail = { scratch: 0.5, rough: 0.35, albedo: 0.07, bump: 0.00006, scale: 8 };
+  const polishMat = new THREE.MeshStandardMaterial({ color: '#e4e7eb', metalness: 1, roughness: 0.14 });
+  polishMat.userData.detail = { scratch: 0.9, rough: 0.45, albedo: 0.04, bump: 0.00002, scale: 10 };
+  const woodMat = new THREE.MeshPhysicalMaterial({ map: WM.map, normalMap: WM.normalMap, roughnessMap: WM.roughnessMap, roughness: 0.7, clearcoat: 0.4, clearcoatRoughness: 0.32, envMapIntensity: 0.6 });
+  woodMat.userData.detail = { albedo: 0.05, rough: 0.2, bump: 0.00002, scratch: 0.1, grime: 0.15, scale: 8 };
+  const instBrass = new THREE.MeshStandardMaterial({ color: '#d2a052', metalness: 1, roughness: 0.62, roughnessMap: FM.roughnessMap, normalMap: FM.normalMap, normalScale: new THREE.Vector2(0.35, 0.35) });
+  instBrass.userData.detail = { scratch: 0.3, rough: 0.4, albedo: 0.12, grime: 0.45, bump: 0.00004, scale: 8 };
+  const inst = SI.buildInstruments(5, { lite }).map((b, i) => {
     const g = new THREE.Group(); g.scale.setScalar(ISCALE);
-    const sm = new THREE.Mesh(b.steel, steelMat); g.add(sm);
-    if (b.brass) g.add(new THREE.Mesh(b.brass, brassMat));
+    for (const [geo, mat] of [[b.steel, steelMat], [b.polish, polishMat], [b.wood, woodMat], [b.brass, instBrass]]) if (geo) g.add(new THREE.Mesh(geo, mat));
     shadowAll(g);
     display.add(g);
     const theta = -Math.PI / 2 + (i * TAU) / SLOTS;
@@ -232,20 +243,63 @@ export function create(ctx, segment) {
   // palm-leaf manuscript on its wooden boards behind the display, red cords through the holes
   const folio = new THREE.Group(); folio.position.copy(FOLIO); scene.add(folio);
   const boardMat = new THREE.MeshStandardMaterial({ map: teak, color: '#c89070', roughness: 0.6 });
-  const board = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.022, 0.27), boardMat); board.position.y = 0.011; folio.add(board);
+  // the lower board: rounded ends, a raised rim round a sunk panel
+  const boardShape = (len, wid) => { const sh = new THREE.Shape(), r = wid * 0.5, hl = len / 2 - r; sh.moveTo(-hl, -r); sh.lineTo(hl, -r); sh.absarc(hl, 0, r, -Math.PI / 2, Math.PI / 2, false); sh.lineTo(-hl, r); sh.absarc(-hl, 0, r, Math.PI / 2, Math.PI * 1.5, false); return sh; };
+  const boardGeo = (len, wid, th) => { const g = new THREE.ExtrudeGeometry(boardShape(len, wid), { depth: th - 0.004, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.003, bevelSegments: 2, curveSegments: 16 }); g.rotateX(-Math.PI / 2); g.translate(0, 0.002, 0); const p = g.attributes.position, uv = g.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 1.9 + 0.5, p.getZ(i) / 0.3 + 0.5 + p.getY(i) * 2); return g; };
+  const board = new THREE.Mesh(boardGeo(1.78, 0.27, 0.022), boardMat); folio.add(board);
   const folioTex = AS.folioTexture();
-  const leafEdge = new THREE.MeshStandardMaterial({ color: '#b89a62', roughness: 0.8 });
-  const leafTop = new THREE.MeshStandardMaterial({ map: folioTex, color: '#ffffff', roughness: 0.62 });
-  for (let k = 0; k < 4; k++) {
-    const lf = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.005, 0.23), [leafEdge, leafEdge, leafTop, leafEdge, leafEdge, leafEdge]);
-    lf.position.set((k - 1.5) * 0.004, 0.025 + k * 0.0055, (k % 2) * 0.004); lf.rotation.y = (k - 1.5) * 0.004; folio.add(lf);
+  const leafEdge = new THREE.MeshStandardMaterial({ color: '#a88a56', roughness: 0.85 });
+  const leafTop = new THREE.MeshStandardMaterial({ map: folioTex, bumpMap: folioTex, bumpScale: 1.2, color: '#ffffff', roughness: 0.62 });
+  const leafLower = new THREE.MeshStandardMaterial({ color: '#c7a874', roughness: 0.7, bumpMap: SI.leafBumpTexture(), bumpScale: 0.6 });
+  for (let k = 0; k < 7; k++) {
+    const top = k === 6;
+    const lf = new THREE.Mesh(SI.palmLeafGeometry(1.7, 0.23, 0.0028, k + 3), [top ? leafTop : leafLower, leafEdge]);
+    lf.position.set((k - 3) * 0.0028 + (k % 3 - 1) * 0.002, 0.024 + k * 0.0036, ((k * 5) % 3 - 1) * 0.0025); lf.rotation.y = (k - 3) * 0.0035; folio.add(lf);
   }
   const cordMat = new THREE.MeshStandardMaterial({ color: '#8a1e1a', roughness: 0.7 });
+  cordMat.userData.detail = { albedo: 0.2, rough: 0.2, bump: 0.0003, grime: 0.2, scale: 30 };
   for (const hx of [-0.34, 0.34]) {
-    const pts = [V3(hx, 0.05, 0), V3(hx + 0.05, 0.05, 0.08), V3(hx + 0.16, 0.025, 0.2), V3(hx + 0.28, 0.006, 0.26), V3(hx + 0.42, 0.003, 0.24)];
-    folio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.006, 6, false), cordMat));
+    const pts = [V3(hx, 0.004, 0), V3(hx, 0.05, 0), V3(hx + 0.012, 0.058, 0.02), V3(hx + 0.05, 0.05, 0.08), V3(hx + 0.16, 0.025, 0.2), V3(hx + 0.28, 0.006, 0.26), V3(hx + 0.42, 0.003, 0.24)];
+    const curve = new THREE.CatmullRomCurve3(pts);
+    folio.add(new THREE.Mesh(new THREE.TubeGeometry(curve, lite ? 40 : 90, 0.0055, lite ? 6 : 8, false), cordMat));
+    // twisted plies: two thin strands wound round the cord, a knot and a frayed tassel at its end
+    if (!lite) for (const ph of [0, Math.PI]) {
+      const P = [], T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), p = new THREE.Vector3();
+      for (let i = 0; i <= 160; i++) { const u = i / 160; curve.getPointAt(u, p); curve.getTangentAt(u, T); N.set(0, 1, 0).cross(T).normalize(); B.crossVectors(T, N); const a = u * 70 + ph; P.push(p.clone().addScaledVector(N, Math.cos(a) * 0.0042).addScaledVector(B, Math.sin(a) * 0.0042)); }
+      folio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(P), 400, 0.0022, 5, false), cordMat));
+    }
+    const end = pts[pts.length - 1];
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.011, 14, 10), cordMat); knot.scale.set(1.2, 0.8, 1); knot.position.copy(end).add(V3(0, 0.006, 0)); folio.add(knot);
+    for (let f = 0; f < (lite ? 5 : 11); f++) {
+      const a = (f / 11) * 1.4 - 0.7, len = 0.03 + (f % 3) * 0.008;
+      const fp = [end.clone().add(V3(0.006, 0.005, 0)), end.clone().add(V3(0.006 + Math.cos(a) * len * 0.5, 0.003, Math.sin(a) * len * 0.5)), end.clone().add(V3(0.006 + Math.cos(a) * len, 0.0012, Math.sin(a) * len))];
+      folio.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(fp), 6, 0.0013, 4, false), cordMat));
+    }
   }
+  // the painted cover, lifted off and laid aside behind the stack
+  const coverMat = new THREE.MeshStandardMaterial({ map: SI.coverTexture(), roughness: 0.5 });
+  coverMat.userData.detail = { albedo: 0.08, rough: 0.5, bump: 0.0002, scratch: 0.3, grime: 0.3, scale: 6 };
+  const cover = new THREE.Mesh(boardGeo(1.78, 0.27, 0.02), [coverMat, boardMat]);
+  cover.position.set(0.06, 0.0, -0.33); cover.rotation.y = 0.05; folio.add(cover);
   shadowAll(folio);
+
+  // on the table round the manuscript: a lidded terracotta jar of ghee, a brass katori of water, a
+  // rolled linen bandage
+  const props = new THREE.Group(); scene.add(props);
+  const clayMat = new THREE.MeshStandardMaterial({ color: '#9c5638', roughness: 0.88 });
+  clayMat.userData.detail = { albedo: 0.25, rough: 0.3, bump: 0.0004, grime: 0.45, scale: 10 };
+  const linenMat = new THREE.MeshStandardMaterial({ map: SI.linenTexture(), color: '#f2e8d8', roughness: 0.95, side: THREE.DoubleSide });
+  linenMat.userData.detail = { albedo: 0.12, rough: 0.1, bump: 0.0002, grime: 0.35, scale: 14 };
+  const seg = lite ? 24 : 48;
+  const jar = new THREE.Group(); jar.position.set(-0.95, 0, -1.62); jar.rotation.y = 0.6; props.add(jar);
+  jar.add(new THREE.Mesh(SI.jarGeometry(seg), clayMat), new THREE.Mesh(SI.jarClothGeometry(seg), linenMat));
+  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.0475, 0.0026, 6, seg), cordMat); tie.rotation.x = Math.PI / 2; tie.position.y = 0.149; jar.add(tie);
+  const katori = new THREE.Mesh(SI.katoriGeometry(seg), brassMat); katori.position.set(-0.68, 0, -2.0); props.add(katori);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(0.067, seg), new THREE.MeshStandardMaterial({ color: '#100c06', roughness: 0.04, metalness: 0 }));
+  water.material.userData.noDetail = true;
+  water.rotation.x = -Math.PI / 2; water.position.set(-0.68, 0.04, -2.0); props.add(water);
+  const bandage = new THREE.Mesh(SI.bandageGeometry(lite), linenMat); bandage.position.set(1.62, 0, -1.55); bandage.rotation.y = 2.5; props.add(bandage);
+  shadowAll(props);
 
   // ---------------------------------------------------------------- the rhinoplasty hologram
   const diaPivot = new THREE.Group(); scene.add(diaPivot);

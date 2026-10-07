@@ -26,6 +26,7 @@ import { Dust } from '../../lib/particles.js';
 import { Callout, BracketFrame, faceCamera } from '../../lib/hud.js';
 import { TextPlane, FONTS } from '../../lib/text.js';
 import { pulse } from '../../lib/rhythm.js';
+import { folioRelief, coverRelief, cordMaps, cordGeo, weaveMaps, buildLamp, buildStylus, wrappedBundle, metalMat, brushedMaps, lathe as latheK, beadRing, Parts, uvScale } from './language-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const GOLD = '#ffcf85';
@@ -199,8 +200,9 @@ function prep(g) {
 
 // Writing shader on a folio: strokes appear in reading order (row by row, left to right) as uReveal runs
 // 0 → 1, white-hot at the stylus, cooling to an ember (uGlow) and leaving a dark, soot-filled incision.
-function folioMaterial(map, script, tint) {
-  const m = new THREE.MeshStandardMaterial({ map, color: tint, roughness: 0.66, metalness: 0 });
+function folioMaterial(map, script, tint, relief) {
+  const m = new THREE.MeshStandardMaterial({ map, color: tint, roughness: 0.66, metalness: 0, normalMap: relief?.n ?? null, roughnessMap: relief?.r ?? null, normalScale: new THREE.Vector2(0.55, 0.55) });
+  m.userData.detail = { grime: 0.08, albedo: 0.08, scale: 3 };
   const u = { uScript: { value: script }, uReveal: { value: 0 }, uGlow: { value: 0 }, uHot: { value: new THREE.Color('#ffbf66') } };
   m.userData.write = u;
   m.onBeforeCompile = (sh) => {
@@ -219,10 +221,20 @@ function folioMaterial(map, script, tint) {
         fWritten = smoothstep(fOrd - 0.003, fOrd + 0.003, uReveal);
         fHead = exp(-max(uReveal - fOrd, 0.0) * 90.0);
         diffuseColor.rgb *= 1.0 - 0.86 * fMask * fWritten;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          // the cut: written strokes are incised into the leaf (a bump from the script mask)
+          float fH = -fMask * fWritten * 0.0016;
+          vec3 fSp = -vViewPosition, fSx = dFdx(fSp), fSy = dFdy(fSp);
+          vec3 fR1 = cross(fSy, normal), fR2 = cross(normal, fSx);
+          float fDet = dot(fSx, fR1);
+          vec3 fGrad = sign(fDet) * (dFdx(fH) * fR1 + dFdy(fH) * fR2);
+          normal = normalize(abs(fDet) * normal - fGrad);
+        }`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += uHot * fMask * fWritten * (fHead * 7.0 + uGlow);`);
   };
-  m.customProgramCacheKey = () => 'india-folio-v1';
+  m.customProgramCacheKey = () => 'india-folio-v2';
   return m;
 }
 
@@ -280,6 +292,8 @@ export function create(ctx, segment) {
   scene.fog = new THREE.FogExp2('#0b0705', FOG);
   const camera = new THREE.PerspectiveCamera(35, ctx.aspect, 0.1, 200);
   const R = rng(1202);
+  const lite = ctx.engine?.quality === 'lite';
+  const R2 = rng(4021);   // extra variety for set dressing (R's sequence drives the manuscript and must not change)
 
   // ----------------------------------------------------------------------------------- the room
   const plankTex = woodTexture({ seed: 2, base: [82, 44, 22] }); plankTex.repeat.set(1.6, 2.2);
@@ -311,12 +325,16 @@ export function create(ctx, segment) {
       while (x < 7.4) {
         const L = 1.2 + R() * 1.2, h = 0.22 + R() * 0.14, d = 0.32 + R() * 0.12, stack = R() < 0.4 ? 2 : 1;
         for (let s = 0; s < stack; s++) {
-          const g = prep(new THREE.BoxGeometry(L, h, d).translate(x + L / 2, y + 0.07 + h / 2 + s * (h + 0.01), -8.5 + (R() - 0.5) * 0.2));
+          const g = prep(wrappedBundle(L, h, d, { seg: lite ? 2 : 5 }).translate(x + L / 2, y + 0.07 + h / 2 + s * (h + 0.01), -8.5 + (R() - 0.5) * 0.2));
           const col = cloth[Math.floor(R() * cloth.length)], k = 0.7 + R() * 0.5, cols = new Float32Array(g.attributes.position.count * 3);
           for (let i = 0; i < cols.length; i += 3) { cols[i] = col[0] * k; cols[i + 1] = col[1] * k; cols[i + 2] = col[2] * k; }
           g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
           bundleParts.push(g);
-          for (const f of [0.25, 0.75]) bandParts.push(prep(new THREE.BoxGeometry(0.04, h + 0.02, d + 0.02).translate(x + L * f, y + 0.07 + h / 2 + s * (h + 0.01), -8.5)));
+          for (const f of [0.25, 0.75]) {
+            // a tie: a flattened cord loop round the bundle (an elliptical torus), slightly askew
+            const tie = new THREE.TorusGeometry(1, 0.014 / Math.max(h, d), 4, lite ? 10 : 20).scale(d / 2 + 0.012, h / 2 + 0.012, 1).rotateY(Math.PI / 2 + (R2() - 0.5) * 0.12);
+            bandParts.push(prep(tie.translate(x + L * f + (R2() - 0.5) * 0.06, y + 0.07 + h / 2 + s * (h + 0.01), -8.5)));
+          }
         }
         x += L + 0.08 + R() * 0.25;
       }
@@ -324,26 +342,15 @@ export function create(ctx, segment) {
     for (const x of [-6.9, 7.9]) shelfParts.push(prep(new THREE.BoxGeometry(0.2, 6.4, 1.2).translate(x, 3.2, -8.55)));
     const shelfMat = new THREE.MeshStandardMaterial({ map: plankTex, color: '#8a7060', roughness: 0.7 });
     scene.add(new THREE.Mesh(mergeGeometries(shelfParts), shelfMat));
-    scene.add(new THREE.Mesh(mergeGeometries(bundleParts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })));
+    const bw = weaveMaps().n.clone(); bw.repeat.set(30, 30); bw.needsUpdate = true;
+    scene.add(new THREE.Mesh(mergeGeometries(bundleParts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, normalMap: bw, normalScale: new THREE.Vector2(0.5, 0.5) })));
     scene.add(new THREE.Mesh(mergeGeometries(bandParts), new THREE.MeshStandardMaterial({ color: '#2a1a0e', roughness: 0.8 })));
   }
 
   // ----------------------------------------------------------------------------------- the lamp
-  const brass = new THREE.MeshStandardMaterial({ color: '#c8913e', metalness: 1, roughness: 0.32 });
   const LAMP = V(-3.7, 0, 0.7);
   const lamp = new THREE.Group(); lamp.position.copy(LAMP); scene.add(lamp);
-  {
-    const stand = new THREE.Mesh(lathe([[0, 0], [0.42, 0], [0.44, 0.04], [0.3, 0.1], [0.12, 0.18], [0.08, 0.32], [0.1, 0.42], [0.07, 0.6], [0.14, 0.66], [0, 0.66]], 32), brass);
-    const bowlG = lathe([[0, 0.64], [0.12, 0.64], [0.3, 0.7], [0.38, 0.8], [0.36, 0.83], [0.3, 0.76], [0, 0.73]], 40);
-    const spout = new THREE.ConeGeometry(0.1, 0.36, 16, 1, true); spout.rotateZ(-Math.PI / 2); spout.scale(1, 0.45, 1); spout.translate(0.42, 0.8, 0);
-    const bowl = new THREE.Mesh(mergeGeometries([prep(bowlG), prep(spout)]), brass);
-    stand.castShadow = bowl.castShadow = true;
-    const oil = new THREE.Mesh(new THREE.CircleGeometry(0.3, 32), new THREE.MeshStandardMaterial({ color: '#2a1806', roughness: 0.1, metalness: 0.2 }));
-    oil.rotation.x = -Math.PI / 2; oil.position.y = 0.765;
-    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.16, 8), new THREE.MeshStandardMaterial({ color: '#1a1410', roughness: 1 }));
-    wick.position.set(0.5, 0.86, 0); wick.rotation.z = -0.5;
-    lamp.add(stand, bowl, oil, wick);
-  }
+  lamp.add(buildLamp({ lite }).group);
   const flame = new THREE.Mesh(lathe([[0, 0], [0.045, 0.03], [0.06, 0.09], [0.05, 0.16], [0.025, 0.24], [0, 0.3]], 16),
     new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb24a').multiplyScalar(7), toneMapped: false }));
   flame.position.set(0.53, 0.9, 0); lamp.add(flame);
@@ -378,10 +385,10 @@ export function create(ctx, segment) {
     cg.computeVertexNormals();
     const clothMat = new THREE.MeshPhysicalMaterial({ map: clothTexture(), roughness: 0.85, sheen: 0.6, sheenRoughness: 0.5, sheenColor: new THREE.Color('#ff9a7a') });
     clothMat.map.repeat.set(1, 1);
+    clothMat.normalMap = weaveMaps().n.clone(); clothMat.normalMap.repeat.set(22, 9); clothMat.normalMap.needsUpdate = true; clothMat.normalScale.set(0.6, 0.6);
     const cl = new THREE.Mesh(cg, clothMat); cl.position.set(0.2, 0, 1.5); cl.rotation.y = 0.04; cl.receiveShadow = true; scene.add(cl);
-    const steel = new THREE.MeshStandardMaterial({ color: '#4a4440', metalness: 0.9, roughness: 0.4 });
-    const stylus = new THREE.Mesh(mergeGeometries([prep(new THREE.CylinderGeometry(0.022, 0.022, 1.2, 12)), prep(new THREE.ConeGeometry(0.022, 0.16, 12).translate(0, 0.68, 0)), prep(new THREE.SphereGeometry(0.04, 12, 8).translate(0, -0.62, 0))]), steel);
-    stylus.rotation.set(0, 0.4, Math.PI / 2); stylus.position.set(2.75, 0.03, 1.9); stylus.castShadow = true; scene.add(stylus);
+    const stylus = buildStylus({ lite });
+    stylus.rotation.set(0, 0.4, Math.PI / 2); stylus.position.set(2.75, 0.034, 1.9); scene.add(stylus);
   }
 
   // ----------------------------------------------------------------------------------- the manuscript
@@ -389,7 +396,10 @@ export function create(ctx, segment) {
   const coverGeo = slabGeometry(COVER_L, COVER_W, COVER_T, 0.06, { bevel: 0.008, hr: HOLE_R * 1.1 });
   const leafMaps = [0, 1, 2].map((i) => leafTexture(3 + i * 7));
   const scripts = [0, 1, 2, 3].map((i) => scriptTexture(5 + i));
-  const coverMat = new THREE.MeshStandardMaterial({ map: coverTexture(1), roughness: 0.42, metalness: 0 });
+  const coverRel = coverRelief(1024, 160, [0.5 - HOLE_X / COVER_L, 0.5 + HOLE_X / COVER_L]);
+  const coverMat = new THREE.MeshPhysicalMaterial({ map: coverTexture(1), roughness: 0.42, metalness: 0, normalMap: coverRel.n, roughnessMap: coverRel.r, normalScale: new THREE.Vector2(0.8, 0.8), clearcoat: 0.55, clearcoatRoughness: 0.28 });
+  coverMat.userData.detail = { grime: 0.1, albedo: 0.08, scratch: 0.2, scale: 3 };
+  const leafRel = [0, 1, 2].map((i) => folioRelief(11 + i));
   const fan = new THREE.Group(); fan.rotation.order = 'YXZ'; scene.add(fan);
   const elems = [];
   let stackY = 0;
@@ -403,18 +413,39 @@ export function create(ctx, segment) {
   const leafMats = [];
   addElem(coverGeo, coverMat, COVER_T + 0.016, 0.008);
   for (let k = 0; k < NLEAF; k++) {
-    const tone = 0.88 + R() * 0.2, m = folioMaterial(leafMaps[k % 3], scripts[k % 4], new THREE.Color(tone, tone * (0.97 + R() * 0.05), tone * (0.9 + R() * 0.08)));
+    const tone = 0.88 + R() * 0.2, m = folioMaterial(leafMaps[k % 3], scripts[k % 4], new THREE.Color(tone, tone * (0.97 + R() * 0.05), tone * (0.9 + R() * 0.08)), leafRel[k % 3]);
     leafMats.push(m);
     addElem(leafGeo, m, LEAF_T + 0.0035, 0);
   }
   addElem(coverGeo, coverMat, COVER_T + 0.016, 0.008);
   const NE = elems.length;
   // the cord through the left string hole, knotted at both ends
-  const cordMat = new THREE.MeshStandardMaterial({ color: '#7a5a34', roughness: 0.9 });
-  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 1, 8).translate(0, 0.5, 0), cordMat);
-  const knotA = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshStandardMaterial({ color: '#b98a3c', metalness: 0.6, roughness: 0.4 }));
-  const knotB = knotA.clone();
-  const tassel = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 10, 1, true), cordMat);
+  // a braided two-ply cord (its twist map re-scaled as the stack spreads, so the braid never stretches), a turned
+  // brass bead knotted on at each end, and a tassel of loose strands under a whipped collar
+  const cm = cordMaps();
+  const cordMap = cm.map.clone(), cordN = cm.n.clone(); cordMap.needsUpdate = cordN.needsUpdate = true;
+  const cordMat = new THREE.MeshStandardMaterial({ color: '#ffffff', map: cordMap, normalMap: cordN, roughness: 0.92 });
+  const cord = new THREE.Mesh(cordGeo(new THREE.LineCurve3(V(0, 0, 0), V(0, 1, 0)), 0.016, 2, 10, 1), cordMat);
+  const knotBead = (() => {
+    const P = new Parts();
+    const bead = metalMat('#b98a3c', { rough: 0.3, maps: brushedMaps(9), nScale: 0.4 });
+    P.add(bead, latheK([[0.014, -0.045], [0.034, -0.04], [0.05, -0.02], [0.053, 0], [0.05, 0.02], [0.034, 0.04], [0.014, 0.045]], 28));
+    P.add(bead, beadRing(0.052, 0.004, 0, 28));
+    P.add(cordMat, new THREE.TorusGeometry(0.03, 0.014, 8, 16).rotateX(Math.PI / 2).translate(0, -0.055, 0));   // the knot that holds it
+    return P.build();
+  })();
+  const knotA = knotBead;
+  const knotB = knotBead.clone(); knotB.rotation.x = Math.PI;
+  const tassel = (() => {
+    const P = new Parts(), R3 = rng(77);
+    P.add(cordMat, uvScale(new THREE.CylinderGeometry(0.03, 0.034, 0.05, 12, 1), 1, 0.4).translate(0, 0.07, 0));      // whipped collar
+    for (let i = 0; i < (lite ? 10 : 22); i++) {
+      const a = R3() * Math.PI * 2, r = 0.012 + R3() * 0.02, l = 0.13 + R3() * 0.05;
+      const top = V(Math.cos(a) * r * 0.6, 0.06, Math.sin(a) * r * 0.6), bot = V(Math.cos(a) * (r + 0.02), 0.06 - l, Math.sin(a) * (r + 0.02));
+      P.add(cordMat, cordGeo(new THREE.CatmullRomCurve3([top, top.clone().lerp(bot, 0.5).add(V(0, 0, 0.005)), bot]), 0.0045, 6, 4, 2));
+    }
+    const g = P.build(); g.rotation.x = Math.PI; return g;
+  })();
   fan.add(cord, knotA, knotB, tassel);
 
   const TH_MIN = -0.1, TH_MAX = 1.68;          // fan spread (rad), bottom cover → top cover
@@ -432,7 +463,7 @@ export function create(ctx, segment) {
       e.holder.rotation.x = 0.05 * open * Math.sin(t * 2.1 + e.flut) * (k > 0 && k < NE - 1 ? 1 : 0.3);
     });
     const h = stackY * spread;
-    cord.position.y = -0.04; cord.scale.y = h + 0.08;
+    cord.position.y = -0.04; cord.scale.y = h + 0.08; cordMap.repeat.set(1, (h + 0.08) * 3); cordN.repeat.copy(cordMap.repeat);
     knotA.position.y = -0.05; knotB.position.y = h + 0.04; tassel.position.set(0, h + 0.17, 0);
     return open;
   }
