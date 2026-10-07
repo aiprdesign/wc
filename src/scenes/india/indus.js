@@ -483,7 +483,7 @@ export function create(ctx, segment) {
 
   // building rubble, spoil heaps and stacks of new bricks round the edge of the town
   if (!lite) {
-    const mound = new THREE.IcosahedronGeometry(1, 1).toNonIndexed();
+    const mound = new THREE.IcosahedronGeometry(1, 1);
     for (let k = 0; k < 70; k++) {
       const edge = Math.floor(rd() * 4);
       const x = edge === 0 ? 4 + rd() * 3 : edge === 1 ? 197 + rd() * 6 : 10 + rd() * 185;
