@@ -78,8 +78,6 @@ function mainPlinth(F) {
   const T = F.sub(0, 0, MAIN_CZ);
   const PL = stepped(14.6, 15.1, [[0, 4.5, 0.4], [11.6, 14.6, 0.4]], [[0, 5.0, 0.4], [12.0, 15.1, 0.4]]);
   animalPlinth(T, PL, 15.0, 15.5, { skip: [[-2.6, 2.6]] });
-  // a flight of steps on each side (north and south) up to the side porches
-  for (const s of [-1, 1]) for (let k = 0; k < 6; k++) T.box('stone', s * (15.4 + k * 0.0), s * (15.6 + 0.6 * (6 - k)), 0, TERRACE * (k + 1) / 7, 6.8 - k * 0.0 - 0.0 - 2.2, 6.8 + 2.2 - 4.4 - 2.2 + 4.4);
 }
 
 // ------------------------------------------------------------------------------------------- the mandapa
@@ -110,7 +108,7 @@ function mandapa(F) {
   // the west porch (mukha-mandapa): pillared, its own prastara and hara
   porch(F.sub(0, TERRACE, 1.5), 4.5, 1.9, [0, 1, 3]);
   // the side porches
-  for (const s of [-1, 1]) porch(F.sub(s * 13.9, TERRACE, cz, s * PI / 2), 3.0, 1.5, [0, 1, 3]);
+  for (const s of [-1, 1]) porch(F.sub(s * 13.9, TERRACE, cz, s * PI / 2), 3.0, 1.25, [0, 1, 3]);
 }
 function lotus(F, r) {
   F.add('stone', lathe([[r, 0], [r, 0.12], [r * 0.9, 0.2], [r * 0.62, 0.26], [r * 0.6, 0.34], [r * 0.3, 0.42], [r * 0.28, 0.5], [0, 0.55]], F.lite ? 12 : 24));
