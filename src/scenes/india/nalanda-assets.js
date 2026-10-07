@@ -304,10 +304,13 @@ export function groundMaterial(G) {
         {
           vec2 g = vGW.xz;
           float n1 = mn(g * 0.045), n2 = mn(g * 0.33 + 5.0), n3 = mn(g * 2.6 + 9.0), n4 = mn(g * 11.0);
-          vec3 lawn = mix(vec3(0.050, 0.068, 0.022), vec3(0.110, 0.105, 0.040), n1 * 0.6 + n2 * 0.4);
+          // the kept lawns round the excavations: sunlit yellow-greens and deeper blue-green drifts
+          vec3 lawn = mix(vec3(0.075, 0.165, 0.035), vec3(0.15, 0.25, 0.05), n1 * 0.6 + n2 * 0.4);
+          lawn = mix(lawn, vec3(0.05, 0.13, 0.05), smoothstep(0.55, 0.85, n2) * 0.5);
           vec3 earth = mix(vec3(0.16, 0.085, 0.045), vec3(0.24, 0.14, 0.075), n2);
           float bare = smoothstep(0.62, 0.78, n1 * 0.45 + n2 * 0.35 + n3 * 0.2);
-          vec3 col = mix(lawn, earth, max(bare, uEarth * (0.75 + 0.25 * n3)));
+          // the living campus: grass courts worn to packed earth along the walks
+          vec3 col = mix(lawn, earth, max(bare, uEarth * smoothstep(0.3, 0.6, n2 * 0.7 + n3 * 0.3)));
           col *= 0.82 + 0.3 * n3 + 0.12 * n4;
           // close up: blades and clover in the lawn, dry straw, little bare scuffs (fades out with distance)
           float gd = 1.0 - smoothstep(0.02, 0.12, length(fwidth(vGW)));
@@ -320,7 +323,7 @@ export function groundMaterial(G) {
       .replace('#include <opaque_fragment>', `#include <opaque_fragment>
         if (uMapMix > 0.001) gl_FragColor.rgb = mix(gl_FragColor.rgb, mapLand(vGW.xz / ${DEG.toFixed(1)}) * uMapK, uMapMix);`);
   };
-  m.customProgramCacheKey = () => 'nalanda-ground-v1';
+  m.customProgramCacheKey = () => 'nalanda-ground-v2';
   return m;
 }
 
@@ -587,7 +590,7 @@ export function grassTuftGeometry(r) {
     const bx = Math.cos(a) * rad, bz = Math.sin(a) * rad, px = -Math.sin(a) * w, pz = Math.cos(a) * w;
     pos.push(bx - px, 0, bz - pz, bx + px, 0, bz + pz, bx + Math.cos(la) * lean, h, bz + Math.sin(la) * lean);
     const dry = r();
-    const tip = dry < 0.3 ? [0.26, 0.22, 0.09] : [0.1 + r() * 0.06, 0.14 + r() * 0.06, 0.035];
+    const tip = dry < 0.18 ? [0.26, 0.22, 0.09] : [0.11 + r() * 0.06, 0.2 + r() * 0.07, 0.04];
     col.push(0.025, 0.035, 0.012, 0.025, 0.035, 0.012, ...tip);
     nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
   }

@@ -86,13 +86,14 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
         vec3 soil = vec3(0.2, 0.135, 0.08) * (0.85 + 0.3 * lN(P * 0.21));
         vec3 c; float sp = 0.75, cover = 0.7;
         rough = 1.0;
-        if (id < 0.2)       { c = mix(vec3(0.09, 0.15, 0.04), vec3(0.15, 0.2, 0.06), lH(vec2(id, 3.0))); cover = 0.75; }   // young wheat
-        else if (id < 0.3)  { c = vec3(0.42, 0.34, 0.06); cover = 0.8; sp = 0.6; }            // mustard in flower
-        else if (id < 0.52) { c = soil * 0.72; soil *= 1.18; cover = 0.5; sp = 0.55; }          // ploughed furrows
-        else if (id < 0.68) { c = vec3(0.34, 0.27, 0.15); cover = 0.6; sp = 0.35; }            // stubble
-        else if (id < 0.8)  { c = vec3(0.065, 0.11, 0.035); cover = 0.88; sp = 1.1; }          // sugarcane / vegetables
-        else if (id < 0.9)  { c = vec3(0.27, 0.24, 0.12); cover = 0.95; sp = 0.0; }            // fallow, dry grass
-        else                { c = vec3(0.14, 0.2, 0.06); cover = 0.8; sp = 0.9; }              // fodder
+        if (id < 0.3)       { c = mix(vec3(0.11, 0.21, 0.045), vec3(0.17, 0.27, 0.06), lH(vec2(id, 3.0))); cover = 0.8; }  // young wheat
+        else if (id < 0.4)  { c = vec3(0.45, 0.37, 0.05); cover = 0.82; sp = 0.6; }            // mustard in flower
+        else if (id < 0.48) { c = soil * 0.72; soil *= 1.18; cover = 0.5; sp = 0.55; }          // ploughed furrows
+        else if (id < 0.53) { c = vec3(0.34, 0.27, 0.15); cover = 0.6; sp = 0.35; }            // stubble
+        else if (id < 0.72) { c = vec3(0.08, 0.18, 0.045); cover = 0.9; sp = 1.1; }            // sugarcane / vegetables
+        else if (id < 0.78) { c = vec3(0.24, 0.23, 0.1); cover = 0.95; sp = 0.0; }             // fallow, dry grass
+        else if (id < 0.88) { c = vec3(0.07, 0.2, 0.07); cover = 0.92; sp = 0.3; soil = vec3(0.05, 0.08, 0.075); }   // rice paddy: water between the shoots
+        else                { c = vec3(0.13, 0.25, 0.06); cover = 0.88; sp = 0.9; }            // fodder, green
         float amp = sp > 0.0 ? (1.0 - smoothstep(0.06, 0.28, rowW / sp)) * 0.75 : 0.0;
         float row = 0.5 + 0.5 * sin(rowC * 6.2832 / max(sp, 0.1));
         float m = mix(cover, smoothstep(1.0 - cover - 0.2, 1.0 - cover + 0.2, row), amp);
@@ -125,7 +126,7 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
           float ed = min(min(f.x, 1.0 - f.x) * size.x, min(f.y, 1.0 - f.y) * size.y);
           float bw = 0.35 + fwidth(ed) * 1.2;
           float bund = 1.0 - smoothstep(bw * 0.4, bw, ed);
-          vec3 bundC = mix(vec3(0.24, 0.21, 0.11), vec3(0.12, 0.15, 0.06), lN(P * 0.4)) ;
+          vec3 bundC = mix(vec3(0.2, 0.2, 0.09), vec3(0.1, 0.19, 0.05), lN(P * 0.4)) ;
           gCol = mix(gCol, bundC, bund * (0.6 + 0.4 / (1.0 + fwidth(ed))));
           // macro variation (soil moisture, light): no two fields alike
           gCol *= 0.82 + 0.36 * lF(P * 0.0045 + 2.0);
@@ -147,7 +148,7 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
           float crown = exp(-pow(d / 0.32, 2.0)) * smoothstep(0.45, 0.75, lN(P * 1.6));
           dust = mix(dust, vec3(0.2, 0.19, 0.09), crown * 0.6);
           float verge = (1.0 - smoothstep(hw + 0.2, hw + 3.4, d)) * smoothstep(-12.0, 0.0, s);
-          vec3 vergeC = mix(vec3(0.26, 0.23, 0.12), vec3(0.11, 0.15, 0.05), lN(P * 0.5)) * (0.8 + 0.4 * lN(P * 3.0));
+          vec3 vergeC = mix(vec3(0.22, 0.22, 0.1), vec3(0.1, 0.19, 0.05), lN(P * 0.5)) * (0.8 + 0.4 * lN(P * 3.0));
           vergeC *= 1.0 - 0.3 * exp(-pow((d - hw - 1.6) / 0.45, 2.0));                          // the ditch
           gCol = mix(gCol, vergeC, verge * 0.85);
           gCol = mix(gCol, dust, roadM);
@@ -208,7 +209,7 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
     solid(g, tone);
   };
   const TREE_S = 0.62;
-  const LEAVES = [[0.075, 0.12, 0.04], [0.09, 0.135, 0.045], [0.11, 0.13, 0.05], [0.065, 0.105, 0.045], [0.1, 0.12, 0.04], [0.12, 0.15, 0.05]];
+  const LEAVES = [[0.08, 0.17, 0.04], [0.1, 0.19, 0.045], [0.12, 0.18, 0.05], [0.06, 0.15, 0.05], [0.11, 0.2, 0.045], [0.13, 0.21, 0.05]];   // vivid, natural greens (the grade spares them)
   const leafOf = (shade = 1) => { const L = LEAVES[Math.floor(r() * LEAVES.length)], k = (1.0 + r() * 0.5) * shade; return [L[0] * k, L[1] * k, L[2] * k]; };
 
   const dome = (x, z, S, detail) => {
@@ -253,7 +254,7 @@ export function buildLand({ GROUND_Y, SEA_Z, ROAD_O, ROAD_D, SUN_DIR, lite, fogC
       solid(g, [0.11, 0.085, 0.06]);
     }
     top.set(lean * H, H - 0.2, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ang).add(new THREE.Vector3(x, y, z));
-    const nf = 9, leaf = [0.07, 0.1, 0.035];
+    const nf = 9, leaf = [0.09, 0.16, 0.04];
     for (let k = 0; k < nf; k++) {
       const g = frondG.clone(), p = g.attributes.position;
       for (let i = 0; i < p.count; i++) { const u = p.getY(i) / 3.6; p.setXYZ(i, p.getX(i) * (1 - u * 0.6) * (1 + Math.sin(u * 3) * 0.4), p.getY(i), -u * u * 2.2); }

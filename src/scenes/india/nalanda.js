@@ -28,6 +28,7 @@ import { glowSprite } from '../../lib/materials.js';
 import { Callout, faceCamera } from '../../lib/hud.js';
 import { TextPlane, FONTS } from '../../lib/text.js';
 import { pulse } from '../../lib/rhythm.js';
+import * as NK from './nature-kit.js';
 import { brickMaterial, groundMaterial, skyMaterial, monkGeometries, buildMap, ribbon, proj, DEG, debrisMaterial, grassTuftGeometry } from './nalanda-assets.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -633,6 +634,27 @@ export function create(ctx, segment) {
   bundles.frustumCulled = false;
   scene.add(bundles);
 
+  // trees round the site: mango groves (Nalanda's own legend: a mango grove bought for the Buddha), neem,
+  // peepal and a banyan or two, with ashoka along the approach — beyond the excavations, framing the ruins
+  const leafSun = { dir: new THREE.Vector3(0.5, 0.5, 0.5).normalize(), color: new THREE.Color(2, 1.7, 1.3) };
+  const forest = (() => {
+    const items = [], rf = rng(512);
+    const clearOf = (x, z) => x > -150 && x < 150 && z > -108 && z < 40;
+    for (let k = 0; k < 4000 && items.length < (lite ? 150 : 330); k++) {
+      const x = -420 + rf() * 840, z = -480 + rf() * 620;
+      if (clearOf(x, z)) continue;
+      if (Math.hypot(x + 30, z - 30) < 70) continue;                    // the opening camera's own lawn
+      const grove = Math.sin(x * 0.011 + 1.3) * Math.cos(z * 0.013 - 0.4) > -0.1;
+      if (!grove && rf() < 0.75) continue;
+      const q = rf(), kind = q < 0.45 ? 'mango' : q < 0.7 ? 'neem' : q < 0.84 ? 'peepal' : q < 0.92 ? 'banyan' : 'ashoka';
+      const d = Math.min(Math.abs(x) - 150, Math.abs(z + 34) - 74);
+      items.push({ kind, x, y: -0.1, z, s: 0.85 + rf() * 0.4, lite: lite || Math.hypot(x + 20, z - 10) > 190, tint: 0.85 + rf() * 0.3 });
+      void d;
+    }
+    return NK.plantForest(items, { sun: leafSun, lite, variants: 3, seed: 9, wind: 0.7 });
+  })();
+  scene.add(forest.group);
+
   // ground: lawn over the excavations today, packed earth on the living campus; turns into the map from above
   const ground = new THREE.Mesh(new THREE.CircleGeometry(20000, 96), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
@@ -941,6 +963,7 @@ export function create(ctx, segment) {
     sun.position.copy(sun.target.position).addScaledVector(sd, 200);
     sun.color.copy(SK.sun);
     sun.intensity = SK.si * smoothstep(-0.04, 0.06, el);
+    leafSun.dir.copy(sd); leafSun.color.copy(SK.sun).multiplyScalar(sun.intensity * 0.55);
     const sm = sky.material.uniforms;
     sm.uSun.value.copy(sd); sm.uHor.value.copy(SK.hor); sm.uZen.value.copy(SK.zen); sm.uSunCol.value.copy(SK.sun).multiplyScalar(smoothstep(-0.1, 0.05, el));
     sm.uStars.value = ramp(t, 2.5, 3.1);
@@ -1015,6 +1038,7 @@ export function create(ctx, segment) {
     const mapK = ramp(Math.log(r), Math.log(600), Math.log(6000));
     map.group.visible = mapK > 0;
     GU.uMapMix.value = ramp(Math.log(r), Math.log(400), Math.log(5000));
+    forest.group.visible = GU.uMapMix.value < 0.35; forest.update(t);
     GU.uMapK.value = 1;
     MU.uMap.value = mapK;
     MU.uR.value = lerp(0.0, 75, ramp(t, 3.5, 4.25, ease.inOutSine));

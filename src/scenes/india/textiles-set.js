@@ -6,6 +6,7 @@
 // cotton heaps, baskets, potted tulsi, a print-block table with its ink tray; distant trees.
 // Build-time only, except the small update(t) at the end (pure function of t).
 import * as THREE from 'three';
+import * as NK from './nature-kit.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { rng, TAU, lerp } from '../../lib/math.js';
 import { noise2, noise3 } from '../../lib/noise.js';
@@ -778,58 +779,28 @@ export function buildCourtyard(scene, { lite = false, cottonMat, wood, woodDark 
     const fl = glowSprite({ color: '#ffb35a', intensity: 1.6, scale: 0.16 }); fl.position.set(x, 0.14, z); set.add(fl); diyaFlames.push(fl);
   }
 
-  // -------- beyond the walls: trees, and a far line of trees under the sunrise
-  if (!lite) {
-    // neem: a short trunk forking into branches under a broad, clumped crown
-    const tree = (x, z, h, rad, seed) => {
-      const r = rng(seed), wood = [], parts = [];
-      wood.push(new THREE.CylinderGeometry(0.14, 0.24, h * 0.5, 7).translate(x, h * 0.25, z));
-      for (let i = 0; i < 4; i++) { const a = r() * TAU, l = rad * (0.5 + 0.4 * r()); const tip = V3(x + Math.cos(a) * l, h * (0.72 + 0.12 * r()), z + Math.sin(a) * l); const base = V3(x, h * 0.48, z); const d = tip.clone().sub(base); wood.push(new THREE.CylinderGeometry(0.05, 0.1, d.length(), 5).translate(0, d.length() / 2, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), d.clone().normalize())).translate(base.x, base.y, base.z)); }
-      add(merge(wood), barkMat);
-      for (let i = 0; i < 16; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * rad; parts.push(new THREE.IcosahedronGeometry(rad * (0.28 + 0.2 * r()), 1).scale(1, 0.7, 1).translate(x + Math.cos(a) * rr, h * (0.8 + 0.16 * r()) - 0.25 * rr, z + Math.sin(a) * rr)); }
-      const g = merge(parts), p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) { const n = noise3(p.getX(i) * 1.3, p.getY(i) * 1.3, p.getZ(i) * 1.3) * 0.22; p.setXYZ(i, p.getX(i) + n, p.getY(i) + n * 0.6, p.getZ(i) + n); }
-      g.computeVertexNormals();
-      add(g, treeMat);
-    };
-    // a date palm: a leaning, tapering trunk and a crown of arching fronds
-    const palm = (x, z, h, lean, seed) => {
-      const r = rng(seed);
-      const top = V3(x + lean * 0.8, h, z + lean * 0.3);
-      const curve = new THREE.CatmullRomCurve3([V3(x, 0, z), V3(x + lean * 0.15, h * 0.4, z + lean * 0.05), V3(x + lean * 0.5, h * 0.8, z + lean * 0.18), top]);
-      const trunk = new THREE.TubeGeometry(curve, 14, 1, 6, false), tp = trunk.attributes.position, c = V3(0, 0, 0), v = V3(0, 0, 0);
-      for (let i = 0; i <= 14; i++) { curve.getPointAt(i / 14, c); const rr = 0.2 - 0.08 * (i / 14) + 0.015 * Math.sin(i * 3); for (let j = 0; j <= 6; j++) { const k = i * 7 + j; v.fromBufferAttribute(tp, k).sub(c).multiplyScalar(rr).add(c); tp.setXYZ(k, v.x, v.y, v.z); } }
-      trunk.computeVertexNormals(); add(trunk, barkMat);
-      const fr = [];
-      for (let k = 0; k < 13; k++) {
-        const a = (k / 13) * TAU + r() * 0.3, L = 2.2 + r() * 0.9, up = 0.5 + r() * 0.6, N = 9, pos = [], idx = [];
-        const dir = V3(Math.cos(a), 0, Math.sin(a)), side = V3(-dir.z, 0, dir.x);
-        for (let i = 0; i <= N; i++) {
-          const u = i / N, w = 0.32 * Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)) * (1 - 0.3 * u);
-          const pc = top.clone().addScaledVector(dir, u * L).setY(top.y + up * u * 1.6 - (up + 1.6) * u * u);
-          const droop = 0.12 * u;
-          const a1 = pc.clone().addScaledVector(side, w).setY(pc.y - droop), a2 = pc.clone().addScaledVector(side, -w).setY(pc.y - droop);
-          pos.push(a1.x, a1.y, a1.z, pc.x, pc.y + 0.03, pc.z, a2.x, a2.y, a2.z);
-          if (i < N) { const b = i * 3; idx.push(b, b + 3, b + 1, b + 1, b + 3, b + 4, b + 1, b + 4, b + 2, b + 2, b + 4, b + 5); }
-        }
-        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-        fr.push(g);
-      }
-      add(merge(fr), foliage);
-    };
-    tree(-12.5, -12.5, 8.5, 2.6, 1); tree(3.5, -14.0, 9.0, 3.0, 2); tree(-14.0, -2.5, 7.5, 2.4, 4);
-    palm(-10.6, -11.0, 7.6, 0.9, 7); palm(7.6, -7.5, 8.4, -0.7, 8); palm(-1.2, -13.2, 7.0, 0.5, 9);
-    // the far tree line (low, so the sun clears it)
-    const far = [];
-    for (let i = 0; i < 26; i++) { const x = -22 + i * 1.9 + R() * 1.2, z = -34 - R() * 6; far.push(new THREE.IcosahedronGeometry(1.0 + R() * 1.3, 1).scale(1.3, 0.55, 1).translate(x, 0.3 + R() * 0.4, z)); }
-    add(merge(far), treeMat);
-  }
+  // -------- beyond the walls: neem, mango and date palms, and a far line of trees under the sunrise
+  // (nature-kit: instanced, wind-swayed, the low sun glowing through the leaves)
+  const leafSun = { dir: new THREE.Vector3(0, 0.2, -1), color: new THREE.Color(2, 1.5, 1) };
+  const forest = (() => {
+    const items = [
+      { kind: 'neem', x: -12.5, z: -12.5, s: 0.9 }, { kind: 'mango', x: 3.5, z: -14.0, s: 0.85 }, { kind: 'neem', x: -14.0, z: -2.5, s: 0.8 },
+      { kind: 'palm', x: -10.6, z: -11.0, s: 0.7 }, { kind: 'palm', x: 7.6, z: -7.5, s: 0.75 }, { kind: 'palm', x: -1.2, z: -13.2, s: 0.65 },
+    ];
+    for (let i = 0; i < (lite ? 12 : 26); i++) {
+      const x = -22 + i * (lite ? 4.1 : 1.9) + R() * 1.2, z = -34 - R() * 6, q = R();
+      items.push({ kind: q < 0.5 ? 'neem' : q < 0.8 ? 'mango' : 'palm', x, z, s: 0.45 + R() * 0.3, lite: true, tint: 0.8 + R() * 0.3 });
+    }
+    return NK.plantForest(items, { sun: leafSun, lite, variants: 2, seed: 12, wind: 0.5 });
+  })();
+  set.add(forest.group);
 
   return {
     floor, floorMat, wallMat, tray,
     doorLight,
     update(t, { dawn, keyDir, keyCol, keyI }) {
       transU.uTime.value = t;
+      forest.update(t); leafSun.dir.copy(keyDir); leafSun.color.copy(keyCol).multiplyScalar(keyI * 0.6);
       transU.uL.value.copy(keyDir);
       transU.uKey.value.copy(keyCol).multiplyScalar(keyI / 3.2);
       transU.uBack.value = 0.9 + 0.6 * dawn;

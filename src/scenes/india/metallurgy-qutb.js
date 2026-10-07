@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, lerp, smoothstep, sat, TAU } from '../../lib/math.js';
 import { noise3 } from '../../lib/noise.js';
+import * as NK from './nature-kit.js';
 import { masonry, carvingTexture, ribbon, inscriptionTexture, PLANE_CYL } from './metallurgy-stone.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
@@ -365,7 +366,8 @@ export function buildQutb(group, { lite = false } = {}) {
           // beyond the screen and the cloisters: no paving, dusty earth with dry grass
           float outside = max(smoothstep(-15.6, -16.6, P.y), smoothstep(16.2, 17.2, abs(P.x)));
           float grass = smoothstep(0.0, 0.6, snoise(vec3(P * 0.6, 9.0)) + 0.3 * snoise(vec3(P * 3.0, 1.0)));
-          vec3 earth = mix(vec3(0.42, 0.32, 0.22), vec3(0.3, 0.3, 0.16), grass) * (0.85 + 0.3 * snoise(vec3(P * 1.7, 4.0)));
+          // the lawns of the Qutb complex: mown grass, worn to earth here and there
+          vec3 earth = mix(vec3(0.38, 0.3, 0.21), mix(vec3(0.13, 0.25, 0.05), vec3(0.08, 0.18, 0.05), smoothstep(-0.4, 0.6, snoise(vec3(P * 0.15, 3.0)))), smoothstep(-0.6, 0.0, grass - 0.25 + 0.6)) * (0.85 + 0.3 * snoise(vec3(P * 1.7, 4.0)));
           diffuseColor.rgb = mix(diffuseColor.rgb, earth, outside);
           msGrad *= 1.0 - outside; msJoint *= 1.0 - outside;
         }`,
@@ -393,29 +395,16 @@ export function buildQutb(group, { lite = false } = {}) {
   }
 
   // ====================================================================================== trees beyond the walls
-  {
-    const r = rng(97), leaves = [], trunks = [];
-    const spots = [[-26, -30], [-18, -40], [22, -36], [29, -24], [-6, -44], [10, -42], [-30, -8], [28, 2]];
-    for (const [x, z] of spots.slice(0, lite ? 4 : 8)) {
-      const H = 7 + r() * 5;
-      trunks.push(new THREE.CylinderGeometry(0.18, 0.32, H * 0.6, 7).translate(x, H * 0.3, z));
-      for (let i = 0; i < (lite ? 5 : 12); i++) {
-        const g = new THREE.IcosahedronGeometry(1, 1);
-        const pp = g.attributes.position, sz = 0.9 + r() * 1.1;
-        for (let k = 0; k < pp.count; k++) { const vx = pp.getX(k), vy = pp.getY(k), vz = pp.getZ(k); const f = sz * (1 + 0.4 * noise3(vx * 2.6 + i, vy * 2.6, vz * 2.6 + x)); pp.setXYZ(k, vx * f, vy * f * 0.75, vz * f); }
-        g.translate(x + (r() - 0.5) * 5, H * (0.58 + r() * 0.4), z + (r() - 0.5) * 5);
-        const c = new Float32Array(pp.count * 3), tone = 0.8 + r() * 0.4;
-        for (let k = 0; k < pp.count; k++) { const yv = (pp.getY(k) - H * 0.6) / 4; const l = tone * (0.55 + 0.45 * sat(yv + 0.5)); c.set([0.09 * l, 0.12 * l, 0.045 * l], k * 3); }
-        g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-        leaves.push(g);
-      }
-    }
-    const leafG = mergeGeometries(leaves.map((g) => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute('uv'); n.computeVertexNormals(); return n; }));
-    const lm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
-    lm.userData.noDetail = true;
-    const lmesh = new THREE.Mesh(leafG, lm); lmesh.castShadow = false; group.add(lmesh);
-    group.add(new THREE.Mesh(merge(trunks), new THREE.MeshStandardMaterial({ color: '#2a2018', roughness: 0.95 })));
-  }
+  // (nature-kit: neem, peepal, ashoka and a banyan on the lawns round the complex, lit through by the sun)
+  const leafSun = { dir: new THREE.Vector3(-16, 8.5, 9).normalize(), color: new THREE.Color(2.6, 1.9, 1.2) };
+  const forest = (() => {
+    const r = rng(97), items = [];
+    const spots = [[-26, -30, 'neem'], [-18, -40, 'peepal'], [22, -36, 'neem'], [29, -24, 'ashoka'], [-6, -44, 'banyan'], [10, -42, 'mango'], [-30, -8, 'ashoka'], [28, 2, 'neem'],
+      [-14, -29, 'ashoka'], [15, -28, 'ashoka'], [-38, -22, 'mango'], [37, -13, 'peepal'], [-24, -55, 'neem'], [26, -52, 'peepal'], [2, -62, 'neem'], [-42, 6, 'mango'], [40, 12, 'neem'], [-33, 18, 'ashoka']];
+    for (const [x, z, kind] of spots.slice(0, lite ? 9 : 18)) items.push({ kind, x, y: 0, z, s: (kind === 'banyan' ? 0.9 : 0.85) + r() * 0.3, tint: 0.9 + r() * 0.2 });
+    return NK.plantForest(items, { sun: leafSun, lite, variants: 2, seed: 4, wind: 0.6 });
+  })();
+  group.add(forest.group);
 
   // ====================================================================================== sky: warm late afternoon, haze
   const sunDir = new THREE.Vector3(-16, 8.5, 9).normalize();
@@ -447,7 +436,8 @@ export function buildQutb(group, { lite = false } = {}) {
   }));
   sky.renderOrder = -1;
   group.add(sky);
-  return { sky, sunDir, tris };
+  leafSun.dir.copy(sunDir);
+  return { sky, sunDir, tris, forest };
 }
 
 // --------------------------------------------------------------------------------------------------------

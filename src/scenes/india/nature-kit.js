@@ -46,9 +46,9 @@ vec3 nkPasture(vec2 q, float w, float dry){
 vec3 nkLawn(vec2 q, float w, vec2 dir){
   float n1 = nkF(q * 0.05 + 1.1), n2 = nkN(q * 0.6 + 4.2);
   float det = 1.0 - smoothstep(0.03, 0.25, w), n3 = mix(0.5, nkN(q * 6.0 + 2.0), det);
-  vec3 c = mix(vec3(0.12, 0.24, 0.05), vec3(0.07, 0.17, 0.05), smoothstep(0.3, 0.8, n1));
+  vec3 c = mix(vec3(0.14, 0.27, 0.055), vec3(0.085, 0.2, 0.055), smoothstep(0.3, 0.8, n1));
   float band = dot(q, dir);
-  c *= 1.0 + 0.07 * sign(sin(band * 0.75)) * (1.0 - smoothstep(0.4, 2.0, w));             // mowing bands
+  c *= 1.0 + 0.05 * smoothstep(-0.3, 0.3, sin(band * 0.75)) * (1.0 - smoothstep(0.4, 2.0, w));             // mowing bands
   c = mix(c, vec3(0.16, 0.17, 0.06), smoothstep(0.7, 0.9, n1 * 0.7 + n2 * 0.4) * 0.35);
   return c * (0.88 + 0.24 * n3);
 }
@@ -77,20 +77,22 @@ vec3 nkCrop(vec2 q, float w, vec2 dir, float kind, float seed){
 // ------------------------------------------------------------------------------------------- foliage material
 // sun = { dir: Vector3 (towards the sun, world), color: Color } — held by reference, so a scene can animate it.
 // Geometry attributes: position, normal, color (albedo, linear), aLeaf (x: 1 leaf / 0 wood, y: sway weight).
-export function foliageMaterial({ sun, wind = 1, trans = 1, detail = 1, side = THREE.FrontSide, tag = '' } = {}) {
+export function foliageMaterial({ sun, wind = 1, trans = 1, detail = 1, side = THREE.FrontSide, tag = '', haze = null } = {}) {
   const u = {
+    uHazeC: { value: haze?.color ?? new THREE.Color() }, uHazeK: haze?.k ?? { value: 0 },
     uTime: { value: 0 }, uWind: { value: wind }, uTrans: { value: trans },
     uSunDir: { value: sun?.dir ?? V(0.3, 0.8, 0.4).normalize() }, uSunCol: { value: sun?.color ?? new THREE.Color(1, 0.9, 0.7) },
   };
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side });
   m.userData.noDetail = true; m.userData.noAntiTile = true; m.userData.u = u;
+  if (haze) m.fog = false;              // far trees: a scene-controlled haze instead of the scene's fog
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-        attribute vec2 aLeaf; uniform float uTime, uWind; varying vec3 vLP; varying float vLeaf;`)
+        attribute vec2 aLeaf; attribute vec2 aF; uniform float uTime, uWind; varying vec3 vLP; varying float vLeaf; varying vec2 vF;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-        vLeaf = aLeaf.x; vLP = position;
+        vLeaf = aLeaf.x; vLP = position; vF = aF;
         {
           vec3 ip = vec3(0.0);
           #ifdef USE_INSTANCING
@@ -106,7 +108,14 @@ export function foliageMaterial({ sun, wind = 1, trans = 1, detail = 1, side = T
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         ${NK_NOISE}
-        uniform vec3 uSunDir, uSunCol; uniform float uTrans; varying vec3 vLP; varying float vLeaf; float nkBump;`)
+        uniform vec3 uSunDir, uSunCol, uHazeC; uniform float uTrans, uHazeK; varying vec3 vLP; varying float vLeaf; varying vec2 vF; float nkBump;`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+        if (vF.x > 0.0) {
+          // palm frond: a comb of leaflets swept towards the tip, cut out along the frond
+          float av = abs(vF.y);
+          float comb = fract(vF.x * 38.0 - av * 2.2);
+          if (av > 0.12 && (comb > 0.58 || av > 0.97 - 0.25 * (1.0 - vF.x))) discard;
+        }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         {
           // leaf clumps: lit tufts with dark gaps between them (scale ≈ 0.35 m), and a finer leaf flicker
@@ -139,9 +148,10 @@ export function foliageMaterial({ sun, wind = 1, trans = 1, detail = 1, side = T
           float rim = 1.0 - abs(dot(normal, Vv));
           float wrap = max(dot(-normal, Ls), 0.0);
           totalEmissiveRadiance += diffuseColor.rgb * vec3(1.05, 1.15, 0.55) * uSunCol * uTrans * vLeaf * (back * (0.35 + 0.9 * rim) + wrap * 0.18);
-        }`);
+        }`)
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeC, uHazeK);');
   };
-  m.customProgramCacheKey = () => 'nk-foliage' + detail + tag;
+  m.customProgramCacheKey = () => 'nk-foliage' + detail + tag + (haze ? 'h' : '');
   return m;
 }
 
@@ -152,12 +162,13 @@ function paint(g, fn) {
   if (!g.attributes.normal) g.computeVertexNormals();
   for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
   const p = g.attributes.position, n = g.attributes.normal, C = new Float32Array(p.count * 3), L = new Float32Array(p.count * 2);
-  const c = new THREE.Color(), out = { leaf: 0, sway: 0 };
+  const c = new THREE.Color(), out = { leaf: 0, sway: 0, fu: 0, fv: 0 }, F = new Float32Array(p.count * 2);
   for (let i = 0; i < p.count; i++) {
-    fn(p.getX(i), p.getY(i), p.getZ(i), n.getX(i), n.getY(i), n.getZ(i), c, out);
-    C[i * 3] = c.r; C[i * 3 + 1] = c.g; C[i * 3 + 2] = c.b; L[i * 2] = out.leaf; L[i * 2 + 1] = out.sway;
+    out.fu = 0; out.fv = 0;
+    fn(p.getX(i), p.getY(i), p.getZ(i), n.getX(i), n.getY(i), n.getZ(i), c, out, i);
+    C[i * 3] = c.r; C[i * 3 + 1] = c.g; C[i * 3 + 2] = c.b; L[i * 2] = out.leaf; L[i * 2 + 1] = out.sway; F[i * 2] = out.fu; F[i * 2 + 1] = out.fv;
   }
-  g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setAttribute('aLeaf', new THREE.BufferAttribute(L, 2));
+  g.setAttribute('color', new THREE.BufferAttribute(C, 3)); g.setAttribute('aLeaf', new THREE.BufferAttribute(L, 2)); g.setAttribute('aF', new THREE.BufferAttribute(F, 2));
   return g;
 }
 const BARK = new THREE.Color(0.11, 0.085, 0.065), BARK_PALE = new THREE.Color(0.25, 0.22, 0.19);
@@ -250,7 +261,12 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
       for (let s = 0; s < segs; s++) { const a = s * 3; idx.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5); }
       let g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(idx); g.computeVertexNormals();
       const fc = base.clone().multiplyScalar(jit());
-      parts.push(paint(g, (x, y, z, nx, ny, nz, c, o) => { const d = Math.hypot(x - top.x, z - top.z) / L; c.copy(fc).multiplyScalar(0.75 + 0.45 * d).lerp(new THREE.Color(0.2, 0.17, 0.06), f % 5 === 0 ? 0.45 : 0); o.leaf = 1; o.sway = 0.35 + d * 1.3; }));
+      // across-frond coordinate: signed distance from the midrib in the side direction, normalised
+      parts.push(paint(g, (x, y, z, nx, ny, nz, c, o) => {
+        const d = Math.hypot(x - top.x, z - top.z) / L, sd = (x - top.x) * side.x + (z - top.z) * side.z;
+        c.copy(fc).multiplyScalar(0.75 + 0.45 * d).lerp(new THREE.Color(0.2, 0.17, 0.06), f % 5 === 0 ? 0.45 : 0); o.leaf = 1; o.sway = 0.35 + d * 1.3;
+        o.fu = d * 1.0 + 0.001; o.fv = Math.abs(sd) > 0.02 ? Math.sign(sd) : 0;
+      }));
     }
     // coconuts
     if (!lite) for (let k = 0; k < 5; k++) { const a = r() * TAU; parts.push(paint(new THREE.IcosahedronGeometry(0.16, 0).translate(top.x + Math.cos(a) * 0.3, H - 0.35, top.z + Math.sin(a) * 0.3), (x, y, z, nx, ny, nz, c, o) => { c.setRGB(0.16, 0.13, 0.05); o.leaf = 0; o.sway = 0.25; })); }
@@ -271,7 +287,7 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
     const H = 9 + r() * 4, tiers = lite ? 5 : 8;
     parts.push(paint(limb(V(0, 0, 0), V(0, H * 0.95, 0), 0.18, 0.05, 5, 0.03, seed, 2), barkPainter(BARK, 0.1, H)));
     for (let i = 0; i < tiers; i++) {
-      const u = i / (tiers - 1), y = 1.6 + u * (H - 2.4), rad = (1 - u * 0.75) * (1.1 + r() * 0.3);
+      const u = i / (tiers - 1), y = 1.6 + u * (H - 2.4), rad = (1 - u * 0.7) * (1.7 + r() * 0.4);
       const g = new THREE.ConeGeometry(rad, (H - 1.6) / tiers * 1.9, lite ? 7 : 11, 1, true).translate(0, y, 0);
       const p = g.attributes.position;
       for (let k = 0; k < p.count; k++) { const x = p.getX(k), z = p.getZ(k), a = Math.atan2(z, x); const kk = 1 + 0.18 * Math.sin(a * 5 + i * 1.7); p.setX(k, x * kk); p.setZ(k, z * kk); }
@@ -301,7 +317,7 @@ export function treeGeometry(kind = 'neem', seed = 1, lite = false) {
   }
   const NC = lite ? Math.ceil(P.clumps * 0.5) : P.clumps;
   for (let i = 0; i < NC; i++) {
-    const a = r() * TAU, d = Math.sqrt(r()) * W * 0.62, rr = W * (0.32 + r() * 0.16) * (kind === 'banyan' ? 0.75 : 1);
+    const a = r() * TAU, d = Math.sqrt(r()) * W * 0.62, rr = W * (0.32 + r() * 0.16) * (kind === 'banyan' ? 0.75 : 1) * (lite ? 1.22 : 1);
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     const y = cy + (1 - (d / (W * 0.62)) ** 2) * W * P.flat * 0.55 + (r() - 0.5) * W * 0.12;
     cl.push(clump(x, y, z, rr, rr * (P.flat + 0.15), rr, det, r));
@@ -328,7 +344,7 @@ function finish(parts) {
 
 // Plants a list of trees as instanced meshes. items: [{ kind, x, y, z, s = 1, rot = random, tint = 1, seed? }]
 // variants: geometry variants per kind (instances are spread over them). Returns { group, mats, tris, update(t) }.
-export function plantForest(items, { sun, lite = false, variants = 3, wind = 1, trans = 1, castShadow = true, receiveShadow = true, seed = 1, material = null } = {}) {
+export function plantForest(items, { sun, lite = false, variants = 3, wind = 1, trans = 1, castShadow = true, receiveShadow = true, seed = 1, material = null, haze = null } = {}) {
   const group = new THREE.Group(), byKey = new Map(), r = rng(seed);
   for (const it of items) {
     const v = it.variant ?? Math.floor(r() * (lite ? Math.min(2, variants) : variants));
@@ -336,7 +352,7 @@ export function plantForest(items, { sun, lite = false, variants = 3, wind = 1, 
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(it);
   }
-  const mat = material ?? foliageMaterial({ sun, wind, trans, side: THREE.DoubleSide, tag: lite ? 'l' : '' });
+  const mat = material ?? foliageMaterial({ sun, wind, trans, side: THREE.DoubleSide, tag: lite ? 'l' : '', haze });
   let tris = 0;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s3 = new THREE.Vector3(), p3 = new THREE.Vector3(), c = new THREE.Color(), up = V(0, 1, 0);
   for (const [key, list] of byKey) {

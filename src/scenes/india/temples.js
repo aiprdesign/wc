@@ -312,7 +312,12 @@ export function create(ctx, segment) {
     for (let k = 0; k < 900 && list.length < (lite ? 140 : 270); k++) {
       const a = r() * 6.28, d = 58 + r() * 90, x = TOWER.x + Math.cos(a) * d, z = TOWER.z + 10 + Math.sin(a) * d;
       const y = groundH(x, z);
-      if (pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 14)) continue;
+      if (pathPts.some((p) => Math.hypot(x - p.x, z - p.z) < 18)) continue;
+      { // keep the line of sight from the Thanjavur camera to the vimana clear
+        const ax = 208, az = 73, bx = TOWER.x, bz = TOWER.z, ux = bx - ax, uz = bz - az, L2 = ux * ux + uz * uz;
+        const k = clamp(((x - ax) * ux + (z - az) * uz) / L2, 0, 1);
+        if (Math.hypot(x - (ax + ux * k), z - (az + uz * k)) < 18 + 40 * k) continue;
+      }
       const [lx, lz] = inTajLocal(x, z); if (Math.abs(lx) < 80 && lz > -120 && lz < 250) continue;
       list.push([x, y, z, 1, r() * 6.28, 'palm']);
     }

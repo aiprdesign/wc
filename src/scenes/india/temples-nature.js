@@ -49,6 +49,7 @@ export function templeTreeItems(list, { tower, lite, near }) {
     else if (x < 190) kind = q < 0.55 ? 'neem' : q < 0.8 ? 'mango' : 'peepal';
     else if (x < 380) kind = q < 0.55 ? 'palm' : q < 0.78 ? 'neem' : q < 0.92 ? 'mango' : 'banyan';
     else kind = q < 0.4 ? 'neem' : q < 0.7 ? 'mango' : q < 0.85 ? 'peepal' : 'ashoka';
+    if (kind === 'ashoka' && !near(x, z)) kind = 'neem';
     items.push({ kind, x, y: y - 0.3, z, s: kind === 'palm' ? 0.9 + 0.3 * r() : s * 0.85, rot: a, lite: lite || !near(x, z), tint: 0.85 + 0.3 * r() });
   }
   return items;

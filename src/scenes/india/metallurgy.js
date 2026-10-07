@@ -803,6 +803,7 @@ export function create(ctx, segment) {
     const T = info?.T ?? t + segment.start;
     const shot = t < tW ? 0 : t < tP ? 1 : t < tZ ? 2 : 3;
     groupA.visible = shot === 0; groupB.visible = shot === 1; groupC.visible = shot === 2; groupD.visible = shot === 3;
+    qutb.forest?.update(t);
     vapour.visible = shot === 3;
     const fl = flick(T), beat = pulse(T, { decay: 4 }), beat2 = pulse(T, { decay: 4, offset: 0.25 });
     embers.tick(t, info);

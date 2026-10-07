@@ -313,12 +313,12 @@ export function create(ctx, segment) {
                                snoise(vec3(q + 7.3, uTime * 0.4)) * 0.05 + snoise(vec3(q * 4.0 + 3.1, uTime)) * 0.025));
         vec3 R = reflect(V, n); R.y = abs(R.y);
         float fr = 0.03 + 0.97 * pow(1.0 - max(dot(-V, n), 0.0), 5.0);
-        vec3 c = mix(vec3(0.03, 0.05, 0.08), skyCol(R), fr);
+        vec3 c = mix(vec3(0.02, 0.075, 0.08) * (0.85 + 0.3 * uLift), skyCol(R), fr);   // the Arabian Sea at Dandi: blue-green
         float sp = pow(max(snoise(vec3(vW.xz * 0.35, uTime * 1.5)), 0.0), 6.0);
         // the shallows and the surf: sandy water near the beach, lines of breakers rolling in, a swash of foam
         float sh = shoreZ(vW.x) - 1.5 - vW.z;
         float sn = snoise(vec3(vW.xz * 0.06, 2.0));
-        c = mix(vec3(0.16, 0.15, 0.11) * uLift * (0.8 + 0.6 * fr), c, smoothstep(0.0, 22.0, sh + sn * 4.0));
+        c = mix(vec3(0.1, 0.17, 0.13) * uLift * (0.8 + 0.6 * fr), c, smoothstep(0.0, 22.0, sh + sn * 4.0));   // green shallows over sand
         float wph = sh * 0.21 + sn * 1.6 + uTime * 1.3;
         float crest = smoothstep(0.86, 0.99, sin(wph)) * exp(-max(sh, 0.0) / 45.0) * smoothstep(1.0, 6.0, sh);
         crest *= smoothstep(-0.3, 0.4, snoise(vec3(vW.xz * vec2(0.05, 0.3), uTime * 0.3)));
