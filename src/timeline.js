@@ -42,6 +42,7 @@ export const MUSIC_CUES = FILM.MUSIC_CUES ?? CUES;
 // its two extra chapters). The Western film's score runs on its own clock: no splices.
 export const MUSIC_DURATION = FILM.MUSIC_DURATION ?? DURATION;
 export const MUSIC_SPLICES = FILM.MUSIC_SPLICES ?? [];
+export const MUSIC_DUCKS = FILM.MUSIC_DUCKS ?? [];   // [story from, to, gain]: the score steps back (audio/score.js)
 
 export function segmentById(id) {
   return SEGMENTS.find((s) => s.id === id);

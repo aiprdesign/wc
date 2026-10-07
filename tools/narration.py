@@ -9,7 +9,7 @@ import json, sys, numpy as np, soundfile as sf
 from kokoro_onnx import Kokoro
 TS = 100 / 72
 VOICE, SPEED = 'bm_george', 0.92
-LINES = [  # (story seconds, text) — the Western film (src/films/western.js): 90 s of story
+LINES = [  # (story seconds, text) — the Western film (src/films/western.js): 96 s of story
   (0.5,   "Every achievement begins as an idea."),     # over the flash-forward; clear of the SLAM (3.5)
   (4.1,   "And some ideas change the world."),        # after the SLAM, over the title
   (8.1,   "In Athens and Rome, we learned proportion, engineering… and the citizen."),
@@ -17,21 +17,21 @@ LINES = [  # (story seconds, text) — the Western film (src/films/western.js): 
   (16.0,  "The Renaissance. Artists became scientists."),
   (20.4,  "In Italy, Brunelleschi raised a dome, Leonardo drew machines, and Michelangelo painted a heaven."),
   (26.6,  "Copernicus. Galileo. Newton. The universe became knowable."),
-  (31.1,  "Steam and steel multiplied our strength a thousandfold."),
-  (35,  "Lightning, tamed, carried our voices across the oceans."),
-  (38,  "Medicine gave billions longer lives."),
-  (41,  "Within one lifetime… from wooden wings, to orbit."),
-  (44.6,  "Nineteen sixty-nine. America went to the Moon."),
-  (48.9,  "Machines that calculate… became machines that learn."),
-  (52.9,  "From the printing press to the internet: knowledge, set free."),
-  (56.2,  "Light, motion, pictures, and the phone in every hand: two centuries of invention."),
-  (61.95, "From the Shuttle to Webb, America keeps reaching further."),
-  (65.2,  "And next… the first humans on Mars."),
-  (68.2,  "If I have seen further, it is by standing on the shoulders of giants."),
-  (74.4,  "From the agora to the Moon…"),
-  (76.25, "twenty-five centuries of reason, courage, and invention."),
-  (79.55, "Ideas build upon ideas."),
-  (84.9,  "The journey continues."),
+  (37.1,  "Steam and steel multiplied our strength a thousandfold."),
+  (41,  "Lightning, tamed, carried our voices across the oceans."),
+  (44,  "Medicine gave billions longer lives."),
+  (47,  "Within one lifetime… from wooden wings, to orbit."),
+  (50.6,  "Nineteen sixty-nine. America went to the Moon."),
+  (54.9,  "Machines that calculate… became machines that learn."),
+  (58.9,  "From the printing press to the internet: knowledge, set free."),
+  (62.2,  "Light, motion, pictures, and the phone in every hand: two centuries of invention."),
+  (67.95, "From the Shuttle to Webb, America keeps reaching further."),
+  (71.2,  "And next… the first humans on Mars."),
+  (74.2,  "If I have seen further, it is by standing on the shoulders of giants."),
+  (80.4,  "From the agora to the Moon…"),
+  (82.25, "twenty-five centuries of reason, courage, and invention."),
+  (85.55, "Ideas build upon ideas."),
+  (90.9,  "The journey continues."),
 ]
 LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js): 106 s of story
   (0.5,   "Every achievement begins as an idea."),
@@ -61,7 +61,7 @@ LINES_INDIA = [  # (story seconds, text) — the Indian film (src/films/india.js
   (95.55, "Ideas build upon ideas."),
   (100.9, "The journey continues."),
 ]
-STORY = 90.3
+STORY = 96.3
 if len(sys.argv) > 1 and sys.argv[1] == 'india': LINES, STORY = LINES_INDIA, 106.3
 k = Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
 SR = 48000

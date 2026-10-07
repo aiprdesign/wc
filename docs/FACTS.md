@@ -6,7 +6,7 @@ one or two sources for each. Wikipedia links are included only as convenient poi
 primary or institutional source exists (NASA, Britannica, the Library of Congress, museums,
 universities), it is listed first.
 
-**Film time** is the playback time in the 2:05 film (story seconds × 100/72, see
+**Film time** is the playback time in the 2:13 film (story seconds × 100/72, see
 `src/timeline.js`). Captions appear for a second or two around the time given.
 
 **Status**
@@ -31,21 +31,21 @@ universities), it is listed first.
 | 0:22.2 | "The Renaissance. Artists became scientists." | Framing (e.g. Leonardo's anatomical and optical studies) | [Britannica: Leonardo da Vinci](https://www.britannica.com/biography/Leonardo-da-Vinci) |
 | 0:28.3 | "In Italy, Brunelleschi raised a dome, Leonardo drew machines, and Michelangelo painted a heaven." | Framing (Florence Cathedral dome 1420–1436; Leonardo's notebooks; the Sistine Chapel ceiling 1508–1512; see chapter IV) | see chapter IV |
 | 0:36.9 | "Copernicus. Galileo. Newton. The universe became knowable." | Framing (works dated 1543 to 1687/1704, see chapter IV) | [Britannica: Scientific Revolution](https://www.britannica.com/science/Scientific-Revolution) |
-| 0:43.2 | "Steam and steel multiplied our strength a thousandfold." | Framing (hyperbole: one large 19th-century mill engine delivered hundreds to thousands of horsepower, and a labourer sustains about 0.1 hp) | [Britannica: Steam engine](https://www.britannica.com/technology/steam-engine) |
-| 0:48.6 | "Lightning, tamed, carried our voices across the oceans." | Correct (transatlantic radiotelephone service opened 7 January 1927) | [Britannica: telephone](https://www.britannica.com/technology/telephone) |
-| 0:52.8 | "Medicine gave billions longer lives." | Correct (global life expectancy rose from about 32 years in 1900 to over 70 today) | [Our World in Data: Life expectancy](https://ourworldindata.org/life-expectancy) |
-| 0:56.9 | "Within one lifetime… from wooden wings, to orbit." | Correct (Wright Flyer, wood and muslin, 17 Dec 1903 → Gagarin's orbit, 12 Apr 1961: 58 years) | [Smithsonian NASM: 1903 Wright Flyer](https://airandspace.si.edu/collection-objects/1903-wright-flyer/nasm_A19610048000) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
-| 1:01.9 | "Nineteen sixty-nine. America went to the Moon." | Correct (Apollo 11, July 1969) | [NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/) |
-| 1:07.9 | "Machines that calculate… became machines that learn." | Framing | — |
-| 1:13.5 | "From the printing press to the internet: knowledge, set free." | Framing (Gutenberg c. 1450s → internet) | [Britannica: Gutenberg](https://www.britannica.com/biography/Johannes-Gutenberg) |
-| 1:18.1 | "Light, motion, pictures, and the phone in every hand: two centuries of invention." | Framing (photography 1826–39 → the smartphone, 2007; see chapter XIII) | see chapter XIII |
-| 1:26.0 | "From the Shuttle to Webb, America keeps reaching further." | Framing (Webb is NASA-led with ESA and CSA as partners; Hubble is a NASA/ESA project) | [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
-| 1:30.6 | "And next… the first humans on Mars." | Framing (a stated NASA goal, not yet flown) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
-| 1:34.7 | "If I have seen further, it is by standing on the shoulders of giants." | Correct (Newton to Robert Hooke, letter dated 5 February 1675/6; original spelling "ye shoulders of Giants") | [Historical Society of Pennsylvania, item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) · [Wikipedia](https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants) |
-| 1:43.3 | "From the agora to the Moon…" | Framing | — |
-| 1:45.9 | "twenty-five centuries of reason, courage, and invention." | Correct (508/7 BC to AD 1969 is about 2,480 years) | — |
-| 1:50.5 | "Ideas build upon ideas." | Framing | — |
-| 1:57.9 | "The journey continues." | Framing | — |
+| 0:51.5 | "Steam and steel multiplied our strength a thousandfold." | Framing (hyperbole: one large 19th-century mill engine delivered hundreds to thousands of horsepower, and a labourer sustains about 0.1 hp) | [Britannica: Steam engine](https://www.britannica.com/technology/steam-engine) |
+| 0:56.9 | "Lightning, tamed, carried our voices across the oceans." | Correct (transatlantic radiotelephone service opened 7 January 1927) | [Britannica: telephone](https://www.britannica.com/technology/telephone) |
+| 1:01.1 | "Medicine gave billions longer lives." | Correct (global life expectancy rose from about 32 years in 1900 to over 70 today) | [Our World in Data: Life expectancy](https://ourworldindata.org/life-expectancy) |
+| 1:05.3 | "Within one lifetime… from wooden wings, to orbit." | Correct (Wright Flyer, wood and muslin, 17 Dec 1903 → Gagarin's orbit, 12 Apr 1961: 58 years) | [Smithsonian NASM: 1903 Wright Flyer](https://airandspace.si.edu/collection-objects/1903-wright-flyer/nasm_A19610048000) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
+| 1:10.3 | "Nineteen sixty-nine. America went to the Moon." | Correct (Apollo 11, July 1969) | [NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/) |
+| 1:16.2 | "Machines that calculate… became machines that learn." | Framing | — |
+| 1:21.8 | "From the printing press to the internet: knowledge, set free." | Framing (Gutenberg c. 1450s → internet) | [Britannica: Gutenberg](https://www.britannica.com/biography/Johannes-Gutenberg) |
+| 1:26.4 | "Light, motion, pictures, and the phone in every hand: two centuries of invention." | Framing (photography 1826–39 → the smartphone, 2007; see chapter XIV) | see chapter XIV |
+| 1:34.4 | "From the Shuttle to Webb, America keeps reaching further." | Framing (Webb is NASA-led with ESA and CSA as partners; Hubble is a NASA/ESA project) | [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
+| 1:38.9 | "And next… the first humans on Mars." | Framing (a stated NASA goal, not yet flown) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
+| 1:43.1 | "If I have seen further, it is by standing on the shoulders of giants." | Correct (Newton to Robert Hooke, letter dated 5 February 1675/6; original spelling "ye shoulders of Giants") | [Historical Society of Pennsylvania, item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) · [Wikipedia](https://en.wikipedia.org/wiki/Standing_on_the_shoulders_of_giants) |
+| 1:51.7 | "From the agora to the Moon…" | Framing | — |
+| 1:54.2 | "twenty-five centuries of reason, courage, and invention." | Correct (508/7 BC to AD 1969 is about 2,480 years) | — |
+| 1:58.8 | "Ideas build upon ideas." | Framing | — |
+| 2:06.2 | "The journey continues." | Framing | — |
 
 ## 0 · The Idea (0:00)
 
@@ -120,35 +120,48 @@ universities), it is listed first.
 | Saturn's rings: D, C, B, Cassini Division, A (Encke and Keeler gaps), F at their true radii | orrery | Correct | [NASA Saturnian Rings Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/satringfact.html) |
 | Uranus's rings | orrery | Imprecise (the narrow rings are drawn, but the α and β rings are missing and several radii are off by 1–2%) | [NASA Uranian Rings Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/uranringfact.html) |
 
-## VI · Industrial Revolution (card 0:43.6 · "1769 — 1900")
+## VI · Music (card 0:43.2 · "c. 1720 — 1824")
+
+The soundtrack plays three public-domain themes here, over a softened score: the opening of the Prelude of
+Bach's Cello Suite No. 1 (BWV 1007, transposed from G to D), the opening of Mozart's *Eine kleine
+Nachtmusik* (K. 525, transposed from G to D) and the *Ode to Joy* from Beethoven's Ninth (in D, as written).
+
+| Claim as shown | Where | Status | Sources |
+|---|---|---|---|
+| J. S. BACH · CELLO SUITE No. 1 · c. 1720 | cello and manuscript | Correct (the six suites are dated c. 1717–1723, Cöthen; the notation shown is stylised) | [Britannica: Johann Sebastian Bach](https://www.britannica.com/biography/Johann-Sebastian-Bach) |
+| STRADIVARI · CREMONA · 1700s | violin | Correct (Antonio Stradivari, Cremona, c. 1644–1737; his "golden period" c. 1700–1720) | [Britannica: Antonio Stradivari](https://www.britannica.com/biography/Antonio-Stradivari) |
+| W. A. MOZART · EINE KLEINE NACHTMUSIK · VIENNA 1787 | fortepiano and score | Correct (K. 525, completed in Vienna, 10 August 1787) | [Britannica: Eine kleine Nachtmusik](https://www.britannica.com/topic/Eine-kleine-Nachtmusik) |
+| L. VAN BEETHOVEN · SYMPHONY No. 9 · 'ODE TO JOY' · 1824 | piano, manuscript, hall | Correct (premiered in Vienna, 7 May 1824; text by Schiller; the theme is the anthem of the Council of Europe and the EU) | [Britannica: Symphony No. 9](https://www.britannica.com/topic/Symphony-No-9-in-D-Minor-Op-125) |
+
+## VII · Industrial Revolution (card 0:51.9 · "1769 — 1900")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
 | "1769" | chapter card | Correct (James Watt's separate-condenser patent, No. 913, granted 5 January 1769) | [Science Museum blog: Watt and the separate condenser](https://blog.sciencemuseum.org.uk/james-watt-and-the-separate-condenser/) · [Patent No. 913 (Wikimedia Commons)](https://commons.wikimedia.org/wiki/File:James_Watt_Patent_1769_No_913.pdf) |
-| "TWIN MILL ENGINE · 19TH C." [was "WATT · STEAM ENGINE · 1769"] | HUD, 0:46.9 | Fixed. The machine shown is a twin horizontal mill engine with a Lancashire boiler, not Watt's 1769 engine | [Britannica: steam engine](https://www.britannica.com/technology/steam-engine) |
+| "TWIN MILL ENGINE · 19TH C." [was "WATT · STEAM ENGINE · 1769"] | HUD, 0:55.2 | Fixed. The machine shown is a twin horizontal mill engine with a Lancashire boiler, not Watt's 1769 engine | [Britannica: steam engine](https://www.britannica.com/technology/steam-engine) |
 | "LANCASHIRE BOILER · 1844" [was "60 RPM · 3.4 BAR · 40 HP", invented figures] | HUD | Fixed (Fairbairn and Hetherington patent, 1844) | [Britannica: Lancashire boiler](https://www.britannica.com/technology/Lancashire-boiler) · [Grace's Guide](https://www.gracesguide.co.uk/Lancashire_Boiler) |
-| "INVOLUTE PROFILE · α 20° · Z 36 · MODULE 9 mm", "PINION · Z 14 · i 2.57 : 1" | gear callouts, 0:43 | Depiction (the modelled gears: 36 and 14 teeth, 36/14 = 2.57; 20° is today's standard pressure angle) | [Britannica: gear](https://www.britannica.com/technology/gear) |
+| "INVOLUTE PROFILE · α 20° · Z 36 · MODULE 9 mm", "PINION · Z 14 · i 2.57 : 1" | gear callouts, 0:51 | Depiction (the modelled gears: 36 and 14 teeth, 36/14 = 2.57; 20° is today's standard pressure angle) | [Britannica: gear](https://www.britannica.com/technology/gear) |
 
-## VII · Electricity & Communication (card 0:49.2 · "1831 — 1947")
+## VIII · Electricity & Communication (card 0:57.5 · "1831 — 1947")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
 | "1831" | chapter card | Correct (Faraday discovers electromagnetic induction) | [Britannica: Michael Faraday](https://www.britannica.com/biography/Michael-Faraday) |
-| "TELEGRAPH · 1837" | caption, 0:49.0 | Correct (Morse's caveat and demonstrations; Cooke and Wheatstone patent, 1837) | [Library of Congress: Invention of the telegraph](https://www.loc.gov/collections/samuel-morse-papers/articles-and-essays/invention-of-the-telegraph/) |
+| "TELEGRAPH · 1837" | caption, 0:57.3 | Correct (Morse's caveat and demonstrations; Cooke and Wheatstone patent, 1837) | [Library of Congress: Invention of the telegraph](https://www.loc.gov/collections/samuel-morse-papers/articles-and-essays/invention-of-the-telegraph/) |
 | Morse tape reads "WHAT HATH GOD WROUGHT" | telegraph prop | Correct (first public line message, 24 May 1844) | [Library of Congress: Morse Papers](https://www.loc.gov/collections/samuel-morse-papers/) |
-| "TELEPHONE · 1876" | caption, 0:50.0 | Correct (Bell's patent, 7 March 1876) | [Library of Congress: Bell Papers](https://www.loc.gov/collections/alexander-graham-bell-papers/) |
+| "TELEPHONE · 1876" | caption, 0:58.3 | Correct (Bell's patent, 7 March 1876) | [Library of Congress: Bell Papers](https://www.loc.gov/collections/alexander-graham-bell-papers/) |
 | Rotary dial letters (2 ABC … 9 WXY, 0 OPER) | telephone prop | Fixed (the letters sat one digit too low, ABC on 1) | [Wikipedia: Rotary dial](https://en.wikipedia.org/wiki/Rotary_dial) |
-| "RADIO · 1895" | caption, 0:50.8 | Correct (Marconi's first wireless experiments) | [Nobel Prize: Marconi](https://www.nobelprize.org/prizes/physics/1909/marconi/biographical/) |
-| "ELECTRONICS · 1947" | caption, 0:51.6 | Correct (point-contact transistor, Bell Labs, December 1947) | [Nobel Prize 1956](https://www.nobelprize.org/prizes/physics/1956/summary/) |
+| "RADIO · 1895" | caption, 0:59.1 | Correct (Marconi's first wireless experiments) | [Nobel Prize: Marconi](https://www.nobelprize.org/prizes/physics/1909/marconi/biographical/) |
+| "ELECTRONICS · 1947" | caption, 0:59.9 | Correct (point-contact transistor, Bell Labs, December 1947) | [Nobel Prize 1956](https://www.nobelprize.org/prizes/physics/1956/summary/) |
 | "Lightning, tamed, carried the human voice across oceans." | chapter card | Correct (see narration) | — |
 
-## VIII · Medicine (card 0:53.4 · "1543 · 1796 · 1895 · 1928")
+## IX · Medicine (card 1:01.7 · "1543 · 1796 · 1895 · 1928")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "1543" · "DE HVMANI CORPORIS FABRICA" · "Basileae · MDXLIII" | card; engraving, 0:54.1 | Correct (Vesalius, printed in Basel by Oporinus, 1543) | [Library of Congress](https://www.loc.gov/item/2021667096/) · [Britannica](https://www.britannica.com/topic/De-humani-corporis-fabrica-libri-septem) |
+| "1543" · "DE HVMANI CORPORIS FABRICA" · "Basileae · MDXLIII" | card; engraving, 1:02.4 | Correct (Vesalius, printed in Basel by Oporinus, 1543) | [Library of Congress](https://www.loc.gov/item/2021667096/) · [Britannica](https://www.britannica.com/topic/De-humani-corporis-fabrica-libri-septem) |
 | "Liber sextus · De corde et pulmone" [was "De corde, vitae principio", which is not Vesalius's title] | engraving | Fixed (Book VI of the *Fabrica* covers the heart and lungs; the line is a plain Latin description, not a quotation) | [Cambridge Core: Richardson translation of Book VI, "The heart and associated organs"](https://www.cambridge.org/core/journals/medical-history/article/andreas-vesalius-on-the-fabric-of-the-human-body-book-vi-the-heart-and-associated-organs-book-vii-the-brain-a-translation-of-de-humani-corporis-fabrica-libri-septem-by-william-frank-richardson-in-collaboration-with-john-burd-carman-novato-ca-norman-publishing-2009-pp-xx-413-illus-275-hardback-9780930405908/75FEF1F7B3C8B5F50972707CA364E9C4) |
-| "1796 · SMALLPOX" (VACCINATION) | card; callout, 0:55.0 | Correct (Jenner's first vaccination, 14 May 1796) | [Britannica: Edward Jenner](https://www.britannica.com/biography/Edward-Jenner) |
+| "1796 · SMALLPOX" (VACCINATION) | card; callout, 1:03.3 | Correct (Jenner's first vaccination, 14 May 1796) | [Britannica: Edward Jenner](https://www.britannica.com/biography/Edward-Jenner) |
 | "1895 · X-RAY → MRI" (IMAGING) | card; callout | Correct (Röntgen discovers X-rays, 8 November 1895) | [Nobel Prize 1901](https://www.nobelprize.org/prizes/physics/1901/rontgen/facts/) |
 | "1928" | chapter card | Correct (Fleming observes penicillin) | [Nobel Prize 1945](https://www.nobelprize.org/prizes/medicine/1945/fleming/facts/) |
 | "1854 · PUBLIC HEALTH" (SANITATION) | callout | Correct (John Snow's Broad Street cholera investigation) | [UCLA: John Snow site](https://www.ph.ucla.edu/epi/snow.html) |
@@ -156,55 +169,55 @@ universities), it is listed first.
 | "Anatomy, vaccines and antibiotics gave billions longer lives." | chapter card | Correct (see narration) | [Our World in Data](https://ourworldindata.org/life-expectancy) |
 | Labels A Aorta, B Vena cava, C Ventriculus, D Arteria pulmonalis, E Auricula | engraving | Correct anatomical terms | — |
 
-## IX · Flight & Space (card 0:57.5 · "1903 — 1961")
+## X · Flight & Space (card 1:05.8 · "1903 — 1961")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
 | "1903" | chapter card | Correct (Wright Flyer, Kitty Hawk, 17 December 1903) | [Smithsonian NASM](https://airandspace.si.edu/collection-objects/1903-wright-flyer/nasm_A19610048000) |
 | "1961" | chapter card | Correct (Gagarin, Vostok 1, first human orbit, 12 April 1961) | [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
-| Blueprint: "SPAN 20.4 M", "LENGTH 16.8 M", "AIRFOIL 13% · DIHEDRAL 5°", "SCALE 1:56" | blueprint, 0:56.6 | Depiction (a generic 1930s-style twin-engine monoplane drawn from the film's model, not a named type) | — |
-| Saturn V livery: "UNITED STATES" down one side of the first stage, "USA" on the other, flag above | rocket, 1:00.2 | Correct | NASA launch photographs of Apollo 11 ([NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/)) |
+| Blueprint: "SPAN 20.4 M", "LENGTH 16.8 M", "AIRFOIL 13% · DIHEDRAL 5°", "SCALE 2:04" | blueprint, 1:04.9 | Depiction (a generic 1930s-style twin-engine monoplane drawn from the film's model, not a named type) | — |
+| Saturn V livery: "UNITED STATES" down one side of the first stage, "USA" on the other, flag above | rocket, 1:08.5 | Correct | NASA launch photographs of Apollo 11 ([NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/)) |
 
-## X · The Moonshot (1:03.1 · "1969")
+## XI · The Moonshot (1:11.4 · "1969")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "APOLLO 11 · UNITED STATES · JULY 1969" | caption, 1:02.2 | Correct | [NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/) |
+| "APOLLO 11 · UNITED STATES · JULY 1969" | caption, 1:10.5 | Correct | [NASA: Apollo 11](https://www.nasa.gov/mission/apollo-11/) |
 | "TRANS-LUNAR COAST · FREE-RETURN TRAJECTORY · 384 400 KM" | caption | Correct (Apollo 11 was the last mission to fly a pure free return; 384,400 km is the mean Earth–Moon distance) | [NASA: Moon facts](https://science.nasa.gov/moon/facts/) · [Wikipedia: Free-return trajectory](https://en.wikipedia.org/wiki/Free-return_trajectory) |
-| "LUNAR MODULE EAGLE · MARE TRANQUILLITATIS" | caption, 1:03 | Correct | [NASA Apollo 11 Lunar Surface Journal](https://history.nasa.gov/wp-content/uploads/static/history/alsj/a11/a11.html) |
-| DSKY: PROG 63 → 64 → 66 → 68 | DSKY, 1:03 | Correct (braking, approach, manual landing, touchdown confirmation programs) | [Apollo Flight Journal: On-board computers](https://history.nasa.gov/afj/compessay.html) |
+| "LUNAR MODULE EAGLE · MARE TRANQUILLITATIS" | caption, 1:11 | Correct | [NASA Apollo 11 Lunar Surface Journal](https://history.nasa.gov/wp-content/uploads/static/history/alsj/a11/a11.html) |
+| DSKY: PROG 63 → 64 → 66 → 68 | DSKY, 1:11 | Correct (braking, approach, manual landing, touchdown confirmation programs) | [Apollo Flight Journal: On-board computers](https://history.nasa.gov/afj/compessay.html) |
 | DSKY: "PROGRAM ALARM 1202" shown as V05 N09, R1 1202 | DSKY | Correct (1202 executive-overflow alarms during the descent) | [NASA ALSJ: Program Alarms](https://www.nasa.gov/history/alsj/a11/a11.1201-pa.html) |
 | DSKY registers "FWD VEL · ALT RATE · ALT" under Verb 06 Noun 60 [was ALT / ALT RATE / FWD VEL under Noun 63] | DSKY | Fixed (Noun 60 layout: R1 forward velocity, R2 altitude rate, R3 altitude). After touchdown the DSKY now shows V06 N43: latitude +000.67°, longitude +023.47°, which is Tranquility Base | [Apollo Flight Journal](https://history.nasa.gov/afj/compessay.html) · [Wikipedia: Tranquility Base, 0.67408° N 23.47297° E](https://en.wikipedia.org/wiki/Tranquility_Base) |
-| "The Eagle has landed." | caption, 1:04.7 | Correct (Armstrong: "Houston, Tranquility Base here. The Eagle has landed.") | [NASA ALSJ: The First Lunar Landing](https://history.nasa.gov/alsj/a11/a11.landing.html) |
+| "The Eagle has landed." | caption, 1:13.0 | Correct (Armstrong: "Houston, Tranquility Base here. The Eagle has landed.") | [NASA ALSJ: The First Lunar Landing](https://history.nasa.gov/alsj/a11/a11.landing.html) |
 | "TRANQUILITY BASE · 20 JULY 1969 · 20:17 UTC" | caption | Correct (touchdown 20:17:40 UTC; NASA spells it "Tranquility") | [NASA ALSJ: Mission Summary](https://history.nasa.gov/wp-content/uploads/static/history/alsj/a11/a11.summary.html) |
-| "ONE SMALL STEP" | caption, 1:05.5 | Correct (first step 21 July 1969, 02:56 UTC) | as above |
+| "ONE SMALL STEP" | caption, 1:13.8 | Correct (first step 21 July 1969, 02:56 UTC) | as above |
 | US flag: 50 stars (rows of 6 and 5), 13 stripes, proportions per Executive Order 10834 | flag, LM decal | Correct (the 50-star flag dates from 4 July 1960) | [Executive Order 10834](https://www.archives.gov/federal-register/codification/executive-order/10834.html) |
 | LM descent-stage "UNITED STATES" placard with flag | Eagle | Correct | NASA surface photographs ([ALSJ](https://history.nasa.gov/wp-content/uploads/static/history/alsj/a11/a11.html)) |
-| Ticker: "1903 FLIGHT · 1947 TRANSISTOR · 1969 MOON · 1969 ARPANET · 1971 MICROPROCESSOR · TODAY AI" | ticker, 1:06.4 | Correct (ARPANET's first message, 29 Oct 1969; Intel 4004, Nov 1971) | [Computer History Museum: Internet history](https://www.computerhistory.org/internethistory/1960s/) · [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
+| Ticker: "1903 FLIGHT · 1947 TRANSISTOR · 1969 MOON · 1969 ARPANET · 1971 MICROPROCESSOR · TODAY AI" | ticker, 1:14.7 | Correct (ARPANET's first message, 29 Oct 1969; Intel 4004, Nov 1971) | [Computer History Museum: Internet history](https://www.computerhistory.org/internethistory/1960s/) · [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
 | "THE AMERICAN CENTURY" | title | Framing (Henry Luce's 1941 phrase) | [Britannica: Henry Luce](https://www.britannica.com/biography/Henry-R-Luce) |
 
-## XI · Computing & Digital (card 1:08.6 · "1822 — TODAY")
+## XII · Computing & Digital (card 1:16.9 · "1822 — TODAY")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "1822 · MECHANICAL CALCULATION · BABBAGE" | caption, 1:07.7 | Correct (Babbage proposes the Difference Engine, 1822) | [Computer History Museum: Babbage Engine](https://www.computerhistory.org/babbage/) |
-| "1937 · RELAY ADDER · STIBITZ, BELL LABS" [was "ELECTROMECHANICAL RELAY · BELL LABS"] | caption, 1:08.6 | Fixed, more precise (Stibitz's "Model K" relay adder, November 1937) | [IEEE Computer Society: Stibitz](https://history.computer.org/pioneers/stibitz.html) |
-| "1946 · VACUUM TUBE · ENIAC · PHILADELPHIA" | caption, 1:09.3 | Correct (unveiled at the University of Pennsylvania, February 1946) | [Britannica: ENIAC](https://www.britannica.com/technology/ENIAC) |
-| "1947 · TRANSISTOR · BELL LABS" | caption, 1:10.0 | Correct | [Nobel Prize 1956](https://www.nobelprize.org/prizes/physics/1956/summary/) |
-| "1971 · MICROPROCESSOR · SILICON VALLEY" | caption, 1:10.7 | Correct (Intel 4004, Santa Clara) | [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
-| Chat card: "a small signal at the gate controls a much larger current. Billions of them … make a processor." | AI card, 1:11 | Correct (MOSFET principle; modern CPUs hold billions of transistors) | [Britannica: transistor](https://www.britannica.com/technology/transistor) |
+| "1822 · MECHANICAL CALCULATION · BABBAGE" | caption, 1:16.0 | Correct (Babbage proposes the Difference Engine, 1822) | [Computer History Museum: Babbage Engine](https://www.computerhistory.org/babbage/) |
+| "1937 · RELAY ADDER · STIBITZ, BELL LABS" [was "ELECTROMECHANICAL RELAY · BELL LABS"] | caption, 1:16.9 | Fixed, more precise (Stibitz's "Model K" relay adder, November 1937) | [IEEE Computer Society: Stibitz](https://history.computer.org/pioneers/stibitz.html) |
+| "1946 · VACUUM TUBE · ENIAC · PHILADELPHIA" | caption, 1:17.6 | Correct (unveiled at the University of Pennsylvania, February 1946) | [Britannica: ENIAC](https://www.britannica.com/technology/ENIAC) |
+| "1947 · TRANSISTOR · BELL LABS" | caption, 1:18.3 | Correct | [Nobel Prize 1956](https://www.nobelprize.org/prizes/physics/1956/summary/) |
+| "1971 · MICROPROCESSOR · SILICON VALLEY" | caption, 1:19.0 | Correct (Intel 4004, Santa Clara) | [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
+| Chat card: "a small signal at the gate controls a much larger current. Billions of them … make a processor." | AI card, 1:19 | Correct (MOSFET principle; modern CPUs hold billions of transistors) | [Britannica: transistor](https://www.britannica.com/technology/transistor) |
 | Coding card: `fib(10)` prints "55" | AI card | Correct | — |
 
-## XII · Knowledge (card 1:14.2 · "c. 1450 — TODAY")
+## XIII · Knowledge (card 1:22.5 · "c. 1450 — TODAY")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
 | "c. 1450 — TODAY" [was "1450 — TODAY"] | chapter card | Fixed (Gutenberg's press is dated c. 1450; the Bible c. 1454–55) | [Britannica: Gutenberg](https://www.britannica.com/biography/Johannes-Gutenberg) |
-| Title page "PRINCIPIA · Mathematica" [was "Mathematica Naturalis", a garbled title] · "LONDINI · MDCLXXXVII" · "Jussu Societatis Regiae" | page, 1:13 | Fixed. The true title is *Philosophiæ Naturalis Principia Mathematica*, London 1687, "by order of the Royal Society" | [Cambridge Digital Library: Newton's Principia](https://cudl.lib.cam.ac.uk/view/PR-ADV-B-00039-00001/1) |
+| Title page "PRINCIPIA · Mathematica" [was "Mathematica Naturalis", a garbled title] · "LONDINI · MDCLXXXVII" · "Jussu Societatis Regiae" | page, 1:21 | Fixed. The true title is *Philosophiæ Naturalis Principia Mathematica*, London 1687, "by order of the Royal Society" | [Cambridge Digital Library: Newton's Principia](https://cudl.lib.cam.ac.uk/view/PR-ADV-B-00039-00001/1) |
 | Running heads "DE MOTV CORPORVM", "DE REVOLVTIONIBVS", "OPTICKS", "DIALOGO", "ELEMENTORVM" | page headers | Correct titles (Newton, Copernicus, Newton, Galileo, Euclid) | — |
 | "Bibliotheca universalis" | caption | Correct (Conrad Gessner's universal bibliography, 1545; used here as a caption) | [Wikipedia: Bibliotheca universalis](https://en.wikipedia.org/wiki/Bibliotheca_universalis) |
 
-## XIII · Invention (card 1:17.9 · "1826 — 2020")
+## XIV · Invention (card 1:26.2 · "1826 — 2020")
 
 A gallery of significant inventions of the last two centuries that the film does not show elsewhere (the
 telegraph, telephone, radio, transistor, vaccination, computing, the printing press and the internet
@@ -222,40 +235,40 @@ have their own chapters).
 | SMARTPHONE · 2007 · (BEFORE IT: IBM SIMON, 1994) | exhibit 8 | Correct (the touchscreen smartphone era from 2007; IBM Simon, 1994, is usually called the first smartphone; the model shown is generic) | [Britannica: smartphone](https://www.britannica.com/technology/smartphone) |
 | mRNA VACCINES · 2020 · KARIKÓ & WEISSMAN, NOBEL 2023 | exhibit 9 | Correct (nucleoside-modified mRNA, Karikó & Weissman 2005; first authorised mRNA vaccines December 2020; Nobel Prize in Physiology or Medicine 2023) | [Nobel Prize 2023](https://www.nobelprize.org/prizes/medicine/2023/summary/) |
 
-## XIV · The New Frontier (card 1:26.7 · "1981 — 2026")
+## XV · The New Frontier (card 1:35.0 · "1981 — 2026")
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "SPACE SHUTTLE · 1981" · "STS-1 · COLUMBIA · FIRST FLIGHT 12 APRIL 1981" | caption, 1:25.9 | Correct | [NASA: STS-1](https://www.nasa.gov/mission/sts-1/) |
-| "HUBBLE · 1990" · "SPACE TELESCOPE · DEPLOYED FROM DISCOVERY · STS-31" | caption, 1:27.0 | Correct (launched 24 April 1990, deployed 25 April) | [NASA: STS-31](https://www.nasa.gov/mission/sts-31/) |
-| "HUMAN GENOME · 2003" · "HUMAN GENOME PROJECT · COMPLETED APRIL 2003" [was "3 BILLION BASE PAIRS READ"] | caption, 1:28.1 | Fixed. The 2003 sequence covered about 92% of the ~3.1 billion bases; the gapless T2T sequence followed in 2022 | [NHGRI: Human Genome Project](https://www.genome.gov/human-genome-project) · [NHGRI: T2T 2022](https://www.genome.gov/about-genomics/telomere-to-telomere) |
+| "SPACE SHUTTLE · 1981" · "STS-1 · COLUMBIA · FIRST FLIGHT 12 APRIL 1981" | caption, 1:34.2 | Correct | [NASA: STS-1](https://www.nasa.gov/mission/sts-1/) |
+| "HUBBLE · 1990" · "SPACE TELESCOPE · DEPLOYED FROM DISCOVERY · STS-31" | caption, 1:35.3 | Correct (launched 24 April 1990, deployed 25 April) | [NASA: STS-31](https://www.nasa.gov/mission/sts-31/) |
+| "HUMAN GENOME · 2003" · "HUMAN GENOME PROJECT · COMPLETED APRIL 2003" [was "3 BILLION BASE PAIRS READ"] | caption, 1:36.4 | Fixed. The 2003 sequence covered about 92% of the ~3.1 billion bases; the gapless T2T sequence followed in 2022 | [NHGRI: Human Genome Project](https://www.genome.gov/human-genome-project) · [NHGRI: T2T 2022](https://www.genome.gov/about-genomics/telomere-to-telomere) |
 | Genome helix pairs A–T, C–G | helix | Correct | — |
-| "JAMES WEBB · 2021" · "18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021" | caption, 1:29.2 | Correct (model: 18 hexagonal segments, 3-4-4-4-3; five-layer sunshield) | [NASA: Webb's Mirrors](https://science.nasa.gov/mission/webb/webbs-mirrors/) · [NASA: Webb launch](https://science.nasa.gov/mission/webb/) |
-| "MARS · PERSEVERANCE & INGENUITY · 2021" · "JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET" | caption, 1:30.4 | Correct (landed 18 Feb 2021; NASA: "first powered, controlled flight on another planet") | [NASA: Ingenuity](https://science.nasa.gov/mission/mars-2020-perseverance/ingenuity-mars-helicopter/) |
+| "JAMES WEBB · 2021" · "18 GOLD SEGMENTS · 6.5 M PRIMARY · LAUNCHED 25 DEC 2021" | caption, 1:37.5 | Correct (model: 18 hexagonal segments, 3-4-4-4-3; five-layer sunshield) | [NASA: Webb's Mirrors](https://science.nasa.gov/mission/webb/webbs-mirrors/) · [NASA: Webb launch](https://science.nasa.gov/mission/webb/) |
+| "MARS · PERSEVERANCE & INGENUITY · 2021" · "JEZERO CRATER · FIRST POWERED FLIGHT ON ANOTHER PLANET" | caption, 1:38.7 | Correct (landed 18 Feb 2021; NASA: "first powered, controlled flight on another planet") | [NASA: Ingenuity](https://science.nasa.gov/mission/mars-2020-perseverance/ingenuity-mars-helicopter/) |
 | "INGENUITY · 1.8 KG" · "FIRST FLIGHT · 19 APRIL 2021" | callout | Correct | as above |
 | "EARTH · AVG. 225 MILLION KM" [was "225 MILLION KM"] | callout | Fixed (NASA's average; the distance ranges from about 55 to 401 million km) | [NASA: Mars facts](https://science.nasa.gov/mars/facts/) |
-| "ARTEMIS · RETURNING TO THE MOON" · "ARTEMIS II · CREWED LUNAR FLYBY · APRIL 2026" [was "CREWED LUNAR EXPLORATION PROGRAM"] | caption, 1:31.5 | Fixed, now specific (launched 1 April 2026, lunar flyby 6 April, splashdown 10 April) | [NASA: Artemis II](https://www.nasa.gov/mission/artemis-ii/) |
-| "THE VISION · CREWED MISSIONS TO MARS · NOT YET FLOWN · THE GOAL FOR THE 2030s AND BEYOND" | caption, 1:32.4 | Correct (labelled as a goal) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
+| "ARTEMIS · RETURNING TO THE MOON" · "ARTEMIS II · CREWED LUNAR FLYBY · APRIL 2026" [was "CREWED LUNAR EXPLORATION PROGRAM"] | caption, 1:39.8 | Fixed, now specific (launched 1 April 2026, lunar flyby 6 April, splashdown 10 April) | [NASA: Artemis II](https://www.nasa.gov/mission/artemis-ii/) |
+| "THE VISION · CREWED MISSIONS TO MARS · NOT YET FLOWN · THE GOAL FOR THE 2030s AND BEYOND" | caption, 1:40.7 | Correct (labelled as a goal) | [NASA: Moon to Mars](https://www.nasa.gov/humans-in-space/humans-to-mars/) |
 | "THE VISION · FIRST FOOTSTEPS ON MARS", "A NEW HOME AMONG THE STARS" | captions | Framing (clearly labelled vision) | — |
 | "EARTH · A BLUE STAR IN THE MARTIAN DAWN" | caption | Correct (from Mars, Earth appears as a bright morning or evening "star") | [NASA: Curiosity sees 'Evening Star' Earth](https://www.nasa.gov/solar-system/nasa-mars-rover-curiosity-sees-evening-star-earth/) |
 | Orbiter "UNITED STATES" fuselage lettering and flag | Shuttle model | Correct | NASA STS-1 photographs ([NASA: STS-1](https://www.nasa.gov/mission/sts-1/)) |
 
-## Legacy montage (1:33)
+## Legacy montage (1:41)
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "Standing on the shoulders of giants." · "NEWTON TO HOOKE · 1675/6" [was "ISAAC NEWTON · 1675"] | card, 1:34.2 | Fixed (letter dated 5 February 1675 Old Style, 1676 New Style) | [HSP item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) |
+| "Standing on the shoulders of giants." · "NEWTON TO HOOKE · 1675/6" [was "ISAAC NEWTON · 1675"] | card, 1:42.5 | Fixed (letter dated 5 February 1675 Old Style, 1676 New Style) | [HSP item 9792](https://digitallibrary.hsp.org/index.php/detail/objects/9792) |
 | "de divina proportione" | label | Correct (Luca Pacioli, Venice 1509, illustrated by Leonardo) | [Britannica: Luca Pacioli](https://www.britannica.com/biography/Luca-Pacioli) |
 | "VAPOR · MDCCXII" | label | Correct (Newcomen's first working atmospheric engine, 1712) | [Britannica: Thomas Newcomen](https://www.britannica.com/biography/Thomas-Newcomen) |
 | "F = G · m₁m₂ / r²" · "MODERN FORM · NEWTON, PRINCIPIA 1687" [was "PRINCIPIA MATHEMATICA · LIBER III · 1687"] | label | Fixed (G and this notation postdate the *Principia*) | [Britannica: Newton's law of gravitation](https://www.britannica.com/science/Newtons-law-of-gravitation) |
 | "µP · 2300 T" | label | Correct (the Intel 4004 had about 2,300 transistors) | [Intel: 4004](https://www.intel.com/content/www/us/en/history/museum-story-of-intel-4004.html) |
 | "72 BPM · SINUS RHYTHM" | label | Depiction (a typical resting heart rate) | — |
 
-## Finale (1:41.3)
+## Finale (1:49.6)
 
 | Claim as shown | Where | Status | Sources |
 |---|---|---|---|
-| "From the agora to the Moon, twenty-five centuries of reason, courage and invention." | text, 1:43.4 | Correct (see narration) | — |
+| "From the agora to the Moon, twenty-five centuries of reason, courage and invention." | text, 1:51.7 | Correct (see narration) | — |
 | "IDEAS BUILD UPON IDEAS." · "THE JOURNEY CONTINUES" | text | Framing | — |
 
 
@@ -271,14 +284,15 @@ that the chapter's achievements built on.
 | III · Renaissance | Greek texts kept by Byzantine and Arabic scholars · optics of Ibn al-Haytham | [Britannica: Ibn al-Haytham](https://www.britannica.com/biography/Ibn-al-Haytham) · [Britannica: Byzantine scholarship and the Renaissance](https://www.britannica.com/event/Renaissance) |
 | IV · Italy | the Pantheon's Roman dome, c. AD 125 · Greek texts saved by Byzantine and Arab scholars | [Britannica: Pantheon](https://www.britannica.com/topic/Pantheon-building-Rome) |
 | V · Science | refraction, Ibn Sahl 984 · numerals and zero from India · algebra, al-Khwarizmi | [Wikipedia: Ibn Sahl](https://en.wikipedia.org/wiki/Ibn_Sahl_(mathematician)) · [Britannica: Hindu-Arabic numerals](https://www.britannica.com/topic/Hindu-Arabic-numerals) · [Britannica: al-Khwarizmi](https://www.britannica.com/biography/al-Khwarizmi) |
-| VI · Industrial | steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551 | [Britannica: Heron of Alexandria](https://www.britannica.com/biography/Heron-of-Alexandria) · [Wikipedia: Taqi al-Din](https://en.wikipedia.org/wiki/Taqi_ad-Din_Muhammad_ibn_Ma%27ruf) |
-| VII · Electricity | radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia) | [Britannica: Jagadish Chandra Bose](https://www.britannica.com/biography/Jagadish-Chandra-Bose) · [Britannica: Aleksandr Popov](https://www.britannica.com/biography/Aleksandr-Stepanovich-Popov) |
-| VIII · Medicine | lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa (variolation in China, India, West Africa and the Ottoman Empire before Jenner) | [Britannica: Ibn al-Nafis](https://www.britannica.com/biography/Ibn-al-Nafis) · [CDC: History of smallpox](https://www.cdc.gov/smallpox/about/history.html) |
-| IX · Flight | rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961 | [NASA: A brief history of rocketry](https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
-| XI · Computing | zero and place value from India · "algorithm" honours al-Khwarizmi, Baghdad | [Britannica: zero](https://www.britannica.com/science/zero-mathematics) · [Britannica: algorithm](https://www.britannica.com/science/algorithm) |
-| XII · Knowledge | paper, China AD 105 (Cai Lun) · movable type, Bi Sheng c. 1040 · metal type, Korea 1377 | [Britannica: Cai Lun](https://www.britannica.com/biography/Cai-Lun) · [Britannica: Bi Sheng](https://www.britannica.com/biography/Bi-Sheng) · [UNESCO: Jikji](https://www.unesco.org/en/memory-world) |
-| XIII · Invention | television also by Takayanagi (Japan) · the maser and laser by Basov and Prokhorov (USSR) · mRNA vaccines brought to the world by BioNTech (Germany) and Moderna | [IEEE Milestone: Takayanagi](https://ethw.org/Milestones:Development_of_Electronic_Television,_1924-1941) · [Nobel Prize in Physics 1964](https://www.nobelprize.org/prizes/physics/1964/summary/) |
-| XIV · Frontier | first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA) | [NASA: Sputnik](https://history.nasa.gov/sputnik/) · [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
+| VI · Music | notation from Guido of Arezzo, c. 1025 · the violin family from Cremona · the oud and lute from the Arab world | [Britannica: Guido d'Arezzo](https://www.britannica.com/biography/Guido-dArezzo) · [Britannica: lute](https://www.britannica.com/art/lute) |
+| VII · Industrial | steam power described by Hero of Alexandria, 1st c. AD · Taqi al-Din, 1551 | [Britannica: Heron of Alexandria](https://www.britannica.com/biography/Heron-of-Alexandria) · [Wikipedia: Taqi al-Din](https://en.wikipedia.org/wiki/Taqi_ad-Din_Muhammad_ibn_Ma%27ruf) |
+| VIII · Electricity | radio, 1895, also by Jagadish Chandra Bose (India) and Alexander Popov (Russia) | [Britannica: Jagadish Chandra Bose](https://www.britannica.com/biography/Jagadish-Chandra-Bose) · [Britannica: Aleksandr Popov](https://www.britannica.com/biography/Aleksandr-Stepanovich-Popov) |
+| IX · Medicine | lung circulation, Ibn al-Nafis c. 1242 · smallpox inoculation from Asia and Africa (variolation in China, India, West Africa and the Ottoman Empire before Jenner) | [Britannica: Ibn al-Nafis](https://www.britannica.com/biography/Ibn-al-Nafis) · [CDC: History of smallpox](https://www.cdc.gov/smallpox/about/history.html) |
+| X · Flight | rockets invented in China · first human in orbit, Yuri Gagarin, USSR, 1961 | [NASA: A brief history of rocketry](https://www.grc.nasa.gov/www/k-12/TRC/Rockets/history_of_rockets.html) · [Britannica: Yuri Gagarin](https://www.britannica.com/biography/Yuri-Gagarin) |
+| XII · Computing | zero and place value from India · "algorithm" honours al-Khwarizmi, Baghdad | [Britannica: zero](https://www.britannica.com/science/zero-mathematics) · [Britannica: algorithm](https://www.britannica.com/science/algorithm) |
+| XIII · Knowledge | paper, China AD 105 (Cai Lun) · movable type, Bi Sheng c. 1040 · metal type, Korea 1377 | [Britannica: Cai Lun](https://www.britannica.com/biography/Cai-Lun) · [Britannica: Bi Sheng](https://www.britannica.com/biography/Bi-Sheng) · [UNESCO: Jikji](https://www.unesco.org/en/memory-world) |
+| XIV · Invention | television also by Takayanagi (Japan) · the maser and laser by Basov and Prokhorov (USSR) · mRNA vaccines brought to the world by BioNTech (Germany) and Moderna | [IEEE Milestone: Takayanagi](https://ethw.org/Milestones:Development_of_Electronic_Television,_1924-1941) · [Nobel Prize in Physics 1964](https://www.nobelprize.org/prizes/physics/1964/summary/) |
+| XV · Frontier | first satellite, Sputnik, USSR 1957 · Webb with Europe (ESA) and Canada (CSA) | [NASA: Sputnik](https://history.nasa.gov/sputnik/) · [NASA: Webb partners](https://science.nasa.gov/mission/webb/) |
 
 ---
 

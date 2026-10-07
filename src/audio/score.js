@@ -33,7 +33,7 @@
 //   then, on the rendered buffer: loudness trim → tape/console saturation →
 //   two-band glue compressor → room tone → limiter at -1 dBFS
 
-import { DURATION, FILM_DURATION, TIME_SCALE, MUSIC_CUES as C, CUES as CN, MUSIC_DURATION, MUSIC_SPLICES } from '../timeline.js';
+import { DURATION, FILM_DURATION, TIME_SCALE, MUSIC_CUES as C, CUES as CN, MUSIC_DURATION, MUSIC_SPLICES, MUSIC_DUCKS } from '../timeline.js';
 import { FILM_ID } from '../film.js';
 import { Studio, mulberry32 } from './core.js';
 import { makeWideMonoReverb, makeEarlyReflections } from './reverb.js';
@@ -197,6 +197,22 @@ function spliceMusic(src, like, splices) {
   return out;
 }
 
+/** The score steps back over story windows [from, to, gain] (half-second equal-power ramps either side). */
+function duckMusic(buf, ducks) {
+  const sr = buf.sampleRate, R = 0.5 * TIME_SCALE;
+  for (const [a, b, g] of ducks) {
+    const A = a * TIME_SCALE, B = b * TIME_SCALE;
+    const i0 = Math.max(0, Math.floor((A - R) * sr)), i1 = Math.min(buf.length, Math.ceil((B + R) * sr));
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = i0; i < i1; i++) {
+        const t = i / sr, u = t < A ? (t - (A - R)) / R : t > B ? 1 - (t - B) / R : 1;
+        d[i] *= 1 - (1 - g) * Math.sin(Math.max(0, Math.min(1, u)) * Math.PI / 2);
+      }
+    }
+  }
+}
+
 /** Sum `src` into `dst` (same length / channel count). */
 function mixInto(dst, src) {
   for (let c = 0; c < dst.numberOfChannels; c++) {
@@ -243,7 +259,7 @@ export async function renderScore(sampleRate = 48000, { voiceOver = true, only =
   const [music, b2, d2] = await Promise.all([A.render(), B.render(), D?.render()]);
   mixInto(music, b2);
   let buffer = music;
-  if (D) { buffer = spliceMusic(music, d2, MUSIC_SPLICES); mixInto(buffer, d2); }
+  if (D) { buffer = spliceMusic(music, d2, MUSIC_SPLICES); if (MUSIC_DUCKS.length) duckMusic(buffer, MUSIC_DUCKS); mixInto(buffer, d2); }
 
   if (only) return buffer;   // (diagnostics: the raw mix, unmastered, so the parts compare)
   // Master: set the loud body of the film to a consistent level, glue it with a

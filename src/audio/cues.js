@@ -11,8 +11,10 @@ import { groove as grooveM } from './music.js';
 // where the music playing under it lies, then carried back to the film's clock
 const musicOff = (t) => { let o = 0; for (const [at, off] of MUSIC_SPLICES) if (t >= at) o = off; return o; };
 const groove = (t) => { const o = musicOff(t); return grooveM(t - o) + o; };
-// shift of the Western film's later chapters against the times this file was first written on
+// shift of the Western film's later chapters against the times this file was first written on (the Italian
+// Renaissance moved the Scientific Revolution on; Music moved everything from the Industrial Revolution on)
 const WSH = C.microDive != null ? C.microDive - 32.0 : 0;
+const wsh = (t) => (C.gear == null ? 0 : t >= 24.5 ? C.gear - 25.0 : t >= 20.0 ? C.fallStart - 20.2 : 0);
 import { headingList, kickTiming, onBeat, SWAPS } from '../lib/headings.js';
 
 function opening(S) {
@@ -448,12 +450,33 @@ function transitionAir(S) {
   // the Western film's chapter downbeats (on its tempo map); another film's: its own segment starts,
   // up to the last chapter before the launch the score lands on (its sound design plays on the film clock)
   const list = FILM_ID === 'western'
-    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, -0.5, 0.04], ...[[20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4], [49.5, 0.4]].map(([t, ...r]) => [t + WSH, ...r])]
+    ? [[7.5, 0.5, 0.035], [12.0, -0.6], [15.5, 0.5, 0.035], [20.0, -0.5, 0.04], [30.5, 0.4, 0.035], ...[[20.0, 0.6], [24.5, -0.5, 0.04], [28.5, -0.5], [31.5, 0.5, 0.04], [34.5, 0.5], [38.5, -0.4], [42.5, 0.4], [46.5, -0.4]].map(([t, ...r]) => [t + wsh(t), ...r]), [C.photograph ?? 61.5, 0.4]]
     : SEGMENTS.slice(1, -3).map((sg, i) => [sg.start, i % 2 ? -0.5 : 0.5, 0.045]);
   for (const [t, p0, lv = 0.05] of list) {
     const tt = FILM_ID === 'western' ? groove(t) : t;   // (the italy and inventions entries land in spliced bars: grooved there)
     S.at(tt - 0.35, () => I.whoosh(S, tt - 0.35, 0.9, { level: lv, f0: 160, f1: 1800, pan0: p0, pan1: -p0, peak: 0.4 }));
   }
+}
+
+// MUSIC: the composers themselves, over the softened score (MUSIC_DUCKS) — public-domain themes, in the
+// score's D: Bach's Cello Suite No. 1 Prelude (BWV 1007, G major, here in D), Mozart's Eine kleine
+// Nachtmusik (K. 525, G major, here in D), Beethoven's Ode to Joy (Symphony No. 9 finale, in D as written)
+function musicChapter(S) {
+  if (C.bach == null) return;
+  // Bach: the Prelude's opening arpeggio, two bars' first beats in 16ths, a cello (strings, low)
+  const bach = [50, 57, 66, 64, 66, 57, 66, 57, 50, 59, 67, 66, 67, 59, 67, 59];   // D A F# E F# A F# A | D B G F# G B G B
+  O.line(S, 'strings', bach.map((m, i) => [C.bach + i * 0.125, m, 0.15]), { level: 0.46, cutoff: 2600, bus: 'strings', attack: 0.02, release: 0.25, overlap: 0.02 });
+  // Mozart: "G – D G – D G D G B D" in D, violins over a pizzicato bass
+  const mz = [[0, 62, 0.3], [0.375, 57, 0.11], [0.5, 62, 0.3], [0.875, 57, 0.11], [1.0, 62, 0.12], [1.125, 57, 0.12], [1.25, 62, 0.12], [1.375, 66, 0.12], [1.5, 69, 0.45]];
+  O.line(S, 'strings', mz.map(([d, m, l]) => [C.mozart + d, m + 12, l]), { level: 0.42, cutoff: 3600, bus: 'strings', attack: 0.015, release: 0.3, overlap: 0.02 });
+  for (const [d, m] of [[0, 38], [0.5, 38], [1.0, 45], [1.5, 38]]) I.pizz(S, C.mozart + d, m, { level: 0.2 });
+  // Beethoven: the Ode to Joy, on the horns, warm and broad, the strings joining for the cadence
+  const ode = [66, 66, 67, 69, 69, 67, 66, 64, 62, 62, 64, 66, 66, 64, 64];
+  const durs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.5, 0.5, 2];
+  let t = C.beethoven; const notes = [];
+  ode.forEach((m, i) => { notes.push([t, m, durs[i] * 0.25 * 0.95]); t += durs[i] * 0.25; });
+  O.line(S, 'horn', notes, { level: 0.5, cutoff: 2400, bus: 'horn', attack: 0.04, release: 0.5 });
+  O.chord(S, 'strings', C.odeToJoy + 1.4, C.odeToJoy + 2.6, [50, 57, 62, 66], { level: 0.16 });
 }
 
 // invention: a gallery of two centuries — the camera shutter, a filament's hum, an engine cough, the
@@ -473,7 +496,7 @@ function inventions(S) {
 
 // `chapters`: the film's own chapter sound design between the shared opening and montage
 // (the Western film's by default; the Indian film passes src/audio/india/cues.js).
-export function arrangeCues(S, chapters = [classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, inventions, frontier]) {
+export function arrangeCues(S, chapters = [classical, civic, renaissance, science, industrial, electricity, medicine, flight, moonshot, computing, knowledge, inventions, frontier, musicChapter]) {
   transitionAir(S);
   headings(S);
   for (const section of [opening, ...chapters, montage, finale]) {

@@ -2,7 +2,7 @@
 
 Two 1:48 cinematic short films **rendered live in the browser**, sharing one engine:
 
-- **Achievements of Western Civilization**: 17 sequences (2:05) from the first idea to the Italian Renaissance, the Moon, AI,
+- **Achievements of Western Civilization**: 18 sequences (2:13) from the first idea to the Italian Renaissance, Bach, Mozart and Beethoven, the Moon, AI,
   a gallery of the last two centuries' inventions, and the vision of Mars.
 - **Achievements of Indian Civilization**: 21 sequences (2:27) from the Indus cities to zero, Aryabhata,
   wootz steel, Sushruta, Ellora, Rajasthan's stepwells and lakes, Nalanda, Ashoka and Gandhi, cotton and
@@ -253,17 +253,18 @@ preset costs roughly 8 × 4 = 32× the GPU work of a draft frame.
 | III | 0:21 | **Art & the Renaissance**: golden-ratio geometry and a sketch drawn from thousands of strokes lift into a 3D figure, then burst into pigment | procedural drawing · 2D→3D · particle simulation |
 | IV | 0:28 | **The Italian Renaissance**: Brunelleschi's dome rises over Florence (a cutaway of its herringbone brick), Leonardo's notebook machines draw themselves and lift into 3D, the Sistine Chapel ceiling and the two hands of the Creation of Adam | procedural ink drawing · 2D→3D · architectural cutaway · fresco vault |
 | V | 0:27 | **Scientific Revolution**: slow-motion fall and trajectory, instruments assemble, orrery fly-through, a prism splits white light | speed ramping · scientific visualisation · light and refraction |
-| VI | 0:42 | **Industrial Revolution**: macro gears, hundreds of meshing gears, pistons on the beat, steam, the machine revealed | hard-surface · mechanical rigs · smoke · sound sync |
-| VII | 0:47 | **Electricity & Communication**: a spark races down copper; telegraph → telephone → radio → electronics; a circuit city | match cuts · energy FX · procedural circuit growth |
-| VIII | 0:51 | **Medicine**: a microscopic dive, engraving → holographic anatomy, a medical HUD | scientific visualisation · holographic UI |
-| IX | 0:55 | **Flight & Space**: a blueprint folds into an aircraft, clouds, launch, Earth and orbits | blueprint fold · atmospherics · planetary shading |
-| X | 1:01 | **The Moonshot**: translunar flight, the descent, the landing, the footprint, Earthrise | space cinematography · lunar terrain |
-| XI | 1:07 | **Computing & Digital**: calculator → relays → tubes → transistors → microprocessor, a dive into the die, then AI | hard-surface morphs · data-flow viz · UI animation |
-| XII | 1:12 | **Knowledge**: pages form a sphere, then books, pixels and a global network | instanced choreography · multi-stage morphs |
-| XIII | 1:16 | **Invention**: a gallery of two centuries — photography, the electric light, the Benz Motorwagen, cinema, television, the laser, GPS, the smartphone, mRNA vaccines | museum lighting · hard-surface exhibits · light shaped by each exhibit, on the score's hits |
-| XIV | 1:25 | **The New Frontier**: the Shuttle, Hubble, the genome, Webb, Perseverance and Ingenuity, Artemis, the vision of Mars | planetary shading · telescope optics · procedural terrain |
-| – | 1:33 | **Legacy** (montage): columns → gears → orbits → atoms → circuit nodes → stars | shape-driven match cuts · rhythm editing |
-| – | 1:39 | **Finale**: particles around Earth, *Ideas build upon ideas.*, then the title on one deep impact | large particle systems · title design |
+| VI | 0:42 | **Music**: a candle-lit music room — Bach's cello and the Prelude of Cello Suite No. 1, a Stradivari violin, Mozart's fortepiano and *Eine kleine Nachtmusik*, Beethoven's piano and the *Ode to Joy* as the hall fills with light; the soundtrack plays the three themes | procedural instruments · notation that lights in time with the soundtrack · candle and concert-hall lighting |
+| VII | 0:50 | **Industrial Revolution**: macro gears, hundreds of meshing gears, pistons on the beat, steam, the machine revealed | hard-surface · mechanical rigs · smoke · sound sync |
+| VIII | 0:55 | **Electricity & Communication**: a spark races down copper; telegraph → telephone → radio → electronics; a circuit city | match cuts · energy FX · procedural circuit growth |
+| IX | 0:59 | **Medicine**: a microscopic dive, engraving → holographic anatomy, a medical HUD | scientific visualisation · holographic UI |
+| X | 1:03 | **Flight & Space**: a blueprint folds into an aircraft, clouds, launch, Earth and orbits | blueprint fold · atmospherics · planetary shading |
+| XI | 1:09 | **The Moonshot**: translunar flight, the descent, the landing, the footprint, Earthrise | space cinematography · lunar terrain |
+| XII | 1:15 | **Computing & Digital**: calculator → relays → tubes → transistors → microprocessor, a dive into the die, then AI | hard-surface morphs · data-flow viz · UI animation |
+| XIII | 1:20 | **Knowledge**: pages form a sphere, then books, pixels and a global network | instanced choreography · multi-stage morphs |
+| XIV | 1:24 | **Invention**: a gallery of two centuries — photography, the electric light, the Benz Motorwagen, cinema, television, the laser, GPS, the smartphone, mRNA vaccines | museum lighting · hard-surface exhibits · light shaped by each exhibit, on the score's hits |
+| XV | 1:33 | **The New Frontier**: the Shuttle, Hubble, the genome, Webb, Perseverance and Ingenuity, Artemis, the vision of Mars | planetary shading · telescope optics · procedural terrain |
+| – | 1:41 | **Legacy** (montage): columns → gears → orbits → atoms → circuit nodes → stars | shape-driven match cuts · rhythm editing |
+| – | 1:47 | **Finale**: particles around Earth, *Ideas build upon ideas.*, then the title on one deep impact | large particle systems · title design |
 
 Colour moves from marble, bronze, parchment and gold to steel, electricity and cool white
 light across the running time. The final grade applies this shift as an era white balance.
