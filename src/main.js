@@ -329,7 +329,31 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
     time.textContent = fmt(t);
     scrub.setAttribute('aria-valuenow', t.toFixed(1));
   };
-  player.onEnd = () => { body.classList.remove('playing'); showControls(true); };
+  player.onEnd = () => { body.classList.remove('playing'); showControls(true); memo.clear(); };
+  // RESUME: where the viewer was in this film is remembered on the device (localStorage, per film); the next
+  // visit offers to carry on from there. (Wrapped in try: storage can be missing or blocked.)
+  const memo = (() => {
+    const key = `awc-pos-${FILM_ID}`;
+    let last = 0;
+    return {
+      get: () => { try { const v = parseFloat(localStorage.getItem(key)); return Number.isFinite(v) ? v : 0; } catch { return 0; } },
+      put: (t, force = false) => { const now = performance.now(); if (!force && now - last < 2000) return; last = now; try { localStorage.setItem(key, t.toFixed(1)); } catch { /* storage blocked */ } },
+      clear: () => { try { localStorage.removeItem(key); } catch { /* storage blocked */ } },
+    };
+  })();
+  { const onTick0 = player.onTick; player.onTick = (t) => { onTick0?.(t); if (player.playing && t > 3 && t < DURATION - 3) memo.put(t); }; }
+  addEventListener('pagehide', () => { const t = player.currentTime; if (t > 3 && t < DURATION - 3) memo.put(t, true); });
+  const resumeAt = memo.get();
+  if (resumeAt > 3 && resumeAt < DURATION - 5 && !params.has('t')) {
+    // the Play button resumes; a small link starts over
+    const label = $('play').querySelector('span');
+    label.textContent = `Resume · ${fmt(resumeAt).replace(/\.\d$/, '')}`;
+    player.time = resumeAt;
+    const over = document.createElement('button');
+    over.type = 'button'; over.className = 'resume-over'; over.textContent = 'Start from the beginning';
+    over.addEventListener('click', () => { memo.clear(); player.time = 0; label.textContent = 'Play film'; over.remove(); begin(player); syncPlaying(); });
+    $('play').closest('.play-row').after(over);
+  }
   const syncPlaying = () => body.classList.toggle('playing', playing());
   const toggle = async () => {
     if (!exp.active) await player.toggle();

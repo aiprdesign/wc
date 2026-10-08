@@ -6,6 +6,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, lerp, sat, TAU } from '../../lib/math.js';
 import { fbm2, noise2 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
+import { persistModule } from '../../lib/persist.js';
+
+// painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 // ------------------------------------------------------------------ geometry helpers
 // Merge-friendly: non-indexed, position / normal / uv only.
@@ -74,7 +78,8 @@ export function leafGeometry({ len = 1, width = 0.3, shape = 'lance', teeth = 0,
 }
 
 // Leaf surface: a darker midrib and veins, a paler rim (alpha-free, used as colour map ×vertex/instance tint).
-export function leafTexture({ veins = 7, seed = 1 } = {}) {
+export function leafTexture(...args) { return P.memo(`leafTexture:${JSON.stringify(args)}`, () => leafTexture__paint(...args)); }
+function leafTexture__paint({ veins = 7, seed = 1 } = {}) {
   const W = 256, H = 128, c = mkCanvas(W, H), x = c.getContext('2d');
   const R = rng(seed);
   x.fillStyle = '#b9c9a0'; x.fillRect(0, 0, W, H);

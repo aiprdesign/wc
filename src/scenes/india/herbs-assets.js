@@ -9,6 +9,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, lerp, sat, TAU } from '../../lib/math.js';
 import { fbm2, noise2, noise3 } from '../../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
+import { persistModule } from '../../lib/persist.js';
+
+// painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 export const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Level of detail for the tessellating helpers (lathe, grid surfaces, tubes): herbs.js sets k < 1 on the lite path.
@@ -129,7 +133,8 @@ function veinPaths(kind, R) {
   return P;
 }
 // Colour (neutral pale green: instance colour tints it) + normal map from the same veins.
-export function leafMaps(kind = 'pinnate', seed = 1) {
+export function leafMaps(...args) { return P.memo(`leafMaps:${JSON.stringify(args)}`, () => leafMaps__paint(...args)); }
+function leafMaps__paint(kind = 'pinnate', seed = 1) {
   const W = 512, H = 256, R = rng(seed), paths = veinPaths(kind, R);
   // (strokes drawn plainly on a layer, then the layer composited once through the blur: a canvas filter
   // per stroke is very slow on software canvases)

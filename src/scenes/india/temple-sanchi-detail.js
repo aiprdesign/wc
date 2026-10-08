@@ -17,6 +17,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvas as mkCanvas } from '../../lib/textures.js';
 import { rng } from '../../lib/math.js';
+import { persistModule } from '../../lib/persist.js';
+
+// painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 // ------------------------------------------------------------------------------------------- layout
 // Gateway (torana) layout in its own frame: x across the passage, y up, z outward (front = +z).
@@ -404,7 +408,8 @@ class Relief {
 }
 
 // Architrave friezes: 4 rows (each the full 6 m face of a beam), the row picked per architrave/face/gate.
-function friezeAtlas(lite) {
+function friezeAtlas(...args) { return P.memo(`friezeAtlas:${JSON.stringify(args)}`, () => friezeAtlas__paint(...args)); }
+function friezeAtlas__paint(lite) {
   const W = lite ? 1024 : 2048, RH = lite ? 128 : 256, R = new Relief(W, RH * 4);
   const pxm = W / (2 * G.LB), pym = RH / G.AH;
   const X = (lx) => (lx + G.LB) * pxm;
@@ -448,7 +453,8 @@ function friezeAtlas(lite) {
 }
 
 // Pillar panels: 4 columns (front A, front B, inner sides: lotus vine, outer sides), each a full shaft face.
-function panelAtlas(lite) {
+function panelAtlas(...args) { return P.memo(`panelAtlas:${JSON.stringify(args)}`, () => panelAtlas__paint(...args)); }
+function panelAtlas__paint(lite) {
   const CW = lite ? 128 : 256, H = lite ? 1024 : 2048, R = new Relief(CW * 4, H);
   const LEN = G.SHAFT - G.PLINTH, pxm = CW / G.PW, pym = H / LEN;
   const fy = (m) => H - m * pym;                 // metres above the plinth → canvas y

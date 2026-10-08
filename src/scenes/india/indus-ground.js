@@ -8,16 +8,27 @@ import { canvas as mkCanvas } from '../../lib/textures.js';
 import { rng } from '../../lib/math.js';
 import { INDUS_NOISE } from './indus-surface.js';
 import { NK_NOISE, NK_GROUND } from './nature-kit.js';
+import { persistModule } from '../../lib/persist.js';
+
+// the painted masks are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 export const PLAIN_RECT = [-1200, -1200, 2400, 2400];    // x0, z0, width, depth (m)
 export const TOWN_RECT = [-150, -140, 370, 280];
 
 function compose(w, h, R, G, B) {
+  // each grey mask into its own channel, all on the canvas's own (GPU) path: tinted by multiply, summed by
+  // 'lighter' — no pixel read-back (reading three blurred canvases back took tens of seconds on some GPUs)
   const out = mkCanvas(w, h), g = out.getContext('2d');
-  const img = g.createImageData(w, h), d = img.data;
-  const r = R.getContext('2d').getImageData(0, 0, w, h).data, gg = G.getContext('2d').getImageData(0, 0, w, h).data, b = B.getContext('2d').getImageData(0, 0, w, h).data;
-  for (let i = 0; i < d.length; i += 4) { d[i] = r[i]; d[i + 1] = gg[i]; d[i + 2] = b[i]; d[i + 3] = 255; }
-  g.putImageData(img, 0, 0);
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = 'lighter';
+  for (const [c, tint] of [[R, '#ff0000'], [G, '#00ff00'], [B, '#0000ff']]) {
+    const t = mkCanvas(w, h), tg = t.getContext('2d');
+    tg.drawImage(c, 0, 0);
+    tg.globalCompositeOperation = 'multiply'; tg.fillStyle = tint; tg.fillRect(0, 0, w, h);
+    g.drawImage(t, 0, 0);
+  }
+  g.globalCompositeOperation = 'source-over';
   const t = new THREE.CanvasTexture(out);
   t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8;
   t.needsUpdate = true;
@@ -27,7 +38,11 @@ function layer(w, h) { const c = mkCanvas(w, h), g = c.getContext('2d'); g.fillS
 function blurred(c, px) { const o = mkCanvas(c.width, c.height), g = o.getContext('2d'); g.filter = `blur(${px}px)`; g.drawImage(c, 0, 0); return o; }
 
 // riverPts: Vector3[] along the Indus; lots: [x0,x1,z0,z1][] footprints; streets: {ns:[{x,w}], ew:[{z,w}]}, extents of the town
-export function groundMasks({ riverPts, riverW, lots, citadel, streets, town }) {
+export function groundMasks(args) {
+  return { ...P.memo('masks', () => paintMasks(args)), townK: { value: 1 } };
+}
+
+function paintMasks({ riverPts, riverW, lots, citadel, streets, town }) {
   const r = rng(404);
   // ---- the plain
   const PW = 1024, k = PW / PLAIN_RECT[2];
@@ -93,7 +108,7 @@ export function groundMasks({ riverPts, riverW, lots, citadel, streets, town }) 
   // keep the dust and shadow outside the footprints only (inside is the house, which rises later)
   for (const c of [tR, tB]) { const g = c.getContext('2d'); g.globalCompositeOperation = 'destination-out'; foot(g, 0); }
   const town2 = compose(TW, TH, tR, blurred(tg, 0.6), tB);
-  return { plain, town: town2, townK: { value: 1 } };
+  return { plain, town: town2 };
 }
 
 // Patches the ground material (MeshStandard, no map): procedural colour, roughness and relief.

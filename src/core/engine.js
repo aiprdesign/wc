@@ -180,7 +180,10 @@ export class Engine {
     {
       let mod = this.modules[seg.id];
       if (typeof mod === 'function') mod = this.modules[seg.id] = await mod();   // (lazy: AR / VR Lite)
+      const prof = this._profile ??= (typeof location !== 'undefined' && /[?&]profile\b/.test(location.search));
+      const tp0 = performance.now();
       const inst = await mod.create(this.ctx, seg);
+      const tp1 = performance.now();
       inst.segment = seg;
       if (inst.camera?.isPerspectiveCamera) { inst.camera.aspect = FILM_ASPECT; inst.camera.updateProjectionMatrix(); }
       this.instances.set(seg.id, inst);
@@ -205,8 +208,10 @@ export class Engine {
         antiTileScene(inst.scene);
         // phones: cap every texture's size before it reaches the GPU (lib/texbudget.js)
         if (this.quality === 'lite') { budgetScene(inst.scene, { before: texV0 }); if (inst.hud) budgetScene(inst.hud.scene); }
+        const tp2 = performance.now();
         await r.compileAsync(inst.scene, inst.camera);
         if (inst.hud) await r.compileAsync(inst.hud.scene, inst.hud.camera);
+        if (prof) console.info(`[profile] ${seg.id}: create ${(tp1 - tp0).toFixed(0)} ms · warm/batch ${(tp2 - tp1).toFixed(0)} ms · compile ${(performance.now() - tp2).toFixed(0)} ms`);
       } catch (e) { console.warn('warm-up failed for', seg.id, e); }
       this.words3d.addSegment(seg.id);
       if (this.quality === 'lite' && inst._wordsOverlay) budgetScene(inst._wordsOverlay.scene);

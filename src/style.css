@@ -331,3 +331,7 @@ body.buffering .buffering { display: inline-flex; }
 .xpad-on.xpad-walk.xpad-touch .xpad-stick, .xpad-on.xpad-walk.xpad-touch .xpad-btns { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
 @media (max-height: 430px) { .xpad-mode { top: calc(env(safe-area-inset-top, 0px) + 10px); } }
 .xpad-touch .xpad-mode { top: calc(env(safe-area-inset-top, 0px) + 16px); }
+
+/* resume: 'Start from the beginning' under the play row */
+.resume-over { display: block; margin: 10px auto 0; padding: 4px 10px; font: inherit; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); opacity: 0.7; background: none; border: 0; border-bottom: 1px solid rgba(226, 195, 138, 0.35); cursor: pointer; }
+.resume-over:hover, .resume-over:focus-visible { opacity: 1; color: var(--gold); outline: none; }

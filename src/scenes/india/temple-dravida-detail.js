@@ -22,6 +22,10 @@
 import * as THREE from 'three';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { rng } from '../../lib/math.js';
+import { persistModule } from '../../lib/persist.js';
+
+// painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 const PI = Math.PI;
 
@@ -157,6 +161,9 @@ function blurred(c, px) { const o = mkCanvas(c.width, c.height), g = o.getContex
 function reliefTextures() {
   if (TEX) return TEX;
   if (typeof document === 'undefined') return (TEX = {});
+  return (TEX = P.memo('relief', paintRelief));
+}
+function paintRelief() {
   const N = 512, c = mkCanvas(N, N), g = c.getContext('2d'), r = rng(23), rowH = N / 8;
   g.fillStyle = '#505050'; g.fillRect(0, 0, N, N);
   const ell = (x, y, rx, ry, a = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, a, 0, PI * 2); g.fill(); };
@@ -207,7 +214,7 @@ function reliefTextures() {
     }
   }
   const script = heightToNormal(blurred(s, 0.7), 2.2);
-  return (TEX = { frieze, script });
+  return { frieze, script };
 }
 // Register the carved / shaded variants of a monument's stone on M (M[prefix + 'Frieze'|'Script'|'Shade'|'Recess'|'Void']).
 export function dravidaMaterials(M, prefix, base, { cut = false, shade = '#8c7660', recess = '#d6bea0', void: vcol = '#16100c' } = {}) {

@@ -11,6 +11,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { sdfBody, meshBody } from '../../lib/sdfmesh.js';
 import { rng, sat, lerp } from '../../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
+import { persistModule } from '../../lib/persist.js';
+
+// painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 export const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const TAU = Math.PI * 2;
@@ -345,7 +349,8 @@ const BRAHMI = [
   [[['l', .5, 0, .5, .56], ['c', .5, .78, .22]], .5, .5],                                      // kha
   [[['l', .14, 0, .14, 1], ['l', .14, 1, .86, 1], ['l', .86, 1, .86, 0], ['l', .86, 0, .62, .22]], .86, .86],   // pha
 ];
-export function inscriptionCanvas({ W = 1024, H = 1024, lines = 9, perLine = 13, seed = 9 } = {}) {
+export function inscriptionCanvas(...args) { return P.memo(`inscriptionCanvas:${JSON.stringify(args)}`, () => inscriptionCanvas__paint(...args)); }
+function inscriptionCanvas__paint({ W = 1024, H = 1024, lines = 9, perLine = 13, seed = 9 } = {}) {
   const r = rng(seed);
   const mk = () => { const c = mkCanvas(W, H), g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'miter'; g.miterLimit = 3; return [c, g]; };
   const [hc, hg] = mk(), [oc, og] = mk();

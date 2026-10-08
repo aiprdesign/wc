@@ -9,10 +9,14 @@ import * as THREE from 'three';
 import { rng, TAU } from '../../lib/math.js';
 import { canvas as mkCanvas, toTexture } from '../../lib/textures.js';
 import { V3, bake, merge, tint, lathe, box, cyl, rod, beam } from './isro-assets.js';
+import { persistModule } from '../../lib/persist.js';
+
+// the painted maps are kept on the device between visits (lib/persist.js)
+const P = await persistModule(import.meta.url);
 
 // ================================================================== procedural maps
 const TEXC = new Map();
-const once = (k, f) => { if (!TEXC.has(k)) TEXC.set(k, f()); return TEXC.get(k); };
+const once = (k, f) => { if (!TEXC.has(k)) TEXC.set(k, P.memo(k, f)); return TEXC.get(k); };
 const grey = (c, S, v = 128) => { const g = c.getContext('2d'); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, 0, S, c.height); return g; };
 // draw at the 9 wrap offsets (seamless tiles)
 const wrap9 = (S, fn, H = S) => { for (const ox of [-S, 0, S]) for (const oy of [-H, 0, H]) fn(ox, oy); };
