@@ -91,7 +91,12 @@ export async function persistModule(url) {
             t.needsUpdate = true;
             return t;
           };
-          return hit.single ? build('_') : Object.fromEntries(Object.keys(hit.meta).map((n) => [n, build(n)]));
+          const res = hit.single ? build('_') : Object.fromEntries(Object.keys(hit.meta).map((n) => [n, build(n)]));
+          // used once: the decoded copies go, so the device never holds each image twice (a later rebuild of
+          // the same chapter, e.g. AR Lite coming back to it, simply paints it again)
+          mem.delete(full);
+          for (const b of Object.values(hit.parts)) b?.close?.();
+          return res;
         }
         const res = make();
         save(full, res);

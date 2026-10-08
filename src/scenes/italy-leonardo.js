@@ -38,6 +38,8 @@ function screwModel() {
   wood.push(at(new THREE.TorusGeometry(0.43, 0.012, 5, 40), 0, 0.045, 0, Math.PI / 2));
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; wood.push(beam(V(0, 0.048, 0), V(Math.cos(a) * 0.42, 0.048, Math.sin(a) * 0.42), 0.018, 0.01)); }
   wood.push(at(new THREE.CylinderGeometry(0.05, 0.06, 0.05, 12), 0, 0.06, 0));
+  for (let i = 0; i < 12; i++) { const a = (i + 0.5) / 12 * Math.PI * 2; wood.push(rod(V(Math.cos(a) * 0.425, 0.04, Math.sin(a) * 0.425), V(Math.cos(a) * 0.425, 0.085, Math.sin(a) * 0.425), 0.006, 5)); }
+  wood.push(at(new THREE.TorusGeometry(0.425, 0.006, 4, 40), 0, 0.085, 0, Math.PI / 2));
   // the screw: mast, push bars with handles, the helix of linen, its rim and struts
   wood2.push(rod(V(0, 0.04, 0), V(0, 0.98, 0), 0.014, 8));
   for (let i = 0; i < 4; i++) {
@@ -81,6 +83,8 @@ function orniModel() {
   // the pylon carrying the wing pivots
   wood.push(beam(V(0.03, 0.14, 0), V(0.03, 0.27, 0), 0.02, 0.02));
   wood.push(beam(V(0.03, 0.27, -0.09), V(0.03, 0.27, 0.09), 0.018, 0.018));
+  for (const sz of [1, -1]) { wood.push(rod(V(-0.08, 0.155, sz * 0.05), V(0.06, 0.29, sz * 0.2), 0.0025, 4)); wood.push(rod(V(0.12, 0.155, sz * 0.05), V(0.08, 0.3, sz * 0.24), 0.0025, 4)); }
+  wood.push(at(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 10), 0.03, 0.27, 0.09, Math.PI / 2)); wood.push(at(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 10), 0.03, 0.27, -0.09, Math.PI / 2));
   // tail: a fan of linen on three ribs
   const tail = [];
   {
@@ -163,7 +167,8 @@ function carModel() {
   }
   // wheels (inside, just below the skirt)
   for (const [x, z] of [[0.22, 0.2], [-0.22, 0.2], [0.22, -0.2], [-0.22, -0.2]]) {
-    wood.push(at(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 16), x, 0.075, z, Math.PI / 2));
+    wood.push(at(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8), x, 0.075, z, Math.PI / 2));
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI; wood.push(at(new THREE.BoxGeometry(0.008, 0.14, 0.012), x, 0.075, z, 0, 0, a)); }
     iron.push(at(new THREE.TorusGeometry(0.075, 0.006, 4, 20), x, 0.075, z));
   }
   return { root, parts: [{ obj: body, meshes: wood, mat: 'wood' }, { obj: body, meshes: iron, mat: 'iron' }, { obj: body, meshes: bronze, mat: 'bronze' }] };
@@ -269,6 +274,11 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
     const brass = new THREE.MeshStandardMaterial({ color: '#b98d4c', roughness: 0.3, metalness: 1 });
     const div = new THREE.Mesh(mergeParts([beam(V(0, 0.004, 0), V(0.13, 0.004, 0.035), 0.005, 0.004), beam(V(0, 0.004, 0), V(0.13, 0.004, -0.01), 0.005, 0.004), at(new THREE.CylinderGeometry(0.008, 0.008, 0.006, 12), 0, 0.005, 0)]), brass);
     div.position.set(0.6, 0, 0.19); div.rotation.y = 0.5; div.castShadow = true; root.add(div);
+    const holder = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.045, 0], [0.047, 0.006], [0.012, 0.012], [0.01, 0.05], [0.022, 0.056], [0.022, 0.062], [0, 0.062]].map(([a, b]) => new THREE.Vector2(a, b)), 20), pewter);
+    holder.position.set(1.12, 0, -0.26); holder.castShadow = true; root.add(holder);
+    const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.012, 0.1, 12), new THREE.MeshStandardMaterial({ color: '#efe3c8', roughness: 0.6, emissive: '#ffb060', emissiveIntensity: 0.15 }));
+    wax.position.set(1.12, 0.112, -0.26); root.add(wax);
+    root.userData.flameAt = V(1.12, 0.176, -0.26);
     const chalk = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.008), new THREE.MeshStandardMaterial({ color: '#a8462a', roughness: 0.95 }));
     chalk.position.set(0.3, 0.004, 0.2); chalk.rotation.y = -0.6; chalk.castShadow = true; root.add(chalk);
   }

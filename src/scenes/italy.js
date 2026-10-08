@@ -133,6 +133,10 @@ export function create(ctx, segment) {
   chapel.root.add(dustC);
   const dustS = new Dust({ count: lite ? 300 : 700, size: [1.6, 0.6, 0.8], center: [0.4, 0.3, 0], color: '#ffe2b8', particleSize: 0.0016, opacity: 0.45, intensity: 1.3, seed: 21 });
   study.root.add(dustS);
+  const flame = glowSprite({ color: '#ffb35c', intensity: 2.2, scale: 0.05 });
+  flame.position.copy(study.root.userData.flameAt); study.root.add(flame);
+  const flameCore = glowSprite({ color: '#fff0c8', intensity: 2.5, scale: 0.016 });
+  flameCore.position.copy(study.root.userData.flameAt).add(V(0, -0.004, 0)); study.root.add(flameCore);
   const gapGlow = glowSprite({ color: '#ffd9a0', intensity: 3, scale: 0.2 });
   gapGlow.position.copy(chapel.gap); gapGlow.renderOrder = 6;
   chapel.root.add(gapGlow);
@@ -353,6 +357,8 @@ export function create(ctx, segment) {
       bloom.strength = 0.6;
       exposure = lerp(0.55, 1, dim);
       dustS.tick(t, info);
+      const fl = 0.85 + 0.1 * Math.sin(t * 23.0) + 0.05 * Math.sin(t * 37.0 + 1.3);
+      flame.material.color.set('#ffb35c').multiplyScalar(2.2 * fl * dim); flameCore.material.color.set('#fff0c8').multiplyScalar(2.5 * fl * dim);
       // the ghost of the vault's linework, posed for the chapel camera, in front of the desk camera
       const gp = ramp(t, TC2 - 0.36, TC2, ease.linear);
       if (gp > 0) {

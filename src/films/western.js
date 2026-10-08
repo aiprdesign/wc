@@ -217,7 +217,7 @@ const INTERLUDES = [
 // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
 const WORDS = {
   classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
-  renaissance: 'BEAUTY', italy: 'WONDER', science: 'REASON', music: { text: 'HARMONY', t0: 30.6, t1: 31.5, pace: 0.8, focus: false }, industrial: 'POWER',   // (HARMONY clears before the cello's first notes, no focus pull)
+  renaissance: 'BEAUTY', italy: { text: 'WONDER', t0: 20.1, t1: 20.85, pace: 0.8, focus: false }, science: 'REASON', music: { text: 'HARMONY', t0: 30.6, t1: 31.5, pace: 0.8, focus: false }, industrial: 'POWER',   // (HARMONY clears before the cello's first notes, no focus pull)
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   moonshot: { text: 'USA', t0: 51.95, t1: 52.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 54.55, t1: 56.3, pace: 0.8 }, { text: 'AI', t0: 57.5, t1: 58.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
   inventions: 'INVENTION',

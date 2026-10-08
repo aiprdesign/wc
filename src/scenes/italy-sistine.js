@@ -437,6 +437,12 @@ export function buildChapel({ lite = false } = {}) {
       for (let k = 0; k < 10; k++) P.push(at(new THREE.CylinderGeometry(0.035, 0.05, 1.2, 8), sx, 1.72, s * (1.2 + k * (HZ - 1.6) / 9)));
       P.push(at(new THREE.BoxGeometry(0.3, 0.1, HZ - 0.9), sx, 2.36, s * (HZ + 0.9) / 2));
     }
+    // stone benches along the walls, and seven candelabra on the screen
+    for (const sg of [1, -1]) P.push(at(new THREE.BoxGeometry(HALL.L - 1, 0.45, 0.55), 0, 0.225, sg * (HZ - 0.28)));
+    for (let k = 0; k < 7; k++) {
+      const z = (k - 3) * 1.75; if (Math.abs(z) < 0.8) continue;
+      P.push(at(new THREE.LatheGeometry([[0, 0], [0.16, 0], [0.1, 0.12], [0.05, 0.2], [0.07, 0.6], [0.04, 0.7], [0.12, 0.78], [0.1, 0.82], [0.02, 0.84], [0.025, 1.05], [0, 1.05]].map(([a, b]) => new THREE.Vector2(a, b)), 12), sx, 2.41, z));
+    }
     // the singers' gallery (cantoria) on the right wall
     P.push(at(new THREE.BoxGeometry(3.6, 0.25, 1.2), 4.0, 5.6, HZ - 0.6));
     P.push(at(new THREE.BoxGeometry(3.6, 0.9, 0.1), 4.0, 6.15, HZ - 1.2));
