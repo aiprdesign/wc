@@ -591,6 +591,9 @@ export class Engine {
   // fall across a hard camera cut are dropped, so a cut never double-exposes.
   render(filmT, filmDt = 1 / 60, opts = {}) {
     if (this.xrActive) return;   // the headset's frame loop renders (core/xr.js)
+    // streaming: a moment whose chapter isn't built yet is not drawn at all — the canvas keeps the last
+    // frame it showed (never a black frame while the next chapter loads)
+    if (this.keepLastFrame && !this.isReady(filmT / TIME_SCALE)) return;
     this.live?.tick();   // viewer's live camera offset (zero unless someone is dragging)
     const N = Math.max(1, Math.floor(opts.motionBlur ?? 0));
     if (N <= 1 || this.explore?.active || !(filmDt > 0)) {

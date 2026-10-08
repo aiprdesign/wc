@@ -114,7 +114,9 @@ async function boot() {
   const reloadLighter = () => {
     const cur = params.get('q') ?? quality;
     const lost = (parseInt(params.get('lost') ?? '0', 10) || 0) + 1;
-    const q = { ultra: 'high', high: 'medium', medium: 'lite', low: 'lite' }[cur];
+    // (already at lite — a phone: reload at lite, at the same moment; with only a window of the film held
+    // it usually comes back. Twice at most, then a message rather than a loop)
+    const q = { ultra: 'high', high: 'medium', medium: 'lite', low: 'lite', lite: 'lite' }[cur];
     intro.classList.remove('hidden', 'ready');
     if (!q || lost > 2) { setStatus('The graphics driver reset and the film could not recover on this device. Close other tabs and reload to try again.'); return; }
     const url = new URL(location.href);
@@ -145,6 +147,8 @@ async function boot() {
   // behind the loader before Play. AR / VR Lite (#arlite) streams chapter by chapter, letting go of the
   // chapters behind it.
   const streaming = !params.has('still') && (params.get('stream') !== '0' || !!chapter);
+  // streaming: a moment that isn't built yet is never drawn (no black frame) — the last frame stays on screen
+  engine.keepLastFrame = streaming;
   if (onlyIds?.length) {
     await engine.setup(modules);
     for (const id of onlyIds) { setStatus(`Building · ${id}`); await engine.buildSegment(id); }
@@ -520,7 +524,17 @@ function setupUI(player, score, explorer, experience, ambient, xrs) {
       resumeAfterExplore = exp.active && exp.playing;
       if (exp.active) { exp.pause({ keepAudio: true }); syncPlaying(); } else if (player.playing) { player.pause(); syncPlaying(); }
       intro.classList.add('hidden');
-      explorer.enter(exp.active ? exp.t : player.time);
+      const tE = exp.active ? exp.t : player.time;
+      if (explorer.enter(tE) === false) {
+        // (streaming: this chapter isn't built yet — build it, then enter; the spinner shows meanwhile)
+        const seg = engine.activeSegments(tE / TIME_SCALE).at(-1);
+        document.body.classList.add('buffering');
+        engine.buildSegment(seg.id).then(() => engine.warmSegment(seg.id)).then(() => {
+          engine.instances.get(seg.id)._ready = true;
+          document.body.classList.remove('buffering');
+          if (body.classList.contains('exploring-on')) explorer.enter(tE);
+        }).catch(() => document.body.classList.remove('buffering'));
+      }
     } else explorer.exit();
     body.classList.toggle('exploring-on', on);
     explorer.padUI?.show(on);
