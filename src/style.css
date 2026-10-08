@@ -344,3 +344,7 @@ body.buffering .buffering { display: inline-flex; }
 .buf-spin { position: fixed; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.18); border-top-color: var(--gold); animation: buf-spin 0.9s linear infinite; z-index: 44; display: none; pointer-events: none; }
 body.buffering .buf-spin { display: block; }
 @keyframes buf-spin { to { transform: rotate(360deg); } }
+
+/* the last frame, held while the next chapters load (main.js) */
+.hold-frame { position: fixed; z-index: 5; display: none; pointer-events: none; background: #000; }
+.hold-frame.on { display: block; }

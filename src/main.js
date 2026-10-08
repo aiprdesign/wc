@@ -223,7 +223,35 @@ async function boot() {
   const gate = (filmT) => { const T = filmT / TIME_SCALE; return engine.isReady(T) && readyThrough(T, Math.min(END, T + LOOKAHEAD)); };
   player.gate = gate;
   experience.gate = gate;
-  const buffering = () => document.body.classList.toggle('buffering', !!(player.waiting || experience.waiting));
+  // HOLD: while playback waits for the next chapters, the last frame stays on screen as a plain image laid
+  // exactly over the canvas (the building underneath may touch the GL canvas; the viewer never sees it go
+  // black or flicker), with the spinner over it; it lifts the moment playback resumes
+  const hold = document.createElement('canvas');
+  hold.className = 'hold-frame'; hold.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(hold);
+  const placeHold = () => { const r = $('film').getBoundingClientRect(); Object.assign(hold.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` }); };
+  let held = false, heldT = -1;
+  const freeze = () => {
+    if (held && Math.abs(nowT() - heldT) < 0.01) return;   // (a seek while held: the new frame …)
+    if (held && !engine.isReady(nowT() / TIME_SCALE)) return;   // (… unless it isn't built yet: the last frame there was stays)
+    if (!held && !engine.isReady(nowT() / TIME_SCALE)) return;   // (nothing built there to copy: the canvas keeps its last frame)
+    held = true; heldT = nowT();
+    try {
+      const c = $('film');
+      engine.render(nowT(), 0);                       // a fresh copy of the frame, read back in the same task
+      hold.width = c.width; hold.height = c.height;
+      hold.getContext('2d').drawImage(c, 0, 0);
+      placeHold();
+      hold.classList.add('on');
+    } catch { /* the canvas stays as it is */ }
+  };
+  const thaw = () => { if (!held) return; held = false; hold.classList.remove('on'); };
+  addEventListener('resize', () => { if (held) placeHold(); });
+  const buffering = () => {
+    const w = !!(player.waiting || experience.waiting);
+    if (w) freeze(); else thaw();
+    document.body.classList.toggle('buffering', w);
+  };
   const onBuilt = () => {
     loadedUI?.();
     if (player.waiting && gate(player.time) && readyThrough(player.time / TIME_SCALE, Math.min(END, player.time / TIME_SCALE + BUFFER))) player.play(player.time);
