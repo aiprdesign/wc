@@ -280,7 +280,7 @@ export function create(ctx, segment) {
       for (const m of flo.cutMats) m.opacity = 1 - ramp(t, B.brunelleschi + 0.08, B.brunelleschi + 0.42);
       const C = flo.bricks.courses;
       const laid = flo.bricks.lay(lerp(C * 0.22, C * 0.97, ramp(t, B.brunelleschi + 0.05, TC1 - 0.1, ease.linear)));
-      flo.bricks.mesh.visible = open > 0.02;
+      flo.bricks.mesh.visible = flo.bricks.rib.visible = open > 0.02;
       // ink: the dome draws itself, then the frame turns to parchment
       const inkP = ramp(t, B.brunelleschi + 0.45, TC1 - 0.12, ease.inOutSine);
       inkF.progress = inkP; inkF.material.depthTest = false;

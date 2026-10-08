@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { rng, lerp } from '../lib/math.js';
 import { noise2, fbm2 } from '../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
-import { V, mergeParts, at } from './italy-assets.js';
+import { V, mergeParts, at, normalFromHeight, boxUV } from './italy-assets.js';
 
 export const DOME_Y0 = 5.5;        // springing of the dome (top of the drum)
 export const DOME_H = 3.6;         // springing → oculus ring
@@ -61,10 +61,17 @@ function tileCanvas(seed = 3, S = 512) {
     g.fillStyle = r() < 0.6 ? `rgba(40,25,15,${0.04 + r() * 0.07})` : `rgba(190,170,120,${0.03 + r() * 0.05})`;
     g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
   }
+  // rain streaks down the slope
+  for (let i = 0; i < 70; i++) { const x = r() * S, y = r() * S; const gr = g.createLinearGradient(0, y, 0, y + 120); gr.addColorStop(0, 'rgba(30,20,12,0.16)'); gr.addColorStop(1, 'rgba(30,20,12,0)'); g.fillStyle = gr; g.fillRect(x, y, 4 + r() * 8, 120); }
   return c;
 }
 let _tile = null;
-export const tileTexture = () => (_tile ??= toTexture(tileCanvas(), { repeat: true }));
+export function tileTexture() {
+  if (_tile) return _tile;
+  const c = tileCanvas();
+  _tile = toTexture(c, { repeat: true }); _tile.userData.normal = normalFromHeight(c, 4);
+  return _tile;
+}
 
 function brickCanvas(S = 256) {
   const c = mkCanvas(S, S), g = c.getContext('2d'), r = rng(9);
@@ -79,30 +86,111 @@ function brickCanvas(S = 256) {
   return c;
 }
 let _brick = null;
-export const brickTexture = () => (_brick ??= toTexture(brickCanvas(), { repeat: true }));
+export function brickTexture() { if (_brick) return _brick; const c = brickCanvas(); _brick = toTexture(c, { repeat: true }); _brick.userData.normal = normalFromHeight(c, 3); return _brick; }
 
-// white Carrara with dark green Prato serpentine frames and a rose accent (the cathedral's polychrome skin)
-function marbleCanvas(S = 512) {
-  const c = mkCanvas(S, S), g = c.getContext('2d'), r = rng(12);
+// The cathedral's polychrome skin: white Carrara, green Prato serpentine and red Maremma marble in
+// geometric bands — a plinth, framed rectangular panels with red inlays, a chequer frieze, tall panels
+// with blind arches, striped corner pilasters. One canvas = 20 m × 20 m of wall (box-projected UVs); a
+// height canvas gives the joints and the slightly proud frames for the normal map.
+const MG = '#2c4434', MR = '#9c4a3e', MW = '#ece6d8';
+function marbleCanvas(S = 1024) {
+  const c = mkCanvas(S, S), g = c.getContext('2d'), h = mkCanvas(S, S), hg = h.getContext('2d'), r = rng(12);
   const img = g.createImageData(S, S), d = img.data;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const n = fbm2(x / S * 5, y / S * 5, 4) * 0.06, i = (y * S + x) * 4;
-    d[i] = 236 * (1 + n); d[i + 1] = 229 * (1 + n); d[i + 2] = 214 * (1 + n); d[i + 3] = 255;
+    const n = fbm2(x / S * 6, y / S * 6, 4), i = (y * S + x) * 4;
+    const vein = Math.pow(1 - Math.abs(Math.sin((x / S * 9 + y / S * 4 + n * 3) * Math.PI)), 24) * 0.18;
+    const l = 1 + n * 0.05 - vein;
+    d[i] = 236 * l; d[i + 1] = 230 * l; d[i + 2] = 216 * l; d[i + 3] = 255;
   }
   g.putImageData(img, 0, 0);
-  const G = '#2e4537', P = '#b9877a';
-  g.strokeStyle = G; g.lineWidth = S * 0.028;
-  g.strokeRect(S * 0.08, S * 0.06, S * 0.84, S * 0.5);
-  g.lineWidth = S * 0.012; g.strokeRect(S * 0.16, S * 0.14, S * 0.68, S * 0.34);
-  g.fillStyle = P; g.fillRect(S * 0.24, S * 0.22, S * 0.52, S * 0.18);
-  g.fillStyle = G;
-  g.fillRect(0, S * 0.66, S, S * 0.05); g.fillRect(0, S * 0.94, S, S * 0.06);
-  for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? G : P; g.fillRect(S * (0.04 + i * 0.16), S * 0.75, S * 0.12, S * 0.14); }
-  for (let i = 0; i < 1500; i++) { g.fillStyle = `rgba(80,70,50,${r() * 0.05})`; g.fillRect(r() * S, r() * S, 1 + r() * 3, 1 + r() * 3); }
-  return c;
+  hg.fillStyle = '#808080'; hg.fillRect(0, 0, S, S);
+  const box = (x, y, w, hh, col, lift = 0.6) => { g.fillStyle = col; g.fillRect(x * S, y * S, w * S, hh * S); hg.fillStyle = `rgb(${lift * 255 | 0},${lift * 255 | 0},${lift * 255 | 0})`; hg.fillRect(x * S, y * S, w * S, hh * S); };
+  const frame = (x, y, w, hh, t, col) => { box(x, y, w, t, col); box(x, y + hh - t, w, t, col); box(x, y, t, hh, col); box(x + w - t, y, t, hh, col); };
+  const stone = (col, k) => { const cc = new THREE.Color(col).multiplyScalar(k); return `#${cc.getHexString()}`; };
+  // plinth and base bands
+  box(0, 0.93, 1, 0.07, MG, 0.55); box(0, 0.905, 1, 0.025, MW, 0.7); box(0, 0.885, 1, 0.02, MR, 0.6);
+  // lower zone: framed panels with red inlays
+  for (const x0 of [0.08, 0.54]) {
+    frame(x0, 0.6, 0.38, 0.27, 0.025, MG);
+    box(x0 + 0.06, 0.65, 0.26, 0.17, stone(MR, 0.95 + r() * 0.1), 0.62);
+    box(x0 + 0.1, 0.69, 0.18, 0.09, MW, 0.6);
+    frame(x0 + 0.06, 0.65, 0.26, 0.17, 0.008, MG);
+  }
+  // chequer frieze with lozenges
+  box(0, 0.53, 1, 0.05, MW, 0.6);
+  for (let i = 0; i < 24; i++) box(i / 24, 0.53 + (i % 2) * 0.025, 1 / 24, 0.025, MG, 0.62);
+  box(0, 0.515, 1, 0.012, MR, 0.65); box(0, 0.582, 1, 0.012, MR, 0.65);
+  // upper zone: tall panels with blind round arches and a red roundel
+  for (const x0 of [0.08, 0.54]) {
+    frame(x0, 0.07, 0.38, 0.42, 0.022, MG);
+    g.strokeStyle = MG; g.lineWidth = S * 0.014; hg.strokeStyle = '#a0a0a0'; hg.lineWidth = S * 0.014;
+    for (const ctx2 of [g, hg]) { ctx2.beginPath(); ctx2.moveTo((x0 + 0.08) * S, 0.46 * S); ctx2.lineTo((x0 + 0.08) * S, 0.24 * S); ctx2.arc((x0 + 0.19) * S, 0.24 * S, 0.11 * S, Math.PI, 0); ctx2.lineTo((x0 + 0.3) * S, 0.46 * S); ctx2.stroke(); }
+    g.fillStyle = MR; g.beginPath(); g.arc((x0 + 0.19) * S, 0.25 * S, 0.035 * S, 0, 7); g.fill();
+  }
+  // striped corner pilasters (between bays)
+  for (const x0 of [0, 0.475, 0.96]) for (let k = 0; k < 20; k++) box(x0, k / 20 * 0.86, 0.04, 1 / 40, k % 2 ? MG : MW, 0.7);
+  box(0, 0, 1, 0.025, MG, 0.7); box(0, 0.025, 1, 0.012, MR, 0.65);
+  // block joints and a little grime in them
+  hg.strokeStyle = 'rgba(40,40,40,0.9)'; g.strokeStyle = 'rgba(90,80,60,0.25)'; hg.lineWidth = g.lineWidth = 1.2;
+  for (let y = 0; y < 1; y += 0.0625) for (const ctx2 of [g, hg]) { ctx2.beginPath(); ctx2.moveTo(0, y * S); ctx2.lineTo(S, y * S); ctx2.stroke(); }
+  for (let y = 0; y < 1; y += 0.0625) for (let x = (y * 16 % 2) * 0.0625; x < 1; x += 0.125) for (const ctx2 of [g, hg]) { ctx2.beginPath(); ctx2.moveTo(x * S, y * S); ctx2.lineTo(x * S, (y + 0.0625) * S); ctx2.stroke(); }
+  for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(70,60,45,${r() * 0.05})`; g.fillRect(r() * S, r() * S, 1 + r() * 4, 1 + r() * 4); }
+  // rain streaks under the ledges
+  for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S * 0.9; const gr = g.createLinearGradient(0, y, 0, y + 80); gr.addColorStop(0, 'rgba(90,75,55,0.12)'); gr.addColorStop(1, 'rgba(90,75,55,0)'); g.fillStyle = gr; g.fillRect(x, y, 3 + r() * 5, 80); }
+  return { c, h };
 }
 let _marble = null;
-export const polyMarbleTexture = () => (_marble ??= toTexture(marbleCanvas(), { repeat: true }));
+export function polyMarbleTexture() {
+  if (_marble) return _marble;
+  const { c, h } = marbleCanvas();
+  _marble = toTexture(c, { repeat: true }); _marble.userData.normal = normalFromHeight(h, 2.2);
+  return _marble;
+}
+// Giotto's campanile, one face (1.45 × 8.2 units): hexagonal reliefs, lozenges, then three storeys of
+// Gothic windows that grow towards the top (paired, paired and taller, a tall triple light), banded cornices
+function campanileCanvas() {
+  const W = 256, H = 1024, c = mkCanvas(W, H), g = c.getContext('2d'), r = rng(1334);
+  g.fillStyle = MW; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 1600; i++) { g.fillStyle = `rgba(80,70,50,${r() * 0.05})`; g.fillRect(r() * W, r() * H, 2, 2); }
+  const Y = (f) => (1 - f) * H;
+  const band = (f, hh) => { g.fillStyle = MG; g.fillRect(0, Y(f) - hh * H, W, hh * H * 0.4); g.fillStyle = MR; g.fillRect(0, Y(f) - hh * H * 0.6, W, hh * H * 0.2); g.fillStyle = MG; g.fillRect(0, Y(f) - hh * H * 0.4, W, hh * H * 0.4); };
+  // corner pilasters
+  for (const x of [0, W - 22]) for (let k = 0; k < 60; k++) { g.fillStyle = k % 2 ? MG : (k % 6 === 0 ? MR : MW); g.fillRect(x, k * H / 60, 22, H / 60); }
+  // level 1: hexagonal reliefs
+  for (let k = 0; k < 4; k++) { const cx = W * (0.2 + 0.2 * k), cy = Y(0.06); g.strokeStyle = MG; g.lineWidth = 5; g.beginPath(); for (let j = 0; j <= 6; j++) { const a = j / 6 * Math.PI * 2; g.lineTo(cx + Math.cos(a) * 20, cy + Math.sin(a) * 24); } g.stroke(); g.fillStyle = '#d6cfc0'; g.beginPath(); g.arc(cx, cy, 10, 0, 7); g.fill(); }
+  band(0.115, 0.012);
+  // level 2: lozenges
+  for (let k = 0; k < 5; k++) { const cx = W * (0.15 + 0.175 * k), cy = Y(0.165); g.fillStyle = MR; g.beginPath(); g.moveTo(cx, cy - 26); g.lineTo(cx + 16, cy); g.lineTo(cx, cy + 26); g.lineTo(cx - 16, cy); g.fill(); g.strokeStyle = MG; g.lineWidth = 3; g.stroke(); }
+  band(0.22, 0.012);
+  // blind niches
+  for (let k = 0; k < 3; k++) { g.strokeStyle = MG; g.lineWidth = 4; g.strokeRect(W * (0.18 + 0.23 * k), Y(0.33), W * 0.16, H * 0.09); }
+  band(0.36, 0.012);
+  const gothic = (cx, f0, f1, w, lights) => {
+    const top = Y(f1), bot = Y(f0), apex = top - w * 0.6;
+    g.fillStyle = MG; g.beginPath(); g.moveTo(cx - w / 2 - 8, bot); g.lineTo(cx - w / 2 - 8, top); g.quadraticCurveTo(cx - w / 2 - 8, apex - 10, cx, apex - 14); g.quadraticCurveTo(cx + w / 2 + 8, apex - 10, cx + w / 2 + 8, top); g.lineTo(cx + w / 2 + 8, bot); g.fill();
+    g.fillStyle = '#1a140f'; g.beginPath(); g.moveTo(cx - w / 2, bot); g.lineTo(cx - w / 2, top); g.quadraticCurveTo(cx - w / 2, apex, cx, apex - 4); g.quadraticCurveTo(cx + w / 2, apex, cx + w / 2, top); g.lineTo(cx + w / 2, bot); g.fill();
+    g.fillStyle = MW; for (let k = 1; k < lights; k++) g.fillRect(cx - w / 2 + w * k / lights - 2.5, top, 5, bot - top);
+    g.strokeStyle = MW; g.lineWidth = 3; g.beginPath(); g.arc(cx, top - w * 0.12, w * 0.16, 0, 7); g.stroke();
+  };
+  gothic(W * 0.33, 0.42, 0.5, 34, 2); gothic(W * 0.67, 0.42, 0.5, 34, 2);
+  band(0.55, 0.014);
+  gothic(W * 0.33, 0.6, 0.7, 44, 2); gothic(W * 0.67, 0.6, 0.7, 44, 2);
+  band(0.76, 0.014);
+  gothic(W * 0.5, 0.8, 0.95, 120, 3);
+  band(0.985, 0.012);
+  return c;
+}
+function baptisteryCanvas() {
+  const S = 512, c = mkCanvas(S, S), g = c.getContext('2d');
+  g.fillStyle = MW; g.fillRect(0, 0, S, S);
+  g.fillStyle = MG;
+  for (const x of [0, S - 30]) g.fillRect(x, 0, 30, S);
+  g.fillRect(0, S * 0.95, S, S * 0.05); g.fillRect(0, S * 0.5, S, 14); g.fillRect(0, S * 0.2, S, 12);
+  for (let k = 0; k < 3; k++) { g.strokeStyle = MG; g.lineWidth = 8; g.strokeRect(S * (0.12 + k * 0.27), S * 0.58, S * 0.2, S * 0.33); }
+  for (let k = 0; k < 3; k++) { const cx = S * (0.22 + k * 0.27); g.lineWidth = 9; g.beginPath(); g.moveTo(cx - S * 0.1, S * 0.48); g.lineTo(cx - S * 0.1, S * 0.33); g.arc(cx, S * 0.33, S * 0.1, Math.PI, 0); g.lineTo(cx + S * 0.1, S * 0.48); g.stroke(); g.fillStyle = '#1d1712'; g.fillRect(cx - S * 0.03, S * 0.34, S * 0.06, S * 0.1); g.fillStyle = MG; }
+  for (let k = 0; k < 6; k++) g.fillRect(S * (0.08 + k * 0.15), S * 0.06, S * 0.08, S * 0.1);
+  return c;
+}
 
 // a Florentine house front: stucco (tinted per instance), stone-framed windows with green shutters, a
 // ground floor of arched shop doors, a dark eave line
@@ -228,18 +316,20 @@ function brickCourses(lite) {
       basis.makeBasis(X, Y, Z); q.setFromRotationMatrix(basis);
       // herringbone: bricks on end every other course, in two families climbing from each corner
       const verticals = [];
-      if (c % 2 === 0) {
+      // every so often a course of sandstone beams: one of the stone chains that hoop the dome
+      const chain = c % 16 === 9;
+      if (c % 2 === 0 && !chain) {
         const P0 = W / Math.max(1, Math.round(W / 0.62));
         for (let d = (c / 2 * Lb * 0.55) % P0; d < W; d += P0) { verticals.push(d); if (W - d > 0.02) verticals.push(W - d); }
       }
-      const n = Math.max(1, Math.round(W / Lb)), L = W / n;
+      const n = Math.max(1, Math.round(W / (chain ? 0.34 : Lb))), L = W / n;
       for (let i = 0; i < n; i++) {
         const u = (i + 0.5) / n;
         octPt(xm, k, u, yAt(s), P);
         sc.set(L * 0.94, Hb * 0.86, thick * 0.96);
         m4.compose(P, q, sc);
         const l = 0.78 + r() * 0.32;
-        items.push({ m: m4.clone(), c, o: k + u, col: [0.8 * l, 0.47 * l, 0.31 * l] });
+        items.push({ m: m4.clone(), c, o: k + u, col: chain ? [0.72 * l, 0.68 * l, 0.58 * l] : [0.8 * l, 0.47 * l, 0.31 * l] });
       }
       for (const d of verticals) {
         const u = d / W;
@@ -253,13 +343,19 @@ function brickCourses(lite) {
   }
   items.sort((a, b) => a.c - b.c || a.o - b.o);
   const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.86, metalness: 0, map: brickFaceTexture() });
+  const bft = brickFaceTexture();
+  const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.86, metalness: 0, map: bft, normalMap: bft.userData.normal });
   const mesh = new THREE.InstancedMesh(geo, mat, items.length);
   const col = new THREE.Color();
   items.forEach((it, i) => { mesh.setMatrixAt(i, it.m); mesh.setColorAt(i, col.setRGB(...it.col)); });
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.receiveShadow = true; mesh.castShadow = false;
   mesh.frustumCulled = false;
+  // the corner spur (sperone) inside the cut: a stone rib on the inner shell's corner, rising with the courses
+  const ribPts = []; for (let j = 0; j <= 40; j++) { const sj = sAtLen(total * j / 40); ribPts.push(octPt(mid(sj), CUT[0] + 1, 0, yAt(sj))); }
+  const ribGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ribPts), 40, 0.11, 6, false);
+  const rib = new THREE.Mesh(ribGeo, new THREE.MeshStandardMaterial({ color: '#b9ad94', roughness: 0.8, metalness: 0 }));
+  rib.receiveShadow = true; rib.userData.keep = true;
   const courseStart = [];   // first instance index of each course
   items.forEach((it, i) => { if (courseStart[it.c] === undefined) courseStart[it.c] = i; });
   courseStart.push(items.length);
@@ -273,6 +369,7 @@ function brickCourses(lite) {
     const a = courseStart[cFull], b = courseStart[Math.min(courses, cFull + 1)];
     const n = cFull >= courses ? items.length : Math.round(a + (b - a) * (p - cFull));
     mesh.count = n;
+    ribGeo.setDrawRange(0, Math.floor(Math.min(1, p / courses) * 40) * 6 * 6);
     for (let i = Math.max(0, n - DROP); i < n; i++) {
       const age = (n - i) / DROP;                      // 1/DROP … 1
       const e = 1 - age;
@@ -283,29 +380,32 @@ function brickCourses(lite) {
     mesh.instanceMatrix.needsUpdate = true;
     return n > 0 ? items[n - 1] : null;
   }
-  return { mesh, courses, lay, Hb, sAtLen, items };
+  return { mesh, rib, courses, lay, Hb, sAtLen, items };
 }
 function brickFaceTexture() {
   const S = 64, c = mkCanvas(S, S), g = c.getContext('2d'), r = rng(4);
   g.fillStyle = '#c9b49a'; g.fillRect(0, 0, S, S);              // mortar
   g.fillStyle = '#ffffff'; g.fillRect(3, 4, S - 6, S - 8);
   for (let i = 0; i < 300; i++) { g.fillStyle = `rgba(60,30,20,${r() * 0.12})`; g.fillRect(r() * S, r() * S, 1 + r() * 3, 1 + r() * 2); }
-  return toTexture(c);
+  const t = toTexture(c); t.userData.normal = normalFromHeight(c, 3, { repeat: false });
+  return t;
 }
 
 // ---------------------------------------------------------------------------- the whole city
 export function buildFlorence({ lite = false } = {}) {
   const root = new THREE.Group();
   const r = rng(1436);
-  const tileMat = new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.82, metalness: 0, color: '#f2dccd' });
+  const tileMat = new THREE.MeshStandardMaterial({ map: tileTexture(), normalMap: tileTexture().userData.normal, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.82, metalness: 0, color: '#f2dccd' });
   const roofTile = tileTexture().clone(); roofTile.repeat.set(2, 2); roofTile.needsUpdate = true;
-  const roofMat = new THREE.MeshStandardMaterial({ map: roofTile, roughness: 0.85, metalness: 0, color: '#e8c9b4' });
+  const roofN = tileTexture().userData.normal.clone(); roofN.repeat.set(2, 2); roofN.needsUpdate = true;
+  const roofMat = new THREE.MeshStandardMaterial({ map: roofTile, normalMap: roofN, roughness: 0.85, metalness: 0, color: '#e8c9b4' });
   const brickT = brickTexture();
-  const sectionMat = new THREE.MeshStandardMaterial({ map: brickT, roughness: 0.9, metalness: 0, color: '#f6dcc8', emissive: '#d0662a', emissiveIntensity: 0.35, emissiveMap: brickT });
+  const sectionMat = new THREE.MeshStandardMaterial({ map: brickT, normalMap: brickT.userData.normal, roughness: 0.9, metalness: 0, color: '#f6dcc8', emissive: '#d0662a', emissiveIntensity: 0.35, emissiveMap: brickT });
   const plasterMat = new THREE.MeshStandardMaterial({ color: '#d8c3a2', roughness: 0.92, metalness: 0, side: THREE.FrontSide });
-  const gapMat = new THREE.MeshStandardMaterial({ map: brickT, roughness: 0.92, metalness: 0, color: '#b08a78' });
+  const gapMat = new THREE.MeshStandardMaterial({ map: brickT, normalMap: brickT.userData.normal, roughness: 0.92, metalness: 0, color: '#b08a78' });
   const pm = polyMarbleTexture();
-  const marbleMat = new THREE.MeshStandardMaterial({ map: pm, roughness: 0.5, metalness: 0 });
+  const marbleMat = new THREE.MeshStandardMaterial({ map: pm, normalMap: pm.userData.normal, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.42, metalness: 0 });
+  marbleMat.userData.noAntiTile = true;
   const whiteMat = new THREE.MeshStandardMaterial({ color: '#efe8da', roughness: 0.45, metalness: 0 });
   const darkMat = new THREE.MeshStandardMaterial({ color: '#1d1610', roughness: 0.7, metalness: 0 });
   const goldMat = new THREE.MeshStandardMaterial({ color: '#e7b85a', roughness: 0.28, metalness: 1 });
@@ -401,18 +501,31 @@ export function buildFlorence({ lite = false } = {}) {
     for (const z of [-1.2, 0, 1.2]) D.push(at(new THREE.PlaneGeometry(0.5, 0.9), x1 - 0.205, 0.45, z, 0, -Math.PI / 2, 0));
     // Giotto's campanile
     const cpx = -12.4, cpz = 2.75;
-    M.push(at(new THREE.BoxGeometry(1.45, 8.2, 1.45), cpx, 4.1, cpz));
-    W.push(at(new THREE.BoxGeometry(1.62, 0.12, 1.62), cpx, 8.25, cpz));
-    for (const [y, h] of [[6.9, 0.9], [5.5, 0.7]]) for (const [dx, dz, ry] of [[0.73, 0, Math.PI / 2], [-0.73, 0, -Math.PI / 2], [0, 0.73, 0], [0, -0.73, Math.PI]]) {
-      D.push(at(new THREE.PlaneGeometry(0.34, h), cpx + dx * 1.01, y, cpz + dz * 1.01, 0, ry, 0));
+    {
+      const ct = toTexture(campanileCanvas());
+      const cm = new THREE.Mesh(new THREE.BoxGeometry(1.45, 8.2, 1.45), [0, 1, 2, 3, 4, 5].map((k) => (k === 2 || k === 3 ? whiteMat : new THREE.MeshStandardMaterial({ map: ct, roughness: 0.45, metalness: 0 }))));
+      cm.position.set(cpx, 4.1, cpz); cm.castShadow = cm.receiveShadow = true; root.add(cm);
+      // corner buttresses and the projecting top cornice on its corbels
+      const cb = [];
+      for (const [dx, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) cb.push(at(new THREE.BoxGeometry(0.16, 8.2, 0.16), cpx + dx * 0.72, 4.1, cpz + dz * 0.72));
+      for (let k = 0; k < 7; k++) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const o = (k - 3) * 0.2; cb.push(at(new THREE.BoxGeometry(0.06, 0.12, 0.06), cpx + (dx ? dx * 0.78 : o), 8.12, cpz + (dz ? dz * 0.78 : o))); }
+      const cbm = new THREE.Mesh(mergeParts(cb), whiteMat); cbm.castShadow = true; root.add(cbm);
     }
+    W.push(at(new THREE.BoxGeometry(1.62, 0.12, 1.62), cpx, 8.25, cpz));
     // the baptistery
     const bx = -18.6;
-    M.push(at(new THREE.CylinderGeometry(1.35, 1.35, 2.4, 8, 1, true), bx, 1.2, 0, 0, Math.PI / 8));
+    {
+      const bt = toTexture(baptisteryCanvas(), { repeat: true }); bt.repeat.set(8, 1);
+      const bg = new THREE.CylinderGeometry(1.35, 1.35, 2.4, 8, 1, true).toNonIndexed(); bg.computeVertexNormals();
+      const bm = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ map: bt, roughness: 0.45, metalness: 0 }));
+      bm.material.userData.noAntiTile = true;
+      bm.position.set(bx, 1.2, 0); bm.rotation.y = Math.PI / 8; bm.castShadow = bm.receiveShadow = true; root.add(bm);
+    }
     W.push(at(new THREE.CylinderGeometry(1.2, 1.3, 0.45, 8, 1), bx, 2.62, 0, 0, Math.PI / 8));
     R.push(at(new THREE.ConeGeometry(1.25, 0.7, 8, 1, true), bx, 3.2, 0, 0, Math.PI / 8));
     W.push(at(new THREE.CylinderGeometry(0.16, 0.18, 0.35, 8), bx, 3.65, 0));
-    const mm = new THREE.Mesh(mergeParts(M), marbleMat); mm.castShadow = mm.receiveShadow = true; root.add(mm);
+    const mg = mergeParts(M); mg.computeVertexNormals(); boxUV(mg, 0.5);
+    const mm = new THREE.Mesh(mg, marbleMat); mm.castShadow = mm.receiveShadow = true; root.add(mm);
     const ww = new THREE.Mesh(mergeParts(W), whiteMat); ww.castShadow = ww.receiveShadow = true; root.add(ww);
     const dd = new THREE.Mesh(mergeParts(D), darkMat); root.add(dd);
     const rr = new THREE.Mesh(mergeParts(R), roofMat); rr.castShadow = rr.receiveShadow = true; root.add(rr);
@@ -478,6 +591,16 @@ export function buildFlorence({ lite = false } = {}) {
     }
     towers.castShadow = tcaps.castShadow = true; towers.receiveShadow = true;
     root.add(towers, tcaps);
+    // altane: open rooftop loggias (four piers and a little tiled roof) on some of the houses
+    const lg = mergeParts([...[[-0.4, -0.3], [0.4, -0.3], [-0.4, 0.3], [0.4, 0.3]].map(([x, z]) => at(new THREE.BoxGeometry(0.09, 0.42, 0.09), x, 0.21, z)), at(new THREE.BoxGeometry(0.98, 0.06, 0.78), 0, 0.45, 0)]);
+    const lr = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1, true); lr.rotateY(Math.PI / 4); lr.translate(0, 0.5, 0); lr.scale(1.1, 0.22, 0.9); lr.translate(0, 0.48, 0);
+    const nL = lite ? 24 : 60, log = new THREE.InstancedMesh(lg, wallMat, nL), logR = new THREE.InstancedMesh(lr, roofMat, nL);
+    for (let i = 0; i < nL; i++) {
+      const sp = spots[(i * 37 + 11) % spots.length], sc = Math.min(sp.w, sp.d) * 0.7;
+      m4.compose(V(sp.x, sp.h, sp.z), q.setFromAxisAngle(V(0, 1, 0), sp.rot), V(sc, sc, sc)); log.setMatrixAt(i, m4); logR.setMatrixAt(i, m4);
+      log.setColorAt(i, col.set('#e9d9b8'));
+    }
+    log.castShadow = logR.castShadow = true; root.add(log, logR);
     root.userData.houses = spots.length;
   }
 
@@ -519,7 +642,7 @@ export function buildFlorence({ lite = false } = {}) {
 
   // ----- the bricks
   const bricks = brickCourses(lite);
-  root.add(bricks.mesh);
+  root.add(bricks.mesh, bricks.rib);
 
   // ----- ink linework of the dome (world space): what the drawing becomes
   const ink = [];

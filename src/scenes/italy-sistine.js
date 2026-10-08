@@ -14,7 +14,7 @@ import { rng, lerp, sat } from '../lib/math.js';
 import { noise2, fbm2 } from '../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
 import { smin, sdRoundCone2, sdEllipse2 } from '../lib/sdfmesh.js';
-import { V, mergeParts, at, contour, hatchField, inkOpts, orderedStrokes, SEPIA, CHALK } from './italy-assets.js';
+import { V, mergeParts, at, contour, hatchField, inkOpts, orderedStrokes, normalFromHeight, boxUV, SEPIA, CHALK } from './italy-assets.js';
 
 export const HALL = { L: 40.9, W: 13.4, WALL: 15.0, RISE: 5.7 };
 const HX = HALL.L / 2, HZ = HALL.W / 2;
@@ -112,8 +112,16 @@ function scenePanel(g, x, y, w, h, r, kind) {
   g.strokeStyle = shade(FR.umber, 0.8); g.lineWidth = 2; g.strokeRect(x, y, w, h);
 }
 function frescoFinish(g, W, H, seed) {
-  // granular plaster, giornate seams, craquelure and soft discoloration
+  // brushwork, granular plaster, giornate seams, craquelure and soft discoloration
   const r = rng(seed);
+  g.lineCap = 'round';
+  for (let i = 0; i < W * H / 700; i++) {
+    const x = r() * W, y = r() * H, a = noise2(x * 0.004, y * 0.004) * 3, l = 4 + r() * 9;
+    g.strokeStyle = r() < 0.5 ? 'rgba(255,248,232,0.05)' : 'rgba(70,45,25,0.045)'; g.lineWidth = 1 + r() * 2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+  }
+  g.strokeStyle = 'rgba(90,65,40,0.1)'; g.lineWidth = 1;
+  for (let i = 0; i < 8; i++) { let x = r() * W, y = 0; g.beginPath(); g.moveTo(x, y); while (y < H) { y += 20 + r() * 40; x += (r() - 0.5) * 30; g.lineTo(x, y); } g.stroke(); }
   for (let i = 0; i < W * H / 220; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '255,250,235' : '60,40,25'},${r() * 0.05})`; g.fillRect(r() * W, r() * H, 1 + r() * 2.5, 1 + r() * 2.5); }
   g.strokeStyle = 'rgba(70,50,30,0.12)'; g.lineWidth = 0.7;
   for (let i = 0; i < 160; i++) {
@@ -257,57 +265,138 @@ function endWallCanvas(altar) {
   frescoFinish(g, W, H, altar ? 11 : 13);
   return c;
 }
+// Cosmatesque inlay (2 × 2 bays = 6.8 m): in each bay a quincunx — a great porphyry roundel and four small
+// ones — held in interlaced white guilloche bands, every field between them filled with tesserae
+// (red porphyry, green serpentine, giallo antico) in small triangles and squares; each bay a little
+// different, the grout recessed (height canvas), worn paths of lighter polish.
 function floorCanvas() {
-  // Cosmatesque inlay: porphyry and serpentine roundels in interlaced white bands, triangles between
-  const S = 512, c = mkCanvas(S, S), g = c.getContext('2d'), r = rng(8);
-  g.fillStyle = '#d9d0bf'; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) { g.fillStyle = (i + j) % 2 ? '#7c2e26' : '#36503f'; g.globalAlpha = 0.8; g.beginPath(); g.moveTo(i * 64, j * 64); g.lineTo(i * 64 + 32, j * 64 + 32); g.lineTo(i * 64, j * 64 + 64); g.fill(); }
-  g.globalAlpha = 1;
-  for (const [x, y, R] of [[S / 2, S / 2, S * 0.36], [0, 0, S * 0.22], [S, 0, S * 0.22], [0, S, S * 0.22], [S, S, S * 0.22]]) {
-    g.fillStyle = '#ece5d6'; g.beginPath(); g.arc(x, y, R, 0, 7); g.fill();
-    g.fillStyle = '#6d2a22'; g.beginPath(); g.arc(x, y, R * 0.82, 0, 7); g.fill();
-    g.fillStyle = '#ece5d6'; g.beginPath(); g.arc(x, y, R * 0.66, 0, 7); g.fill();
-    g.fillStyle = (x + y) % 2 ? '#3c5a44' : '#7c3027'; g.beginPath(); g.arc(x, y, R * 0.55, 0, 7); g.fill();
+  const S = 1024, c = mkCanvas(S, S), g = c.getContext('2d'), h = mkCanvas(S, S), hg = h.getContext('2d'), r = rng(8);
+  g.fillStyle = '#dcd3c2'; g.fillRect(0, 0, S, S);
+  hg.fillStyle = '#9a9a9a'; hg.fillRect(0, 0, S, S);
+  const COLS = [['#7a2a22', '#36503f', '#c9a85a'], ['#6d2620', '#2f4a3b', '#d2b36a'], ['#82332a', '#3c5747', '#bfa055'], ['#732a25', '#334c3e', '#cdac60']];
+  const tess = (clip, size, cols, rot) => {
+    g.save(); clip(g); g.clip(); hg.save(); clip(hg); hg.clip();
+    for (let y = -size; y < S + size; y += size) for (let x = -size; x < S + size; x += size) {
+      const k = ((x / size | 0) + (y / size | 0)) % 2;
+      g.fillStyle = cols[(((x / size | 0) * 7 + (y / size | 0) * 3) % 3 + 3) % 3];
+      g.beginPath();
+      if (rot) { g.moveTo(x, y); g.lineTo(x + size, y); g.lineTo(x + (k ? size : 0), y + size); } else { g.rect(x + 1, y + 1, size - 2, size - 2); }
+      g.fill();
+      g.fillStyle = '#e8e0cf'; if (rot) { g.beginPath(); g.moveTo(x + size, y + size); g.lineTo(x, y + size); g.lineTo(x + (k ? size : 0), y); g.fill(); }
+      hg.strokeStyle = '#3a3a3a'; hg.lineWidth = 1; hg.strokeRect(x, y, size, size);
+    }
+    g.restore(); hg.restore();
+  };
+  for (let by = 0; by < 2; by++) for (let bx = 0; bx < 2; bx++) {
+    const ox = bx * S / 2, oy = by * S / 2, B = S / 2, cols = COLS[by * 2 + bx], cx = ox + B / 2, cy = oy + B / 2;
+    // fields of tesserae (triangles in the corners, squares elsewhere)
+    tess((q) => { q.beginPath(); q.rect(ox + 8, oy + 8, B - 16, B - 16); }, 9 + (bx + by) % 2 * 2, cols, (bx + by) % 2 === 0);
+    // guilloche: bands looping round the big roundel and the four small ones
+    const ring = (x, y, R, w) => {
+      g.strokeStyle = '#efe8da'; g.lineWidth = w; g.beginPath(); g.arc(x, y, R, 0, 7); g.stroke();
+      hg.strokeStyle = '#c8c8c8'; hg.lineWidth = w; hg.beginPath(); hg.arc(x, y, R, 0, 7); hg.stroke();
+    };
+    const disc = (x, y, R, col) => { g.fillStyle = col; g.beginPath(); g.arc(x, y, R, 0, 7); g.fill(); const gr = g.createRadialGradient(x - R * 0.3, y - R * 0.3, 1, x, y, R); gr.addColorStop(0, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(0,0,0,0.12)'); g.fillStyle = gr; g.fill(); hg.fillStyle = '#b4b4b4'; hg.beginPath(); hg.arc(x, y, R, 0, 7); hg.fill(); };
+    const smalls = [[cx - B * 0.32, cy - B * 0.32], [cx + B * 0.32, cy - B * 0.32], [cx - B * 0.32, cy + B * 0.32], [cx + B * 0.32, cy + B * 0.32]];
+    smalls.forEach(([x, y], i) => { g.fillStyle = '#e8e0cf'; g.beginPath(); g.arc(x, y, B * 0.13, 0, 7); g.fill(); disc(x, y, B * 0.085, cols[i % 2]); ring(x, y, B * 0.11, 9); });
+    g.fillStyle = '#e8e0cf'; g.beginPath(); g.arc(cx, cy, B * 0.27, 0, 7); g.fill();
+    tess((q) => { q.beginPath(); q.arc(cx, cy, B * 0.25, 0, 7); }, 7, [cols[2], cols[0], cols[1]], true);
+    disc(cx, cy, B * 0.16, cols[(bx + by) % 2]);
+    ring(cx, cy, B * 0.26, 12); ring(cx, cy, B * 0.175, 8);
+    // bands linking the roundels (the interlace)
+    g.strokeStyle = '#efe8da'; g.lineWidth = 10; hg.strokeStyle = '#c8c8c8'; hg.lineWidth = 10;
+    for (const [x, y] of smalls) for (const q of [g, hg]) { q.beginPath(); q.moveTo(x, y); q.lineTo(cx + (x - cx) * 0.45, cy + (y - cy) * 0.45); q.stroke(); }
+    for (const q of [g, hg]) { q.strokeStyle = q === g ? '#efe8da' : '#c8c8c8'; q.lineWidth = 14; q.strokeRect(ox + 6, oy + 6, B - 12, B - 12); }
   }
-  for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(0,0,0,${r() * 0.06})`; g.fillRect(r() * S, r() * S, 2, 2); }
-  return c;
+  // wear: polished paths and old stains
+  for (let i = 0; i < 30; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '255,250,240' : '60,45,30'},${0.03 + r() * 0.05})`; g.beginPath(); g.ellipse(r() * S, r() * S, 40 + r() * 140, 30 + r() * 90, r() * 3, 0, 7); g.fill(); }
+  for (let i = 0; i < 6000; i++) { g.fillStyle = `rgba(0,0,0,${r() * 0.06})`; g.fillRect(r() * S, r() * S, 2, 2); }
+  return { c, h };
+}
+// carved marble for the screen: a moulded frame, a running scroll of acanthus (rinceaux) and rosettes
+function carvedCanvas() {
+  const S = 512, c = mkCanvas(S, S), g = c.getContext('2d'), h = mkCanvas(S, S), hg = h.getContext('2d'), r = rng(5);
+  const img = g.createImageData(S, S), d = img.data;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const n = fbm2(x / S * 5, y / S * 5, 3) * 0.05, i = (y * S + x) * 4; d[i] = 232 * (1 + n); d[i + 1] = 226 * (1 + n); d[i + 2] = 212 * (1 + n); d[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  hg.fillStyle = '#606060'; hg.fillRect(0, 0, S, S);
+  hg.fillStyle = '#d0d0d0'; hg.fillRect(0, 0, S, 40); hg.fillRect(0, S - 40, S, 40); hg.fillRect(0, 0, 40, S); hg.fillRect(S - 40, 0, 40, S);
+  hg.fillStyle = '#909090'; hg.fillRect(40, 40, S - 80, 14); hg.fillRect(40, S - 54, S - 80, 14);
+  hg.strokeStyle = '#e0e0e0'; hg.lineCap = 'round';
+  // the scroll: a wave stem with spiral tendrils and leaves
+  hg.lineWidth = 16; hg.beginPath(); for (let x = 60; x <= S - 60; x += 4) hg.lineTo(x, S / 2 + Math.sin((x - 60) / (S - 120) * Math.PI * 3) * 90); hg.stroke();
+  for (let k = 0; k < 3; k++) {
+    const x0 = 60 + (k + 0.5) / 3 * (S - 120), up = k % 2 ? 1 : -1, y0 = S / 2 + up * 70;
+    hg.lineWidth = 9; hg.beginPath(); for (let a = 0; a < 9; a += 0.2) { const rr = 60 * Math.exp(-a * 0.25); hg.lineTo(x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr * up); } hg.stroke();
+    hg.fillStyle = '#f0f0f0'; for (let j = 0; j < 6; j++) { hg.beginPath(); hg.ellipse(x0 + (r() - 0.5) * 80, S / 2 + (r() - 0.5) * 140, 18, 7, r() * 3, 0, 7); hg.fill(); }
+  }
+  for (const [x, y] of [[90, 90], [S - 90, 90], [90, S - 90], [S - 90, S - 90]]) { hg.fillStyle = '#f0f0f0'; for (let j = 0; j < 8; j++) { const a = j / 8 * Math.PI * 2; hg.beginPath(); hg.ellipse(x + Math.cos(a) * 14, y + Math.sin(a) * 14, 12, 6, a, 0, 7); hg.fill(); } hg.beginPath(); hg.arc(x, y, 8, 0, 7); hg.fill(); }
+  // shade the colour from the relief (cavities darker)
+  g.globalCompositeOperation = 'multiply'; g.globalAlpha = 0.35; g.drawImage(h, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  return { c, h };
 }
 
 // ------------------------------------------------------------------------------------ the hands
 // Composition coordinates: x across the chapel (−2.8 … 2.8: Adam on the left, God on the right),
 // y along it (−1.4 … 1.4). Signed distance of each figure's arm and hand (round cones + ellipses).
+// Each finger is a chain of joints [x, y, r] (knuckle, middle joint, last joint, tip); the hand is the
+// palm, the back-of-hand ridge, the fingers as tapering round cones with a slight swelling at each joint.
+// Adam's hand hangs limp from the wrist, its fingers curling down; God's index reaches out straight.
+export const HANDS = {
+  adam: {
+    arm: [['c', -2.85, -0.66, -1.75, -0.42, 0.175, 0.13], ['c', -1.75, -0.42, -0.68, -0.07, 0.13, 0.083], ['e', -1.25, -0.27, 0.32, 0.12, 0.34],
+      ['e', -2.0, -0.86, 0.3, 0.21, 0.25], ['c', -2.9, -1.35, -2.0, -0.88, 0.3, 0.2], ['c', -2.0, -0.9, -2.35, -1.5, 0.19, 0.14]],
+    palm: [['e', -0.5, -0.07, 0.16, 0.074, -0.16], ['e', -0.43, -0.075, 0.07, 0.06, -0.5], ['c', -0.66, -0.065, -0.58, -0.055, 0.075, 0.07]],
+    fingers: [
+      [[-0.37, -0.052, 0.028], [-0.26, -0.058, 0.025], [-0.17, -0.075, 0.022], [-0.1, -0.105, 0.018]],
+      [[-0.37, -0.09, 0.028], [-0.27, -0.125, 0.025], [-0.215, -0.17, 0.022], [-0.2, -0.215, 0.018]],
+      [[-0.39, -0.112, 0.026], [-0.31, -0.15, 0.023], [-0.27, -0.19, 0.02], [-0.265, -0.23, 0.017]],
+      [[-0.425, -0.125, 0.022], [-0.36, -0.16, 0.019], [-0.335, -0.19, 0.017], [-0.33, -0.22, 0.015]],
+      [[-0.56, -0.012, 0.034], [-0.47, 0.03, 0.027], [-0.4, 0.035, 0.022], [-0.35, 0.022, 0.019]],
+    ],
+  },
+  god: {
+    arm: [['c', 2.85, 0.44, 1.75, 0.22, 0.2, 0.15], ['c', 1.75, 0.22, 0.62, 0.065, 0.12, 0.08], ['e', 1.2, 0.15, 0.3, 0.115, 0.14]],
+    palm: [['e', 0.47, 0.055, 0.15, 0.07, 0.06], ['e', 0.41, 0.04, 0.065, 0.055, 0.4], ['c', 0.62, 0.065, 0.56, 0.06, 0.075, 0.07]],
+    fingers: [
+      [[0.36, 0.064, 0.027], [0.24, 0.056, 0.024], [0.15, 0.046, 0.021], [0.075, 0.033, 0.018]],
+      [[0.36, 0.02, 0.027], [0.28, -0.02, 0.024], [0.27, -0.065, 0.021], [0.3, -0.09, 0.018]],
+      [[0.395, 0.0, 0.025], [0.33, -0.04, 0.022], [0.325, -0.08, 0.019], [0.35, -0.1, 0.017]],
+      [[0.43, -0.01, 0.021], [0.38, -0.045, 0.018], [0.375, -0.075, 0.016], [0.39, -0.093, 0.014]],
+      [[0.535, 0.1, 0.033], [0.45, 0.13, 0.026], [0.38, 0.12, 0.021], [0.34, 0.1, 0.018]],
+    ],
+  },
+};
 export function handsField() {
-  const prims = (list) => list;
-  const adam = prims([
-    ['c', -2.85, -0.66, -1.75, -0.42, 0.175, 0.13], ['c', -1.75, -0.42, -0.68, -0.07, 0.13, 0.083],
-    ['e', -0.5, -0.07, 0.165, 0.074, -0.16], ['e', -1.25, -0.27, 0.32, 0.12, 0.34],
-    ['c', -0.38, -0.055, -0.22, -0.065, 0.028, 0.022], ['c', -0.22, -0.065, -0.095, -0.11, 0.022, 0.018],
-    ['c', -0.38, -0.095, -0.25, -0.145, 0.027, 0.023], ['c', -0.25, -0.145, -0.205, -0.21, 0.023, 0.019],
-    ['c', -0.405, -0.115, -0.3, -0.17, 0.025, 0.021], ['c', -0.3, -0.17, -0.275, -0.228, 0.021, 0.018],
-    ['c', -0.435, -0.125, -0.355, -0.18, 0.021, 0.018], ['c', -0.355, -0.18, -0.335, -0.22, 0.018, 0.015],
-    ['c', -0.56, -0.005, -0.44, 0.035, 0.032, 0.024], ['c', -0.44, 0.035, -0.36, 0.022, 0.024, 0.02],
-    // the raised knee the arm rests on, thigh and shin
-    ['e', -2.0, -0.86, 0.3, 0.21, 0.25], ['c', -2.9, -1.35, -2.0, -0.88, 0.3, 0.2], ['c', -2.0, -0.9, -2.35, -1.5, 0.19, 0.14],
-  ]);
-  const god = prims([
-    ['c', 2.85, 0.44, 1.75, 0.22, 0.2, 0.15], ['c', 1.75, 0.22, 0.62, 0.065, 0.12, 0.08],
-    ['e', 0.47, 0.055, 0.15, 0.07, 0.06], ['e', 1.2, 0.15, 0.3, 0.115, 0.14],
-    ['c', 0.36, 0.064, 0.2, 0.052, 0.026, 0.021], ['c', 0.2, 0.052, 0.075, 0.033, 0.021, 0.018],
-    ['c', 0.36, 0.018, 0.27, -0.03, 0.026, 0.022], ['c', 0.27, -0.03, 0.3, -0.085, 0.022, 0.019],
-    ['c', 0.395, 0.002, 0.31, -0.05, 0.024, 0.02], ['c', 0.31, -0.05, 0.34, -0.1, 0.02, 0.017],
-    ['c', 0.425, -0.005, 0.36, -0.05, 0.02, 0.017], ['c', 0.36, -0.05, 0.39, -0.09, 0.017, 0.015],
-    ['c', 0.52, 0.1, 0.42, 0.13, 0.03, 0.023], ['c', 0.42, 0.13, 0.34, 0.1, 0.023, 0.019],
-  ]);
+  const build = (H) => {
+    const P = [...H.arm, ...H.palm];
+    for (const f of H.fingers) {
+      for (let i = 0; i < f.length - 1; i++) P.push(['c', f[i][0], f[i][1], f[i + 1][0], f[i + 1][1], f[i][2] * (i ? 0.94 : 1), f[i + 1][2] * 0.92]);
+      for (let i = 0; i < 3; i++) P.push(['e', f[i][0], f[i][1], f[i][2] * 1.12, f[i][2] * 1.05, 0]);   // the joints swell a little
+    }
+    return P;
+  };
+  const adam = build(HANDS.adam), god = build(HANDS.god);
   const ev = (list, x, y) => {
     let d = 1e9;
     for (const p of list) {
       const v = p[0] === 'c' ? sdRoundCone2(x, y, p[1], p[2], p[3], p[4], p[5], p[6]) : sdEllipse2(x, y, [p[1], p[2]], [p[3], p[4]], p[5]);
-      d = d === 1e9 ? v : smin(d, v, Math.min(0.02, (p[5] ?? 0.05) * 0.4));
+      d = d === 1e9 ? v : smin(d, v, Math.min(0.016, (p[5] ?? 0.05) * 0.35));
     }
     return d;
   };
   const fA = (x, y) => (x > 0.05 ? 1 : ev(adam, x, y)), fG = (x, y) => (x < 0.02 ? 1 : ev(god, x, y));
   return { f: (x, y) => Math.min(fA(x, y), fG(x, y)), fA, fG };
+}
+// fingernails (centre, half-length, half-width, angle) and the tendons on the backs of the hands
+export function handMarks() {
+  const nails = [], tendons = [];
+  for (const H of [HANDS.adam, HANDS.god]) for (const f of H.fingers) {
+    const [p2, p3] = [f[2], f[3]], dx = p3[0] - p2[0], dy = p3[1] - p2[1], l = Math.hypot(dx, dy);
+    nails.push({ x: p3[0] - dx / l * p3[2] * 0.55, y: p3[1] - dy / l * p3[2] * 0.55, a: p3[2] * 0.85, b: p3[2] * 0.55, ang: Math.atan2(dy, dx) });
+  }
+  for (const H of [HANDS.adam, HANDS.god]) { const w = H.palm[2]; for (const f of H.fingers.slice(0, 4)) tendons.push([[w[3], w[4]], [(w[3] + f[0][0]) / 2, (w[4] + f[0][1]) / 2 + 0.006], [f[0][0], f[0][1]]]); }
+  return { nails, tendons };
 }
 
 function creationCanvas(F, lite) {
@@ -349,6 +438,15 @@ function creationCanvas(F, lite) {
     }
   }
   g.putImageData(img, 0, 0);
+  // nails: paler, a little pink, with a shadowed rim; knuckle creases
+  const mk = handMarks();
+  for (const n of mk.nails) {
+    g.save(); g.translate(toX(n.x), toY(n.y)); g.rotate(-n.ang);
+    g.fillStyle = 'rgba(246,214,200,0.9)'; g.beginPath(); g.ellipse(0, 0, n.a / COMP.w * W, n.b / COMP.h * H, 0, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(120,70,50,0.6)'; g.lineWidth = 1.2; g.stroke(); g.restore();
+  }
+  g.strokeStyle = 'rgba(120,72,48,0.35)'; g.lineWidth = 1.4;
+  for (const t of mk.tendons) { g.beginPath(); g.moveTo(toX(t[0][0]), toY(t[0][1])); g.quadraticCurveTo(toX(t[1][0]), toY(t[1][1]), toX(t[2][0]), toY(t[2][1])); g.stroke(); }
   frescoFinish(g, W, H, 17);
   // the sepia cartoon version (before the colour)
   const s = mkCanvas(W, H), gs = s.getContext('2d');
@@ -411,8 +509,10 @@ export function buildChapel({ lite = false } = {}) {
     m.receiveShadow = true; root.add(m);
   }
   // floor
-  const fTex = toTexture(floorCanvas(), { repeat: true }); fTex.repeat.set(HALL.L / 3.4, HALL.W / 3.4);
-  const floorMat = new THREE.MeshStandardMaterial({ map: fTex, roughness: 0.45, metalness: 0 });
+  const fc = floorCanvas();
+  const fTex = toTexture(fc.c, { repeat: true }); fTex.repeat.set(HALL.L / 6.8, HALL.W / 6.8);
+  const fN = normalFromHeight(fc.h, 2.5); fN.repeat.copy(fTex.repeat);
+  const floorMat = new THREE.MeshStandardMaterial({ map: fTex, normalMap: fN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.32, metalness: 0 });
   floorMat.userData.noAntiTile = true;
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALL.L, HALL.W), floorMat); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; root.add(floor);
   // architecture with depth: the cornice at the springing, window reveals, the marble screen, the singers' gallery
@@ -431,12 +531,24 @@ export function buildChapel({ lite = false } = {}) {
     for (const x of [-HX, HX]) P.push(at(new THREE.BoxGeometry(0.35, 0.32, HALL.W), x - Math.sign(x) * 0.17, HALL.WALL - 0.16, 0));
     // the marble screen (transenna) across the hall, an opening in the middle
     const sx = -7.0;
+    const SC = [];
     for (const s of [1, -1]) {
-      P.push(at(new THREE.BoxGeometry(0.3, 1.0, HZ - 0.9), sx, 0.5, s * (HZ + 0.9) / 2));
-      P.push(at(new THREE.BoxGeometry(0.4, 0.12, HZ - 0.9), sx, 1.06, s * (HZ + 0.9) / 2));
-      for (let k = 0; k < 10; k++) P.push(at(new THREE.CylinderGeometry(0.035, 0.05, 1.2, 8), sx, 1.72, s * (1.2 + k * (HZ - 1.6) / 9)));
-      P.push(at(new THREE.BoxGeometry(0.3, 0.1, HZ - 0.9), sx, 2.36, s * (HZ + 0.9) / 2));
+      // carved lower panels between pilasters, a moulded rail, balusters, the top rail
+      for (let k = 0; k < 5; k++) { const z0 = 0.9 + k * (HZ - 0.9) / 5; SC.push(at(new THREE.BoxGeometry(0.22, 0.9, (HZ - 0.9) / 5 - 0.06), sx, 0.5, s * (z0 + (HZ - 0.9) / 10))); SC.push(at(new THREE.BoxGeometry(0.3, 1.0, 0.1), sx, 0.5, s * z0)); }
+      SC.push(at(new THREE.BoxGeometry(0.34, 0.08, HZ - 0.9), sx, 0.04, s * (HZ + 0.9) / 2));
+      SC.push(at(new THREE.BoxGeometry(0.4, 0.12, HZ - 0.9), sx, 1.06, s * (HZ + 0.9) / 2));
+      SC.push(at(new THREE.BoxGeometry(0.34, 0.05, HZ - 0.9), sx, 1.135, s * (HZ + 0.9) / 2));
+      for (let k = 0; k < 10; k++) {
+        const z = s * (1.2 + k * (HZ - 1.6) / 9);
+        P.push(at(new THREE.LatheGeometry([[0, 0], [0.06, 0], [0.06, 0.05], [0.035, 0.12], [0.075, 0.42], [0.045, 0.62], [0.03, 0.7], [0.045, 0.75], [0.03, 1.0], [0.05, 1.12], [0.06, 1.2], [0, 1.2]].map(([a, b]) => new THREE.Vector2(a, b)), 10), sx, 1.12, z));
+      }
+      SC.push(at(new THREE.BoxGeometry(0.3, 0.1, HZ - 0.9), sx, 2.36, s * (HZ + 0.9) / 2));
     }
+    const cv = carvedCanvas();
+    const cvM = new THREE.MeshStandardMaterial({ map: toTexture(cv.c, { repeat: true }), normalMap: normalFromHeight(cv.h, 3), roughness: 0.4, metalness: 0 });
+    cvM.userData.noAntiTile = true;
+    const scg = mergeParts(SC); scg.computeVertexNormals(); boxUV(scg, 1.05);
+    const scm = new THREE.Mesh(scg, cvM); scm.receiveShadow = true; root.add(scm);
     // stone benches along the walls, and seven candelabra on the screen
     for (const sg of [1, -1]) P.push(at(new THREE.BoxGeometry(HALL.L - 1, 0.45, 0.55), 0, 0.225, sg * (HZ - 0.28)));
     for (let k = 0; k < 7; k++) {
@@ -514,6 +626,11 @@ export function buildChapel({ lite = false } = {}) {
   curve([[2.2, 1.35], [2.45, 1.0], [2.4, 0.7], [2.8, 0.55]]);
   curve([[1.7, -0.3], [2.05, -0.55], [2.5, -0.62], [2.8, -0.5]]);
   curve([[1.45, 0.34], [1.5, 0.26], [1.52, 0.1], [1.46, 0.02]], 10);                      // the cuff of the sleeve
+  {
+    const mk = handMarks();
+    for (const n of mk.nails) { const pts = []; for (let k = 0; k <= 10; k++) { const a = Math.PI * 0.15 + k / 10 * Math.PI * 1.7; const lx = Math.cos(a) * n.a, ly = Math.sin(a) * n.b; pts.push(V(n.x + lx * Math.cos(n.ang) - ly * Math.sin(n.ang), n.y + lx * Math.sin(n.ang) + ly * Math.cos(n.ang))); } for (let k = 0; k < pts.length - 1; k++) gesture.push([pts[k], pts[k + 1]]); }
+    for (const t of mk.tendons) curve(t, 8);
+  }
   const toW = (segs) => segs.map(([a, b]) => [compToWorld(a.x, a.y, 0.045), compToWorld(b.x, b.y, 0.045)]);
   // order: the two hands first, from the fingertips outward (the gap is drawn first), then the arms
   const ordOf = (segs, jitter, r = rng(5)) => segs.map(([a, b]) => Math.min(1, fromHands((a.x + b.x) / 2, (a.y + b.y) / 2) * 0.9 + r() * jitter));

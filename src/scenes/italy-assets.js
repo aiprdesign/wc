@@ -215,6 +215,14 @@ export function pageCanvas() {
   g.strokeStyle = 'rgba(120,85,45,0.05)'; g.lineWidth = 1;
   for (let x = 0; x < S; x += 36) { g.beginPath(); g.moveTo(x + r() * 2, 0); g.lineTo(x + r() * 2, S); g.stroke(); }
   for (let y = 0; y < S; y += 3) { if (r() < 0.5) continue; g.strokeStyle = `rgba(120,85,45,${0.012 + r() * 0.015})`; g.beginPath(); g.moveTo(0, y); g.lineTo(S, y); g.stroke(); }
+  // ink blots, a thumb smudge and a faint ring left by the inkwell
+  for (let i = 0; i < 5; i++) {
+    const x = r() * S, y = r() * S, rad = 2 + r() * 5;
+    g.fillStyle = `rgba(45,25,12,${0.35 + r() * 0.3})`; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
+    for (let k = 0; k < 6; k++) { g.beginPath(); g.arc(x + (r() - 0.5) * rad * 4, y + (r() - 0.5) * rad * 4, rad * r() * 0.4, 0, 7); g.fill(); }
+  }
+  g.fillStyle = 'rgba(80,50,25,0.07)'; g.beginPath(); g.ellipse(S * 0.86, S * 0.9, 26, 34, 0.4, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(90,55,25,0.08)'; g.lineWidth = 4; g.beginPath(); g.arc(S * 0.12, S * 0.1, 38, 0.3, 5.6); g.stroke();
   const gr = g.createRadialGradient(S / 2, S / 2, S * 0.3, S / 2, S / 2, S * 0.75);
   gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(90,50,20,0.28)');
   g.fillStyle = gr; g.fillRect(0, 0, S, S);
@@ -224,41 +232,69 @@ export function pageCanvas() {
 let _pageTex = null;
 export const pageTexture = () => (_pageTex ??= toTexture(pageCanvas()));
 
+// Wood: fine long grain with growth rings, medullary flecks and darker pores (map), its relief (normal) and
+// a satin/worn roughness; shared by every model part (UVs run along each beam's length).
 let _wood = null;
-export function woodTexture() {
+function woodCanvases() {
   if (_wood) return _wood;
-  const W = 512, H = 512, c = mkCanvas(W, H), g = c.getContext('2d');
-  const img = g.createImageData(W, H), d = img.data;
+  const W = 512, H = 512, c = mkCanvas(W, H), g = c.getContext('2d'), hc = mkCanvas(W, H), hg = hc.getContext('2d');
+  const img = g.createImageData(W, H), d = img.data, him = hg.createImageData(W, H), hd = him.data;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const u = x / W, v = y / H;
-    const warp = fbm2(u * 3, v * 0.6, 4) * 0.6;
-    const ring = 0.5 + 0.5 * Math.sin((u * 26 + warp * 6) * Math.PI);
-    const fine = noise2(u * 300, v * 6) * 0.06;
-    const l = 0.72 + ring * 0.2 + fine + fbm2(u * 8 + 3, v * 2, 3) * 0.1;
+    const warp = fbm2(u * 3, v * 0.5, 4) * 0.7 + noise2(u * 9, v * 1.2) * 0.1;
+    const ring = 0.5 + 0.5 * Math.sin((u * 30 + warp * 7) * Math.PI);
+    const late = Math.pow(ring, 6);                                    // dark latewood lines
+    const pore = noise2(u * 420, v * 14) > 0.55 ? 1 : 0;
+    const fleck = Math.max(0, noise2(u * 60, v * 3) - 0.6) * 1.5;
+    const l = 0.8 + fbm2(u * 6 + 3, v * 1.5, 3) * 0.14 - late * 0.22 - pore * 0.08 + fleck * 0.1;
     const i = (y * W + x) * 4;
-    d[i] = 128 * l; d[i + 1] = 84 * l; d[i + 2] = 48 * l; d[i + 3] = 255;
+    d[i] = 150 * l; d[i + 1] = 100 * l; d[i + 2] = 58 * l; d[i + 3] = 255;
+    const hh = 0.6 - late * 0.25 - pore * 0.2 + noise2(u * 200, v * 8) * 0.05;
+    hd[i] = hd[i + 1] = hd[i + 2] = Math.max(0, Math.min(255, hh * 255)); hd[i + 3] = 255;
   }
-  g.putImageData(img, 0, 0);
-  _wood = toTexture(c, { repeat: true });
+  g.putImageData(img, 0, 0); hg.putImageData(him, 0, 0);
+  _wood = { map: toTexture(c, { repeat: true }), normal: normalFromHeight(hc, 3.5) };
   return _wood;
 }
+export const woodTexture = () => woodCanvases().map;
+export const woodNormal = () => woodCanvases().normal;
 
+// Linen: plain weave with slubs (map + normal), stitched seams every so often, a starched sheen
 let _linen = null;
-export function linenTexture() {
+function linenCanvases() {
   if (_linen) return _linen;
-  const S = 256, c = mkCanvas(S, S), g = c.getContext('2d');
-  const img = g.createImageData(S, S), d = img.data;
+  const S = 256, c = mkCanvas(S, S), g = c.getContext('2d'), hc = mkCanvas(S, S), hg = hc.getContext('2d');
+  const img = g.createImageData(S, S), d = img.data, him = hg.createImageData(S, S), hd = him.data;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const wv = 0.5 + 0.5 * Math.sin(x * 1.3) * Math.sin(y * 1.3 + (Math.floor(x / 5) % 2) * 1.5);
-    const sl = noise2(x * 0.05, y * 0.6) * 0.05 + noise2(x * 0.7, y * 0.04) * 0.05;
-    const l = 0.86 + wv * 0.08 + sl + fbm2(x / S * 3, y / S * 3, 3) * 0.06;
+    const over = ((x >> 2) + (y >> 2)) % 2;                            // which thread is on top
+    const wx = Math.sin((x % 4) / 4 * Math.PI), wy = Math.sin((y % 4) / 4 * Math.PI);
+    const hgt = over ? wx * 0.8 + 0.2 * wy : wy * 0.8 + 0.2 * wx;
+    const slub = noise2(x * 0.05, y * 0.7) * 0.06 + noise2(x * 0.7, y * 0.04) * 0.06;
+    const seam = (x % 128 < 3) ? 1 : 0;
+    const stitch = seam && (y % 8 < 5) ? 1 : 0;
+    const l = 0.84 + hgt * 0.1 + slub + fbm2(x / S * 3, y / S * 3, 3) * 0.06 - seam * 0.08 - stitch * 0.12;
     const i = (y * S + x) * 4;
-    d[i] = 236 * l; d[i + 1] = 222 * l; d[i + 2] = 190 * l; d[i + 3] = 255;
+    d[i] = 236 * l; d[i + 1] = 222 * l; d[i + 2] = 188 * l; d[i + 3] = 255;
+    hd[i] = hd[i + 1] = hd[i + 2] = Math.max(0, Math.min(255, (0.4 + hgt * 0.4 + slub + seam * 0.25 + stitch * 0.1) * 255)); hd[i + 3] = 255;
   }
-  g.putImageData(img, 0, 0);
-  _linen = toTexture(c, { repeat: true });
-  _linen.repeat.set(4, 4);
+  g.putImageData(img, 0, 0); hg.putImageData(him, 0, 0);
+  const map = toTexture(c, { repeat: true }), normal = normalFromHeight(hc, 2.5);
+  map.repeat.set(4, 4); normal.repeat.set(4, 4);
+  _linen = { map, normal };
   return _linen;
+}
+export const linenTexture = () => linenCanvases().map;
+export const linenNormal = () => linenCanvases().normal;
+
+// Rope: three twisted strands (map + normal), for lashings and cords
+let _rope = null;
+export function ropeMaps() {
+  if (_rope) return _rope;
+  const hc = stripeHeight(64, 64, 3, 1.2), c = mkCanvas(64, 64), g = c.getContext('2d');
+  g.drawImage(hc, 0, 0); g.globalCompositeOperation = 'multiply'; g.fillStyle = '#b89a6a'; g.fillRect(0, 0, 64, 64);
+  const map = toTexture(c, { repeat: true }), normal = normalFromHeight(hc, 4);
+  _rope = { map, normal };
+  return _rope;
 }
 
 // merge a list of { geometry, matrix } into one geometry (position, normal, uv)
@@ -289,3 +325,42 @@ export function rod(a, b, r, seg = 6) {
   return { geometry: g, matrix: m };
 }
 export const at = (geometry, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) => ({ geometry, matrix: new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), typeof s === 'number' ? V(s, s, s) : s) });
+
+// ---------------------------------------------------------------------------
+// Detail through maps: a tangent-space normal map from a height canvas (grey = height), and box-projected
+// world-scale UVs for merged architecture (so a texture keeps its real size on every face, whatever the
+// primitive's own UVs were).
+export function normalFromHeight(src, strength = 2, { repeat = true } = {}) {
+  const W = src.width, H = src.height;
+  const sd = src.getContext('2d').getImageData(0, 0, W, H).data;
+  const c = mkCanvas(W, H), g = c.getContext('2d'), img = g.createImageData(W, H), d = img.data;
+  const h = (x, y) => sd[(((y + H) % H) * W + ((x + W) % W)) * 4] / 255;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = (h(x + 1, y) - h(x - 1, y)) * strength, dy = (h(x, y + 1) - h(x, y - 1)) * strength;
+    const l = Math.hypot(dx, dy, 1), i = (y * W + x) * 4;
+    d[i] = (-dx / l * 0.5 + 0.5) * 255; d[i + 1] = (dy / l * 0.5 + 0.5) * 255; d[i + 2] = (1 / l * 0.5 + 0.5) * 255; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = toTexture(c, { srgb: false, repeat });
+  return t;
+}
+export function boxUV(geometry, scale = 1, offset = [0, 0, 0]) {
+  const p = geometry.attributes.position, n = geometry.attributes.normal;
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i) + offset[0], y = p.getY(i) + offset[1], z = p.getZ(i) + offset[2];
+    const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i));
+    let u, v;
+    if (ay > ax && ay > az) { u = x; v = z; } else if (ax > az) { u = z * Math.sign(n.getX(i) || 1); v = y; } else { u = -x * Math.sign(n.getZ(i) || 1); v = y; }
+    uv[i * 2] = u * scale; uv[i * 2 + 1] = v * scale;
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return geometry;
+}
+// a height canvas of rope twist / lashing bands (for normal maps)
+export function stripeHeight(W, H, n, slant = 0.6) {
+  const c = mkCanvas(W, H), g = c.getContext('2d'), img = g.createImageData(W, H), d = img.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = 0.5 + 0.5 * Math.sin(((x / W) * n + (y / H) * n * slant) * Math.PI * 2); const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v * 255; d[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  return c;
+}

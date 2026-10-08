@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { rng, lerp } from '../lib/math.js';
 import { fbm2, noise2 } from '../lib/noise.js';
 import { canvas as mkCanvas, toTexture } from '../lib/textures.js';
-import { V, mergeParts, at, beam, rod, drawingOf, hatchTriangles, mirrorScript, woodTexture, linenTexture, pageTexture, inkOpts, orderedStrokes, SEPIA, CHALK } from './italy-assets.js';
+import { V, mergeParts, at, beam, rod, drawingOf, hatchTriangles, mirrorScript, woodTexture, woodNormal, linenTexture, linenNormal, ropeMaps, normalFromHeight, boxUV, pageTexture, inkOpts, orderedStrokes, SEPIA, CHALK } from './italy-assets.js';
 import { segmentsLine } from '../lib/lines.js';
 
 export const PAGE_Y = 0.016;            // the notebook's page surface
@@ -25,6 +25,17 @@ export const SHEETS = {
   orni: { x: 0.47, z: 0.012, ry: -0.07, y: SHEET_Y },
   car: { x: 0.81, z: -0.006, ry: 0.06, y: SHEET_Y },
 };
+
+// a lashing: a few turns of cord round a joint (a short, fat torus coil along the member a → b)
+function lash(list, at0, dir, r, turns = 3, pitch = 0.004) {
+  const d = dir.clone().normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), d);
+  for (let k = 0; k < turns; k++) {
+    const g = new THREE.TorusGeometry(r, r * 0.22 + 0.0012, 4, 10);
+    list.push({ geometry: g, matrix: new THREE.Matrix4().compose(at0.clone().addScaledVector(d, (k - (turns - 1) / 2) * pitch), q, V(1, 1, 1)) });
+  }
+}
+// a wooden peg (treenail) through a joint: its end grain shows as a small disc proud of the surface
+const peg = (list, p, n, r = 0.0035) => list.push(rod(p.clone().addScaledVector(n, -0.004), p.clone().addScaledVector(n, 0.004), r, 6));
 
 // ---------------------------------------------------------------------------------------- models
 // Each returns { root, parts: [{ obj, meshes: [{ geometry, matrix }], mat: name }] } in model space
@@ -55,7 +66,7 @@ function screwModel() {
     for (let i = 0; i <= nP; i++) for (let j = 0; j <= nR; j++) {
       const f = i / nP, r = lerp(0.02, Rout(f), j / nR);
       const p = helix(f, r);
-      p.y -= 0.012 * Math.sin(Math.PI * j / nR);            // the cloth sags a little between mast and rim
+      p.y -= (0.008 + 0.01 * Math.abs(Math.sin(f * 15 * Math.PI))) * Math.sin(Math.PI * j / nR);   // the cloth sags between mast and rim, most between the struts
       pos.push(p.x, p.y, p.z); uv.push(f * 6, j / nR);
     }
     for (let i = 0; i < nP; i++) for (let j = 0; j < nR; j++) { const a = i * (nR + 1) + j, b = a + 1, c = a + nR + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
@@ -65,8 +76,16 @@ function screwModel() {
   }
   const rim = []; for (let i = 0; i <= 160; i++) { const f = i / 160; rim.push(helix(f, Rout(f))); }
   wood2.push({ geometry: new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rim), 160, 0.007, 5, false), matrix: new THREE.Matrix4() });
-  for (let i = 0; i <= 15; i++) { const f = i / 15; wood2.push(rod(helix(f, 0.015), helix(f, Rout(f)), 0.0045, 5)); }
-  return { root, parts: [{ obj: base, meshes: wood, mat: 'wood' }, { obj: screw, meshes: wood2, mat: 'wood' }, { obj: screw, meshes: linen, mat: 'linen' }], screw };
+  const rope = [], iron = [];
+  for (let i = 0; i <= 15; i++) {
+    const f = i / 15, a = helix(f, 0.015), b = helix(f, Rout(f));
+    wood2.push(rod(a, b, 0.0045, 5));
+    lash(rope, b.clone().lerp(a, 0.03), b.clone().sub(a).cross(V(0, 1, 0)).normalize().cross(b.clone().sub(a)).normalize(), 0.009, 2, 0.005);
+  }
+  for (const y of [0.17, 0.3, 0.6, 0.9]) iron.push(at(new THREE.CylinderGeometry(0.019, 0.019, 0.014, 12, 1, true), 0, y, 0));
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4; lash(rope, V(Math.cos(a) * 0.05, 0.17, Math.sin(a) * 0.05), V(Math.cos(a), 0, Math.sin(a)), 0.012, 3, 0.006); }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; peg(wood, V(Math.cos(a) * 0.4, 0.056, Math.sin(a) * 0.4), V(0, 1, 0)); }
+  return { root, parts: [{ obj: base, meshes: wood, mat: 'wood' }, { obj: screw, meshes: wood2, mat: 'wood' }, { obj: screw, meshes: linen, mat: 'linen' }, { obj: screw, meshes: rope, mat: 'rope', draw: false }, { obj: screw, meshes: iron, mat: 'iron', draw: false }], screw };
 }
 
 function orniModel() {
@@ -83,7 +102,23 @@ function orniModel() {
   // the pylon carrying the wing pivots
   wood.push(beam(V(0.03, 0.14, 0), V(0.03, 0.27, 0), 0.02, 0.02));
   wood.push(beam(V(0.03, 0.27, -0.09), V(0.03, 0.27, 0.09), 0.018, 0.018));
-  for (const sz of [1, -1]) { wood.push(rod(V(-0.08, 0.155, sz * 0.05), V(0.06, 0.29, sz * 0.2), 0.0025, 4)); wood.push(rod(V(0.12, 0.155, sz * 0.05), V(0.08, 0.3, sz * 0.24), 0.0025, 4)); }
+  const cords = [], leather = [];
+  for (const sz of [1, -1]) {
+    // pulleys on the pylon's cross-tree, cords from the pilot's levers over them to the wing spars
+    for (const x of [-0.01, 0.07]) {
+      wood.push(at(new THREE.CylinderGeometry(0.011, 0.011, 0.008, 12), x, 0.255, sz * 0.05, Math.PI / 2));
+      wood.push(at(new THREE.TorusGeometry(0.011, 0.0025, 4, 12), x, 0.255, sz * 0.05));
+    }
+    cords.push(rod(V(-0.08, 0.155, sz * 0.05), V(-0.01, 0.266, sz * 0.05), 0.0018, 4), rod(V(-0.01, 0.266, sz * 0.05), V(0.06, 0.29, sz * 0.2), 0.0018, 4));
+    cords.push(rod(V(0.12, 0.155, sz * 0.05), V(0.07, 0.266, sz * 0.05), 0.0018, 4), rod(V(0.07, 0.266, sz * 0.05), V(0.08, 0.3, sz * 0.24), 0.0018, 4));
+    // levers and pedals the pilot works
+    wood.push(rod(V(-0.08, 0.15, sz * 0.05), V(-0.1, 0.2, sz * 0.05), 0.004, 5), rod(V(0.12, 0.15, sz * 0.05), V(0.14, 0.2, sz * 0.05), 0.004, 5));
+    leather.push(at(new THREE.BoxGeometry(0.016, 0.006, 0.03), -0.36, 0.06, sz * 0.08));
+  }
+  // the prone pilot's harness: straps across the board, a chest sling
+  for (const x of [-0.12, 0.04, 0.16]) leather.push(at(new THREE.BoxGeometry(0.018, 0.004, 0.14), x, 0.157, 0));
+  leather.push(at(new THREE.TorusGeometry(0.045, 0.004, 4, 16, Math.PI), 0.16, 0.157, 0, 0, Math.PI / 2, 0));
+  for (const x of [-0.24, -0.06, 0.12, 0.24]) for (const sz of [1, -1]) lash(cords, V(x, 0.13, sz * 0.075), V(0, 0, 1), 0.012, 2, 0.004);
   wood.push(at(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 10), 0.03, 0.27, 0.09, Math.PI / 2)); wood.push(at(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 10), 0.03, 0.27, -0.09, Math.PI / 2));
   // tail: a fan of linen on three ribs
   const tail = [];
@@ -93,10 +128,10 @@ function orniModel() {
     for (const tp of tips) wood.push(rod(o, tp, 0.005, 5));
     const pos = [];
     for (let i = 0; i < 2; i++) { const a = tips[i], b = tips[i + 1], m = a.clone().lerp(b, 0.5).lerp(o, 0.12); pos.push(o.x, o.y, o.z, a.x, a.y, a.z, m.x, m.y, m.z, o.x, o.y, o.z, m.x, m.y, m.z, b.x, b.y, b.z); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); boxUV(g, 10);
     tail.push({ geometry: g, matrix: new THREE.Matrix4() });
   }
-  const parts = [{ obj: body, meshes: wood, mat: 'wood' }, { obj: body, meshes: tail, mat: 'linen' }];
+  const parts = [{ obj: body, meshes: wood, mat: 'wood' }, { obj: body, meshes: tail, mat: 'linen' }, { obj: body, meshes: cords, mat: 'rope', draw: false }, { obj: body, meshes: leather, mat: 'leather', draw: false }];
   // the wings: a curved leading spar and five finger ribs with scalloped linen between (bat-like)
   const wings = [];
   for (const s of [1, -1]) {
@@ -130,8 +165,10 @@ function orniModel() {
         pos.push(...a.toArray(), ...cc.toArray(), ...b.toArray(), ...b.toArray(), ...cc.toArray(), ...d.toArray());
       }
     }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
-    parts.push({ obj: w, meshes: ww, mat: 'wood' }, { obj: w, meshes: [{ geometry: g, matrix: new THREE.Matrix4() }], mat: 'linen' });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); boxUV(g, 10);
+    const wl = [];
+    ribs.forEach((pts) => lash(wl, pts[0].clone().lerp(pts[1], 0.15), pts[1].clone().sub(pts[0]), 0.0085, 2, 0.004));
+    parts.push({ obj: w, meshes: ww, mat: 'wood' }, { obj: w, meshes: [{ geometry: g, matrix: new THREE.Matrix4() }], mat: 'linen' }, { obj: w, meshes: wl, mat: 'rope', draw: false });
   }
   return { root, parts, wings };
 }
@@ -165,13 +202,28 @@ function carModel() {
     bronze.push(rod(p0, p1, 0.012, 8));
     bronze.push(at(new THREE.TorusGeometry(0.014, 0.004, 4, 10), p1.x, p1.y, p1.z, 0, Math.PI / 2 - a, 0));
   }
+  const detail = [];
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2;
+    detail.push(at(new THREE.TorusGeometry(0.022, 0.004, 4, 12), Math.cos(a) * 0.513, 0.095, Math.sin(a) * 0.513, 0, Math.PI / 2 - a, 0));
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2 + Math.PI / 16;
+    for (const [r, y] of prof.slice(0, 6)) detail.push(at(new THREE.SphereGeometry(0.005, 6, 4), Math.cos(a) * (r + 0.011), y, Math.sin(a) * (r + 0.011)));
+  }
+  // the gearing inside: a crown wheel on the crank shaft driving lantern pinions on the axles
+  const teeth = (cx, cy, cz, R, n, axis) => { for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2; const off = axis === 'y' ? V(Math.cos(a) * R, 0.012, Math.sin(a) * R) : V(Math.cos(a) * R, Math.sin(a) * R, 0); wood.push(at(new THREE.BoxGeometry(0.008, 0.012, 0.008), cx + off.x, cy + off.y, cz + off.z)); } };
+  wood.push(at(new THREE.CylinderGeometry(0.11, 0.11, 0.014, 24), 0, 0.12, 0)); teeth(0, 0.12, 0, 0.1, 20, 'y');
+  wood.push(rod(V(0, 0.12, 0), V(0, 0.3, 0), 0.01, 8));
+  for (const sx of [1, -1]) { wood.push(rod(V(sx * 0.22, 0.075, -0.24), V(sx * 0.22, 0.075, 0.24), 0.008, 6)); wood.push(at(new THREE.CylinderGeometry(0.025, 0.025, 0.03, 8, 1, true), sx * 0.09, 0.105, 0, 0, 0, Math.PI / 2)); }
+  wood.push(beam(V(0, 0.3, 0), V(0.08, 0.3, 0), 0.01, 0.01), rod(V(0.08, 0.3, 0), V(0.08, 0.34, 0), 0.005, 5));
   // wheels (inside, just below the skirt)
   for (const [x, z] of [[0.22, 0.2], [-0.22, 0.2], [0.22, -0.2], [-0.22, -0.2]]) {
     wood.push(at(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8), x, 0.075, z, Math.PI / 2));
     for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI; wood.push(at(new THREE.BoxGeometry(0.008, 0.14, 0.012), x, 0.075, z, 0, 0, a)); }
     iron.push(at(new THREE.TorusGeometry(0.075, 0.006, 4, 20), x, 0.075, z));
   }
-  return { root, parts: [{ obj: body, meshes: wood, mat: 'wood' }, { obj: body, meshes: iron, mat: 'iron' }, { obj: body, meshes: bronze, mat: 'bronze' }] };
+  return { root, parts: [{ obj: body, meshes: wood, mat: 'wood' }, { obj: body, meshes: iron, mat: 'iron' }, { obj: body, meshes: bronze, mat: 'bronze' }, { obj: body, meshes: detail, mat: 'iron', draw: false }] };
 }
 
 // ---------------------------------------------------------------------------------------- the desk
@@ -209,8 +261,10 @@ function plasterCanvas() {
 export function buildStudy({ lite = false, domeInk = null } = {}) {
   const root = new THREE.Group();
   const r = rng(1489);
-  const deskTex = toTexture(deskCanvas(), { repeat: true }); deskTex.repeat.set(1, 1);
-  const deskMat = new THREE.MeshStandardMaterial({ map: deskTex, roughness: 0.55, metalness: 0 });
+  const dc = deskCanvas();
+  const deskTex = toTexture(dc, { repeat: true }); deskTex.repeat.set(1, 1);
+  const deskN = normalFromHeight(dc, 1.6); 
+  const deskMat = new THREE.MeshStandardMaterial({ map: deskTex, normalMap: deskN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.5, metalness: 0 });
   const desk = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 1.0), deskMat);
   desk.position.set(0.35, -0.025, -0.08); desk.receiveShadow = true; root.add(desk);
   const edge = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.035, 0.03), deskMat); edge.position.set(0.35, -0.035, 0.43); edge.receiveShadow = true; root.add(edge);
@@ -234,7 +288,27 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
   // the notebook: leather cover, page block, two pages curving into the gutter
   const pageTex = pageTexture();
   const pageMat = new THREE.MeshStandardMaterial({ map: pageTex, roughness: 0.9, metalness: 0, color: '#fff6e6' });
-  const coverMat = new THREE.MeshStandardMaterial({ color: '#4a2716', roughness: 0.55, metalness: 0 });
+  // the binding: dark calf, blind-tooled double fillet border and a lozenge, scuffed corners
+  const leatherC = mkCanvas(512, 352), lg = leatherC.getContext('2d'), lh = mkCanvas(512, 352), lhg = lh.getContext('2d');
+  {
+    const r2 = rng(77), img = lg.createImageData(512, 352), d = img.data, him = lhg.createImageData(512, 352), hd = him.data;
+    for (let y = 0; y < 352; y++) for (let x = 0; x < 512; x++) {
+      const n = fbm2(x / 60, y / 60, 4) * 0.12 + noise2(x * 0.9, y * 0.9) * 0.04, i = (y * 512 + x) * 4;
+      const edge = Math.min(x, y, 511 - x, 351 - y), scuff = Math.max(0, 1 - edge / 26) * (0.5 + noise2(x * 0.2, y * 0.2) * 0.5);
+      const l = 0.85 + n + scuff * 0.35;
+      d[i] = 82 * l; d[i + 1] = 44 * l; d[i + 2] = 26 * l; d[i + 3] = 255;
+      hd[i] = hd[i + 1] = hd[i + 2] = (0.6 + n * 1.5) * 255; hd[i + 3] = 255;
+    }
+    lg.putImageData(img, 0, 0); lhg.putImageData(him, 0, 0);
+    for (const [ctx2, col] of [[lg, 'rgba(25,10,4,0.55)'], [lhg, 'rgba(0,0,0,0.9)']]) {
+      ctx2.strokeStyle = col; ctx2.lineWidth = 3;
+      ctx2.strokeRect(22, 22, 468, 308); ctx2.strokeRect(32, 32, 448, 288);
+      ctx2.beginPath(); ctx2.moveTo(256, 96); ctx2.lineTo(330, 176); ctx2.lineTo(256, 256); ctx2.lineTo(182, 176); ctx2.closePath(); ctx2.stroke();
+      ctx2.beginPath(); ctx2.arc(256, 176, 22, 0, 7); ctx2.stroke();
+    }
+    for (let i = 0; i < 40; i++) { lg.strokeStyle = `rgba(150,100,70,${0.08 + r2() * 0.1})`; lg.lineWidth = 1; lg.beginPath(); const x = r2() * 512, y = r2() * 352; lg.moveTo(x, y); lg.lineTo(x + (r2() - 0.5) * 60, y + (r2() - 0.5) * 20); lg.stroke(); }
+  }
+  const coverMat = new THREE.MeshStandardMaterial({ map: toTexture(leatherC), normalMap: normalFromHeight(lh, 3, { repeat: false }), color: '#ffffff', roughness: 0.58, metalness: 0 });
   const blockMat = new THREE.MeshStandardMaterial({ color: '#d9c7a4', roughness: 0.9, metalness: 0 });
   {
     const cover = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.006, 0.315), coverMat); cover.position.set(0, 0.003, 0); cover.castShadow = cover.receiveShadow = true; root.add(cover);
@@ -284,11 +358,14 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
   }
 
   // ---------------------------------------------------------------- the drawings and the models
-  const wood = new THREE.MeshStandardMaterial({ map: woodTexture(), color: '#d8b48a', roughness: 0.62, metalness: 0 });
-  const linen = new THREE.MeshStandardMaterial({ map: linenTexture(), color: '#f3e6c8', roughness: 0.92, metalness: 0, side: THREE.DoubleSide });
+  const wood = new THREE.MeshStandardMaterial({ map: woodTexture(), normalMap: woodNormal(), normalScale: new THREE.Vector2(0.8, 0.8), color: '#f4d2a2', roughness: 0.52, metalness: 0 });
+  const linen = new THREE.MeshStandardMaterial({ map: linenTexture(), normalMap: linenNormal(), normalScale: new THREE.Vector2(0.7, 0.7), color: '#f6ead0', roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
+  const rm = ropeMaps();
+  const rope = new THREE.MeshStandardMaterial({ map: rm.map, normalMap: rm.normal, color: '#e6d2a8', roughness: 0.9, metalness: 0 });
+  const leatherM = new THREE.MeshStandardMaterial({ color: '#5a3020', roughness: 0.6, metalness: 0 });
   const iron = new THREE.MeshStandardMaterial({ color: '#3a342e', roughness: 0.5, metalness: 1 });
   const bronze = new THREE.MeshStandardMaterial({ color: '#b07a45', roughness: 0.35, metalness: 1 });
-  const kinds = { wood, linen, iron, bronze };
+  const kinds = { wood, linen, iron, bronze, rope, leather: leatherM };
   const az = -0.62, el = 0.42;                                 // the drawing's view: from the front left, above
   const view = V(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).normalize();
   const xc = V().crossVectors(V(0, 1, 0), view).normalize(), yc = V().crossVectors(view, xc);
@@ -319,6 +396,7 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
       part.obj.add(mesh); solids.push(mesh);
       mesh.geometry.computeBoundingBox();
       box.union(mesh.geometry.boundingBox.clone().applyMatrix4(part.obj.matrix));
+      if (part.draw === false) continue;
       const dr = drawingOf([{ geometry: mesh.geometry, matrix: new THREE.Matrix4() }], view, { creaseDeg: 35 });
       strokeSegs.push({ obj: part.obj, edges: dr.edges });
       // (parts are posed at rest when drawn: their local frame is the model's, offset by obj.position)
