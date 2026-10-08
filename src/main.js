@@ -166,7 +166,7 @@ async function boot() {
     // shaders and textures of that first stretch, so its first seconds play without a stall
     const until = (next ?? first[first.length - 1]).end;
     await engine.prewarm((p) => setLoad(0.8 + p * 0.15), { from: Math.max(0, startStory - 0.5), to: until });
-    for (const id of ids) engine.instances.get(id)._warm = true;
+    for (const id of ids) { engine.instances.get(id)._warm = true; engine.instances.get(id)._ready = true; }
   }
   setStatus('Composing score…');
   const score = await scorePromise;
@@ -211,13 +211,21 @@ async function boot() {
   // STREAMING: the remaining chapters build in the background, always the first unbuilt one at or after
   // the playhead (so a seek reorders the queue), each warmed without touching the canvas. Playback holds
   // (a small "Loading" note) if it reaches a chapter that isn't ready yet, and resumes on its own.
-  const LOOKAHEAD = 1.0;   // story seconds of film that must be built ahead of the playhead
-  const gate = (filmT) => { const T = filmT / TIME_SCALE; return engine.isReady(T) && engine.isReady(Math.min(DURATION / TIME_SCALE - 0.01, T + LOOKAHEAD)); };
+  // Nothing is built while the film plays (a chapter's build holds the page for a moment, and the picture
+  // would jump while the sound ran on): building happens before Play and whenever playback is held. If the
+  // playhead nears a chapter that isn't ready, picture AND sound pause together under the buffering ring,
+  // and the film resumes only once BUFFER story seconds ahead are built and warm — so a hold is rare, and
+  // the stretch after it plays smooth.
+  const LOOKAHEAD = 2.0;   // story seconds that must be ready ahead of the playhead to keep playing
+  const BUFFER = 14;       // story seconds made ready before a held film resumes
+  const END = DURATION / TIME_SCALE - 0.01;
+  const readyThrough = (T0, T1) => SEGMENTS.every((s) => s.end <= T0 || s.start >= T1 || (engine.isBuilt(s.id) && (engine.instances.get(s.id)._ready || !streaming)));
+  const gate = (filmT) => { const T = filmT / TIME_SCALE; return engine.isReady(T) && readyThrough(T, Math.min(END, T + LOOKAHEAD)); };
   player.gate = gate;
   experience.gate = gate;
   const buffering = () => document.body.classList.toggle('buffering', !!(player.waiting || experience.waiting));
   const onBuilt = () => {
-    if (player.waiting && gate(player.time)) player.play(player.time);
+    if (player.waiting && gate(player.time) && readyThrough(player.time / TIME_SCALE, Math.min(END, player.time / TIME_SCALE + BUFFER))) player.play(player.time);
     buffering();
     if (!player.playing && !experience.playing && !engine.pinned) engine.render(nowT(), 0);   // a waiting still frame fills in
   };
@@ -231,26 +239,32 @@ async function boot() {
     for (;;) {
       const T = nowT() / TIME_SCALE;
       for (const s of SEGMENTS) if (engine.isBuilt(s.id) && (s.end < T - 1.5 || s.start > T + WINDOW + 6)) engine.disposeSegment(s.id);
-      const want = SEGMENTS.find((s) => s.end > T + 0.05 && s.start < T + WINDOW && (!engine.isBuilt(s.id) || !engine.instances.get(s.id)._warm));
+      const want = SEGMENTS.find((s) => s.end > T + 0.05 && s.start < T + WINDOW && (!engine.isBuilt(s.id) || !engine.instances.get(s.id)._ready));
       if (!want) { await new Promise((r) => setTimeout(r, 250)); continue; }
+      // (as in streamAll: no building under a playing film unless it's held; the gate holds it in time)
+      if ((player.playing || experience.playing) && !player.waiting && !experience.waiting) { await new Promise((r) => setTimeout(r, 200)); continue; }
       try {
         await engine.buildSegment(want.id);
         await engine.warmSegment(want.id, { textures: false });
-      } catch (e) { console.warn('[stream] could not build', want.id, e); if (engine.instances.get(want.id)) engine.instances.get(want.id)._warm = true; }
+        engine.instances.get(want.id)._ready = true;
+      } catch (e) { console.warn('[stream] could not build', want.id, e); const i = engine.instances.get(want.id); if (i) { i._warm = true; i._ready = true; } }
       onBuilt();
       await new Promise((r) => setTimeout(r, 0));
     }
   };
   const streamAll = () => (streamDone ??= chapter ? liteWindow() : (async () => {
     for (;;) {
-      const pending = SEGMENTS.filter((s) => !engine.isBuilt(s.id) || !engine.instances.get(s.id)._warm);
+      const pending = SEGMENTS.filter((s) => !engine.isBuilt(s.id) || !engine.instances.get(s.id)._ready);
       if (!pending.length) break;
+      // while the film plays, the page stays free for it: build only when it's held (or before Play)
+      if ((player.playing || experience.playing) && !player.waiting && !experience.waiting) { await new Promise((r) => setTimeout(r, 200)); continue; }
       const T = nowT() / TIME_SCALE;
       const next = pending.find((s) => s.end > T) ?? pending[0];
       try {
         await engine.buildSegment(next.id);
         await engine.warmSegment(next.id);
-      } catch (e) { console.warn('[stream] could not build', next.id, e); if (engine.instances.get(next.id)) engine.instances.get(next.id)._warm = true; else break; }
+        engine.instances.get(next.id)._ready = true;
+      } catch (e) { console.warn('[stream] could not build', next.id, e); const i = engine.instances.get(next.id); if (i) { i._warm = true; i._ready = true; } else break; }
       onBuilt();
       await new Promise((r) => setTimeout(r, 0));
     }
