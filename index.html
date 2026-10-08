@@ -20,7 +20,8 @@
   </main>
 
   <!-- streaming: shown while playback waits for the next chapter to finish building -->
-  <div id="buffering" class="buffering" role="status" aria-live="polite"><span class="buf-dot"></span>Loading the next chapter…</div>
+  <div class="buf-spin" aria-hidden="true"></div>
+  <div id="buffering" class="buffering" role="status" aria-live="polite"><span class="buf-dot"></span><span id="buf-text">Loading the next chapter…</span></div>
 
   <!-- AR Lite: back to the chapter list (top right, outside AR) -->
   <button type="button" id="arlite-close" class="xr-close arlite-close" aria-label="Close and choose another chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z" /></svg><span class="xr-close-lbl">Chapters</span></button>
@@ -101,7 +102,7 @@
     </button>
     <span id="time" class="time">0:00.0</span>
     <div id="scrub" class="scrub" role="slider" aria-label="Timeline" aria-valuemin="0" aria-valuemax="108" tabindex="0">
-      <div class="scrub-track"><div id="scrub-fill" class="scrub-fill"></div></div>
+      <div class="scrub-track"><div id="scrub-buf" class="scrub-buf" aria-hidden="true"></div><div id="scrub-fill" class="scrub-fill"></div></div>
       <div id="chapters" class="chapters"></div>
       <div id="scrub-tip" class="scrub-tip"></div>
     </div>

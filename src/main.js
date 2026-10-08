@@ -225,12 +225,39 @@ async function boot() {
   experience.gate = gate;
   const buffering = () => document.body.classList.toggle('buffering', !!(player.waiting || experience.waiting));
   const onBuilt = () => {
+    loadedUI?.();
     if (player.waiting && gate(player.time) && readyThrough(player.time / TIME_SCALE, Math.min(END, player.time / TIME_SCALE + BUFFER))) player.play(player.time);
     buffering();
     if (!player.playing && !experience.playing && !engine.pinned) engine.render(nowT(), 0);   // a waiting still frame fills in
   };
-  player.onWait = buffering;
-  setInterval(buffering, 300);
+  // YouTube-style loading feedback: the ready stretch of the film as a lighter band on the timeline, the
+  // start screen counting chapters as they load behind it, the buffering note showing how far along it is
+  const segReady = (sg) => engine.isBuilt(sg.id) && (engine.instances.get(sg.id)._ready || !streaming);
+  let loadedKey = '';
+  const loadedUI = () => {
+    const ready = SEGMENTS.map(segReady), n = ready.filter(Boolean).length, all = n === SEGMENTS.length;
+    const key = ready.join('');
+    if (key !== loadedKey) {
+      loadedKey = key;
+      const ranges = [];
+      SEGMENTS.forEach((sg, i) => {
+        if (!ready[i]) return;
+        const a = sg.start * TIME_SCALE / DURATION, b = Math.min(1, sg.end * TIME_SCALE / DURATION), last = ranges[ranges.length - 1];
+        if (last && a <= last[1] + 1e-3) last[1] = Math.max(last[1], b); else ranges.push([a, b]);
+      });
+      const buf = $('scrub-buf');
+      if (buf) buf.innerHTML = ranges.map(([a, b]) => `<i style="left:${(a * 100).toFixed(2)}%;width:${((b - a) * 100).toFixed(2)}%"></i>`).join('');
+      document.body.classList.toggle('all-loaded', all);
+      if (!all && intro.classList.contains('ready')) { setStatus(`Ready to play · the rest loads in the background · ${n} / ${SEGMENTS.length} chapters`); setLoad(n / SEGMENTS.length); }
+    }
+    if (player.waiting || experience.waiting) {
+      const T = nowT() / TIME_SCALE, ahead = SEGMENTS.filter((sg) => sg.end > T && sg.start < T + BUFFER);
+      const pct = ahead.length ? Math.round((ahead.filter(segReady).length / ahead.length) * 100) : 100;
+      const tx = $('buf-text'); if (tx) tx.textContent = `Loading the next chapters · ${pct}%`;
+    }
+  };
+  player.onWait = () => { buffering(); loadedUI(); };
+  setInterval(() => { buffering(); loadedUI(); }, 300);
   let streamDone = null;
   // AR / VR Lite keeps a window instead: the chapters within WINDOW story seconds ahead of the playhead
   // are built (and warmed), those behind it are freed — about two chapters in memory at any time.

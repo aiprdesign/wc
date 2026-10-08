@@ -29,7 +29,8 @@ h1 { font-family: 'Cinzel', serif; font-weight: 400; font-size: clamp(26px, 5.2v
 .play:hover { background: rgba(226, 195, 138, 0.16); border-color: var(--gold); transform: translateY(-1px); }
 .play:focus-visible { outline: 1px solid var(--gold); outline-offset: 4px; }
 .ready .play { display: inline-flex; }
-.ready .loader, .ready .status { display: none; }
+.all-loaded .ready .loader, .all-loaded .ready .status { display: none; }
+.ready .status { opacity: 0.75; }
 .hint { font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--dim); margin: 22px 0 0; opacity: 0; transition: opacity 0.6s; }
 .ready .hint { opacity: 1; }
 .note { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 14px; color: rgba(244, 239, 230, 0.4); margin: 36px auto 0; max-width: 460px; line-height: 1.5; }
@@ -335,3 +336,11 @@ body.buffering .buffering { display: inline-flex; }
 /* resume: 'Start from the beginning' under the play row */
 .resume-over { display: block; margin: 10px auto 0; padding: 4px 10px; font: inherit; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); opacity: 0.7; background: none; border: 0; border-bottom: 1px solid rgba(226, 195, 138, 0.35); cursor: pointer; }
 .resume-over:hover, .resume-over:focus-visible { opacity: 1; color: var(--gold); outline: none; }
+
+/* streaming, YouTube-style: the loaded stretch of the film shows as a lighter band on the timeline, and a
+   spinner sits over the picture while playback waits for the next chapters */
+.scrub-buf { position: absolute; inset: 0; pointer-events: none; }
+.scrub-buf i { position: absolute; top: 0; bottom: 0; background: rgba(255, 255, 255, 0.38); border-radius: 2px; transition: width 0.4s ease; }
+.buf-spin { position: fixed; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.18); border-top-color: var(--gold); animation: buf-spin 0.9s linear infinite; z-index: 44; display: none; pointer-events: none; }
+body.buffering .buf-spin { display: block; }
+@keyframes buf-spin { to { transform: rotate(360deg); } }
