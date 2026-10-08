@@ -473,10 +473,11 @@ function musicChapter(S) {
   // Beethoven: the Ode to Joy, on the horns, warm and broad, the strings joining for the cadence
   const ode = [66, 66, 67, 69, 69, 67, 66, 64, 62, 62, 64, 66, 66, 64, 64];
   const durs = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.5, 0.5, 2];
+  const Q = 0.18;   // a quarter: all 15 notes fit before the hall dissolves into the Industrial Revolution
   let t = C.beethoven; const notes = [];
-  ode.forEach((m, i) => { notes.push([t, m, durs[i] * 0.25 * 0.95]); t += durs[i] * 0.25; });
+  ode.forEach((m, i) => { notes.push([t, m, durs[i] * Q * 0.95]); t += durs[i] * Q; });
   O.line(S, 'horn', notes, { level: 0.5, cutoff: 2400, bus: 'horn', attack: 0.04, release: 0.5 });
-  O.chord(S, 'strings', C.odeToJoy + 1.4, C.odeToJoy + 2.6, [50, 57, 62, 66], { level: 0.16 });
+  O.chord(S, 'strings', C.beethoven + 12 * Q, C.beethoven + 16.5 * Q, [50, 57, 62, 66], { level: 0.16 });
 }
 
 // invention: a gallery of two centuries — the camera shutter, a filament's hum, an engine cough, the

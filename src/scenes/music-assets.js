@@ -516,46 +516,56 @@ export function manuscript(kind, { W = 1024, H = 1400, seed = 3 } = {}) {
       }
     }
   };
+  const keyD = (yb, clefType) => {   // two sharps: F# and C#
+    const ps = clefType === 'bass' ? [6, 3] : [8, 5];
+    ps.forEach((p, i) => sharp(left + S * 3.6 + i * S * 1.0, yb - (p * S) / 2));
+  };
   if (kind === 'bach') {
     title('Prélude', 'Suite I'); x.textAlign = 'left';
-    const yb = H * 0.26; staff(yb); clef('bass', yb); sharp(left + S * 3.6, yb - 3 * S); commonTime(left + S * 5.5, yb);
-    // bar 1 lit (G2 D3 B3 A3 B3 D3 B3 D3 ×2), bars 2–3 in ink
-    const bars = [[0, 4, 9, 8, 9, 4, 9, 4], [0, 5, 10, 9, 10, 5, 10, 5], [0, 6, 10, 9, 10, 6, 10, 6]];
-    let cx = left + S * 7.6;
+    const yb = H * 0.26; staff(yb); clef('bass', yb); keyD(yb, 'bass'); commonTime(left + S * 6.3, yb);
+    // bar 1 lit (D3 A3 F#4 E4 F#4 A3 F#4 A3), bar 2 lit (D3 B3 G4 F#4 G4 B3 G4 B3), bar 3 in ink
+    const bars = [[4, 8, 13, 12, 13, 8, 13, 8], [4, 9, 14, 13, 14, 9, 14, 9], [4, 10, 14, 13, 14, 10, 14, 10]];
+    let cx = left + S * 8.2;
     bars.forEach((b, bi) => {
-      for (let h = 0; h < 2; h++) { cx = group(cx, yb, b.slice(0, 4), { lit: bi === 0, dx: S * 1.85 }) + S * 0.35; cx = group(cx, yb, b.slice(4), { lit: bi === 0, dx: S * 1.85 }) + S * 0.35; }
+      cx = group(cx, yb, b.slice(0, 4), { lit: bi < 2, dx: S * 1.85 }) + S * 0.35; cx = group(cx, yb, b.slice(4), { lit: bi < 2, dx: S * 1.85 }) + S * 0.35;
       bar(cx - S * 0.2, yb); cx += S * 0.8;
     });
-    filler(yb + S * 11, 8, 'bass', [6]);
+    filler(yb + S * 12, 8, 'bass', [6, 3]);
   } else if (kind === 'mozart') {
     title('Allegro', 'Violino I');
-    const yb = H * 0.26; staff(yb); clef('treble', yb); sharp(left + S * 3.6, yb - 4 * S); commonTime(left + S * 5.5, yb);
-    // G4 · D4 G4 · D4 G4 D4 G4 B4 | D5
-    let cx = left + S * 8;
-    cx = group(cx, yb, [2], { beams: 0, lit: true, dx: S * 3.2 });
-    rest8(cx, yb); cx += S * 2.0;
-    cx = group(cx, yb, [-1], { beams: 1, lit: true, dx: S * 3 });
-    cx = group(cx, yb, [2], { beams: 0, lit: true, dx: S * 3.2 });
-    rest8(cx, yb); cx += S * 2.0;
-    cx = group(cx, yb, [-1], { beams: 1, lit: true, dx: S * 3 });
-    bar(cx, yb); cx += S * 1.4;
-    cx = group(cx, yb, [2, -1, 2, 4], { beams: 1, lit: true, dx: S * 2.6 });
+    const yb = H * 0.26; staff(yb); clef('treble', yb); keyD(yb, 'treble'); commonTime(left + S * 6.3, yb);
+    // D5 · A4 D5 · A4 D5 A4 D5 F#5 | A5
+    let cx = left + S * 8.4;
     cx = group(cx, yb, [6], { beams: 0, lit: true, dx: S * 3.2 });
+    rest8(cx, yb); cx += S * 2.0;
+    cx = group(cx, yb, [3], { beams: 1, lit: true, dx: S * 3 });
+    cx = group(cx, yb, [6], { beams: 0, lit: true, dx: S * 3.2 });
+    rest8(cx, yb); cx += S * 2.0;
+    cx = group(cx, yb, [3], { beams: 1, lit: true, dx: S * 3 });
+    bar(cx, yb); cx += S * 1.4;
+    cx = group(cx, yb, [6, 3, 6, 8], { beams: 1, lit: true, dx: S * 2.6 });
+    cx = group(cx, yb, [10], { beams: 0, lit: true, dx: S * 3.2 });
     rest8(cx, yb); cx += S * 2.4;
     bar(cx, yb);
-    filler(yb + S * 11, 8, 'treble', [8]);
+    filler(yb + S * 12, 8, 'treble', [8, 5]);
   } else {
     title('Allegro assai', 'Finale · Bassi');
-    const yb = H * 0.26; staff(yb); clef('treble', yb);
-    sharp(left + S * 3.6, yb - 4 * S); sharp(left + S * 4.6, yb - 2.5 * S); commonTime(left + S * 6.3, yb);
+    const yb = H * 0.26; staff(yb); clef('treble', yb); keyD(yb, 'treble'); commonTime(left + S * 6.3, yb);
     // F# F# G A | A G F# E | D D E F# | F#. E E   (D major)
-    const tune = [[1, 1, 2, 3], [3, 2, 1, 0], [-1, -1, 0, 1], [1, 0, 0]];
+    const tune = [[1, 1, 2, 3], [3, 2, 1, 0], [-1, -1, 0, 1]];
     let cx = left + S * 8.4;
     tune.forEach((b) => {
       b.forEach((p) => { cx = group(cx, yb, [p], { beams: 0, lit: true, dx: S * 3.6 }); });
       bar(cx - S * 0.8, yb); cx += S * 0.6;
     });
-    filler(yb + S * 11, 8, 'treble', [8, 5]);
+    // the last bar: a dotted quarter, an eighth, a half note
+    const dotX = cx + S * 1.0;
+    cx = group(cx, yb, [1], { beams: 0, lit: true, dx: S * 4.4 });
+    x.fillStyle = ink; x.beginPath(); x.arc(dotX, yb - S * 0.5 - S * 0.5, S * 0.2, 0, TAU); x.fill();
+    cx = group(cx, yb, [0], { beams: 1, lit: true, dx: S * 3.4 });
+    cx = group(cx, yb, [0], { beams: 0, lit: true, dx: S * 4.4, filled: false });
+    bar(cx - S * 0.8, yb);
+    filler(yb + S * 12, 8, 'treble', [8, 5]);
   }
   return { texture: toTex(c), notes, aspect: W / H };
 }

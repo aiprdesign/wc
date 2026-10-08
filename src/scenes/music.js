@@ -25,9 +25,14 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // local fallbacks (seconds from the segment start) when the film has no such cue
 const FALLBACK = { musicHall: 0.1, bach: 0.5, stradivari: 1.9, mozart: 2.5, beethoven: 4.5, odeToJoy: 5.1 };
 // the melodies, as the score plays them (story-second offsets from each theme's cue)
-const BACH = { off: [...Array(16)].map((_, k) => k * 0.125), str: [1, 2, 3, 3, 3, 2, 3, 2, 1, 2, 3, 3, 3, 2, 3, 2] };   // cello strings C G D A = 0..3
-const MOZART = { off: [0, 0.375, 0.5, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5], midi: [67, 62, 67, 62, 67, 62, 67, 71, 74] };
-const ODE = { off: [...Array(15)].map((_, k) => k * 0.25), midi: [66, 66, 67, 69, 69, 67, 66, 64, 62, 62, 64, 66, 66, 64, 64] };
+// Bach in D: D3 A3 F#4 E4 F#4 A3 F#4 A3 | D3 B3 G4 F#4 G4 B3 G4 B3 — D3 stopped on the G string, A3 / B3 on the D
+// string, the upper notes on the A string (cello strings C G D A = 0..3)
+const BACH = { off: [...Array(16)].map((_, k) => k * 0.125), str: [1, 2, 3, 3, 3, 2, 3, 2, 1, 2, 3, 3, 3, 2, 3, 2] };
+// Mozart transposed to D (as the soundtrack plays it): D5 A4 D5 A4 D5 A4 D5 F#5 A5
+const MOZART = { off: [0, 0.375, 0.5, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5], midi: [74, 69, 74, 69, 74, 69, 74, 78, 81] };
+// Ode to Joy: quarter = 0.18 s story; the last bar F#. E | E (dotted quarter, eighth, half)
+const ODE_Q = 0.18, ODE_DUR = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.5, 0.5, 2];
+const ODE = { off: ODE_DUR.map((_, k) => ODE_Q * ODE_DUR.slice(0, k).reduce((a, b) => a + b, 0)), midi: [66, 66, 67, 69, 69, 67, 66, 64, 62, 62, 64, 66, 66, 64, 64] };
 const WARM = '#ffb45a', CANDLE = '#ffa64a';
 
 // the ring of a struck / bowed note: an attack then an exponential decay (0 before the note)
@@ -90,15 +95,15 @@ export function create(ctx, segment) {
     for (let j = 0; j < rows; j++) {
       let px = -r() * W * 0.3;
       while (px < W) {
-        const w = W * (0.22 + r() * 0.3), k = 0.75 + r() * 0.4;
+        const w = W * (0.18 + r() * 0.42), k = 0.82 + r() * 0.3;
         const g = x.createLinearGradient(px, 0, px + w, 0);
         g.addColorStop(0, `rgb(${92 * k},${56 * k},${30 * k})`); g.addColorStop(0.5, `rgb(${110 * k},${66 * k},${36 * k})`); g.addColorStop(1, `rgb(${86 * k},${52 * k},${28 * k})`);
         x.fillStyle = g; x.fillRect(px, j * h, w, h);
         for (let i = 0; i < 9; i++) { x.strokeStyle = `rgba(40,20,8,${0.1 + r() * 0.12})`; x.lineWidth = 1; x.beginPath(); const yy = j * h + r() * h; x.moveTo(px, yy); x.bezierCurveTo(px + w * 0.3, yy + (r() - 0.5) * 6, px + w * 0.6, yy + (r() - 0.5) * 6, px + w, yy); x.stroke(); }
-        x.fillStyle = 'rgba(10,5,2,0.8)'; x.fillRect(px, j * h, 2, h);
+        x.fillStyle = 'rgba(20,10,4,0.45)'; x.fillRect(px, j * h, 1, h);
         px += w;
       }
-      x.fillStyle = 'rgba(10,5,2,0.85)'; x.fillRect(0, j * h, W, 2);
+      x.fillStyle = 'rgba(20,10,4,0.5)'; x.fillRect(0, j * h, W, 1);
     }
     return A.toTex(c, { repeat: true });
   })();
@@ -194,7 +199,7 @@ export function create(ctx, segment) {
     const page = new THREE.Mesh(pg, pageMat(ms.texture)); page.receiveShadow = true; grp.add(page);
     const glowTex = noteGlowTex();
     const n = ms.notes.length;
-    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(w * 0.05, w * 0.05), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }), n);
+    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(w * 0.075, w * 0.075), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }), n);
     const o = new THREE.Object3D();
     ms.notes.forEach(([u, v], i) => { const lx = (u - 0.5) * w, ly = (v - 0.5) * h; o.position.set(lx, ly, 0.012 * w * Math.pow(lx / (w / 2), 2) + 0.002); o.updateMatrix(); im.setMatrixAt(i, o.matrix); im.setColorAt(i, new THREE.Color(0, 0, 0)); });
     im.frustumCulled = false;
@@ -352,7 +357,7 @@ export function create(ctx, segment) {
   const lampGeo = new THREE.BufferGeometry();
   lampGeo.setAttribute('position', new THREE.BufferAttribute(lampPos, 3));
   lampGeo.setAttribute('color', new THREE.BufferAttribute(lampCol, 3));
-  const lamps = new THREE.Points(lampGeo, new THREE.PointsMaterial({ size: 0.7, vertexColors: true, map: noteGlowTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  const lamps = new THREE.Points(lampGeo, new THREE.PointsMaterial({ size: 0.5, vertexColors: true, map: noteGlowTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   lamps.frustumCulled = false; hall.add(lamps);
   // the choir: rows of standing figures on stepped risers behind the orchestra
   const choirRows = lite ? 3 : 4, perRow = lite ? 16 : 22;
@@ -388,8 +393,8 @@ export function create(ctx, segment) {
         float pil = 1.0 - smoothstep(0.32, 0.36, abs(fract(P.x / 3.0 + 0.5) - 0.5) * 3.0);
         float cor = smoothstep(8.5, 8.6, P.y) * (1.0 - smoothstep(8.9, 9.0, P.y));
         float glow = exp(-pow(length((P - vec2(9.0, 5.5)) / vec2(9.0, 6.0)), 2.0) * 1.6);
-        vec3 wall = uC * (0.16 + 0.42 * glow) * (1.0 + 0.25 * pil) * (1.0 - 0.45 * cor) * (1.0 - 0.6 * frame);
-        vec3 c = wall + vec3(1.0, 0.86, 0.62) * win * 1.35;
+        vec3 wall = uC * (0.15 + 0.34 * glow) * (1.0 + 0.25 * pil) * (1.0 - 0.45 * cor) * (1.0 - 0.6 * frame);
+        vec3 c = wall + vec3(1.0, 0.86, 0.62) * win * 1.1;
         gl_FragColor = vec4(c * uI, 1.0); }`,
     depthWrite: true, fog: false,
   });
@@ -489,10 +494,10 @@ export function create(ctx, segment) {
   // ---------------------------------------------------------------- update
   const _c = new THREE.Color(), _o = new THREE.Object3D();
   const sumRing = (t, times, filter, decay) => { let s = 0; times.forEach((t0, i) => { if (!filter || filter(i)) s += ring(t, t0, decay); }); return Math.min(1.4, s); };
-  function lightNotes(page, t, times, kHit = 2.4) {
+  function lightNotes(page, t, times, kHit = 3.6) {
     times.forEach((t0, i) => {
       if (i >= page.im.count) return;
-      const hit = ring(t, t0, 5), after = t >= t0 ? 0.22 : 0;
+      const hit = ring(t, t0, 5), after = t >= t0 ? 0.4 : 0;
       _c.copy(page.base).multiplyScalar(after + hit * kHit);
       page.im.setColorAt(i, _c);
     });
@@ -595,7 +600,7 @@ export function create(ctx, segment) {
       const k = sat((t - tOde - s.d * 0.08) / 0.35);
       _c.setRGB(1.0, 0.82, 0.55).multiplyScalar(k * (0.9 + 0.5 * beatPulse));
       pages.setColorAt(i, _c);
-      lampCol[i * 3] = _c.r * 1.6; lampCol[i * 3 + 1] = _c.g * 1.4; lampCol[i * 3 + 2] = _c.b * 1.1;
+      lampCol[i * 3] = _c.r * 1.25; lampCol[i * 3 + 1] = _c.g * 1.05; lampCol[i * 3 + 2] = _c.b * 0.8;
     });
     pages.instanceColor.needsUpdate = true; lampGeo.attributes.color.needsUpdate = true;
     hallBackMat.uniforms.uI.value = 0.05 + 1.1 * hallOn;

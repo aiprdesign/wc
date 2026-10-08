@@ -148,7 +148,7 @@ const BASE = {
 //   from the New Frontier on, music time = story − 18
 const MUSIC_SPLICES = [[20.0, 6], [31.0, 12], [61.5, 32], [67.5, 18]];   // [story time, offset]: from there on, music time = story − offset
 // the score steps back while the composers play (story [from, to, gain]; audio/score.js)
-const MUSIC_DUCKS = [[31.0, 37.0, 0.35]];
+const MUSIC_DUCKS = [[31.0, 37.9, 0.35]];
 const CUES = {
   ...Object.fromEntries(Object.entries(BASE).map(([k, v]) => [k, v >= 49.5 ? v + 18 : v >= 25.0 ? v + 12 : v >= 20.0 ? v + 6 : v])),
   // the italian renaissance — Florence and Rome
@@ -217,7 +217,7 @@ const INTERLUDES = [
 // entries may be objects with explicit story timing: { text, t0, t1, pace, y (fraction of frame height), focus }
 const WORDS = {
   classical: 'ORDER', civic: { text: 'LAW', t0: 12.3, t1: 13.6, pace: 0.8 },   // LAW clears before REPRESENTATION
-  renaissance: 'BEAUTY', italy: 'WONDER', science: 'REASON', music: 'HARMONY', industrial: 'POWER',
+  renaissance: 'BEAUTY', italy: 'WONDER', science: 'REASON', music: { text: 'HARMONY', t0: 30.6, t1: 31.5, pace: 0.8, focus: false }, industrial: 'POWER',   // (HARMONY clears before the cello's first notes, no focus pull)
   electricity: 'CONNECTION', medicine: 'LIFE', flight: 'FLIGHT',
   moonshot: { text: 'USA', t0: 51.95, t1: 52.86, pace: 0.6, y: 0.25, focus: false }, computing: [{ text: 'INTELLIGENCE', t0: 54.55, t1: 56.3, pace: 0.8 }, { text: 'AI', t0: 57.5, t1: 58.5, pace: 0.7, y: 0.2, focus: false }], knowledge: 'KNOWLEDGE',
   inventions: 'INVENTION',
