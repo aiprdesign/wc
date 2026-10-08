@@ -293,8 +293,8 @@ select.ex-v { padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(226, 
 @media (max-width: 420px) { .share-card img { width: 92px; height: 92px; } }
 
 /* streaming: a quiet note while playback waits for the next chapter */
-.buffering { position: fixed; left: 50%; bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px)); transform: translateX(-50%); z-index: 45; display: none; align-items: center; gap: 10px; padding: 9px 16px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.7); border: 1px solid rgba(226, 195, 138, 0.45); border-radius: 999px; pointer-events: none; }
-body.buffering .buffering { display: inline-flex; }
+#buffering { position: fixed; left: 50%; bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px)); transform: translateX(-50%); z-index: 45; display: none; align-items: center; gap: 10px; padding: 9px 16px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); background: rgba(10, 10, 10, 0.7); border: 1px solid rgba(226, 195, 138, 0.45); border-radius: 999px; pointer-events: none; }
+body.buffering #buffering { display: inline-flex; }
 .buf-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: buf-pulse 1s ease-in-out infinite; }
 @keyframes buf-pulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
 @media (prefers-reduced-motion: reduce) { .buf-dot { animation: none; } }
