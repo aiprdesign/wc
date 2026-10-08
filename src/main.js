@@ -263,7 +263,10 @@ async function boot() {
   const segReady = (sg) => engine.isBuilt(sg.id) && (engine.instances.get(sg.id)._ready || !streaming);
   let loadedKey = '';
   const loadedUI = () => {
-    const ready = SEGMENTS.map(segReady), n = ready.filter(Boolean).length, all = n === SEGMENTS.length;
+    const ready = SEGMENTS.map(segReady), n = ready.filter(Boolean).length;
+    // (phones and AR Lite keep only a window of the film: 'all' means the stretch ahead is in)
+    const windowed = !!chapter || engine.quality === 'lite';
+    const all = windowed ? readyThrough(nowT() / TIME_SCALE, Math.min(END, nowT() / TIME_SCALE + 14)) : n === SEGMENTS.length;
     const key = ready.join('');
     if (key !== loadedKey) {
       loadedKey = key;
@@ -276,7 +279,10 @@ async function boot() {
       const buf = $('scrub-buf');
       if (buf) buf.innerHTML = ranges.map(([a, b]) => `<i style="left:${(a * 100).toFixed(2)}%;width:${((b - a) * 100).toFixed(2)}%"></i>`).join('');
       document.body.classList.toggle('all-loaded', all);
-      if (!all && intro.classList.contains('ready')) { setStatus(`Ready to play · the rest loads in the background · ${n} / ${SEGMENTS.length} chapters`); setLoad(n / SEGMENTS.length); }
+      if (!all && intro.classList.contains('ready')) {
+        if (windowed) setStatus('Ready to play · the next chapters are loading');
+        else { setStatus(`Ready to play · the rest loads in the background · ${n} / ${SEGMENTS.length} chapters`); setLoad(n / SEGMENTS.length); }
+      }
     }
     if (player.waiting || experience.waiting) {
       const T = nowT() / TIME_SCALE, ahead = SEGMENTS.filter((sg) => sg.end > T && sg.start < T + BUFFER);
@@ -289,7 +295,9 @@ async function boot() {
   let streamDone = null;
   // AR / VR Lite keeps a window instead: the chapters within WINDOW story seconds ahead of the playhead
   // are built (and warmed), those behind it are freed — about two chapters in memory at any time.
-  const WINDOW = 6;
+  // Phones (lite quality) keep a window too, a longer one (the whole film held at once ran a phone out of
+  // graphics memory: a blank screen): what's within WINDOW ahead is built, what's behind is freed.
+  const WINDOW = chapter ? 6 : 20;
   const liteWindow = async () => {
     for (;;) {
       const T = nowT() / TIME_SCALE;
@@ -307,7 +315,7 @@ async function boot() {
       await new Promise((r) => setTimeout(r, 0));
     }
   };
-  const streamAll = () => (streamDone ??= chapter ? liteWindow() : (async () => {
+  const streamAll = () => (streamDone ??= (chapter || engine.quality === 'lite') ? liteWindow() : (async () => {
     for (;;) {
       const pending = SEGMENTS.filter((s) => !engine.isBuilt(s.id) || !engine.instances.get(s.id)._ready);
       if (!pending.length) break;

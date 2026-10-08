@@ -130,8 +130,20 @@ export class Explorer {
       const ms = [o.material].flat();
       if (ms.some((m) => !m || m.side === THREE.BackSide || m.blending === THREE.AdditiveBlending || (m.transparent && (!m.depthWrite || m.opacity < 0.5)))) return;
       if (o.userData.noCollide) return;
-      out.push(o);
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.updateWorldMatrix(true, false);
+      const sph = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld);
+      out.push({ o, c: sph.center, r: sph.radius });
     });
+    return out;
+  }
+  // only the solids a ray can reach (phones: a whole set's triangles tested every frame made walking stall)
+  _near(from, far, down) {
+    const out = [];
+    for (const { o, c, r } of this._solids()) {
+      const d = down ? Math.hypot(c.x - from.x, c.z - from.z) : c.distanceTo(from);
+      if (d <= r + (down ? 0 : far)) out.push(o);
+    }
     return out;
   }
 
@@ -139,7 +151,7 @@ export class Explorer {
   _groundBelow(from, far) {
     this.ray.set(from, this._u.set(0, -1, 0));
     this.ray.near = 0; this.ray.far = far;
-    const hit = this.ray.intersectObjects(this._solids(), false)[0];
+    const hit = this.ray.intersectObjects(this._near(from, far, true), false)[0];
     return hit ? hit.point.y : null;
   }
 
@@ -147,7 +159,7 @@ export class Explorer {
   _wallAhead(from, dir, far) {
     this.ray.set(from, dir);
     this.ray.near = 0; this.ray.far = far;
-    const hit = this.ray.intersectObjects(this._solids(), false)[0];
+    const hit = this.ray.intersectObjects(this._near(from, far, false), false)[0];
     return hit ? hit.distance : Infinity;
   }
 
