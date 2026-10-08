@@ -138,11 +138,13 @@ async function boot() {
   // where playback starts (?t= is story time; AR Lite: its chapter)
   const chapterSeg = chapter ? SEGMENTS.find((s) => s.id === chapter) : null;
   const startStory = chapterSeg ? (chapterSeg.start > 0 ? chapterSeg.start + 0.5 : 0) : (parseFloat(params.get('t') ?? '0') || 0);
-  // Default: everything is built and pre-drawn behind the loader, so playback never stops or stutters
-  // (background building competes with the film for the main thread). ?stream=1 opts into streaming:
-  // only the chapter(s) at the start (and the next one) before Play, the rest behind (streamAll below).
-  // AR / VR Lite (#arlite) always streams, chapter by chapter, letting go of the chapters behind it.
-  const streaming = !params.has('still') && (params.get('stream') === '1' || !!chapter);
+  // Default: STREAMING — only the chapter(s) at the start (and the next one) are built and warmed before Play,
+  // so the film is ready in seconds; the rest build behind it, always the next chapter the playhead needs
+  // first (streamAll below), and if playback ever catches up it waits for a moment under the buffering
+  // ring instead of stuttering. ?stream=0 restores the old behaviour: everything built and pre-drawn
+  // behind the loader before Play. AR / VR Lite (#arlite) streams chapter by chapter, letting go of the
+  // chapters behind it.
+  const streaming = !params.has('still') && (params.get('stream') !== '0' || !!chapter);
   if (onlyIds?.length) {
     await engine.setup(modules);
     for (const id of onlyIds) { setStatus(`Building · ${id}`); await engine.buildSegment(id); }
