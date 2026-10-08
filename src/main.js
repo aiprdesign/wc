@@ -237,12 +237,17 @@ async function boot() {
   let held = false, heldT = -1;
   const freeze = () => {
     if (held && Math.abs(nowT() - heldT) < 0.01) return;   // (a seek while held: the new frame …)
-    if (held && !engine.isReady(nowT() / TIME_SCALE)) return;   // (… unless it isn't built yet: the last frame there was stays)
-    if (!held && !engine.isReady(nowT() / TIME_SCALE)) return;   // (nothing built there to copy: the canvas keeps its last frame)
-    held = true; heldT = nowT();
+    if (!engine.isDrawable(nowT() / TIME_SCALE)) return;   // (not built and warmed there: whatever is on screen stays)
     try {
       const c = $('film');
       engine.render(nowT(), 0);                       // a fresh copy of the frame, read back in the same task
+      // never hold a black copy (a frame the GPU hadn't finished): keep what was on screen instead
+      const probe = new OffscreenCanvas(16, 9), px = probe.getContext('2d');
+      px.drawImage(c, 0, 0, 16, 9);
+      const d = px.getImageData(0, 0, 16, 9).data;
+      let lit = 0; for (let i = 0; i < d.length; i += 4) lit = Math.max(lit, d[i], d[i + 1], d[i + 2]);
+      if (lit < 6) return;
+      held = true; heldT = nowT();
       hold.width = c.width; hold.height = c.height;
       hold.getContext('2d').drawImage(c, 0, 0);
       placeHold();
