@@ -42,31 +42,48 @@ const arcOfZ = (z) => arcOfAlpha(Math.acos(Math.max(-1, Math.min(1, z / HZ))));
 // ------------------------------------------------------------------------------------ painting kit
 const FR = { lapis: '#2f5a9a', azure: '#7aa0c8', sky: '#c3cdc8', ochre: '#d39a3c', gold: '#e0b24e', verde: '#6f8a4e', rose: '#d0705c', red: '#a8321f', flesh: '#e2b48e', fleshD: '#9a6444', plaster: '#e6d8bc', stone: '#cfc2a6', stoneD: '#8c7d63', umber: '#5b3f2a', lilac: '#a07ab0', green: '#4f8150' };
 function figureBlob(g, x, y, s, r, cloth, seated = true) {
-  // a draped figure in a few soft masses: cloth body, flesh head and arm (no features)
+  // a draped figure in soft painted masses: a mantle over the body, a lit flank, a head turned in
+  // three-quarter (no features), an arm and a foot; seated figures fold at the knee
   g.save(); g.translate(x, y); g.scale(s, s);
-  const lean = (r() - 0.5) * 0.5;
-  g.rotate(lean * 0.3);
-  const body = g.createLinearGradient(-30, -40, 30, 50);
-  body.addColorStop(0, cloth); body.addColorStop(1, shade(cloth, 0.55));
+  const lean = (r() - 0.5) * 0.6, nude = cloth === FR.flesh;
+  g.rotate(lean * 0.35);
+  const C = nude ? FR.flesh : cloth;
+  const body = g.createLinearGradient(-28, -30, 26, 40);
+  body.addColorStop(0, tint(C, 1.25)); body.addColorStop(0.55, C); body.addColorStop(1, shade(C, 0.5));
   g.fillStyle = body;
   g.beginPath();
-  if (seated) { g.moveTo(-22, -20); g.bezierCurveTo(-34, 10, -40, 40, -30, 58); g.lineTo(34, 58); g.bezierCurveTo(30, 30, 26, 0, 18, -22); g.closePath(); }
-  else { g.moveTo(-14, -22); g.bezierCurveTo(-24, 20, -22, 60, -18, 80); g.lineTo(18, 80); g.bezierCurveTo(22, 50, 22, 10, 14, -22); g.closePath(); }
+  if (seated) { g.moveTo(-14, -22); g.bezierCurveTo(-26, -6, -30, 18, -26, 34); g.bezierCurveTo(-10, 38, 18, 30, 36, 40); g.lineTo(40, 58); g.lineTo(18, 60); g.bezierCurveTo(4, 48, -20, 54, -30, 50); g.bezierCurveTo(-34, 30, -24, 0, -18, -22); g.moveTo(-14, -22); g.bezierCurveTo(4, -26, 16, -18, 18, -4); g.bezierCurveTo(20, 10, 14, 28, 10, 34); g.lineTo(-26, 34); g.closePath(); }
+  else { g.moveTo(-12, -22); g.bezierCurveTo(-22, 10, -24, 50, -18, 80); g.lineTo(16, 80); g.bezierCurveTo(22, 50, 20, 6, 12, -22); g.closePath(); }
   g.fill();
-  // folds
-  g.strokeStyle = shade(cloth, 0.45); g.globalAlpha = 0.5; g.lineWidth = 2.2;
-  for (let i = 0; i < 4; i++) { g.beginPath(); const fx = -18 + i * 11 + r() * 4; g.moveTo(fx, -10 + r() * 8); g.quadraticCurveTo(fx + (r() - 0.5) * 16, 25, fx + (r() - 0.5) * 10, 55); g.stroke(); }
-  g.strokeStyle = tint(cloth, 1.35); g.globalAlpha = 0.35; g.lineWidth = 1.6;
-  for (let i = 0; i < 3; i++) { g.beginPath(); const fx = -12 + i * 12 + r() * 4; g.moveTo(fx, -12); g.quadraticCurveTo(fx + 6, 20, fx + 2, 50); g.stroke(); }
+  // folds: shadowed troughs and lit ridges
+  g.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const fx = -20 + i * 8 + r() * 4, fy = -8 + r() * 10;
+    g.strokeStyle = shade(C, 0.42); g.globalAlpha = 0.45; g.lineWidth = 2.4;
+    g.beginPath(); g.moveTo(fx, fy); g.quadraticCurveTo(fx + (r() - 0.5) * 18, fy + 26, fx + (r() - 0.5) * 12 + 4, fy + 52); g.stroke();
+    g.strokeStyle = tint(C, 1.45); g.globalAlpha = 0.35; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(fx + 3, fy + 2); g.quadraticCurveTo(fx + 3 + (r() - 0.5) * 14, fy + 26, fx + 6, fy + 48); g.stroke();
+  }
   g.globalAlpha = 1;
-  // head and an arm
-  const hg = g.createRadialGradient(-3, -36, 2, 0, -33, 13);
-  hg.addColorStop(0, tint(FR.flesh, 1.12)); hg.addColorStop(1, FR.fleshD);
-  g.fillStyle = hg; g.beginPath(); g.ellipse(0, -34, 10, 12, lean, 0, Math.PI * 2); g.fill();
-  g.fillStyle = shade(FR.umber, 0.9); g.globalAlpha = 0.6; g.beginPath(); g.ellipse(2, -42, 10, 6, lean, Math.PI, Math.PI * 2); g.fill(); g.globalAlpha = 1;
-  g.strokeStyle = FR.flesh; g.lineWidth = 6; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(14, -12); g.quadraticCurveTo(28 + r() * 8, 4, 18 + r() * 14, 20 + r() * 10); g.stroke();
+  // arm, foot and head (three-quarter, hair in shadow)
+  g.strokeStyle = shade(FR.flesh, 0.92); g.lineWidth = 6.5;
+  g.beginPath(); g.moveTo(10, -14); g.quadraticCurveTo(26 + r() * 8, -2, 16 + r() * 16, 14 + r() * 12); g.stroke();
+  g.strokeStyle = tint(FR.flesh, 1.12); g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(11, -15); g.quadraticCurveTo(25, -4, 20, 10); g.stroke();
+  g.fillStyle = FR.flesh; g.beginPath(); g.ellipse(seated ? 30 : 2, seated ? 60 : 82, 7, 3.5, 0, 0, 7); g.fill();
+  const hg = g.createRadialGradient(-2, -34, 1, 1, -32, 9);
+  hg.addColorStop(0, tint(FR.flesh, 1.15)); hg.addColorStop(1, FR.fleshD);
+  g.fillStyle = hg; g.beginPath(); g.ellipse(1, -32, 7, 8.5, lean, 0, Math.PI * 2); g.fill();
+  g.fillStyle = shade(FR.umber, 0.85); g.globalAlpha = 0.75; g.beginPath(); g.ellipse(3, -37, 7.5, 5, lean + 0.3, Math.PI * 0.9, Math.PI * 2.1); g.fill(); g.globalAlpha = 1;
+  // a contour in brown, as fresco painters drew over the colour
+  g.strokeStyle = 'rgba(70,40,20,0.35)'; g.lineWidth = 1.2;
+  g.beginPath(); g.moveTo(-14, -22); g.bezierCurveTo(-26, -6, -30, 18, -26, 34); g.stroke();
   g.restore();
+}
+function soften(c, px) {
+  const t = mkCanvas(c.width, c.height), gt = t.getContext('2d');
+  gt.filter = `blur(${px}px)`; gt.drawImage(c, 0, 0);
+  const g = c.getContext('2d'); g.globalAlpha = 0.85; g.drawImage(t, 0, 0); g.globalAlpha = 1;
 }
 function shade(hex, k) { const c = new THREE.Color(hex).multiplyScalar(k); return `#${c.getHexString()}`; }
 function tint(hex, k) { const c = new THREE.Color(hex); c.r = Math.min(1, c.r * k); c.g = Math.min(1, c.g * k); c.b = Math.min(1, c.b * k); return `#${c.getHexString()}`; }
@@ -172,6 +189,7 @@ function vaultCanvas(lite) {
   }
   // the ends of the vault (beyond the panels): pendentive scenes
   for (const ex of [-19, 19]) scenePanel(g, px(ex - 1.3), py(cy - STRIP), px(ex + 1.3) - px(ex - 1.3), py(cy + STRIP) - py(cy - STRIP), r, 5);
+  soften(g0, 1.3);
   frescoFinish(g, W, H, 3);
   return g0;
 }
@@ -220,6 +238,7 @@ function wallCanvas(lite) {
     g.fillStyle = '#6e604c'; g.beginPath(); g.moveTo(px(nx) - w, py(11.0)); g.lineTo(px(nx) - w, py(12.4)); g.arc(px(nx), py(12.4), w, Math.PI, 0); g.lineTo(px(nx) + w, py(11.0)); g.fill();
     figureBlob(g, px(nx), py(11.8), 0.55, r, [FR.red, FR.lilac, FR.ochre][Math.floor(r() * 3)], false);
   }
+  soften(c, 1.0);
   frescoFinish(g, W, H, 7);
   return { map: c, emissive: e };
 }

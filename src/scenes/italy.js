@@ -142,7 +142,7 @@ export function create(ctx, segment) {
   const goldSegs = [];
   for (const pl of chapel.gold) for (let i = 0; i < pl.length - 1; i++) goldSegs.push([pl[i], pl[i + 1]]);
   const goldOrd = goldSegs.map(([a, b]) => sat(((a.x + b.x) / 2 + HALL.L / 2) / HALL.L * 0.8 + (1 - ((a.y + b.y) / 2) / 21) * 0.2));
-  const goldOpts = { color: GOLD, headColor: '#fff4dc', intensity: 1.6, opacity: 1, head: 0.03, additive: true };
+  const goldOpts = { color: GOLD, headColor: '#fff4dc', intensity: 1.15, opacity: 1, head: 0.03, additive: true };
   const goldC = orderedStrokes(goldSegs, goldOrd, goldOpts, 0.05);
   chapel.root.add(goldC);
   const ghost = new THREE.Group(); ghost.matrixAutoUpdate = false;
@@ -162,7 +162,7 @@ export function create(ctx, segment) {
 
   // ------------------------------------------------------------------------------------------ overlay
   // parchment on the lens for the match-cut (the dome's ink lines draw over it)
-  const overlay = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: pageTexture(), color: '#d8c3a0', transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false, toneMapped: true }));
+  const overlay = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: pageTexture(), color: '#efdcb6', transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false, toneMapped: true }));
   overlay.renderOrder = 50; overlay.frustumCulled = false;
   camera.add(overlay);
 
@@ -211,12 +211,12 @@ export function create(ctx, segment) {
   const pathD = makePath([
     [TC1, V(sp.x, PAGE_Y + DPAGE, sp.z + 0.0001), V(sp.x, PAGE_Y, sp.z)],
     [TC1 + 0.38, V(-0.06, 0.42, 0.3), V(0.0, 0.012, -0.01)],
-    [B.aerialScrew + 0.1, V(0.04, 0.31, 0.39), V(0.11, 0.07, -0.01)],
-    [B.aerialScrew + 0.45, V(0.14, 0.28, 0.41), V(0.12, 0.11, 0)],
-    [B.ornithopter + 0.1, V(0.38, 0.27, 0.43), V(0.46, 0.06, 0.01)],
-    [B.ornithopter + 0.45, V(0.5, 0.25, 0.42), V(0.48, 0.08, 0)],
-    [B.armouredCar + 0.1, V(0.74, 0.26, 0.43), V(0.8, 0.06, 0)],
-    [B.armouredCar + 0.42, V(0.85, 0.28, 0.39), V(0.82, 0.09, -0.02)],
+    [B.aerialScrew + 0.05, V(0.05, 0.3, 0.39), V(0.11, 0.06, -0.01)],
+    [B.aerialScrew + 0.52, V(0.15, 0.27, 0.41), V(0.12, 0.11, 0)],
+    [B.ornithopter + 0.08, V(0.41, 0.27, 0.43), V(0.47, 0.05, 0.01)],
+    [B.ornithopter + 0.52, V(0.52, 0.24, 0.42), V(0.48, 0.08, 0)],
+    [B.armouredCar + 0.08, V(0.76, 0.26, 0.43), V(0.81, 0.05, 0)],
+    [B.armouredCar + 0.42, V(0.86, 0.27, 0.39), V(0.82, 0.09, -0.02)],
     [TC2 + 0.02, V(0.9, 0.38, 0.3), V(0.92, 0.95, -0.4)],
   ]);
   const AX = ADAM.xc;
@@ -243,7 +243,7 @@ export function create(ctx, segment) {
   };
   const subj = V(), subjW = V();
   const M = study.models;
-  const MODEL_T = { screw: [B.aerialScrew - 0.1, B.aerialScrew + 0.28], orni: [B.ornithopter - 0.12, B.ornithopter + 0.22], car: [B.armouredCar - 0.12, B.armouredCar + 0.2] };
+  const MODEL_T = { screw: [B.aerialScrew - 0.12, B.aerialScrew + 0.18], orni: [B.ornithopter - 0.14, B.ornithopter + 0.16], car: [B.armouredCar - 0.14, B.armouredCar + 0.15] };
   const cSep = new THREE.Color(SEPIA), cGold = new THREE.Color(GOLD), cTmp = new THREE.Color();
   const q1 = new THREE.Quaternion(), qy = new THREE.Quaternion(), Y = V(0, 1, 0);
 
@@ -279,7 +279,7 @@ export function create(ctx, segment) {
       flo.bricks.mesh.visible = open > 0.02;
       // ink: the dome draws itself, then the frame turns to parchment
       const inkP = ramp(t, B.brunelleschi + 0.45, TC1 - 0.12, ease.inOutSine);
-      inkF.progress = inkP;
+      inkF.progress = inkP; inkF.material.depthTest = false;
       const parch = ramp(t, TC1 - 0.3, TC1 - 0.04, ease.inOutSine);
       inkF.material.uniforms.uColor.value.copy(cGold).lerp(cSep, parch);
       inkF.intensity = lerp(1.6, 1.0, parch);
@@ -323,7 +323,7 @@ export function create(ctx, segment) {
       for (const [k, [a, l]] of Object.entries(MODEL_T)) {
         const m = M[k];
         const draw = ramp(t, a, a + 0.36, ease.inOutSine);
-        m.strokes.forEach((s, i) => { s.progress = i % 2 ? ramp(t, a + 0.04, a + 0.4, ease.inOutSine) : draw; });
+        m.strokes.forEach((s) => { s.progress = s.userData.lead ? draw : ramp(t, a + 0.04, a + 0.4, ease.inOutSine); });
         m.hatch.progress = ramp(t, a + 0.14, a + 0.42, ease.linear);
         m.script.progress = ramp(t, a + 0.02, a + 0.5, ease.linear);
         m.script.opacity = 0.8;
@@ -334,10 +334,10 @@ export function create(ctx, segment) {
         const spin = Math.max(0, t - l) * 0.55 * L;
         qy.setFromAxisAngle(Y, m.yaw1 + spin);
         m.inner.quaternion.copy(study.q0).slerp(qy, L);
-        const glow = envelope(t, l - 0.05, l + 0.55, 0.15, 0.3);
+        const glow = envelope(t, l, l + 0.6, 0.15, 0.3);
         const inkOut = 1 - ramp(t, l + 0.22, l + 0.6);
         for (const s of m.strokes) { s.material.uniforms.uColor.value.copy(cSep).lerp(cGold, glow * 0.75); s.intensity = 1 + glow * 0.45; }
-        m.strokes.forEach((s, i) => { s.opacity = (i % 2 ? 0.4 : 0.92) * inkOut; });
+        m.strokes.forEach((s) => { s.opacity = s.userData.op * inkOut; });
         m.hatch.opacity = 0.5 * (1 - ramp(t, l - 0.02, l + 0.22));
         const solid = ramp(t, l + 0.06, l + 0.4, ease.inOutSine);
         for (const mt of m.mats) mt.opacity = solid;
@@ -385,7 +385,7 @@ export function create(ctx, segment) {
       goldC.progress = 1;
       goldC.opacity = 1 - ramp(t, TC2 + 0.2, TC2 + 0.6);
       // Michelangelo's order: entrance → altar
-      chapel.front.value = lerp(-0.02, 1.05, ramp(t, TC2 + 0.05, B.creationOfAdam + 0.2, ease.inOutSine));
+      chapel.front.value = lerp(-0.02, 1.05, ramp(t, TC2 - 0.05, B.creationOfAdam - 0.1, ease.linear));
       // the Creation of Adam: the hands drawn as stroke art over the cartoon, then the colour returns
       const c0 = B.creationOfAdam - 0.08;
       const [sA, sB, sC, sH, sG] = chapel.strokes;
@@ -428,7 +428,13 @@ export function create(ctx, segment) {
   };
 
   Object.defineProperty(api, 'exploreLimits', { get: () => LIM[phase] });
-  api.explore = () => { overlay.visible = false; ghost.visible = false; for (const q of calls) q.c.visible = false; };
+  // Explore: no lens overlay or ghost; the dome's ink respects depth off-axis; the desk keeps its light
+  api.explore = (t) => {
+    overlay.visible = false; ghost.visible = false; for (const q of calls) q.c.visible = false;
+    inkF.material.depthTest = true;
+    if (phase === 'D') { sun.intensity = 3.1; hemi.intensity = 0.32; fill.intensity = 0.25; scene.environmentIntensity = 0.3; api.exposure = 1; }
+  };
+  api.exploreEnd = () => { inkF.material.depthTest = false; };
   api.arSubject = (t) => {
     const ph = t < TC1 ? 'F' : t < TC2 ? 'D' : 'C';
     if (ph === 'F') return { centre: flo.domeCentre, radius: 5.2 };

@@ -246,7 +246,7 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
       const sp = SHEETS[k] ?? { x, z, ry, y: SHEET_Y - 0.0012 };
       const g = new THREE.PlaneGeometry(PAGE.w * 1.05, PAGE.h, 6, 1); g.rotateX(-Math.PI / 2);
       const p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) p.setY(i, sp.y + 0.002 * Math.sin((p.getX(i) / PAGE.w + 0.5) * Math.PI));
+      for (let i = 0; i < p.count; i++) p.setY(i, sp.y + 0.0007 * Math.sin((p.getX(i) / PAGE.w + 0.5) * Math.PI));
       g.computeVertexNormals();
       const m = new THREE.Mesh(g, pageMat); m.position.set(sp.x, 0, sp.z); m.rotation.y = sp.ry; m.receiveShadow = true; root.add(m);
     }
@@ -294,7 +294,7 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
   for (const [key, [mdl, width]] of Object.entries(defs)) {
     const sp = SHEETS[key];
     const outer = new THREE.Group(), lift = new THREE.Group(), inner = new THREE.Group();
-    outer.position.set(sp.x, sp.y + 0.0008, sp.z); outer.rotation.y = sp.ry;
+    outer.position.set(sp.x, sp.y + 0.0012, sp.z); outer.rotation.y = sp.ry;
     root.add(outer); outer.add(lift); lift.add(inner); inner.add(mdl.root);
     mdl.root.traverse((o) => o.updateMatrix());
     // solids (one mesh per part and material) and their drawing strokes
@@ -330,8 +330,11 @@ export function buildStudy({ lite = false, domeInk = null } = {}) {
       const segB = s.edges.filter(() => jr() < 0.7).map(([a, b]) => { const o = V((jr() - 0.5) * jit, (jr() - 0.5) * jit, (jr() - 0.5) * jit); return [a.clone().add(o), b.clone().add(o).addScaledVector(b.clone().sub(a), (jr() - 0.3) * 0.08)]; });
       const ordB = segB.map(() => Math.min(1, jr() * 0.2 + 0.1));
       const A = orderedStrokes(segA, order, inkOpts(SEPIA, 0.92), 0.12);
+      const off2 = V(0.0012, 0.0009, -0.0011).divideScalar(scale);
+      const A2 = orderedStrokes(segA.map(([a, b]) => [a.clone().add(off2), b.clone().add(off2)]), order.map((o) => Math.min(1, o + 0.03)), inkOpts(SEPIA, 0.75), 0.12);
+      A2.userData.op = 0.75; A2.renderOrder = 5; s.obj.add(A2); strokeObjs.push(A2);
       const B = orderedStrokes(segB, segB.map(([a, b], i) => { const m = a.clone().add(b).multiplyScalar(0.5).applyMatrix4(s.obj.matrix); const [, y] = proj(m); return Math.min(1, Math.max(0, 0.55 - y / (size.length() * 0.9) + ordB[i] - 0.15)); }), inkOpts(CHALK, 0.4), 0.15);
-      A.renderOrder = B.renderOrder = 5;
+      A.renderOrder = B.renderOrder = 5; A.userData.op = 0.92; B.userData.op = 0.4; A.userData.lead = 1;
       s.obj.add(A, B);
       strokeObjs.push(A, B);
     }

@@ -425,20 +425,20 @@ export function buildFlorence({ lite = false } = {}) {
   {
     const spots = [];
     const blocked = (x, z, rad) => (x > -15.6 - rad && x < 4.9 + rad && Math.abs(z) < 4.8 + rad) || (x > -20.6 - rad && x < -16.4 + rad && Math.abs(z) < 2.3 + rad) || (Math.hypot(x - 3.5, z - 26) < 2.2 + rad);
-    const B = 3.1, RMAX = lite ? 30 : 40;
+    const B = 3.1, RMAX = lite ? 38 : 48;
     for (let bx = -RMAX; bx < RMAX; bx += B) for (let bz = -RMAX; bz < RMAX; bz += B) {
       const cx = bx + B / 2 + (noise2(bx * 0.1, bz * 0.1) * 0.6), cz = bz + B / 2 + noise2(bz * 0.1 + 5, bx * 0.1) * 0.6;
       const dist = Math.hypot(cx + 4, cz);
       if (dist > RMAX) continue;
       const rot = noise2(bx * 0.03 + 9, bz * 0.03) * 0.35;
-      const per = dist > 26 ? 2 : 4;
+      const per = dist > 34 ? 1 : dist > 24 ? 2 : 4;
       for (let i = 0; i < per; i++) {
         const w = (B - 0.5) / (per > 2 ? 2 : 1) * (0.75 + r() * 0.25), d = (B - 0.5) / 2 * (0.8 + r() * 0.2);
-        const ox = per > 2 ? ((i % 2) - 0.5) * (B - 0.5) / 2 : 0, oz = ((Math.floor(i / 2) % 2) - 0.5) * (B - 0.5) / 2;
+        const ox = per > 2 ? ((i % 2) - 0.5) * (B - 0.5) / 2 : 0, oz = per > 1 ? ((Math.floor(i / 2) % 2) - 0.5) * (B - 0.5) / 2 : 0;
         const x = cx + ox * Math.cos(rot) - oz * Math.sin(rot), z = cz + ox * Math.sin(rot) + oz * Math.cos(rot);
         if (blocked(x, z, 0.8)) continue;
         const h = 1.0 + r() * 1.1 + (dist < 12 ? 0.3 : 0);
-        spots.push({ x, z, w: per > 2 ? w : w * 1.6, d, h, rot: rot + (r() - 0.5) * 0.06 });
+        spots.push({ x, z, w: per > 2 ? w : w * 1.6, d: per > 1 ? d : d * 1.8, h, rot: rot + (r() - 0.5) * 0.06 });
       }
     }
     const fac = toTexture(facadeCanvas());
@@ -459,6 +459,25 @@ export function buildFlorence({ lite = false } = {}) {
     });
     walls.castShadow = roofs.castShadow = true; walls.receiveShadow = roofs.receiveShadow = true;
     root.add(walls, roofs);
+    // chimneys on the roofs, and medieval tower-houses rising over the skyline
+    const nCh = Math.min(spots.length, lite ? 300 : 900);
+    const chim = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), new THREE.MeshStandardMaterial({ color: '#b48a68', roughness: 0.9 }), nCh);
+    for (let i = 0; i < nCh; i++) {
+      const sp = spots[(i * 7) % spots.length], ox = (r() - 0.5) * sp.w * 0.5, oz = (r() - 0.5) * sp.d * 0.5;
+      m4.compose(V(sp.x + ox * Math.cos(sp.rot) - oz * Math.sin(sp.rot), sp.h + 0.2, sp.z + ox * Math.sin(sp.rot) + oz * Math.cos(sp.rot)), q.setFromAxisAngle(V(0, 1, 0), sp.rot), V(1, 0.8 + r() * 0.6, 1));
+      chim.setMatrixAt(i, m4);
+    }
+    root.add(chim);
+    const nT = lite ? 18 : 36, towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), wallMat, nT);
+    const tcaps = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ color: '#9c7a5a', roughness: 0.9 }), nT);
+    for (let i = 0; i < nT; i++) {
+      const sp = spots[Math.floor(r() * spots.length)], w = 0.55 + r() * 0.3, h = sp.h + 1.2 + r() * 2.2;
+      m4.compose(V(sp.x, 0, sp.z), q.setFromAxisAngle(V(0, 1, 0), sp.rot), V(w, h, w)); towers.setMatrixAt(i, m4);
+      towers.setColorAt(i, col.set(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85));
+      m4.compose(V(sp.x, h, sp.z), q, V(w * 1.15, 0.12, w * 1.15)); tcaps.setMatrixAt(i, m4);
+    }
+    towers.castShadow = tcaps.castShadow = true; towers.receiveShadow = true;
+    root.add(towers, tcaps);
     root.userData.houses = spots.length;
   }
 
